@@ -33,6 +33,8 @@ type DaemonAPI struct {
 	AgentTargetSetupService   AgentTargetSetupService
 	PreferencesService        preferencesapi.Service
 	ManagedCredentialsService *managedcredentialsservice.Service
+	ModelPlanService          ModelPlanService
+	AgentModelBindingService  AgentModelBindingService
 	AccountService            AccountService
 	EventStreamService        EventStreamService
 	WorkspaceService          workspaceapi.CatalogService
