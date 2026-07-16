@@ -1,11 +1,15 @@
 import type {
   AgentActivityRuntime,
   AgentGUIProps,
-  AgentHostInputApi
+  AgentHostInputApi,
+  TuttiModePlanReviewRuntime
 } from "@tutti-os/agent-gui";
 import type { PlanIssueCreationOptions } from "@tutti-os/agent-gui/plan-issue";
 import type { AgentContextMentionProvider } from "@tutti-os/agent-gui/context-mention-provider";
-import type { TuttidClient } from "@tutti-os/client-tuttid-ts";
+import type {
+  TuttidClient,
+  TuttidEventStreamClient
+} from "@tutti-os/client-tuttid-ts";
 import type { RichTextTriggerProvider } from "@tutti-os/ui-rich-text/types";
 import type {
   DesktopHostFilesApi,
@@ -50,10 +54,12 @@ import { translate } from "../../../i18n/appRuntime.ts";
 import { createDesktopAgentGeneratedFileMentionProvider } from "./internal/createDesktopAgentGeneratedFileMentionProvider.ts";
 import { createDesktopAgentExternalPromptFilePreparer } from "./internal/prepareDesktopAgentExternalPromptFiles.ts";
 import { createDesktopIssueFromAgentPlan } from "./desktopAgentGUIPlanIssue.ts";
+import { createDesktopTuttiModePlanReviewRuntime } from "./internal/desktopWorkspaceWorkflowRuntime.ts";
 
 export interface DesktopAgentGUIWorkbenchHostInput {
   agentActivityRuntime: AgentActivityRuntime;
   agentHostApi: AgentHostInputApi;
+  tuttiModePlanReviewRuntime: TuttiModePlanReviewRuntime;
   contextMentionProviders: NonNullable<
     AgentGUIProps["hostCapabilities"]["contextMentionProviders"]
   >;
@@ -99,6 +105,7 @@ export interface DesktopAgentGUIWorkbenchHostInput {
 
 export interface CreateDesktopAgentGUIWorkbenchHostInputInput {
   agentHostApi?: AgentHostInputApi | null;
+  eventStreamClient?: TuttidEventStreamClient | null;
   hostFilesApi: DesktopHostFilesApi;
   tuttidClient: TuttidClient;
   platformApi: Pick<
@@ -121,6 +128,7 @@ export interface CreateDesktopAgentGUIWorkbenchHostInputInput {
 
 export function createDesktopAgentGUIWorkbenchHostInput({
   agentHostApi,
+  eventStreamClient,
   hostFilesApi,
   tuttidClient,
   platformApi,
@@ -273,6 +281,10 @@ export function createDesktopAgentGUIWorkbenchHostInput({
   return {
     agentActivityRuntime,
     agentHostApi: resolvedAgentHostApi,
+    tuttiModePlanReviewRuntime: createDesktopTuttiModePlanReviewRuntime({
+      tuttidClient,
+      eventStreamClient
+    }),
     contextMentionProviders: richTextAtService
       .getProviders({
         capabilities: [
