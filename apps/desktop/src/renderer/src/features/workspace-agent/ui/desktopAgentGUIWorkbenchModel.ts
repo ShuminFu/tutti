@@ -71,6 +71,7 @@ export interface DesktopAgentGUIWorkbenchBodyProps {
     provider: DesktopAgentGUINodeState["provider"];
     workspaceId: string;
   }) => Promise<void> | void;
+  onCreateIssueFromPlan?: AgentGUIProps["hostActions"]["onCreateIssueFromPlan"];
   onStateChange: (state: DesktopAgentGUIWorkbenchState) => void;
   prefillPromptBootstrapRequest?: DesktopAgentGUIPrefillPromptRequest | null;
   previewMode?: boolean;
@@ -167,6 +168,7 @@ export function areDesktopAgentGUIWorkbenchBodyPropsEqual(
     previous.onCapabilitySettingsRequest === next.onCapabilitySettingsRequest &&
     previous.onOpenAgentConversationWindow ===
       next.onOpenAgentConversationWindow &&
+    previous.onCreateIssueFromPlan === next.onCreateIssueFromPlan &&
     previous.prefillPromptBootstrapRequest ===
       next.prefillPromptBootstrapRequest &&
     previous.previewMode === next.previewMode &&

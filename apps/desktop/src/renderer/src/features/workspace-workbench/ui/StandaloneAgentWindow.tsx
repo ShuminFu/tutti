@@ -40,6 +40,7 @@ import type { DesktopAgentGUIPrefillPromptRequest } from "@renderer/features/wor
 import {
   desktopAgentGUIOpenSessionActivationType,
   normalizeDesktopAgentGUIProvider,
+  type DesktopAgentGUIProvider,
   type DesktopAgentGUIWorkbenchState
 } from "@renderer/features/workspace-agent/desktopAgentGUINodeState.ts";
 import {
@@ -90,6 +91,7 @@ import { Toast } from "@renderer/lib/toast";
 import { useStandaloneAgentWindowLayout } from "./useStandaloneAgentWindowLayout.ts";
 import { createStandaloneAgentWorkspaceAppSurfacePresenter } from "../services/standaloneAgentWorkspaceAppSurfacePresenter.ts";
 import { createStandaloneAgentWorkspaceFilePreviewPresenter } from "../services/standaloneAgentWorkspaceFilePreviewPresenter.ts";
+import { resolveStandaloneAgentLaunchConfiguration } from "./standaloneAgentLaunchProvider.ts";
 
 const LazyWorkspaceAccountMenu = lazy(() =>
   import("./WorkspaceAccountMenu").then(({ WorkspaceAccountMenu }) => ({
@@ -116,6 +118,7 @@ function renderStandaloneAgentSidebarFooter(): ReactNode {
 
 export interface StandaloneAgentWindowProps {
   agentProviderStatusService: AgentProviderStatusService;
+  defaultAgentProvider: DesktopAgentGUIProvider;
   desktopApi: DesktopApi;
   hostWindowApi: Pick<
     DesktopHostWindowApi,
@@ -144,6 +147,7 @@ export interface StandaloneAgentWindowProps {
 
 export function StandaloneAgentWindow({
   agentProviderStatusService,
+  defaultAgentProvider,
   desktopApi,
   hostWindowApi,
   reporterService,
@@ -224,24 +228,18 @@ export function StandaloneAgentWindow({
     () => resolveDesktopWindowIntent(window.location.search),
     []
   );
-  const launchProvider =
-    windowIntent.kind === "agent" && windowIntent.provider
-      ? normalizeDesktopAgentGUIProvider(windowIntent.provider)
-      : "codex";
-  const launchDraftPrompt =
-    windowIntent.kind === "agent" ? (windowIntent.draftPrompt ?? null) : null;
-  const launchAutoSubmit =
-    windowIntent.kind === "agent" && windowIntent.autoSubmit === true;
-  const launchUserProjectPath =
-    windowIntent.kind === "agent"
-      ? (windowIntent.userProjectPath ?? null)
-      : null;
-  const launchAgentSessionId =
-    windowIntent.kind === "agent"
-      ? (windowIntent.agentSessionID ?? null)
-      : null;
-  const launchAgentTargetId =
-    windowIntent.kind === "agent" ? (windowIntent.agentTargetID ?? null) : null;
+  const launch = resolveStandaloneAgentLaunchConfiguration({
+    defaultProvider: defaultAgentProvider,
+    intent: windowIntent
+  });
+  const launchProvider = launch.provider;
+  const launchDraftPrompt = launch.draftPrompt;
+  const launchModel = launch.model;
+  const launchModelPlanId = launch.modelPlanId;
+  const launchAutoSubmit = launch.autoSubmit;
+  const launchUserProjectPath = launch.userProjectPath;
+  const launchAgentSessionId = launch.agentSessionId;
+  const launchAgentTargetId = launch.agentTargetId;
   const prefillPromptBootstrapRequest =
     useMemo<DesktopAgentGUIPrefillPromptRequest | null>(
       () =>
@@ -250,6 +248,8 @@ export function StandaloneAgentWindow({
               agentTargetId: launchAgentTargetId,
               autoSubmit: launchAutoSubmit,
               draftPrompt: launchDraftPrompt,
+              ...(launchModel ? { model: launchModel } : {}),
+              ...(launchModelPlanId ? { modelPlanId: launchModelPlanId } : {}),
               provider: launchProvider,
               sequence: 1,
               ...(launchUserProjectPath
@@ -261,6 +261,8 @@ export function StandaloneAgentWindow({
         launchAgentTargetId,
         launchAutoSubmit,
         launchDraftPrompt,
+        launchModel,
+        launchModelPlanId,
         launchProvider,
         launchUserProjectPath
       ]

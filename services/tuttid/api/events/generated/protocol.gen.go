@@ -6,15 +6,17 @@ import "encoding/json"
 
 const (
 	BusinessEventProtocolVersion = 1
-	BusinessEventCatalogRevision = "sha256:db6763e8818fc827"
+	BusinessEventCatalogRevision = "sha256:0d9fc4b961d41383"
 )
 
 type Topic string
 
 const (
 	TopicAgentActivityUpdated                           Topic = "agent.activity.updated"
+	TopicAgentAutomationRulesChanged                    Topic = "agent.automation.rules.changed"
 	TopicAgentCollaborationUpdated                      Topic = "agent.collaboration.updated"
 	TopicAgentModelCatalogInvalidated                   Topic = "agent.model.catalog.invalidated"
+	TopicAgentModelConfigurationChanged                 Topic = "agent.model.configuration.changed"
 	TopicAnalyticsDebugReported                         Topic = "analytics.debug.reported"
 	TopicPreferencesAgentComposerDefaultsChanged        Topic = "preferences.agent.composer.defaults.changed"
 	TopicPreferencesAgentComposerDefaultsPatchRequested Topic = "preferences.agent.composer.defaults.patch.requested"
@@ -245,6 +247,11 @@ type AgentActivityUpdatedPayload struct {
 	Data           any     `json:"data"`
 }
 
+type AgentAutomationRulesChangedPayload struct {
+	WorkspaceId      string `json:"workspaceId"`
+	OccurredAtUnixMs int    `json:"occurredAtUnixMs"`
+}
+
 type AgentCollaborationUpdatedPayload struct {
 	WorkspaceId      string  `json:"workspaceId"`
 	RunId            string  `json:"runId"`
@@ -262,6 +269,14 @@ type AgentCollaborationUpdatedPayload struct {
 type AgentModelCatalogInvalidatedPayload struct {
 	Providers        []string `json:"providers"`
 	OccurredAtUnixMs int      `json:"occurredAtUnixMs"`
+}
+
+type AgentModelConfigurationChangedPayload struct {
+	WorkspaceId        string            `json:"workspaceId"`
+	AgentTargetIds     []string          `json:"agentTargetIds"`
+	DefaultModels      map[string]string `json:"defaultModels"`
+	ResetComposerModel bool              `json:"resetComposerModel"`
+	OccurredAtUnixMs   int               `json:"occurredAtUnixMs"`
 }
 
 type AnalyticsDebugReportedPayload struct {
@@ -335,6 +350,15 @@ type AgentActivityUpdatedEvent struct {
 	Payload   AgentActivityUpdatedPayload `json:"payload"`
 }
 
+type AgentAutomationRulesChangedEvent struct {
+	ID        string                             `json:"id"`
+	Topic     Topic                              `json:"topic"`
+	Version   int                                `json:"version"`
+	EmittedAt string                             `json:"emittedAt"`
+	Scope     *EventScope                        `json:"scope,omitempty"`
+	Payload   AgentAutomationRulesChangedPayload `json:"payload"`
+}
+
 type AgentCollaborationUpdatedEvent struct {
 	ID        string                           `json:"id"`
 	Topic     Topic                            `json:"topic"`
@@ -351,6 +375,15 @@ type AgentModelCatalogInvalidatedEvent struct {
 	EmittedAt string                              `json:"emittedAt"`
 	Scope     *EventScope                         `json:"scope,omitempty"`
 	Payload   AgentModelCatalogInvalidatedPayload `json:"payload"`
+}
+
+type AgentModelConfigurationChangedEvent struct {
+	ID        string                                `json:"id"`
+	Topic     Topic                                 `json:"topic"`
+	Version   int                                   `json:"version"`
+	EmittedAt string                                `json:"emittedAt"`
+	Scope     *EventScope                           `json:"scope,omitempty"`
+	Payload   AgentModelConfigurationChangedPayload `json:"payload"`
 }
 
 type AnalyticsDebugReportedEvent struct {
@@ -510,6 +543,13 @@ var BusinessEventDefinitions = []EventDefinition{
 		Scope:     ScopeNameWorkspace,
 	},
 	{
+		Topic:     TopicAgentAutomationRulesChanged,
+		Version:   1,
+		Direction: DirectionServerToClient,
+		Owner:     "agent",
+		Scope:     ScopeNameWorkspace,
+	},
+	{
 		Topic:     TopicAgentCollaborationUpdated,
 		Version:   1,
 		Direction: DirectionServerToClient,
@@ -522,6 +562,13 @@ var BusinessEventDefinitions = []EventDefinition{
 		Direction: DirectionServerToClient,
 		Owner:     "agent",
 		Scope:     ScopeNameGlobal,
+	},
+	{
+		Topic:     TopicAgentModelConfigurationChanged,
+		Version:   1,
+		Direction: DirectionServerToClient,
+		Owner:     "agent",
+		Scope:     ScopeNameWorkspace,
 	},
 	{
 		Topic:     TopicAnalyticsDebugReported,
@@ -597,18 +644,20 @@ var BusinessEventDefinitions = []EventDefinition{
 
 var businessEventDefinitionByTopic = map[Topic]EventDefinition{
 	TopicAgentActivityUpdated:                           BusinessEventDefinitions[0],
-	TopicAgentCollaborationUpdated:                      BusinessEventDefinitions[1],
-	TopicAgentModelCatalogInvalidated:                   BusinessEventDefinitions[2],
-	TopicAnalyticsDebugReported:                         BusinessEventDefinitions[3],
-	TopicPreferencesAgentComposerDefaultsChanged:        BusinessEventDefinitions[4],
-	TopicPreferencesAgentComposerDefaultsPatchRequested: BusinessEventDefinitions[5],
-	TopicPreferencesDesktopUpdateRequested:              BusinessEventDefinitions[6],
-	TopicPreferencesDesktopUpdated:                      BusinessEventDefinitions[7],
-	TopicUserProjectUpdated:                             BusinessEventDefinitions[8],
-	TopicWorkspaceAppUpdated:                            BusinessEventDefinitions[9],
-	TopicWorkspaceAppfactoryJobUpdated:                  BusinessEventDefinitions[10],
-	TopicWorkspaceIssueUpdated:                          BusinessEventDefinitions[11],
-	TopicWorkspaceWorkbenchNodeLaunchRequested:          BusinessEventDefinitions[12],
+	TopicAgentAutomationRulesChanged:                    BusinessEventDefinitions[1],
+	TopicAgentCollaborationUpdated:                      BusinessEventDefinitions[2],
+	TopicAgentModelCatalogInvalidated:                   BusinessEventDefinitions[3],
+	TopicAgentModelConfigurationChanged:                 BusinessEventDefinitions[4],
+	TopicAnalyticsDebugReported:                         BusinessEventDefinitions[5],
+	TopicPreferencesAgentComposerDefaultsChanged:        BusinessEventDefinitions[6],
+	TopicPreferencesAgentComposerDefaultsPatchRequested: BusinessEventDefinitions[7],
+	TopicPreferencesDesktopUpdateRequested:              BusinessEventDefinitions[8],
+	TopicPreferencesDesktopUpdated:                      BusinessEventDefinitions[9],
+	TopicUserProjectUpdated:                             BusinessEventDefinitions[10],
+	TopicWorkspaceAppUpdated:                            BusinessEventDefinitions[11],
+	TopicWorkspaceAppfactoryJobUpdated:                  BusinessEventDefinitions[12],
+	TopicWorkspaceIssueUpdated:                          BusinessEventDefinitions[13],
+	TopicWorkspaceWorkbenchNodeLaunchRequested:          BusinessEventDefinitions[14],
 }
 
 var ClientToServerTopics = []Topic{
@@ -618,8 +667,10 @@ var ClientToServerTopics = []Topic{
 
 var ServerToClientTopics = []Topic{
 	TopicAgentActivityUpdated,
+	TopicAgentAutomationRulesChanged,
 	TopicAgentCollaborationUpdated,
 	TopicAgentModelCatalogInvalidated,
+	TopicAgentModelConfigurationChanged,
 	TopicAnalyticsDebugReported,
 	TopicPreferencesAgentComposerDefaultsChanged,
 	TopicPreferencesDesktopUpdated,
@@ -655,9 +706,13 @@ func IsServerToClientTopic(topic Topic) bool {
 	switch topic {
 	case TopicAgentActivityUpdated:
 		return true
+	case TopicAgentAutomationRulesChanged:
+		return true
 	case TopicAgentCollaborationUpdated:
 		return true
 	case TopicAgentModelCatalogInvalidated:
+		return true
+	case TopicAgentModelConfigurationChanged:
 		return true
 	case TopicAnalyticsDebugReported:
 		return true
@@ -684,10 +739,14 @@ func PayloadPrototypeForTopic(topic Topic) (any, bool) {
 	switch topic {
 	case TopicAgentActivityUpdated:
 		return &AgentActivityUpdatedPayload{}, true
+	case TopicAgentAutomationRulesChanged:
+		return &AgentAutomationRulesChangedPayload{}, true
 	case TopicAgentCollaborationUpdated:
 		return &AgentCollaborationUpdatedPayload{}, true
 	case TopicAgentModelCatalogInvalidated:
 		return &AgentModelCatalogInvalidatedPayload{}, true
+	case TopicAgentModelConfigurationChanged:
+		return &AgentModelConfigurationChangedPayload{}, true
 	case TopicAnalyticsDebugReported:
 		return &AnalyticsDebugReportedPayload{}, true
 	case TopicPreferencesAgentComposerDefaultsChanged:
@@ -717,10 +776,14 @@ func EventPrototypeForTopic(topic Topic) (any, bool) {
 	switch topic {
 	case TopicAgentActivityUpdated:
 		return &AgentActivityUpdatedEvent{}, true
+	case TopicAgentAutomationRulesChanged:
+		return &AgentAutomationRulesChangedEvent{}, true
 	case TopicAgentCollaborationUpdated:
 		return &AgentCollaborationUpdatedEvent{}, true
 	case TopicAgentModelCatalogInvalidated:
 		return &AgentModelCatalogInvalidatedEvent{}, true
+	case TopicAgentModelConfigurationChanged:
+		return &AgentModelConfigurationChangedEvent{}, true
 	case TopicAnalyticsDebugReported:
 		return &AnalyticsDebugReportedEvent{}, true
 	case TopicPreferencesAgentComposerDefaultsChanged:

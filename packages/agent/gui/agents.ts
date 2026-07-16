@@ -3,6 +3,10 @@ import type {
   AgentGUIAgentAvailabilityStatus,
   AgentGUIAgentTarget
 } from "./types.ts";
+import {
+  agentGUISharedAgentUnavailableReason,
+  normalizeAgentGUISharedAgentAccess
+} from "./sharedAgentAccess.ts";
 
 export function normalizeAgentGUIAgents(
   agents: readonly AgentGUIAgent[] | null | undefined
@@ -27,7 +31,12 @@ export function normalizeAgentGUIAgents(
     seenAgentTargetIds.add(agentTargetId);
     const ownerName = agent.owner?.name?.trim() ?? "";
     const ownerAvatarUrl = agent.owner?.avatarUrl?.trim() ?? "";
-    const reason = agent.availability.reason?.trim() ?? "";
+    const ownerUserId = agent.owner?.userId?.trim() ?? "";
+    const sharedAccess = normalizeAgentGUISharedAgentAccess(agent.sharedAccess);
+    const sharedUnavailableReason =
+      agentGUISharedAgentUnavailableReason(sharedAccess);
+    const reason =
+      sharedUnavailableReason ?? agent.availability.reason?.trim() ?? "";
     normalized.push({
       agentTargetId,
       name,
@@ -38,9 +47,10 @@ export function normalizeAgentGUIAgents(
       ...(agent.description?.trim()
         ? { description: agent.description.trim() }
         : {}),
-      ...(ownerName || ownerAvatarUrl
+      ...(ownerUserId || ownerName || ownerAvatarUrl
         ? {
             owner: {
+              ...(ownerUserId ? { userId: ownerUserId } : {}),
               ...(ownerName ? { name: ownerName } : {}),
               ...(ownerAvatarUrl ? { avatarUrl: ownerAvatarUrl } : {})
             }
@@ -49,10 +59,11 @@ export function normalizeAgentGUIAgents(
       ...(agent.ownership === "self" || agent.ownership === "shared"
         ? { ownership: agent.ownership }
         : {}),
+      ...(sharedAccess ? { sharedAccess } : {}),
       availability: {
-        status: normalizeAgentGUIAgentAvailabilityStatus(
-          agent.availability.status
-        ),
+        status: sharedUnavailableReason
+          ? "unavailable"
+          : normalizeAgentGUIAgentAvailabilityStatus(agent.availability.status),
         ...(reason ? { reason } : {}),
         ...(agent.availability.pendingAction
           ? { pendingAction: agent.availability.pendingAction }
@@ -68,7 +79,10 @@ export function normalizeAgentGUIAgents(
 }
 
 export function agentGUIAgentIsReady(agent: AgentGUIAgent): boolean {
-  return agent.availability.status === "ready";
+  return (
+    agent.availability.status === "ready" &&
+    agentGUISharedAgentUnavailableReason(agent.sharedAccess) === null
+  );
 }
 
 export function resolveAgentGUISelectedDirectoryAgent(input: {
@@ -96,40 +110,46 @@ export function resolveAgentGUISelectedDirectoryAgent(input: {
 export function projectAgentGUIAgentsToInternalTargets(
   agents: readonly AgentGUIAgent[]
 ): AgentGUIAgentTarget[] {
-  return agents.map((agent) => ({
-    targetId: agent.agentTargetId,
-    agentTargetId: agent.agentTargetId,
-    provider: agent.provider,
-    ref: {
-      kind: "agent-directory",
-      provider: agent.provider,
+  return agents.map((agent) => {
+    const unavailableReason =
+      agentGUISharedAgentUnavailableReason(agent.sharedAccess) ??
+      agent.availability.reason?.trim() ??
+      "";
+    return {
+      targetId: agent.agentTargetId,
       agentTargetId: agent.agentTargetId,
-      ...(agent.setupKind ? { setupKind: agent.setupKind } : {})
-    },
-    label: agent.name,
-    availability: agent.availability,
-    ...(agent.description ? { description: agent.description } : {}),
-    iconUrl: agent.iconUrl,
-    ...(agent.maskIconUrl ? { maskIconUrl: agent.maskIconUrl } : {}),
-    ...(agent.sidebarIconUrl ? { sidebarIconUrl: agent.sidebarIconUrl } : {}),
-    ...(agent.heroImageUrl ? { heroImageUrl: agent.heroImageUrl } : {}),
-    ...(agent.owner?.avatarUrl
-      ? {
-          badge: {
-            iconUrl: agent.owner.avatarUrl,
-            ...(agent.owner.name ? { label: agent.owner.name } : {})
+      provider: agent.provider,
+      ref: {
+        kind: "agent-directory",
+        provider: agent.provider,
+        agentTargetId: agent.agentTargetId,
+        ...(agent.sharedAccess ? { sharedAccess: agent.sharedAccess } : {}),
+        ...(agent.setupKind ? { setupKind: agent.setupKind } : {})
+      },
+      label: agent.name,
+      availability: agent.availability,
+      ...(agent.description ? { description: agent.description } : {}),
+      iconUrl: agent.iconUrl,
+      ...(agent.maskIconUrl ? { maskIconUrl: agent.maskIconUrl } : {}),
+      ...(agent.sidebarIconUrl ? { sidebarIconUrl: agent.sidebarIconUrl } : {}),
+      ...(agent.heroImageUrl ? { heroImageUrl: agent.heroImageUrl } : {}),
+      ...(agent.owner?.avatarUrl
+        ? {
+            badge: {
+              iconUrl: agent.owner.avatarUrl,
+              ...(agent.owner.name ? { label: agent.owner.name } : {})
+            }
           }
-        }
-      : {}),
-    ...(agent.owner?.name ? { ownerLabel: agent.owner.name } : {}),
-    ...(agent.ownership ? { ownership: agent.ownership } : {}),
-    ...(agent.availability.status !== "ready" && !agent.setupKind
-      ? { disabled: true }
-      : {}),
-    ...(agent.availability.reason
-      ? { unavailableReason: agent.availability.reason }
-      : {})
-  }));
+        : {}),
+      ...(agent.owner?.name ? { ownerLabel: agent.owner.name } : {}),
+      ...(agent.ownership ? { ownership: agent.ownership } : {}),
+      ...(agent.setupKind ? { setupKind: agent.setupKind } : {}),
+      ...(!agentGUIAgentIsReady(agent) && !agent.setupKind
+        ? { disabled: true }
+        : {}),
+      ...(unavailableReason ? { unavailableReason } : {})
+    };
+  });
 }
 
 function normalizeAgentGUIAgentAvailabilityStatus(

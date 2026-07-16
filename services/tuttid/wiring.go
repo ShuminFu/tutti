@@ -25,6 +25,7 @@ import (
 	agentextensionservice "github.com/tutti-os/tutti/services/tuttid/service/agentextension"
 	agentstatusservice "github.com/tutti-os/tutti/services/tuttid/service/agentstatus"
 	agenttargetservice "github.com/tutti-os/tutti/services/tuttid/service/agenttarget"
+	automationruleservice "github.com/tutti-os/tutti/services/tuttid/service/automationrule"
 	browsersvc "github.com/tutti-os/tutti/services/tuttid/service/browser"
 	cliservice "github.com/tutti-os/tutti/services/tuttid/service/cli"
 	appclicli "github.com/tutti-os/tutti/services/tuttid/service/cli/appcli"
@@ -34,6 +35,7 @@ import (
 	diagnosticscli "github.com/tutti-os/tutti/services/tuttid/service/cli/providers/diagnostics"
 	issuemanagercli "github.com/tutti-os/tutti/services/tuttid/service/cli/providers/issuemanager"
 	managedmodelscli "github.com/tutti-os/tutti/services/tuttid/service/cli/providers/managedmodels"
+	modelconsultcli "github.com/tutti-os/tutti/services/tuttid/service/cli/providers/modelconsult"
 	referencescli "github.com/tutti-os/tutti/services/tuttid/service/cli/providers/references"
 	workbenchappscli "github.com/tutti-os/tutti/services/tuttid/service/cli/providers/workbenchapps"
 	collabrunservice "github.com/tutti-os/tutti/services/tuttid/service/collabrun"
@@ -49,6 +51,7 @@ import (
 	tuttiagentservice "github.com/tutti-os/tutti/services/tuttid/service/tuttiagent"
 	userprojectservice "github.com/tutti-os/tutti/services/tuttid/service/userproject"
 	workspaceservice "github.com/tutti-os/tutti/services/tuttid/service/workspace"
+	workspaceagentservice "github.com/tutti-os/tutti/services/tuttid/service/workspaceagent"
 	tuttitypes "github.com/tutti-os/tutti/services/tuttid/types"
 )
 
@@ -244,6 +247,7 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 
 	events := eventstreamservice.NewService(eventstreamservice.DefaultCatalog(), nil)
 	preferencesPublisher := eventstreamservice.DesktopPreferencesPublisher{Service: events}
+	modelConfigurationPublisher := eventstreamservice.AgentModelConfigurationPublisher{Service: events}
 	preferences := &preferencesservice.Service{
 		Store:                          preferencesStore,
 		Publisher:                      preferencesPublisher,
@@ -287,21 +291,41 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	}
 	managedCredentials := &managedcredentialsservice.Service{
 		Store: managedCredentialsStore,
+		Plans: modelPlansStore,
 	}
 	modelBindingsStore, _ := store.(workspacedata.AgentModelBindingsStore)
 	modelBindings := &modelbindingservice.Service{
-		Store:   modelBindingsStore,
-		Plans:   modelPlansStore,
-		Targets: agentTargetStore,
+		Store:                  modelBindingsStore,
+		Plans:                  modelPlansStore,
+		Targets:                agentTargetStore,
+		ConfigurationPublisher: modelConfigurationPublisher,
 	}
 	modelPolicyStore, _ := store.(modelpolicyservice.Store)
 	modelPolicies := &modelpolicyservice.Service{
 		Store: modelPolicyStore,
 	}
-	modelPlans := &modelplanservice.Service{
-		Store:      modelPlansStore,
-		References: modelplanservice.CompositeReferenceResolver{modelBindings, modelPolicies},
+	workspaceAgentsStore, _ := store.(workspacedata.WorkspaceAgentsStore)
+	workspaceAgents := &workspaceagentservice.Service{
+		Store:      workspaceAgentsStore,
+		Targets:    agentTargetStore,
+		Plans:      modelPlansStore,
+		Workspaces: store,
+		Publisher:  modelConfigurationPublisher,
 	}
+	automationRulesStore, _ := store.(workspacedata.AutomationRulesStore)
+	automationRules := &automationruleservice.Service{
+		Store:     automationRulesStore,
+		Plans:     modelPlansStore,
+		Agents:    workspaceAgents,
+		Publisher: eventstreamservice.AgentAutomationRulesPublisher{Service: events},
+	}
+	modelPlans := &modelplanservice.Service{
+		Store:                  modelPlansStore,
+		References:             modelplanservice.CompositeReferenceResolver{modelBindings, workspaceAgents, automationRules, modelPolicies, managedCredentials},
+		Bindings:               modelplanservice.CompositeAgentTargetBindingResolver{modelBindings, workspaceAgents},
+		ConfigurationPublisher: modelConfigurationPublisher,
+	}
+	workspaceAgents.Completer = modelPlans
 	collabRunsStore, _ := store.(workspacedata.CollaborationRunsStore)
 	collabRuns := &collabrunservice.Service{
 		Store:     collabRunsStore,
@@ -309,7 +333,6 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		Completer: modelPlans,
 		Publisher: eventstreamservice.AgentCollaborationPublisher{Service: events},
 	}
-	modelPolicies.ConfigureReviewAutomation(modelBindingsStore, nil, collabRuns, collabRuns)
 	events.RegisterIntentHandler(
 		eventstreamservice.TopicPreferencesDesktopUpdateRequested,
 		eventstreamservice.NewPreferencesDesktopUpdateRequestedHandler(preferences),
@@ -319,12 +342,14 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		eventstreamservice.NewPreferencesAgentComposerDefaultsPatchRequestedHandler(preferences),
 	)
 	agentActivityProjection := agentservice.NewActivityProjection(agentActivityRepo)
-	modelPolicies.Sessions = modelPolicySessionTargetResolver{projection: agentActivityProjection}
 	collabRuns.Timeline = agentservice.CollaborationTimelineReporter{Projection: agentActivityProjection}
 	agentActivityProjection.SetAnalyticsReporter(analyticsReporter)
 	agentActivityProjection.SetPublisher(eventstreamservice.AgentActivityPublisher{Service: events})
 	if agentTargetResolver, ok := store.(agentservice.AgentTargetResolver); ok {
 		agentActivityProjection.SetAgentTargetResolver(agentTargetResolver)
+	}
+	if workspaceAgentTargetResolver, ok := store.(agentservice.WorkspaceAgentTargetResolver); ok {
+		agentActivityProjection.SetWorkspaceAgentTargetResolver(workspaceAgentTargetResolver)
 	}
 	managedRuntimeResolver := managedruntime.DefaultResolver{}
 	// Shared so a runtime auth failure (reporter side) surfaces in the status
@@ -400,6 +425,7 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		manager: agentExtensionManager,
 	}
 	agentSessionService.SessionInitializer = agentActivityProjection
+	agentSessionService.WorkspaceAgentResolver = workspaceAgents
 	agentSessionService.SessionReader = agentActivityProjection
 	agentSessionService.UserProjectReader = userProjectService
 	agentSessionService.MessageReader = agentActivityProjection
@@ -410,6 +436,7 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	agentSessionService.CommitObserver = agentActivityProjection
 	agentSessionService.SubmitClaimStore = agentActivityRepo
 	agentSessionService.RuntimeOperationEventPublisher = agentActivityProjection
+	agentSessionService.AutomationRuleOverrides = automationRules
 	agentSessionService.RuntimeOperationOwner = uuid.NewString()
 	agentSessionService.StaleTurnSettler = agentActivityProjection
 	agentSessionService.GoalOperationOwner = uuid.NewString()
@@ -451,6 +478,17 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	agentSessionService.AvailabilityChecker = agentservice.AgentStatusProviderAvailabilityChecker{
 		Service: &agentStatusService,
 	}
+	modelPlans.NativeSubscriptionProbe = modelPlanNativeSubscriptionProbe{Agents: agentSessionService}
+	collabRuns.Canceller = agentCollaborationSessionCanceller{Service: agentSessionService}
+	collabRuns.Launcher = agentSessionService
+	// Collaboration settlement observes startup interruption before the later
+	// full observer fan-out is installed.
+	agentActivityProjection.SetSessionStateObserver(collabRuns)
+	automationExecutor := &automationruleservice.DaemonExecutor{Agents: agentSessionService, Runs: collabRuns}
+	automationRules.Executor = automationExecutor
+	automationRules.Usage = automationExecutor
+	automationRules.Context = automationExecutor
+
 	agentHost := agentservice.NewApplicationHost(agentSessionService)
 	agentSessionService.SetApplicationHost(agentHost)
 	// Host fixes startup order: durable runtime operations first, then goal
@@ -469,9 +507,22 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		PreferencesStore: preferencesStore,
 	}
 	issueService := workspaceservice.IssueManagerService{
-		AgentSessionReader: agentActivityProjection,
-		Publisher:          eventstreamservice.WorkspaceIssuePublisher{Service: events},
-		Store:              issueStore,
+		AgentSessionCreator: agentSessionService,
+		AgentSessionReader:  agentActivityProjection,
+		CollaborationRuns:   collabRuns,
+		Publisher:           eventstreamservice.WorkspaceIssuePublisher{Service: events},
+		Store:               issueStore,
+		AgentTargetReader:   agentTargetStore,
+		WorkspaceAgents:     workspaceAgents,
+		ModelPlanReader:     modelPlansStore,
+		AutomationRules:     automationRules,
+		PlanningTimeline:    agentservice.IssuePlanningTimelineReporter{Projection: agentActivityProjection},
+	}
+	automationExecutor.IssueRescues = &issueService
+	collabRuns.TerminalObserver = &issueService
+	automationRules.ReviewOutcomes = automationReviewOutcomeRecorder{
+		Policies: modelPolicies,
+		Issues:   &issueService,
 	}
 	issueService.RunReconcileQueue = workspaceservice.NewIssueRunReconcileQueue(workspaceservice.IssueRunReconcileQueueOptions{
 		Delay:     3 * time.Second,
@@ -540,7 +591,7 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		Publisher:             eventstreamservice.WorkspaceAppFactoryPublisher{Service: events},
 	}
 	agentActivityProjection.SetSessionMessageObserver(appFactoryService)
-	agentActivityProjection.SetSessionStateObserver(agentservice.SessionStateObservers{appFactoryService, agentSessionService, modelPolicies})
+	agentActivityProjection.SetSessionStateObserver(agentservice.SessionStateObservers{appFactoryService, agentSessionService, &issueService, modelPolicies, automationRules, collabRuns})
 	if _, err := appFactoryService.ReconcileInterruptedJobs(ctx); err != nil {
 		agentRuntime.Close()
 		return tuttiapi.DaemonAPI{}, nil, nil, nil, fmt.Errorf("reconcile interrupted app factory jobs: %w", err)
@@ -567,6 +618,7 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 			agentTargets,
 			preferences,
 		),
+		modelconsultcli.NewProvider(workspaceService, modelPlans, collabRuns),
 	}
 	if browserService != nil {
 		cliProviders = append(cliProviders, browsercli.NewProvider(workspaceService, browserService))
@@ -626,6 +678,8 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		PreferencesService:        preferences,
 		ManagedCredentialsService: managedCredentials,
 		ModelPlanService:          modelPlans,
+		WorkspaceAgentService:     workspaceAgents,
+		AutomationRuleService:     automationRules,
 		AgentModelBindingService:  modelBindings,
 		ModelPolicyService:        modelPolicies,
 		CollaborationRunService:   collabRuns,
@@ -692,22 +746,4 @@ func (w *tuttiWiring) Close() error {
 		closeErr = err
 	}
 	return closeErr
-}
-
-// modelPolicySessionTargetResolver lets the review engine resolve a session's
-// agent target from the persisted activity projection when a state report
-// does not carry it.
-type modelPolicySessionTargetResolver struct {
-	projection *agentservice.ActivityProjection
-}
-
-func (r modelPolicySessionTargetResolver) ResolveSessionAgentTarget(workspaceID string, agentSessionID string) (string, bool) {
-	if r.projection == nil {
-		return "", false
-	}
-	session, ok := r.projection.GetSession(workspaceID, agentSessionID)
-	if !ok {
-		return "", false
-	}
-	return session.AgentTargetID, session.AgentTargetID != ""
 }

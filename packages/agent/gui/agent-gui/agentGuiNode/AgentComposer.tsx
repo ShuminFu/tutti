@@ -31,12 +31,17 @@ import { useComposerProviderTargets } from "./composer/useComposerProviderTarget
 import { useComposerFocusAndDrop } from "./composer/useComposerFocusAndDrop";
 import { useComposerPresentation } from "./composer/useComposerPresentation";
 import { AgentComposerView } from "./composer/AgentComposerView";
+import { useComposerAgentCollaboration } from "./composer/useComposerAgentCollaboration";
+import { useComposerAutomationRuleOverride } from "./composer/useComposerAutomationRuleOverride";
 import {
   EMPTY_CONTEXT_MENTION_PROVIDERS,
   EMPTY_PROMPT_TIPS,
   EMPTY_PROVIDER_SKILLS
 } from "./composer/AgentComposerChrome";
-import type { AgentComposerProps } from "./composer/AgentComposer.types";
+import type {
+  AgentComposerExecutionMode,
+  AgentComposerProps
+} from "./composer/AgentComposer.types";
 import {
   agentComposerDraftAttachmentProjection,
   agentComposerDraftFiles,
@@ -82,6 +87,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   "use memo";
   const {
     workspaceId,
+    agentSessionId = null,
     workspacePath,
     currentUserId,
     provider,
@@ -124,6 +130,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     labels,
     onDraftContentChange,
     onSettingsChange,
+    onPlanIssueBudgetPresetChange,
     capabilityMenuState,
     onSubmit,
     onSubmitGuidance,
@@ -168,6 +175,90 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   const [isPaletteOpen, setIsPaletteOpen] = useState(true);
   const [isReviewPickerOpen, setIsReviewPickerOpen] = useState(false);
   const [isHandoffIconPlaying, setIsHandoffIconPlaying] = useState(false);
+  const automationRules = useComposerAutomationRuleOverride({
+    agentSessionId,
+    disabled: disabled || submitDisabled,
+    runtime: agentActivityRuntime,
+    workspaceId
+  });
+  const agentCollaboration = useComposerAgentCollaboration({
+    agentHostApi,
+    agentSessionId,
+    disabled,
+    draftContent,
+    draftPrompt,
+    draftScopeKey,
+    agentTargets,
+    onDraftContentChange,
+    runtime: agentActivityRuntime,
+    submitDisabled,
+    workspaceId
+  });
+  const [executionMode, setExecutionMode] =
+    useState<AgentComposerExecutionMode>(
+      composerSettings.draftSettings.planMode ? "plan" : "normal"
+    );
+  useEffect(() => {
+    setExecutionMode((currentMode) => {
+      if (
+        currentMode === "ultra_plan" &&
+        composerSettings.draftSettings.planMode &&
+        composerSettings.supportsUltraPlan === true
+      ) {
+        return currentMode;
+      }
+      return composerSettings.draftSettings.planMode ? "plan" : "normal";
+    });
+  }, [
+    composerSettings.draftSettings.planMode,
+    composerSettings.supportsUltraPlan
+  ]);
+  const effectiveExecutionMode =
+    executionMode === "ultra_plan" &&
+    composerSettings.supportsUltraPlan !== true
+      ? composerSettings.draftSettings.planMode
+        ? "plan"
+        : "normal"
+      : executionMode;
+  const selectExecutionMode = (mode: AgentComposerExecutionMode): void => {
+    if (mode === "ultra_plan" && composerSettings.supportsUltraPlan !== true) {
+      return;
+    }
+    setExecutionMode(mode);
+    onSettingsChange({ planMode: mode !== "normal" });
+  };
+  const submitWithExecutionMode: AgentComposerProps["onSubmit"] = (
+    content,
+    displayPrompt,
+    options
+  ) => {
+    if (agentCollaboration.hasCollaborationTargets) {
+      agentCollaboration.submit();
+      return;
+    }
+    if (effectiveExecutionMode === "ultra_plan") {
+      onSubmit(content, displayPrompt, {
+        ...options,
+        ...(automationRules.override
+          ? { automationRuleOverride: automationRules.override }
+          : {}),
+        executionMode: effectiveExecutionMode
+      });
+      return;
+    }
+    if (automationRules.override) {
+      onSubmit(content, displayPrompt, {
+        ...options,
+        automationRuleOverride: automationRules.override
+      });
+      return;
+    }
+    if (displayPrompt === undefined) {
+      onSubmit(content);
+      return;
+    }
+    onSubmit(content, displayPrompt);
+  };
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [mentionHighlightedKey, setMentionHighlightedKey] = useState<
     string | null
@@ -397,7 +488,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     workspaceId,
     provider,
     disabled,
-    submitDisabled,
+    submitDisabled: agentCollaboration.effectiveSubmitDisabled,
     canQueueWhileBusy,
     isSendingTurn,
     isSubmittingPrompt,
@@ -407,7 +498,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     composerSettings,
     onDraftContentChange,
     onSettingsChange,
-    onSubmit,
+    onSubmit: submitWithExecutionMode,
     onSubmitGuidance,
     onCapabilitySettingsRequest,
     onSlashStatusOpen,
@@ -596,7 +687,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     onSubmitInteractivePrompt,
     onInterruptCurrentTurn,
     isSelectedProjectMissing,
-    submitDisabled,
+    submitDisabled: agentCollaboration.effectiveSubmitDisabled,
     labels,
     activePromptTip,
     promptTipRef,
@@ -611,6 +702,12 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   return (
     <AgentComposerView
       props={props}
+      collaborationControls={
+        <>
+          {automationRules.controls}
+          {agentCollaboration.controls}
+        </>
+      }
       paletteCatalog={paletteCatalog}
       mentionFrame={mentionFrame}
       slashActions={slashActions}
@@ -645,6 +742,9 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
       isHandoffIconPlaying={isHandoffIconPlaying}
       setIsHandoffIconPlaying={setIsHandoffIconPlaying}
       isGoalModeActive={isGoalModeActive}
+      executionMode={effectiveExecutionMode}
+      onExecutionModeChange={selectExecutionMode}
+      onPlanIssueBudgetPresetChange={onPlanIssueBudgetPresetChange}
       isPromptTipOverflowing={isPromptTipOverflowing}
     />
   );

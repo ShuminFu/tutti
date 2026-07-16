@@ -8,8 +8,10 @@ export type BusinessEventScopeName = "global" | "desktop" | "workspace";
 
 export type BusinessEventTopic =
   | "agent.activity.updated"
+  | "agent.automation.rules.changed"
   | "agent.collaboration.updated"
   | "agent.model.catalog.invalidated"
+  | "agent.model.configuration.changed"
   | "analytics.debug.reported"
   | "preferences.agent.composer.defaults.changed"
   | "preferences.agent.composer.defaults.patch.requested"
@@ -357,6 +359,11 @@ export type AgentActivityUpdatedPayloadV1 =
       };
     };
 
+export interface AgentAutomationRulesChangedPayloadV1 {
+  workspaceId: string;
+  occurredAtUnixMs: number;
+}
+
 export interface AgentCollaborationUpdatedPayloadV1 {
   workspaceId: string;
   runId: string;
@@ -366,13 +373,21 @@ export interface AgentCollaborationUpdatedPayloadV1 {
   targetSessionId?: string;
   modelPlanId?: string;
   model?: string;
-  triggerSource: "user" | "agent" | "policy";
+  triggerSource: "user" | "agent" | "policy" | "automation";
   adoption?: "pending" | "adopted" | "rejected" | "not_applicable";
   occurredAtUnixMs: number;
 }
 
 export interface AgentModelCatalogInvalidatedPayloadV1 {
   providers: readonly string[];
+  occurredAtUnixMs: number;
+}
+
+export interface AgentModelConfigurationChangedPayloadV1 {
+  workspaceId: string;
+  agentTargetIds: readonly string[];
+  defaultModels: Record<string, string>;
+  resetComposerModel: boolean;
   occurredAtUnixMs: number;
 }
 
@@ -454,6 +469,12 @@ export type AgentActivityUpdatedEventV1 = BusinessEventEnvelopeV1<
   2
 >;
 
+export type AgentAutomationRulesChangedEventV1 = BusinessEventEnvelopeV1<
+  "agent.automation.rules.changed",
+  AgentAutomationRulesChangedPayloadV1,
+  1
+>;
+
 export type AgentCollaborationUpdatedEventV1 = BusinessEventEnvelopeV1<
   "agent.collaboration.updated",
   AgentCollaborationUpdatedPayloadV1,
@@ -463,6 +484,12 @@ export type AgentCollaborationUpdatedEventV1 = BusinessEventEnvelopeV1<
 export type AgentModelCatalogInvalidatedEventV1 = BusinessEventEnvelopeV1<
   "agent.model.catalog.invalidated",
   AgentModelCatalogInvalidatedPayloadV1,
+  1
+>;
+
+export type AgentModelConfigurationChangedEventV1 = BusinessEventEnvelopeV1<
+  "agent.model.configuration.changed",
+  AgentModelConfigurationChangedPayloadV1,
   1
 >;
 
@@ -535,8 +562,10 @@ export type ClientToServerEventTopic =
 
 export type ServerToClientEventTopic =
   | "agent.activity.updated"
+  | "agent.automation.rules.changed"
   | "agent.collaboration.updated"
   | "agent.model.catalog.invalidated"
+  | "agent.model.configuration.changed"
   | "analytics.debug.reported"
   | "preferences.agent.composer.defaults.changed"
   | "preferences.desktop.updated"
@@ -552,8 +581,10 @@ export type ClientToServerEventV1 =
 
 export type ServerToClientEventV1 =
   | AgentActivityUpdatedEventV1
+  | AgentAutomationRulesChangedEventV1
   | AgentCollaborationUpdatedEventV1
   | AgentModelCatalogInvalidatedEventV1
+  | AgentModelConfigurationChangedEventV1
   | AnalyticsDebugReportedEventV1
   | PreferencesAgentComposerDefaultsChangedEventV1
   | PreferencesDesktopUpdatedEventV1

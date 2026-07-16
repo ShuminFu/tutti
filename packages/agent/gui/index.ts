@@ -48,6 +48,13 @@ export {
   normalizeAgentGUIAgentTargets,
   resolveAgentGUIAgentTarget
 } from "./agentTargets";
+export {
+  agentGUISharedAgentAllowsModel,
+  agentGUISharedAgentAllowsPolicy,
+  agentGUISharedAgentUnavailableReason,
+  normalizeAgentGUISharedAgentAccess,
+  type AgentGUISharedAgentUnavailableReason
+} from "./sharedAgentAccess";
 export type {
   AgentGUIAgent,
   AgentGUIAgentDirectoryPort,
@@ -58,6 +65,9 @@ export type {
   AgentGUIAgentAvailabilityStatus,
   AgentGUIAgentOwner,
   AgentGUIAgentOwnership,
+  AgentGUISharedAgentAccess,
+  AgentGUISharedAgentConcurrency,
+  AgentGUISharedAgentQuota,
   AgentGUIHomeSuggestionId,
   AgentGUIAllAgentsPresentation,
   AgentGUIProvider,
@@ -107,6 +117,18 @@ export {
 } from "./shared/agentConversation/agentPlanPromptDispatch";
 export type { AgentPlanPromptAction } from "./shared/agentConversation/agentPlanPromptDispatch";
 export {
+  autoTokenBudget,
+  planIssueDraftFromPlanText,
+  planIssueDraftFromTimelineItems
+} from "./shared/agentConversation/planImplementationPresentation";
+export type {
+  PlanIssueBudget,
+  PlanIssueCreationOptions,
+  PlanIssueDraft,
+  PlanIssueExecutionProfile,
+  PlanIssueTaskDraft
+} from "./shared/agentConversation/planImplementationPresentation";
+export {
   AgentActivityRuntimeProvider,
   resetAgentActivityRuntimeForTests,
   setAgentActivityRuntimeForTests,
@@ -115,6 +137,10 @@ export {
   useOptionalAgentActivityRuntime
 } from "./agentActivityRuntime";
 export type {
+  AgentActivityAutomationRuleListResult,
+  AgentActivityAutomationRuleOverrideResult,
+  AgentActivityAutomationRuleSessionInput,
+  AgentActivityAutomationRuleSummary,
   AgentActivityRuntime,
   AgentActivityRuntimeListSessionMessagesInput,
   AgentActivityRuntimeProviderProps,
@@ -127,7 +153,8 @@ export type {
   AgentActivityRuntimeUploadPromptContentInput,
   AgentActivityRuntimeUploadPromptContentResult,
   AgentActivityRuntimeUpdateSessionSettingsInput,
-  AgentActivityRuntimeUpdateSessionSettingsResult
+  AgentActivityRuntimeUpdateSessionSettingsResult,
+  AgentActivitySetAutomationRuleOverrideInput
 } from "./agentActivityRuntime";
 export type {
   AgentHostApi,

@@ -86,6 +86,8 @@ import { createAgentProvidersClient } from "./agentProvidersClient.ts";
 import { unwrapAccepted, unwrapData } from "./tuttidClientResponse.ts";
 import { createWorkspaceAppsClient } from "./workspaceAppsClient.ts";
 import { createWorkspaceAgentClient } from "./workspaceAgentClient.ts";
+import { createWorkspaceAgentConfigurationClient } from "./workspaceAgentConfigurationClient.ts";
+import { createWorkspaceIssueOrchestrationClient } from "./workspaceIssueOrchestrationClient.ts";
 import type {
   CreateTuttidClientInput,
   TuttidClient
@@ -111,6 +113,8 @@ export function createTuttidClient(
   });
 
   return {
+    ...createWorkspaceAgentConfigurationClient(client),
+    ...createWorkspaceIssueOrchestrationClient(client),
     async listAgentTargets() {
       return unwrapData(
         await listAgentTargets({ client }),

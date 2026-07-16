@@ -74,10 +74,16 @@ import {
   createWorkspaceFeatureFlagSettings,
   type WorkspaceFeatureFlagSettings
 } from "./workspaceFeatureFlagSettings.ts";
-import { WorkspaceModelPlansController } from "./workspaceModelPlansController.ts";
+import {
+  WorkspaceModelPlansController,
+  type WorkspaceModelPlansControllerDependencies
+} from "./workspaceModelPlansController.ts";
+import { WorkspaceAgentsController } from "./workspaceAgentsController.ts";
+import { WorkspaceAutomationRulesController } from "./workspaceAutomationRulesController.ts";
 
 export interface WorkspaceSettingsServiceDependencies {
   client: DesktopWorkspaceSettingsClient;
+  launchAgentGui?: WorkspaceModelPlansControllerDependencies["launchAgentGui"];
   onAgentTargetsChanged?: () => void | Promise<void>;
   replaceWorkspaceWindow?: (input: {
     mode: "agent" | "os";
@@ -96,6 +102,8 @@ const tuttiAgentTargetID = "local:tutti-agent";
 export class WorkspaceSettingsService implements IWorkspaceSettingsService {
   readonly _serviceBrand: undefined;
   readonly store = createWorkspaceSettingsStore();
+  readonly agents: WorkspaceAgentsController;
+  readonly automationRules: WorkspaceAutomationRulesController;
   readonly modelPlans: WorkspaceModelPlansController;
 
   private readonly dependencies: WorkspaceSettingsServiceDependencies;
@@ -137,7 +145,17 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     this.reporterNow = reporterNow;
     this.modelPlans = new WorkspaceModelPlansController({
       client: dependencies.client,
+      launchAgentGui: dependencies.launchAgentGui,
       notifications,
+      store: this.store
+    });
+    this.agents = new WorkspaceAgentsController({
+      client: dependencies.client,
+      onWorkspaceAgentsChanged: dependencies.onAgentTargetsChanged,
+      store: this.store
+    });
+    this.automationRules = new WorkspaceAutomationRulesController({
+      client: dependencies.client,
       store: this.store
     });
     this.scheduleTuttiAgentSwitchInitialization();
@@ -150,10 +168,10 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     this.scheduleTuttiAgentSwitchInitialization();
     this.syncWorkspace(workspace);
     // "managed-models" remains the external open-request alias for the pane
-    // that now hosts model plans.
+    // that now hosts model plans, under the dedicated Model settings tab.
     const modelPlansRequested = options?.pane === "managed-models";
     if (modelPlansRequested) {
-      this.store.activeSection = "apps";
+      this.store.activeSection = "model";
     } else if (options?.section) {
       this.store.activeSection = options.section;
     }
@@ -168,9 +186,9 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     if (!wasOpen) {
       this.reportSettingsOpened();
       void this.refreshDeveloperLogs();
-      void this.modelPlans.refresh();
-    } else if (this.store.activeSection === "apps") {
-      void this.modelPlans.refresh();
+      void this.refreshModelAndAgentSettings();
+    } else if (isModelOrAgentSection(this.store.activeSection)) {
+      void this.refreshModelAndAgentSettings();
     }
   }
 
@@ -234,6 +252,8 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       this.store.generalFocusAnchor = null;
       this.store.generalFocusRequestID = 0;
       this.modelPlans.reset();
+      this.agents.reset();
+      this.automationRules.reset();
     }
   }
 
@@ -244,9 +264,17 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
 
     this.store.activeSection = sectionID;
     this.reportSettingsSectionSwitched(sectionID);
-    if (sectionID === "apps") {
-      void this.modelPlans.refresh();
+    if (isModelOrAgentSection(sectionID)) {
+      void this.refreshModelAndAgentSettings();
     }
+  }
+
+  private async refreshModelAndAgentSettings(): Promise<void> {
+    await Promise.all([
+      this.modelPlans.refreshPlans(),
+      this.agents.refresh(),
+      this.automationRules.refresh()
+    ]);
   }
 
   setDeveloperPanelVisible(visible: boolean): void {
@@ -943,6 +971,13 @@ const defaultTuttiAgentSwitchMigration = {
 
 function createActiveTranslator() {
   return createTranslator(getActiveLocale());
+}
+
+// The Model tab hosts model access plans; the Agent tab hosts WorkspaceAgents
+// and automation rules. Both sections read the same daemon-backed slices, so
+// entering either refreshes all three.
+function isModelOrAgentSection(sectionID: WorkspaceSettingsSectionID): boolean {
+  return sectionID === "model" || sectionID === "agent";
 }
 
 // Avoid decorator syntax so the renderer Babel pass can parse this file.
