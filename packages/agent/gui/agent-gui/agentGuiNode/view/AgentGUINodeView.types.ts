@@ -84,6 +84,8 @@ export interface AgentGUIViewLabels {
   modelTooltipVersionLabel: string;
   defaultModel: string;
   loadingOptions: string;
+  optionsLoadFailed: string;
+  optionsLoadFailedRetry: string;
   inheritedUnavailable: string;
   reasoningLabel: string;
   reasoningDegreeLabel: string;
@@ -503,6 +505,8 @@ export interface AgentGUINodeViewProps {
       planMode?: boolean;
       permissionMode?: string;
     }) => void;
+    /** Re-issues the composer-options load after a terminal error state. */
+    retryComposerOptions: () => void;
     setTuttiModeActive: (active: boolean) => void;
     retryTuttiModeActivation: () => void;
     updatePlanIssueBudgetPreset: (preset: PlanIssueBudgetPreset) => void;
