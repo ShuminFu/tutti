@@ -62,6 +62,10 @@ import {
   createInitialSessionMutationsState,
   sessionMutationsReducer
 } from "./sessionMutations.reducer.ts";
+import {
+  collaborationOperationsReducer,
+  createInitialCollaborationOperationsState
+} from "./collaborationOperations.reducer.ts";
 
 // Root reducer: static composition of domain reducers, zero business logic.
 // Cross-domain read-only context is passed explicitly; domains still own all
@@ -70,6 +74,7 @@ import {
 export function createInitialAgentSessionEngineState(): AgentSessionEngineState {
   return {
     attentionReadState: createInitialAttentionReadState(),
+    collaborationOperations: createInitialCollaborationOperationsState(),
     engineRuntime: createInitialEngineRuntimeState(),
     pendingIntents: createInitialPendingIntentsState(),
     planDecisions: createInitialPlanDecisionState(),
@@ -180,6 +185,10 @@ export function rootEngineReducer(
         )
       : null;
   const engineRuntime = engineRuntimeReducer(state.engineRuntime, intent);
+  const collaborationOperations = collaborationOperationsReducer(
+    state.collaborationOperations,
+    intent
+  );
   const planIntent =
     intent.type === "plan/decisionRequested" ||
     intent.type === "plan/feedbackRequested" ||
@@ -363,6 +372,7 @@ export function rootEngineReducer(
   const composerOptions = composerOptionsReducer(state.composerOptions, intent);
   const unchanged =
     attentionReadState.state === state.attentionReadState &&
+    collaborationOperations.state === state.collaborationOperations &&
     engineRuntime.state === state.engineRuntime &&
     pendingIntents.state === state.pendingIntents &&
     planDecisions.state === state.planDecisions &&
@@ -377,6 +387,7 @@ export function rootEngineReducer(
     ? state
     : {
         attentionReadState: attentionReadState.state,
+        collaborationOperations: collaborationOperations.state,
         engineRuntime: engineRuntime.state,
         pendingIntents: pendingIntents.state,
         planDecisions: planDecisions.state,
@@ -391,6 +402,7 @@ export function rootEngineReducer(
   return {
     commands: [
       ...attentionReadState.commands,
+      ...collaborationOperations.commands,
       ...engineRuntime.commands,
       ...pendingIntents.commands,
       ...planDecisions.commands,
