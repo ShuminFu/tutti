@@ -35,6 +35,7 @@ import {
   workspaceReferenceSelectValue
 } from "./AgentComposerChrome";
 import { resolveHandoffTargetOwnershipLabel } from "./handoffTargetPresentation";
+import { TuttiBudgetPopover } from "./TuttiBudgetPopover";
 
 interface Props {
   labels: AgentComposerProps["labels"];
@@ -54,6 +55,7 @@ interface Props {
   isPlanModeActive: boolean;
   isTuttiModeActive: boolean;
   isTuttiModeUpdating: boolean;
+  tuttiModeOrchestrationIntensity: number;
   composerActionButton: ReactNode;
   showHandoffSelect: boolean;
   handoffDisabled: boolean;
@@ -80,6 +82,7 @@ interface Props {
   onClearGoalMode: () => void;
   onClearPlanMode: () => void;
   onClearTuttiMode: () => void;
+  onTuttiModeOrchestrationIntensityChange: (value: number) => void;
 }
 
 export function ComposerFooter({
@@ -100,6 +103,7 @@ export function ComposerFooter({
   isPlanModeActive,
   isTuttiModeActive,
   isTuttiModeUpdating,
+  tuttiModeOrchestrationIntensity,
   composerActionButton,
   showHandoffSelect,
   handoffDisabled,
@@ -125,7 +129,8 @@ export function ComposerFooter({
   onSubmit,
   onClearGoalMode: clearGoalModeBadge,
   onClearPlanMode,
-  onClearTuttiMode
+  onClearTuttiMode,
+  onTuttiModeOrchestrationIntensityChange
 }: Props) {
   // A terminal options-load failure keeps both dropdown slots mounted so the
   // recoverable error affordance can render where the menus normally live.
@@ -425,26 +430,55 @@ export function ComposerFooter({
             </button>
           ) : null}
           {isTuttiModeActive ? (
-            <button
-              type="button"
-              disabled={isTuttiModeUpdating}
-              aria-label={labels.tuttiModeLabel}
-              title={labels.tuttiModeDescription}
-              data-agent-tutti-mode-badge="true"
-              className={cn(
-                styles.composerMenuTrigger,
-                "group w-auto",
-                "disabled:cursor-not-allowed disabled:opacity-60"
-              )}
-              onClick={onClearTuttiMode}
-            >
-              <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-                <RemovableBadgeIcon icon={<Sparkles className="size-3.5" />} />
-                <span className="min-w-0 truncate">
-                  {labels.tuttiModeLabel}
-                </span>
-              </span>
-            </button>
+            <span className="inline-flex shrink-0 items-center gap-0.5">
+              <TuttiBudgetPopover
+                intensity={tuttiModeOrchestrationIntensity}
+                labels={{
+                  title: labels.tuttiBudgetTitle,
+                  intensityLabel: labels.tuttiBudgetIntensityLabel,
+                  intensityMin: labels.tuttiBudgetIntensityMin,
+                  intensityMax: labels.tuttiBudgetIntensityMax,
+                  confirm: labels.tuttiBudgetConfirm,
+                  cancel: labels.tuttiBudgetCancel
+                }}
+                onConfirm={onTuttiModeOrchestrationIntensityChange}
+              >
+                <button
+                  type="button"
+                  disabled={isTuttiModeUpdating}
+                  aria-label={labels.tuttiModeLabel}
+                  title={labels.tuttiModeDescription}
+                  data-agent-tutti-mode-badge="true"
+                  className={cn(
+                    styles.composerMenuTrigger,
+                    "group w-auto",
+                    "disabled:cursor-not-allowed disabled:opacity-60"
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                    <Sparkles aria-hidden className="size-3.5 shrink-0" />
+                    <span className="min-w-0 truncate">
+                      {labels.tuttiModeLabel}
+                    </span>
+                  </span>
+                </button>
+              </TuttiBudgetPopover>
+              <button
+                type="button"
+                disabled={isTuttiModeUpdating}
+                aria-label={labels.tuttiModeRemove}
+                title={labels.tuttiModeRemove}
+                data-agent-tutti-mode-remove="true"
+                className={cn(
+                  styles.composerMenuTrigger,
+                  "group w-auto justify-center",
+                  "disabled:cursor-not-allowed disabled:opacity-60"
+                )}
+                onClick={onClearTuttiMode}
+              >
+                <X aria-hidden className="size-3" strokeWidth={3} />
+              </button>
+            </span>
           ) : null}
           {isGoalModeActive ? (
             <button
