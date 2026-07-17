@@ -325,8 +325,9 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	automationRulesStore, _ := store.(workspacedata.AutomationRulesStore)
 	automationRules := &automationruleservice.Service{
 		Store:     automationRulesStore,
-		Plans:     modelPlansStore,
 		Agents:    workspaceAgents,
+		Targets:   agentTargetStore,
+		Usage:     automationRulesStore,
 		Publisher: eventstreamservice.AgentAutomationRulesPublisher{Service: events},
 	}
 	modelPlans := &modelplanservice.Service{
@@ -495,10 +496,9 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	// Collaboration settlement observes startup interruption before the later
 	// full observer fan-out is installed.
 	agentActivityProjection.SetSessionStateObserver(collabRuns)
-	automationExecutor := &automationruleservice.DaemonExecutor{Agents: agentSessionService, Runs: collabRuns}
+	automationExecutor := &automationruleservice.DaemonExecutor{Agents: agentSessionService, Ledger: automationRulesStore}
 	automationRules.Executor = automationExecutor
-	automationRules.Usage = automationExecutor
-	automationRules.Context = automationExecutor
+	automationRules.Sources = automationExecutor
 
 	agentHost := agentservice.NewApplicationHost(agentSessionService)
 	agentSessionService.SetApplicationHost(agentHost)
@@ -565,10 +565,6 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	}
 	automationExecutor.IssueRescues = &issueService
 	collabRuns.TerminalObserver = &issueService
-	automationRules.ReviewOutcomes = automationReviewOutcomeRecorder{
-		Policies: modelPolicies,
-		Issues:   &issueService,
-	}
 	issueService.RunReconcileQueue = workspaceservice.NewIssueRunReconcileQueue(workspaceservice.IssueRunReconcileQueueOptions{
 		Delay:     3 * time.Second,
 		Interval:  15 * time.Second,

@@ -323,7 +323,6 @@ export type {
   AuthenticateAgentTargetRuntimeResponse,
   AuthenticateAgentTargetRuntimeResponses,
   AutomationRule,
-  AutomationRuleAction,
   AutomationRuleBudget,
   AutomationRuleId,
   AutomationRulePermissions,
