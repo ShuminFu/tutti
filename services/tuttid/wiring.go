@@ -531,6 +531,7 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 			Agents: agentSessionService,
 		},
 		RunTurnResolver: agentActivityRepo,
+		MutationLocks:   workspaceservice.NewIssueMutationLocks(),
 	}
 	tuttiModePlans := &tuttimodeplanservice.Service{
 		Store:                  workflowStore,
@@ -568,6 +569,10 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	}
 	automationExecutor.IssueRescues = &issueService
 	collabRuns.TerminalObserver = &issueService
+	issueService.RunSessionCanceller = agentCollaborationSessionCanceller{Service: agentSessionService}
+	// A user's stop on a planning conversation cascades to every running task
+	// run its accepted plan dispatched.
+	agentSessionService.TurnCancelObserver = &issueService
 	issueService.RunReconcileQueue = workspaceservice.NewIssueRunReconcileQueue(workspaceservice.IssueRunReconcileQueueOptions{
 		Delay:     3 * time.Second,
 		Interval:  15 * time.Second,
