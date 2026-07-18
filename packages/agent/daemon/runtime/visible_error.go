@@ -1,6 +1,7 @@
 package agentruntime
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -9,7 +10,18 @@ import (
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
+
+// IsAuthenticationRequired reports whether a runtime startup failure is an
+// authentication gate. Setup probes use the same classification as sessions.
+func IsAuthenticationRequired(err error) bool {
+	if err == nil {
+		return false
+	}
+	var callErr *acpCallError
+	return (errors.As(err, &callErr) && callErr.AuthRequired()) || authFailurePattern.MatchString(err.Error())
+}
 
 const (
 	visibleErrorKind     = "agent_visible_error"
@@ -25,7 +37,7 @@ var (
 
 func visibleFailureTimelineItem(
 	roomID string,
-	source agentsessionstore.EventSource,
+	source canonical.EventSource,
 	event activityshared.Event,
 	sessionID string,
 	timestamp int64,
@@ -77,7 +89,7 @@ func visibleFailureTimelineItem(
 }
 
 func visibleFailureMessageUpdate(
-	source agentsessionstore.EventSource,
+	source canonical.EventSource,
 	event activityshared.Event,
 	sessionID string,
 	timestamp int64,

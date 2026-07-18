@@ -47,8 +47,29 @@ func (c *Controller) CanResume(input ResumeInput) bool {
 	if provider == "" {
 		return false
 	}
+	extensionTargetRef := providerTargetRefString(input.ProviderTargetRef, "kind") == "agent_extension"
+	if extensionTargetRef {
+		if !authorizedAgentExtensionResumeInput(input, provider) {
+			return false
+		}
+		// The fixed Target binding is durable launch authority. A dynamic adapter
+		// can be resolved from it during Resume even when the process cache is
+		// empty after a daemon restart.
+		if c.adapterResolver != nil {
+			return true
+		}
+	}
 	adapter := c.adapter(provider)
 	if adapter == nil {
+		return false
+	}
+	if bound, ok := adapter.(ResolveInputBoundAdapter); extensionTargetRef && ok &&
+		!bound.MatchesAdapterResolveInput(AdapterResolveInput{
+			Provider:          provider,
+			AgentTargetID:     strings.TrimSpace(input.AgentTargetID),
+			CWD:               strings.TrimSpace(input.CWD),
+			ProviderTargetRef: clonePayload(input.ProviderTargetRef),
+		}) {
 		return false
 	}
 	probeAdapter, ok := adapter.(ResumeProbeAdapter)
@@ -70,6 +91,19 @@ func (c *Controller) CanResume(input ResumeInput) bool {
 		CreatedAtUnixMS:   input.CreatedAtUnixMS,
 		UpdatedAtUnixMS:   input.UpdatedAtUnixMS,
 	})
+}
+
+func authorizedAgentExtensionResumeInput(input ResumeInput, provider string) bool {
+	return strings.TrimSpace(input.ProviderSessionID) != "" &&
+		strings.TrimSpace(input.AgentTargetID) != "" &&
+		providerTargetRefString(input.ProviderTargetRef, "provider") == provider &&
+		providerTargetRefString(input.ProviderTargetRef, "targetId") == strings.TrimSpace(input.AgentTargetID) &&
+		providerTargetRefString(input.ProviderTargetRef, "extensionInstallationId") != ""
+}
+
+func providerTargetRefString(ref map[string]any, key string) string {
+	value, _ := ref[key].(string)
+	return strings.TrimSpace(value)
 }
 
 func (c *Controller) Sessions(roomID string) []Session {
@@ -106,6 +140,9 @@ func (c *Controller) adapter(provider string) Adapter {
 func (c *Controller) resolveAdapter(ctx context.Context, input AdapterResolveInput) (Adapter, error) {
 	provider := strings.TrimSpace(input.Provider)
 	if adapter := c.adapter(provider); adapter != nil {
+		if bound, ok := adapter.(ResolveInputBoundAdapter); ok && !bound.MatchesAdapterResolveInput(input) {
+			return nil, fmt.Errorf("cached adapter binding mismatch for %q", provider)
+		}
 		return adapter, nil
 	}
 	if c == nil || c.adapterResolver == nil {
@@ -121,6 +158,10 @@ func (c *Controller) resolveAdapter(ctx context.Context, input AdapterResolveInp
 	c.configureAdapter(adapter)
 	c.mu.Lock()
 	if existing := c.adapters[provider]; existing != nil {
+		if bound, ok := existing.(ResolveInputBoundAdapter); ok && !bound.MatchesAdapterResolveInput(input) {
+			c.mu.Unlock()
+			return nil, fmt.Errorf("cached adapter binding mismatch for %q", provider)
+		}
 		adapter = existing
 	} else {
 		c.adapters[provider] = adapter

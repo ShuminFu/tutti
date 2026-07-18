@@ -386,7 +386,12 @@ export const zhCN = {
     },
     appCenter: {
       backToApps: "返回应用",
-      dockLabel: "应用"
+      dockLabel: "应用",
+      tabs: {
+        close: "关闭应用标签页",
+        label: "已打开的应用",
+        new: "打开其他应用"
+      }
     },
     info: {
       idDescription: "用于 preload 和 daemon 协调的稳定标识。",
@@ -784,6 +789,18 @@ export const zhCN = {
         fileDefaultOpenersDescription:
           "按文件后缀选择工作区文件激活时优先使用的打开方式",
         fileDefaultOpenersLabel: "默认文件打开方式",
+        codebuddyAgentDescription:
+          "在 Tutti 中显示 CodeBuddy Code，Agent Extension 预览期间默认关闭",
+        codebuddyAgentLabel: "启用 CodeBuddy Code Agent",
+        copilotAgentDescription:
+          "在 Tutti 中显示 GitHub Copilot CLI，Agent Extension 预览期间默认关闭",
+        copilotAgentLabel: "启用 GitHub Copilot CLI Agent",
+        geminiAgentDescription:
+          "在 Tutti 中显示 Gemini CLI，Agent Extension 预览期间默认关闭",
+        geminiAgentLabel: "启用 Gemini CLI Agent",
+        kiloAgentDescription:
+          "在 Tutti 中显示 Kilo Code，Agent Extension 预览期间默认关闭",
+        kiloAgentLabel: "启用 Kilo Code Agent",
         labVisibilityDescription: "在独立设置页中显示实验性控制项",
         labVisibilityLabel: "显示实验室页",
         logMissing: "暂无文件",
@@ -794,6 +811,9 @@ export const zhCN = {
         logsExported: "已导出 {{count}} 个日志文件到 {{path}}",
         logsExportFailed: "暂时无法导出本地日志",
         logsLoadFailed: "暂时无法加载本地日志信息",
+        qwenAgentDescription:
+          "在 Tutti 中显示 Qwen Code，Agent Extension 预览期间默认关闭",
+        qwenAgentLabel: "启用 Qwen Code Agent",
         logsSizeLabel: "日志大小",
         logsSummary: "{{count}} 个文件，共 {{size}}",
         logsTitle: "日志",

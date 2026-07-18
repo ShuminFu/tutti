@@ -1,70 +1,30 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { retainWorkspaceAppInlineAppIds } from "./workspaceAppCenterInlineAppRetention.ts";
 
 const inlineAppBodySource = readFileSync(
   new URL("./workspaceAppCenterInlineAppBody.tsx", import.meta.url),
   "utf8"
 );
+const contributionSource = readFileSync(
+  new URL("./workspaceAppCenterContribution.tsx", import.meta.url),
+  "utf8"
+);
 
-test("inline app retention keeps every app across catalog round trips", () => {
-  const firstOpen = retainWorkspaceAppInlineAppIds({
-    activeAppId: "ai-slide",
-    retainedAppIds: []
-  });
-  const catalog = retainWorkspaceAppInlineAppIds({
-    activeAppId: null,
-    retainedAppIds: firstOpen
-  });
-  const secondOpen = retainWorkspaceAppInlineAppIds({
-    activeAppId: "ai-doc",
-    retainedAppIds: catalog
-  });
-  const reopenFirst = retainWorkspaceAppInlineAppIds({
-    activeAppId: "ai-slide",
-    retainedAppIds: secondOpen
-  });
-
-  assert.deepEqual(firstOpen, ["ai-slide"]);
-  assert.equal(catalog, firstOpen);
-  assert.deepEqual(secondOpen, ["ai-slide", "ai-doc"]);
-  assert.equal(reopenFirst, secondOpen);
-});
-
-test("inline app retention prunes only against a confirmed available app list", () => {
-  const retainedAppIds = ["ai-slide", "removed-app"];
-
-  assert.equal(
-    retainWorkspaceAppInlineAppIds({
-      activeAppId: null,
-      retainedAppIds
-    }),
-    retainedAppIds
-  );
-  assert.deepEqual(
-    retainWorkspaceAppInlineAppIds({
-      activeAppId: null,
-      availableAppIds: ["ai-slide"],
-      retainedAppIds
-    }),
-    ["ai-slide"]
-  );
-});
-
-test("inline app body keeps retained browsers mounted and explicitly hidden", () => {
-  assert.match(
-    inlineAppBodySource,
-    /retainedAppIds\.map\(\(retainedAppId\)\s*=>/
-  );
+test("app-center body renders every persisted app tab and hides inactive guests", () => {
+  assert.match(inlineAppBodySource, /readWorkspaceAppTabIds\(/);
+  assert.match(inlineAppBodySource, /openAppIds\.map\(\(openAppId\)\s*=>/);
   assert.match(
     inlineAppBodySource,
     /hidden=\{context\.node\.isMinimized \|\| !isActive\}/
   );
-  assert.match(
-    inlineAppBodySource,
-    /nodeId=\{workspaceAppInlineBrowserNodeId\(retainedAppId\)\}/
-  );
-  assert.doesNotMatch(inlineAppBodySource, /catalogActive \? "visible"/);
-  assert.doesNotMatch(inlineAppBodySource, /isActive \? "visible"/);
+  assert.doesNotMatch(inlineAppBodySource, /useState/);
+});
+
+test("app-center header exposes a fixed catalog tab and closeable app tabs", () => {
+  assert.match(contributionSource, /role="tablist"/);
+  assert.match(contributionSource, /data-workspace-app-center-tab=/);
+  assert.match(contributionSource, /selectWorkspaceAppTab/);
+  assert.match(contributionSource, /closeWorkspaceAppTab/);
+  assert.match(contributionSource, /<AddIcon/);
 });

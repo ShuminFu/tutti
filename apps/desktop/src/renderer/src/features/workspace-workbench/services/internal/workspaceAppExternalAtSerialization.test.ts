@@ -238,6 +238,79 @@ test("serializes mention item id from insert identity for external restore", () 
   });
 });
 
+test("replaces managed Agent file icons with guest-loadable asset urls", () => {
+  const match: RichTextTriggerQueryMatch = {
+    providerId: "agent-target",
+    trigger: "@",
+    key: "local:cursor",
+    label: "Cursor",
+    iconUrl: "file:///Applications/Tutti.app/cursor-colorful-abc123.png",
+    item: {},
+    insertResult: {
+      kind: "mention",
+      mention: {
+        entityId: "local:cursor",
+        label: "Cursor",
+        presentation: {
+          agentProviderId: "cursor",
+          iconUrl: "file:///Applications/Tutti.app/cursor-colorful-abc123.png"
+        }
+      }
+    }
+  };
+
+  assert.deepEqual(serializeWorkspaceAppExternalAtMatch(match), {
+    providerId: "agent-target",
+    itemId: "local:cursor",
+    label: "Cursor",
+    thumbnailUrl: "tutti-asset://agent/cursor.png",
+    insert: {
+      kind: "mention",
+      mention: {
+        entityId: "local:cursor",
+        label: "Cursor",
+        presentation: {
+          agentProviderId: "cursor",
+          iconUrl: "tutti-asset://agent/cursor.png",
+          thumbnailUrl: "tutti-asset://agent/cursor.png"
+        }
+      }
+    }
+  });
+});
+
+test("preserves remote and data Agent icons for external apps", () => {
+  for (const iconUrl of [
+    "https://cdn.example.com/gemini.png",
+    "data:image/svg+xml;base64,gemini"
+  ]) {
+    const match: RichTextTriggerQueryMatch = {
+      providerId: "agent-target",
+      trigger: "@",
+      key: "extension:gemini",
+      label: "Gemini",
+      iconUrl,
+      item: {},
+      insertResult: {
+        kind: "mention",
+        mention: {
+          entityId: "extension:gemini",
+          label: "Gemini",
+          presentation: {
+            agentProviderId: "acp:gemini",
+            iconUrl
+          }
+        }
+      }
+    };
+
+    assert.equal(
+      serializeWorkspaceAppExternalAtMatch(match)?.thumbnailUrl,
+      iconUrl
+    );
+  }
+});
+
 function createMatch(
   input: Partial<RichTextTriggerQueryMatch> = {}
 ): RichTextTriggerQueryMatch {

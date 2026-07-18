@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type HTMLAttributes } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   AgentComposerDraft,
   AgentComposerDraftFile,
@@ -20,7 +20,6 @@ import { DEFAULT_AGENT_MENTION_FILTER } from "./agentMentionSearchHelpers";
 import { type AgentFileMentionSuggestionState } from "./agentRichText/agentFileMentionExtension";
 import { formatSlashStatusTokenCount } from "./AgentSlashStatusPanel";
 import { useOptionalAgentActivityRuntime } from "../../agentActivityRuntime";
-import { useOptionalAgentHostApi } from "../../agentActivityHost";
 import { useComposerDraftAttachments } from "./composer/useComposerDraftAttachments";
 import { goalDraftObjectiveFromPrompt } from "./composer/composerDraftUtils";
 import { useComposerLayout } from "./composer/useComposerLayout";
@@ -49,20 +48,6 @@ import {
 import type { AgentGUIComposerContentType } from "./engagement/agentGUIEngagement.types";
 
 export { formatSlashStatusTokenCount };
-
-type DotLottieElementProps = HTMLAttributes<HTMLElement> & {
-  autoplay?: boolean;
-  loop?: boolean;
-  src?: string;
-};
-
-declare module "react" {
-  namespace JSX {
-    interface IntrinsicElements {
-      "dotlottie-wc": DotLottieElementProps;
-    }
-  }
-}
 
 const DOCK_COMPOSER_INPUT_MIN_HEIGHT = 56;
 const DOCK_COMPOSER_TEXT_LINE_HEIGHT = 24;
@@ -149,7 +134,8 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     onSlashStatusOpen,
     onLinkAction,
     onRequestWorkspaceReferences = null,
-    resolveDroppedFileReferences = null,
+    prepareExternalPromptFiles = null,
+    promptAssetLimit = null,
     onRequestGitBranches = null,
     contextMentionProviders = EMPTY_CONTEXT_MENTION_PROVIDERS,
     referenceProvenanceFilter = null
@@ -165,15 +151,8 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     largeTexts: draftLargeTexts
   } = agentComposerDraftAttachmentProjection(draftContent);
   const agentActivityRuntime = useOptionalAgentActivityRuntime();
-  const agentHostApi = useOptionalAgentHostApi();
-  const getReferenceForFile = agentHostApi?.workspace.getReferenceForFile;
-  const promptFileUploadSupported = Boolean(
-    canUploadAttachment &&
-    agentActivityRuntime?.uploadPromptContent &&
-    (agentActivityRuntime.promptContentUploadSupport?.file ?? true)
-  );
   const promptFilesSupported = Boolean(
-    resolveDroppedFileReferences && promptFileUploadSupported
+    canUploadAttachment && prepareExternalPromptFiles
   );
   const pastedTextStagingSupported = Boolean(
     canUploadAttachment && agentActivityRuntime?.stagePastedText
@@ -415,6 +394,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   }, [slashStatusAgentSessionId]);
 
   const slashActions = useComposerSlashActions({
+    workspaceId,
     provider,
     disabled,
     submitDisabled,
@@ -507,8 +487,8 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     goalDraftObjective,
     isGoalModeActive,
     promptImagesSupported: canUploadAttachment && promptImagesSupported,
-    promptFileUploadSupported,
     promptFilesSupported,
+    promptAssetLimit,
     pastedTextStagingSupported,
     editorHandleRef,
     draftPromptRef,
@@ -522,10 +502,10 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     onPromptImagesUnsupported,
     onContentEntered: reportContentEntered,
     onRequestWorkspaceReferences,
-    resolveDroppedFileReferences,
+    prepareExternalPromptFiles,
     onLinkAction
   });
-  const { addDraftImages, applyDroppedFileReferences } = attachments;
+  const { addDraftFiles, addDraftImages } = attachments;
 
   const providerState = useComposerProviderTargets({
     layoutMode,
@@ -565,7 +545,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     promptFilesSupported,
     promptImagesSupported: canUploadAttachment && promptImagesSupported,
     addDraftImages,
-    applyDroppedFileReferences,
+    addDraftFiles,
     onPromptImagesUnsupported
   });
   const { fileDropOverlayActive, fileDropOverlayHost } = focusAndDrop;
@@ -582,7 +562,6 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     selectedProjectPath,
     promptTipRef,
     promptInputAreaRef,
-    isPromptTipOverflowing,
     setIsPromptTipOverflowing,
     dockComposerInputHeight,
     setDockComposerInputHeight,
@@ -593,7 +572,6 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     dockComposerTextHeight,
     setDockComposerTextHeight,
     draftImages,
-    draftFiles,
     draftLargeTexts
   });
   const { activePromptTip, promptTipStyle, rotatingPromptTips } = layout;
@@ -648,7 +626,6 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
       promptTipRef={promptTipRef}
       editorHandleRef={editorHandleRef}
       mentionControllerRef={mentionControllerRef}
-      getReferenceForFile={getReferenceForFile}
       promptFilesSupported={promptFilesSupported}
       onDismissProjectMenuAutoFocus={restoreComposerCaretAfterProjectMenu}
       paletteDraftPrompt={paletteDraftPrompt}

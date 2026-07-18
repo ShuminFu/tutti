@@ -134,10 +134,15 @@ interface AgentComposerFileBlockBase {
   mimeType?: string;
   path?: string;
   hostPath?: string;
+  url?: string;
+  uri?: string;
   assetId?: string;
+  uploadStatus?: string;
   sizeBytes?: number;
   uploading?: boolean;
   uploadError?: string;
+  uploadErrorCode?: string;
+  uploadRetryable?: boolean;
 }
 
 export interface AgentComposerRegularFileBlock extends AgentComposerFileBlockBase {
@@ -388,6 +393,7 @@ export interface AgentGUIOperationsViewModel {
   goalClearNoticeSequence: number;
   isDeletingConversation: boolean;
   isDeletingProjectConversations: boolean;
+  isUserProjectMutationPending: boolean;
   pendingDeleteConversation: AgentGUIConversationSummary | null;
   pendingDeleteProjectConversations: AgentGUIProjectConversationDeleteTarget | null;
 }

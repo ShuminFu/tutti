@@ -112,6 +112,33 @@ describe("AgentTranscriptView", () => {
     ).toBe(false);
   });
 
+  it("rerenders when imported history changes the assistant disclosure policy", () => {
+    const labels = {
+      thinkingLabel: "Thought process",
+      toolCallsLabel: (count: number) => `Tool calls (${count})`,
+      processing: "Planning next moves",
+      turnSummary: "Changed files"
+    };
+    const conversation = projectAgentConversationVM(detailViewModel());
+    const importedConversation = {
+      ...conversation,
+      sourceDetail: {
+        ...conversation.sourceDetail,
+        session: {
+          ...conversation.sourceDetail.session,
+          imported: true
+        }
+      }
+    };
+
+    expect(
+      areAgentTranscriptViewPropsEqual(
+        { conversation, labels },
+        { conversation: importedConversation, labels }
+      )
+    ).toBe(false);
+  });
+
   it("keeps the legacy transcript rows flat when canonical timing is unavailable", () => {
     const { container } = render(
       <AgentTranscriptView

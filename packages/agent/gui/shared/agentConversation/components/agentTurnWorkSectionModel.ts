@@ -31,6 +31,10 @@ export interface AgentTurnWorkSectionModel {
   collapseEligible: boolean;
 }
 
+interface AgentTurnWorkSectionOptions {
+  collapseIntermediateAssistantReplies?: boolean;
+}
+
 export function resolveAgentTurnTiming(
   turn: AgentActivityTurn | null | undefined,
   isActiveTurn: boolean
@@ -81,7 +85,8 @@ export function formatAgentTurnDuration(
 export function buildAgentTurnWorkSectionModel(
   group: AgentTranscriptTurnGroup,
   turn: AgentActivityTurn | null | undefined,
-  isActiveTurn = false
+  isActiveTurn = false,
+  options: AgentTurnWorkSectionOptions = {}
 ): AgentTurnWorkSectionModel | null {
   const timing = resolveAgentTurnTiming(turn, isActiveTurn);
   if (!timing) {
@@ -91,7 +96,12 @@ export function buildAgentTurnWorkSectionModel(
   const leadingRowCount = countLeadingUserRows(group.rows);
   const leadingRows = group.rows.slice(0, leadingRowCount);
   const finalTarget = findFinalAssistantTextTarget(group.rows);
-  const sections = buildOrderedSections(group.rows, leadingRowCount);
+  const sections = buildOrderedSections(
+    group.rows,
+    leadingRowCount,
+    finalTarget,
+    options.collapseIntermediateAssistantReplies === true
+  );
   const hasHiddenWork = sections.some(
     (section) => section.kind === "work" && section.rows.length > 0
   );
@@ -123,13 +133,21 @@ function countLeadingUserRows(
 
 function buildOrderedSections(
   rows: readonly AgentTurnWorkSectionRow[],
-  startIndex: number
+  startIndex: number,
+  finalTarget: { rowIndex: number; messageIndex: number } | null,
+  collapseIntermediateAssistantReplies: boolean
 ): AgentTurnWorkSectionSegment[] {
   const sections: AgentTurnWorkSectionSegment[] = [];
   for (let rowIndex = startIndex; rowIndex < rows.length; rowIndex += 1) {
     const entry = rows[rowIndex]!;
     if (entry.row.kind === "message" && entry.row.speaker === "assistant") {
-      appendAssistantMessageSections(sections, entry);
+      if (!collapseIntermediateAssistantReplies) {
+        appendAssistantMessageSections(sections, entry);
+      } else if (finalTarget?.rowIndex === rowIndex) {
+        appendFinalAssistantSections(sections, entry, finalTarget.messageIndex);
+      } else {
+        appendSectionRow(sections, "work", entry);
+      }
       continue;
     }
     appendSectionRow(
@@ -139,6 +157,42 @@ function buildOrderedSections(
     );
   }
   return sections;
+}
+
+function appendFinalAssistantSections(
+  sections: AgentTurnWorkSectionSegment[],
+  sourceEntry: AgentTurnWorkSectionRow,
+  finalMessageIndex: number
+): void {
+  const sourceRow = sourceEntry.row as AgentMessageRowVM;
+  const messagesBeforeFinal = sourceRow.messages.slice(0, finalMessageIndex);
+  const messagesAfterFinal = sourceRow.messages.slice(finalMessageIndex + 1);
+
+  if (sourceRow.thinking.length > 0 || messagesBeforeFinal.length > 0) {
+    appendSectionRow(sections, "work", {
+      ...sourceEntry,
+      renderKey: `${sourceRow.id}:turn-work-before`,
+      row: cloneAssistantRow(sourceRow, messagesBeforeFinal, sourceRow.thinking)
+    });
+  }
+
+  appendSectionRow(sections, "visible", {
+    ...sourceEntry,
+    renderKey: `${sourceRow.id}:turn-final`,
+    row: cloneAssistantRow(
+      sourceRow,
+      [sourceRow.messages[finalMessageIndex]!],
+      []
+    )
+  });
+
+  if (messagesAfterFinal.length > 0) {
+    appendSectionRow(sections, "work", {
+      ...sourceEntry,
+      renderKey: `${sourceRow.id}:turn-work-after`,
+      row: cloneAssistantRow(sourceRow, messagesAfterFinal, [])
+    });
+  }
 }
 
 function appendAssistantMessageSections(

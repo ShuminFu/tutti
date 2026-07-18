@@ -90,7 +90,8 @@ describe("agentTurnWorkSectionModel", () => {
           id: "assistant-row",
           messages: [
             message("draft", null),
-            message("final", "Final answer", true)
+            message("final", "Final answer", true),
+            message("epilogue", null)
           ],
           thinking: [thinking("Inspecting files")]
         }),
@@ -101,7 +102,9 @@ describe("agentTurnWorkSectionModel", () => {
         phase: "settled",
         outcome: "completed",
         settledAtUnixMs: 15_000
-      })
+      }),
+      false,
+      { collapseIntermediateAssistantReplies: true }
     );
 
     expect(model.leadingRows).toHaveLength(1);
@@ -116,18 +119,25 @@ describe("agentTurnWorkSectionModel", () => {
     expect(finalRow?.kind).toBe("message");
     if (finalRow?.kind === "message") {
       expect(finalRow.id).toBe("assistant-row");
-      expect(finalRow.messages.map((item) => item.body)).toEqual([
-        "draft",
-        "final"
-      ]);
+      expect(finalRow.messages.map((item) => item.body)).toEqual(["final"]);
       expect(finalRow.thinking).toEqual([]);
     }
     expect(model.sections[0]?.rows[0]?.renderKey).toBe(
-      "assistant-row:turn-work-0"
+      "assistant-row:turn-work-before"
     );
     expect(model.sections[1]?.rows[0]?.renderKey).toBe(
-      "assistant-row:turn-visible-1"
+      "assistant-row:turn-final"
     );
+    expect(model.sections[2]?.rows[0]?.renderKey).toBe(
+      "assistant-row:turn-work-after"
+    );
+    const afterFinalRow = model.sections[2]?.rows[0]?.row;
+    expect(afterFinalRow?.kind).toBe("message");
+    if (afterFinalRow?.kind === "message") {
+      expect(afterFinalRow.messages.map((item) => item.body)).toEqual([
+        "epilogue"
+      ]);
+    }
   });
 
   it("uses an explicit final-text marker instead of copy availability", () => {
@@ -143,7 +153,9 @@ describe("agentTurnWorkSectionModel", () => {
         phase: "settled",
         outcome: "completed",
         settledAtUnixMs: 15_000
-      })
+      }),
+      false,
+      { collapseIntermediateAssistantReplies: true }
     );
 
     expect(model.collapseEligible).toBe(true);
@@ -174,7 +186,9 @@ describe("agentTurnWorkSectionModel", () => {
         phase: "settled",
         outcome: "completed",
         settledAtUnixMs: 15_000
-      })
+      }),
+      false,
+      { collapseIntermediateAssistantReplies: true }
     );
 
     expect(model.leadingRows.map(({ row }) => row.id)).toEqual(["user-row"]);
@@ -184,13 +198,14 @@ describe("agentTurnWorkSectionModel", () => {
         rowIds: section.rows.map(({ row }) => row.id)
       }))
     ).toEqual([
-      { kind: "visible", rowIds: ["assistant-1", "user-2"] },
+      { kind: "work", rowIds: ["assistant-1"] },
+      { kind: "visible", rowIds: ["user-2"] },
       { kind: "work", rowIds: ["tools"] },
       { kind: "visible", rowIds: ["assistant-2"] }
     ]);
   });
 
-  it("collapses only explicitly classified assistant progress", () => {
+  it("collapses all assistant work before the final answer for Tutti-created conversations", () => {
     const model = buildAgentTurnWorkSectionModel(
       turnGroup([
         userRow(),
@@ -214,7 +229,9 @@ describe("agentTurnWorkSectionModel", () => {
         phase: "settled",
         outcome: "completed",
         settledAtUnixMs: 15_000
-      })
+      }),
+      false,
+      { collapseIntermediateAssistantReplies: true }
     );
 
     expect(
@@ -232,14 +249,51 @@ describe("agentTurnWorkSectionModel", () => {
     ).toEqual([
       {
         kind: "work",
-        bodies: ["Inspecting files", "Compacting context"]
+        bodies: ["Inspecting files", "Compacting context", "Earlier answer"]
       },
       {
         kind: "visible",
-        bodies: ["Earlier answer", "Final answer"]
+        bodies: ["Final answer"]
       }
     ]);
     expect(model.collapseEligible).toBe(true);
+  });
+
+  it("preserves ordinary assistant replies for imported conversation history", () => {
+    const model = buildAgentTurnWorkSectionModel(
+      turnGroup([
+        userRow(),
+        assistantRow({
+          id: "assistant-earlier",
+          messages: [message("Earlier answer", null)]
+        }),
+        toolRow(),
+        assistantRow({
+          id: "assistant-final",
+          messages: [message("Final answer", "Final answer", true)]
+        })
+      ]),
+      canonicalTurn({
+        phase: "settled",
+        outcome: "completed",
+        settledAtUnixMs: 15_000
+      }),
+      false,
+      { collapseIntermediateAssistantReplies: false }
+    );
+
+    expect(
+      model.sections.map((section) => ({
+        kind: section.kind,
+        bodies: section.rows.flatMap(({ row }) =>
+          row.kind === "message" ? row.messages.map((item) => item.body) : []
+        )
+      }))
+    ).toEqual([
+      { kind: "visible", bodies: ["Earlier answer"] },
+      { kind: "work", bodies: [] },
+      { kind: "visible", bodies: ["Final answer"] }
+    ]);
   });
 
   it("fails open when no visible final text is explicitly marked", () => {

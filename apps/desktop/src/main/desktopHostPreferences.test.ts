@@ -391,6 +391,302 @@ test("createDesktopHostPreferencesState preserves initialized rc channel on rc p
   assert.equal(state.getUpdateChannel(), "rc");
 });
 
+test("createDesktopHostPreferencesState aligns a changed packaged rc version to the rc channel", async () => {
+  const migrationStateRootDir = await mkdtemp(
+    join(tmpdir(), "tutti-update-channel-installed-version-")
+  );
+  const migrationsDir = join(migrationStateRootDir, "migrations");
+  const installedVersionStatePath = join(
+    migrationsDir,
+    "desktop-update-channel-installed-version-v1"
+  );
+  await mkdir(migrationsDir, { recursive: true });
+  await writeFile(installedVersionStatePath, "0.2.1", "utf8");
+  const putRequests: PutDesktopPreferencesRequest[] = [];
+
+  const state = await createDesktopHostPreferencesState({
+    appVersion: "v0.2.2-rc.1",
+    fallbackLocale: "zh-CN",
+    isPackaged: true,
+    logger: createLogger(),
+    migrationStateRootDir,
+    tuttidClient: {
+      async getDesktopPreferences() {
+        return {
+          initialized: true,
+          preferences: {
+            agentComposerDefaultsByProvider: {},
+            agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
+            agentDockLayout: "legacySplit",
+            appCatalogChannel: "production",
+            defaultAgentProvider: "codex",
+            featureFlags: {},
+            workbenchShortcuts: defaultDesktopWorkbenchShortcuts,
+            dockIconStyle: "default",
+            dockPlacement: "bottom",
+            fileDefaultOpenersByExtension: { html: "defaultBrowser" },
+            locale: "zh-CN",
+            minimizeAnimation: "scale",
+            sleepPreventionMode: "never",
+            showAppDeveloperSources: false,
+            themeSource: "dark",
+            updateChannel: "stable",
+            updatePolicy: "prompt"
+          }
+        };
+      },
+      async putDesktopPreferences(request) {
+        putRequests.push(request);
+        return {
+          initialized: true,
+          preferences: request.preferences
+        };
+      }
+    }
+  });
+
+  assert.equal(state.getUpdateChannel(), "rc");
+  assert.equal(putRequests.length, 1);
+  assert.equal(putRequests[0]?.preferences.updateChannel, "rc");
+  assert.equal(await readFile(installedVersionStatePath, "utf8"), "0.2.2-rc.1");
+});
+
+test("createDesktopHostPreferencesState preserves a manual channel on the same packaged version", async () => {
+  const migrationStateRootDir = await mkdtemp(
+    join(tmpdir(), "tutti-update-channel-installed-version-")
+  );
+  const migrationsDir = join(migrationStateRootDir, "migrations");
+  await mkdir(migrationsDir, { recursive: true });
+  await writeFile(
+    join(migrationsDir, "desktop-update-channel-installed-version-v1"),
+    "0.2.2-rc.1",
+    "utf8"
+  );
+  let putCalls = 0;
+
+  const state = await createDesktopHostPreferencesState({
+    appVersion: "0.2.2-rc.1",
+    fallbackLocale: "zh-CN",
+    isPackaged: true,
+    logger: createLogger(),
+    migrationStateRootDir,
+    tuttidClient: {
+      async getDesktopPreferences() {
+        return {
+          initialized: true,
+          preferences: {
+            agentComposerDefaultsByProvider: {},
+            agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
+            agentDockLayout: "legacySplit",
+            appCatalogChannel: "production",
+            defaultAgentProvider: "codex",
+            featureFlags: {},
+            workbenchShortcuts: defaultDesktopWorkbenchShortcuts,
+            dockIconStyle: "default",
+            dockPlacement: "bottom",
+            fileDefaultOpenersByExtension: { html: "defaultBrowser" },
+            locale: "zh-CN",
+            minimizeAnimation: "scale",
+            sleepPreventionMode: "never",
+            showAppDeveloperSources: false,
+            themeSource: "dark",
+            updateChannel: "stable",
+            updatePolicy: "prompt"
+          }
+        };
+      },
+      async putDesktopPreferences() {
+        putCalls += 1;
+        throw new Error("putDesktopPreferences should not be called");
+      }
+    }
+  });
+
+  assert.equal(putCalls, 0);
+  assert.equal(state.getUpdateChannel(), "stable");
+});
+
+test("createDesktopHostPreferencesState preserves manual rc on the same packaged stable version", async () => {
+  const migrationStateRootDir = await mkdtemp(
+    join(tmpdir(), "tutti-update-channel-installed-version-")
+  );
+  const migrationsDir = join(migrationStateRootDir, "migrations");
+  await mkdir(migrationsDir, { recursive: true });
+  await writeFile(
+    join(migrationsDir, "desktop-update-channel-installed-version-v1"),
+    "0.2.2",
+    "utf8"
+  );
+  let putCalls = 0;
+
+  const state = await createDesktopHostPreferencesState({
+    appVersion: "0.2.2",
+    fallbackLocale: "zh-CN",
+    isPackaged: true,
+    logger: createLogger(),
+    migrationStateRootDir,
+    tuttidClient: {
+      async getDesktopPreferences() {
+        return {
+          initialized: true,
+          preferences: {
+            agentComposerDefaultsByProvider: {},
+            agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
+            agentDockLayout: "legacySplit",
+            appCatalogChannel: "production",
+            defaultAgentProvider: "codex",
+            featureFlags: {},
+            workbenchShortcuts: defaultDesktopWorkbenchShortcuts,
+            dockIconStyle: "default",
+            dockPlacement: "bottom",
+            fileDefaultOpenersByExtension: { html: "defaultBrowser" },
+            locale: "zh-CN",
+            minimizeAnimation: "scale",
+            sleepPreventionMode: "never",
+            showAppDeveloperSources: false,
+            themeSource: "dark",
+            updateChannel: "rc",
+            updatePolicy: "prompt"
+          }
+        };
+      },
+      async putDesktopPreferences() {
+        putCalls += 1;
+        throw new Error("putDesktopPreferences should not be called");
+      }
+    }
+  });
+
+  assert.equal(putCalls, 0);
+  assert.equal(state.getUpdateChannel(), "rc");
+});
+
+test("createDesktopHostPreferencesState aligns a changed packaged stable version to stable", async () => {
+  const migrationStateRootDir = await mkdtemp(
+    join(tmpdir(), "tutti-update-channel-installed-version-")
+  );
+  const migrationsDir = join(migrationStateRootDir, "migrations");
+  const installedVersionStatePath = join(
+    migrationsDir,
+    "desktop-update-channel-installed-version-v1"
+  );
+  await mkdir(migrationsDir, { recursive: true });
+  await writeFile(
+    join(migrationsDir, "desktop-update-channel-default-stable-v1"),
+    "applied",
+    "utf8"
+  );
+  await writeFile(installedVersionStatePath, "0.2.2-rc.4", "utf8");
+  const putRequests: PutDesktopPreferencesRequest[] = [];
+
+  const state = await createDesktopHostPreferencesState({
+    appVersion: "0.2.2",
+    fallbackLocale: "zh-CN",
+    isPackaged: true,
+    logger: createLogger(),
+    migrationStateRootDir,
+    tuttidClient: {
+      async getDesktopPreferences() {
+        return {
+          initialized: true,
+          preferences: {
+            agentComposerDefaultsByProvider: {},
+            agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
+            agentDockLayout: "legacySplit",
+            appCatalogChannel: "production",
+            defaultAgentProvider: "codex",
+            featureFlags: {},
+            workbenchShortcuts: defaultDesktopWorkbenchShortcuts,
+            dockIconStyle: "default",
+            dockPlacement: "bottom",
+            fileDefaultOpenersByExtension: { html: "defaultBrowser" },
+            locale: "zh-CN",
+            minimizeAnimation: "scale",
+            sleepPreventionMode: "never",
+            showAppDeveloperSources: false,
+            themeSource: "dark",
+            updateChannel: "rc",
+            updatePolicy: "prompt"
+          }
+        };
+      },
+      async putDesktopPreferences(request) {
+        putRequests.push(request);
+        return {
+          initialized: true,
+          preferences: request.preferences
+        };
+      }
+    }
+  });
+
+  assert.equal(state.getUpdateChannel(), "stable");
+  assert.equal(putRequests.length, 1);
+  assert.equal(putRequests[0]?.preferences.updateChannel, "stable");
+  assert.equal(await readFile(installedVersionStatePath, "utf8"), "0.2.2");
+});
+
+test("createDesktopHostPreferencesState retries packaged channel alignment after persistence fails", async () => {
+  const migrationStateRootDir = await mkdtemp(
+    join(tmpdir(), "tutti-update-channel-installed-version-")
+  );
+  const migrationsDir = join(migrationStateRootDir, "migrations");
+  const installedVersionStatePath = join(
+    migrationsDir,
+    "desktop-update-channel-installed-version-v1"
+  );
+  await mkdir(migrationsDir, { recursive: true });
+  await writeFile(installedVersionStatePath, "0.2.1", "utf8");
+  let putCalls = 0;
+
+  const state = await createDesktopHostPreferencesState({
+    appVersion: "0.2.2-rc.1",
+    fallbackLocale: "zh-CN",
+    isPackaged: true,
+    logger: createLogger(),
+    migrationStateRootDir,
+    tuttidClient: {
+      async getDesktopPreferences() {
+        return {
+          initialized: true,
+          preferences: {
+            agentComposerDefaultsByProvider: {},
+            agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
+            agentDockLayout: "legacySplit",
+            appCatalogChannel: "production",
+            defaultAgentProvider: "codex",
+            featureFlags: {},
+            workbenchShortcuts: defaultDesktopWorkbenchShortcuts,
+            dockIconStyle: "default",
+            dockPlacement: "bottom",
+            fileDefaultOpenersByExtension: { html: "defaultBrowser" },
+            locale: "zh-CN",
+            minimizeAnimation: "scale",
+            sleepPreventionMode: "never",
+            showAppDeveloperSources: false,
+            themeSource: "dark",
+            updateChannel: "stable",
+            updatePolicy: "prompt"
+          }
+        };
+      },
+      async putDesktopPreferences() {
+        putCalls += 1;
+        throw new Error("tuttid unavailable");
+      }
+    }
+  });
+
+  assert.equal(putCalls, 1);
+  assert.equal(state.getUpdateChannel(), "stable");
+  assert.equal(await readFile(installedVersionStatePath, "utf8"), "0.2.1");
+});
+
 test("createDesktopHostPreferencesState preserves rc after the stable default migration ran", async () => {
   const migrationStateRootDir = await mkdtemp(
     join(tmpdir(), "tutti-update-channel-migration-")

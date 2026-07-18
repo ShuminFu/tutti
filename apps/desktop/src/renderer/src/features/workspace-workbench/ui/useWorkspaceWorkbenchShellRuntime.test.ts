@@ -22,7 +22,7 @@ test("workbench app presenter registration is independent from App Center snapsh
   assert.doesNotMatch(hostReadyCallback, /registerPresenter/);
   assert.match(
     source,
-    /useEffect\(\(\) => \{\s*if \(!workbenchHost\)[\s\S]*?workspaceAppSurfaceHost\.registerPresenter\([\s\S]*?\[workbenchHost, state\.workspace\.id, workspaceAppSurfaceHost\]/
+    /useEffect\(\(\) => \{\s*if \(!workbenchHost\)[\s\S]*?workspaceAppSurfaceHost\.registerPresenter\([\s\S]*?\[\s*workbenchHost,\s*state\.workspace\.id,\s*workspaceAppCenterService,\s*workspaceAppSurfaceHost\s*\]/
   );
 });
 

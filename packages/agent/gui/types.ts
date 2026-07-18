@@ -101,6 +101,9 @@ export interface AgentGUIAgentOwner {
   avatarUrl?: string | null;
 }
 
+/** Host-authoritative ownership classification for Agent directory entries. */
+export type AgentGUIAgentOwnership = "self" | "shared";
+
 /**
  * Host-projected entry from the workspace `/agents` directory.
  *
@@ -112,11 +115,16 @@ export interface AgentGUIAgent {
   agentTargetId: string;
   name: string;
   iconUrl: string;
+  /** Single-color artwork rendered through the conversation rail CSS mask. */
+  maskIconUrl?: string | null;
+  sidebarIconUrl?: string | null;
   heroImageUrl?: string | null;
   description?: string | null;
   owner?: AgentGUIAgentOwner | null;
+  ownership?: AgentGUIAgentOwnership | null;
   availability: AgentGUIAgentAvailability;
   provider: AgentGUIProvider;
+  setupKind?: "target_runtime" | null;
 }
 
 export type AgentGUIAgentDirectoryStatus =
@@ -160,9 +168,12 @@ export interface AgentGUIAgentTarget {
   label: string;
   description?: string;
   iconUrl?: string | null;
+  maskIconUrl?: string | null;
+  sidebarIconUrl?: string | null;
   heroImageUrl?: string | null;
   badge?: AgentGUIAgentTargetBadge | null;
   ownerLabel?: string;
+  ownership?: AgentGUIAgentOwnership;
   availability?: AgentGUIAgentAvailability;
   disabled?: boolean;
   unavailableReason?: string;

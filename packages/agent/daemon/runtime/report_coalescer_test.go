@@ -6,6 +6,7 @@ import (
 	"time"
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
 
 func TestStreamingReportCoalescerKeepsLatestMessageSnapshot(t *testing.T) {
@@ -76,7 +77,7 @@ func TestStreamingReportCoalescerNeverCoalescesSessionAudit(t *testing.T) {
 	coalescer := newStreamingReportCoalescer(time.Second)
 	defer coalescer.stop()
 	request := reportRequest{report: agentsessionstore.ReportActivityInput{
-		WorkspaceID: "workspace-1", Source: agentsessionstore.EventSource{AgentID: "session-1"},
+		WorkspaceID: "workspace-1", Source: canonical.EventSource{AgentID: "session-1"},
 		SessionAudits: []agentsessionstore.WorkspaceAgentSessionAuditUpdate{{AuditID: "audit-1", Role: "user", OccurredAtUnixMS: 1}},
 	}}
 	flushed := coalescer.add(request)
@@ -96,7 +97,7 @@ func terminalReport(messageID string, seq uint64, content string) agentsessionst
 func messageReport(messageID string, seq uint64, status string, content string) agentsessionstore.ReportActivityInput {
 	return agentsessionstore.ReportActivityInput{
 		WorkspaceID: "workspace-1",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			AgentID:       "agent-session-1",
 			SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 		},

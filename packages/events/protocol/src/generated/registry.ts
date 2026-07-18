@@ -14,10 +14,16 @@ export const businessEventTopicAgentModelCatalogInvalidated =
   "agent.model.catalog.invalidated" as const;
 export const businessEventTopicAnalyticsDebugReported =
   "analytics.debug.reported" as const;
+export const businessEventTopicPreferencesAgentComposerDefaultsChanged =
+  "preferences.agent.composer.defaults.changed" as const;
+export const businessEventTopicPreferencesAgentComposerDefaultsPatchRequested =
+  "preferences.agent.composer.defaults.patch.requested" as const;
 export const businessEventTopicPreferencesDesktopUpdateRequested =
   "preferences.desktop.update.requested" as const;
 export const businessEventTopicPreferencesDesktopUpdated =
   "preferences.desktop.updated" as const;
+export const businessEventTopicUserProjectUpdated =
+  "user.project.updated" as const;
 export const businessEventTopicWorkspaceAppUpdated =
   "workspace.app.updated" as const;
 export const businessEventTopicWorkspaceAppfactoryJobUpdated =
@@ -35,7 +41,7 @@ export interface BusinessEventDefinition {
   scope: BusinessEventScopeName;
 }
 
-export const businessEventCatalogRevision = "sha256:260d4aaa4021fbd9" as const;
+export const businessEventCatalogRevision = "sha256:58c3153c2fddede7" as const;
 
 export const businessEventDefinitions = [
   {
@@ -60,6 +66,20 @@ export const businessEventDefinitions = [
     scope: "desktop"
   },
   {
+    topic: "preferences.agent.composer.defaults.changed",
+    version: 1,
+    direction: "server->client",
+    owner: "core",
+    scope: "desktop"
+  },
+  {
+    topic: "preferences.agent.composer.defaults.patch.requested",
+    version: 1,
+    direction: "client->server",
+    owner: "core",
+    scope: "desktop"
+  },
+  {
     topic: "preferences.desktop.update.requested",
     version: 1,
     direction: "client->server",
@@ -72,6 +92,13 @@ export const businessEventDefinitions = [
     direction: "server->client",
     owner: "core",
     scope: "desktop"
+  },
+  {
+    topic: "user.project.updated",
+    version: 2,
+    direction: "server->client",
+    owner: "core",
+    scope: "global"
   },
   {
     topic: "workspace.app.updated",
@@ -125,6 +152,20 @@ export const businessEventDefinitionByTopic = {
     owner: "desktop",
     scope: "desktop"
   },
+  "preferences.agent.composer.defaults.changed": {
+    topic: "preferences.agent.composer.defaults.changed",
+    version: 1,
+    direction: "server->client",
+    owner: "core",
+    scope: "desktop"
+  },
+  "preferences.agent.composer.defaults.patch.requested": {
+    topic: "preferences.agent.composer.defaults.patch.requested",
+    version: 1,
+    direction: "client->server",
+    owner: "core",
+    scope: "desktop"
+  },
   "preferences.desktop.update.requested": {
     topic: "preferences.desktop.update.requested",
     version: 1,
@@ -138,6 +179,13 @@ export const businessEventDefinitionByTopic = {
     direction: "server->client",
     owner: "core",
     scope: "desktop"
+  },
+  "user.project.updated": {
+    topic: "user.project.updated",
+    version: 2,
+    direction: "server->client",
+    owner: "core",
+    scope: "global"
   },
   "workspace.app.updated": {
     topic: "workspace.app.updated",

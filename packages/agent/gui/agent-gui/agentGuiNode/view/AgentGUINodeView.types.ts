@@ -35,6 +35,7 @@ import type {
   AgentGUINodeViewModel
 } from "../model/agentGuiNodeTypes";
 import type { AgentGUIEngagementEventSink } from "../engagement/agentGUIEngagement.types";
+import type { OpenAgentEnvPanelInput } from "../../../shared/agentEnv";
 
 export type AgentMentionReferenceTargetResolver = (
   item: AgentContextMentionItem
@@ -102,6 +103,7 @@ export interface AgentGUIViewLabels {
   permissionModeReadOnly: string;
   permissionModeAuto: string;
   permissionModeFullAccess: string;
+  permissionModeChangeUnavailableDuringTurn: string;
   modelDescriptions: {
     frontierComplexCoding: string;
     everydayCoding: string;
@@ -171,6 +173,7 @@ export interface AgentGUIViewLabels {
   conversationFilterClaudeCode: string;
   conversationFilterTutti: string;
   providerSwitchLabel: string;
+  sharedAgentOwnerSeparator: string;
   startConversation: string;
   selectConversation: string;
   loadingConversations: string;
@@ -191,6 +194,9 @@ export interface AgentGUIViewLabels {
   projectSectionEdit: string;
   projectSectionMoreActions: string;
   projectSectionViewFiles: string;
+  pinProject: string;
+  unpinProject: string;
+  pinnedProjectAccessibleName: (projectLabel: string) => string;
   projectRailCreateProject: string;
   projectRailLinkExistingProject: string;
   removeProject: string;
@@ -354,6 +360,8 @@ export interface AgentGUIViewLabels {
   handoffConversation: string;
   handoffConversationTooltip: string;
   handoffConversationMenu: string;
+  handoffTargetSelf: string;
+  handoffTargetShared: string;
   projectLocked: string;
   projectMissingDescription: string;
   syncPending: string;
@@ -363,6 +371,61 @@ export interface AgentGUIViewLabels {
   promptTips: readonly AgentComposerPromptTip[];
   reviewPicker: AgentComposerProps["labels"]["reviewPicker"];
 }
+
+export type AgentGUIConversationRailLabels = Pick<
+  AgentGUIViewLabels,
+  | "batchDeleteConversations"
+  | "batchDeleteConversationsBody"
+  | "batchDeleteConversationsConfirm"
+  | "batchDeleteConversationsTitle"
+  | "batchDeleteProjectSessions"
+  | "batchDeleteProjectSessionsBody"
+  | "batchDeleteProjectSessionsConfirm"
+  | "batchDeleteProjectSessionsTitle"
+  | "cancel"
+  | "conversationUnavailable"
+  | "conversationsSectionMoreActions"
+  | "copySessionLink"
+  | "deleteSession"
+  | "deleteSessionConfirm"
+  | "emptyProjectConversations"
+  | "loadingConversations"
+  | "markSessionUnread"
+  | "newConversation"
+  | "noConversations"
+  | "openConversationWindow"
+  | "pinProject"
+  | "pinSession"
+  | "pinnedProjectAccessibleName"
+  | "projectRailCreateProject"
+  | "projectRailLinkExistingProject"
+  | "projectSectionEdit"
+  | "projectSectionMoreActions"
+  | "projectSectionViewFiles"
+  | "relativeTimeDays"
+  | "relativeTimeHours"
+  | "relativeTimeJustNow"
+  | "relativeTimeMinutes"
+  | "relativeTimeMonths"
+  | "relativeTimeYears"
+  | "removeProject"
+  | "removeProjectConfirmDescription"
+  | "removeProjectConfirmTitle"
+  | "renameSession"
+  | "retrySearch"
+  | "searchFailed"
+  | "searchNoConversations"
+  | "searchPlaceholder"
+  | "sectionConversations"
+  | "sectionPinned"
+  | "selectConversation"
+  | "showLessConversations"
+  | "showMoreConversations"
+  | "startConversation"
+  | "unpinProject"
+  | "unpinSession"
+  | "untitledConversationTitle"
+>;
 
 export interface AgentGUINodeViewProps {
   viewModel: AgentGUINodeViewModel;
@@ -412,13 +475,14 @@ export interface AgentGUINodeViewProps {
   accountMenuState?: AgentGUIAccountMenuState | null;
   previewMode?: boolean;
   onAgentProviderLogin?: (provider?: string | null) => void;
+  onAgentEnvPanelOpen?: (input?: OpenAgentEnvPanelInput) => void;
   actions: {
     updateConversationFilter: (
       filter: AgentGUINodeViewModel["rail"]["conversationFilter"]
     ) => void;
     selectConversationFilterTarget: (input: {
       provider: AgentGUIProvider;
-      agentTargetId?: string | null;
+      agentTargetId: string;
     }) => void;
     createConversation: (options?: {
       projectPath?: string | null;
@@ -475,6 +539,11 @@ export interface AgentGUINodeViewProps {
       title: string
     ) => Promise<void>;
     removeProject: (path: string) => void;
+    moveProject: (
+      projectId: string,
+      beforeProjectId: string | null
+    ) => Promise<void>;
+    toggleProjectPinned: (projectId: string, pinned: boolean) => Promise<void>;
     confirmDeleteProjectConversations: (
       sectionKey?: string,
       agentTargetId?: string | null
@@ -493,9 +562,11 @@ export interface AgentGUINodeViewProps {
   onWorkspaceFileReferencesAdded?: (
     references: readonly WorkspaceFileReference[]
   ) => void | Promise<void>;
-  resolveDroppedFileReferences?: AgentComposerProps["resolveDroppedFileReferences"];
+  prepareExternalPromptFiles?: AgentComposerProps["prepareExternalPromptFiles"];
+  promptAssetLimit?: number | null;
   onConversationRailWidthChanged: (widthPx: number) => void;
   labels: AgentGUIViewLabels;
+  conversationRailLabels: AgentGUIConversationRailLabels;
   workspaceUserProjectI18n: WorkspaceUserProjectI18nRuntime;
   workspaceFileManagerCopy?: WorkspaceFileManagerI18nRuntime | null;
   workspaceFileReferenceAdapter?: WorkspaceFileReferenceAdapter | null;

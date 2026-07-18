@@ -67,6 +67,17 @@ func (s *Store) applyAgentTargetsV3(ctx context.Context) error {
 	return s.recordMigration(ctx, schemaMigrationAgentTargetsV3)
 }
 
+func (s *Store) applyAgentTargetsV4(ctx context.Context) error {
+	applied, err := s.hasMigration(ctx, schemaMigrationAgentTargetsV4)
+	if err != nil || applied {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `ALTER TABLE agent_targets ADD COLUMN sidebar_icon_url TEXT`); err != nil {
+		return fmt.Errorf("add agent target sidebar icon URL: %w", err)
+	}
+	return s.recordMigration(ctx, schemaMigrationAgentTargetsV4)
+}
+
 func (s *Store) seedSystemAgentTargets(ctx context.Context, now int64) error {
 	legacyIDs := make([]string, 0, len(s.opts.LegacySystemTargetIDRenames))
 	for legacyID := range s.opts.LegacySystemTargetIDRenames {

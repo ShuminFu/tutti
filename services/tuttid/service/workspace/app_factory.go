@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 	workspacefiles "github.com/tutti-os/tutti/packages/workspace/files"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
@@ -96,8 +96,8 @@ type FactoryAgentSessionService interface {
 type FactoryAgentSessionStateReporter interface {
 	ReportSessionState(
 		context.Context,
-		agentsessionstore.ReportSessionStateInput,
-	) (agentsessionstore.ReportSessionStateReply, error)
+		canonical.ReportSessionStateInput,
+	) (canonical.ReportSessionStateReply, error)
 }
 
 type WorkspaceAppFactoryEventPublisher interface {

@@ -19,6 +19,9 @@ import type {
   AttachEventStreamData,
   AttachEventStreamErrors,
   AttachEventStreamResponses,
+  AuthenticateAgentTargetRuntimeData,
+  AuthenticateAgentTargetRuntimeErrors,
+  AuthenticateAgentTargetRuntimeResponses,
   CancelWorkspaceAgentTurnData,
   CancelWorkspaceAgentTurnErrors,
   CancelWorkspaceAgentTurnResponses,
@@ -139,6 +142,9 @@ import type {
   GetAgentProviderStatusesData,
   GetAgentProviderStatusesErrors,
   GetAgentProviderStatusesResponses,
+  GetAgentTargetSetupData,
+  GetAgentTargetSetupErrors,
+  GetAgentTargetSetupResponses,
   GetDesktopPreferencesData,
   GetDesktopPreferencesErrors,
   GetDesktopPreferencesResponses,
@@ -205,6 +211,9 @@ import type {
   ImportWorkspaceExternalAgentSessionsData,
   ImportWorkspaceExternalAgentSessionsErrors,
   ImportWorkspaceExternalAgentSessionsResponses,
+  InstallAgentTargetRuntimeData,
+  InstallAgentTargetRuntimeErrors,
+  InstallAgentTargetRuntimeResponses,
   InstallWorkspaceAppData,
   InstallWorkspaceAppErrors,
   InstallWorkspaceAppResponses,
@@ -295,12 +304,18 @@ import type {
   LogoutAccountData,
   LogoutAccountErrors,
   LogoutAccountResponses,
+  MoveUserProjectData,
+  MoveUserProjectErrors,
+  MoveUserProjectResponses,
   MoveWorkspaceFileEntryData,
   MoveWorkspaceFileEntryErrors,
   MoveWorkspaceFileEntryResponses,
   OpenWorkspaceData,
   OpenWorkspaceErrors,
   OpenWorkspaceResponses,
+  PinUserProjectData,
+  PinUserProjectErrors,
+  PinUserProjectResponses,
   PreflightUploadWorkspaceFilesData,
   PreflightUploadWorkspaceFilesErrors,
   PreflightUploadWorkspaceFilesResponses,
@@ -707,7 +722,7 @@ export const putDesktopPreferences = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Remove a user project directory from the recent project list
+ * Remove a user project directory from the ordered project list
  */
 export const deleteUserProject = <ThrowOnError extends boolean = false>(
   options: Options<DeleteUserProjectData, ThrowOnError>
@@ -727,7 +742,7 @@ export const deleteUserProject = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * List recently used user project directories
+ * List user project directories in durable order
  */
 export const listUserProjects = <ThrowOnError extends boolean = false>(
   options?: Options<ListUserProjectsData, ThrowOnError>
@@ -775,6 +790,46 @@ export const checkUserProjectPath = <ThrowOnError extends boolean = false>(
   >({
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/user-projects/check",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Move a user project within its pinned or unpinned partition
+ */
+export const moveUserProject = <ThrowOnError extends boolean = false>(
+  options: Options<MoveUserProjectData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    MoveUserProjectResponses,
+    MoveUserProjectErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/user-projects/move",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Pin or unpin a user project
+ */
+export const pinUserProject = <ThrowOnError extends boolean = false>(
+  options: Options<PinUserProjectData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    PinUserProjectResponses,
+    PinUserProjectErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/user-projects/pin",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -833,6 +888,73 @@ export const setSystemAgentTargetEnabled = <
   >({
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/agent-targets/{agentTargetID}/enabled",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Resolve Agent Target setup state
+ *
+ * Prefers a compatible local runtime. Otherwise returns a daemon-derived installation plan and any durable install action for the fixed Target. The managed runtime is installed under the user's stable ~/.local data root and is reused across workspaces. Clients cannot submit runner args, package identity, executable paths, or installation roots.
+ *
+ */
+export const getAgentTargetSetup = <ThrowOnError extends boolean = false>(
+  options: Options<GetAgentTargetSetupData, ThrowOnError>
+) =>
+  (options.client ?? client).get<
+    GetAgentTargetSetupResponses,
+    GetAgentTargetSetupErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-targets/{agentTargetID}/setup",
+    ...options
+  });
+
+/**
+ * Start an Agent Target runtime installation
+ *
+ * Recomputes the trusted installation plan, verifies its digest, then starts or returns the durable idempotent action identified by clientActionId. The daemon owns all executable arguments and paths.
+ *
+ */
+export const installAgentTargetRuntime = <ThrowOnError extends boolean = false>(
+  options: Options<InstallAgentTargetRuntimeData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    InstallAgentTargetRuntimeResponses,
+    InstallAgentTargetRuntimeErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-targets/{agentTargetID}/setup/install",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Authenticate an Agent Target runtime
+ *
+ * Validates methodId against auth methods returned by a fresh ACP initialize, calls ACP authenticate, then requires session/new to succeed before reporting ready. The durable action is idempotent by clientActionId and never stores credentials.
+ *
+ */
+export const authenticateAgentTargetRuntime = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<AuthenticateAgentTargetRuntimeData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    AuthenticateAgentTargetRuntimeResponses,
+    AuthenticateAgentTargetRuntimeErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-targets/{agentTargetID}/setup/authenticate",
     ...options,
     headers: {
       "Content-Type": "application/json",

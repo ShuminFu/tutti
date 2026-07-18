@@ -258,11 +258,22 @@ test("workspace app external user project API exposes live project state", () =>
     workspaceAppExternalUserProjectApiSource,
     /subscribe: \(listener\) =>\s+service\.subscribe\(\(\) => \{\s+listener\(cloneWorkspaceUserProjectServiceSnapshot\(service\)\);/
   );
+  assert.match(
+    workspaceAppExternalUserProjectApiSource,
+    /move: \(input\) => service\.moveProject\(input\)/
+  );
 });
 
 test("workspace app external at query preserves explicit provider filters", () => {
   assert.match(
     workspaceWorkbenchHostServiceSource,
     /input\.query\.providers !== undefined\s+\?\s+input\.query\.providers\s+:\s+tuttiExternalAtProviderIds/
+  );
+});
+
+test("workspace app external at resolve overrides caller workspace scope", () => {
+  assert.match(
+    workspaceWorkbenchHostServiceSource,
+    /resolveWorkspaceAppExternalAt\([\s\S]*?scope: \{[\s\S]*?\.\.\.input\.mention\.scope,[\s\S]*?workspaceId: input\.workspaceId[\s\S]*?\}/
   );
 });

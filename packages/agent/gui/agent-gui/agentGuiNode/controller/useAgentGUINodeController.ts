@@ -37,6 +37,7 @@ import {
 } from "./agentGuiController.errors";
 import {
   areAgentGUIUserProjectsEqual,
+  readAgentGUIUserProjectMutationPending,
   readAgentGUIUserProjectSnapshot,
   upsertAgentGUIUserProject
 } from "./agentGuiController.interactiveHelpers";
@@ -44,7 +45,8 @@ import {
   EMPTY_AGENT_GUI_MESSAGES,
   composerTargetDataFromProviderTarget,
   isExplicitAgentGUIAgentTarget,
-  type AgentGUIRememberComposerDefaultsInput
+  type AgentGUIRememberComposerDefaultsInput,
+  type AgentGUIRememberComposerDefaultsResult
 } from "./agentGuiController.providerHelpers";
 import { reportAgentGUIActiveConversationCleared } from "./agentGuiController.reporting";
 import { useAgentGUIActivation } from "./useAgentGUIActivation";
@@ -117,6 +119,8 @@ interface UseAgentGUINodeControllerInput {
   data: AgentGUINodeData;
   agentTargets?: readonly AgentGUIAgentTarget[];
   agentTargetsLoading?: boolean;
+  handoffAgentTargets?: readonly AgentGUIAgentTarget[];
+  handoffAgentTargetsLoading?: boolean;
   providerRailMode?: AgentGUIProviderRailMode;
   comingSoonProviders?: readonly AgentGUIProvider[];
   providerReadinessGates?: Partial<
@@ -132,7 +136,7 @@ interface UseAgentGUINodeControllerInput {
   ) => void;
   onRememberComposerDefaults?: (
     input: AgentGUIRememberComposerDefaultsInput
-  ) => void | Promise<void>;
+  ) => void | Promise<AgentGUIRememberComposerDefaultsResult>;
   onShowMessage?: (
     message: string,
     tone?: "info" | "warning" | "error"
@@ -142,6 +146,10 @@ interface UseAgentGUINodeControllerInput {
 export type { AgentGUIOpenSessionRequest } from "./agentGuiController.draftMessageHelpers";
 export type { AgentGUIPrefillPromptRequest } from "./useAgentGUIConversationHome";
 export type { AgentGUIComposerAppendRequest } from "./useAgentGUIComposerAppendRequest";
+export type {
+  AgentGUIRememberComposerDefaultsInput,
+  AgentGUIRememberComposerDefaultsResult
+} from "./agentGuiController.providerHelpers";
 
 export function useAgentGUINodeController({
   workspaceId,
@@ -151,6 +159,8 @@ export function useAgentGUINodeController({
   data,
   agentTargets,
   agentTargetsLoading = false,
+  handoffAgentTargets,
+  handoffAgentTargetsLoading = false,
   providerRailMode = "catalog",
   comingSoonProviders,
   providerReadinessGates = null,
@@ -188,7 +198,9 @@ export function useAgentGUINodeController({
     providerRailMode,
     providerReadinessGates,
     agentTargets,
-    agentTargetsLoading
+    agentTargetsLoading,
+    handoffAgentTargets,
+    handoffAgentTargetsLoading
   });
   const {
     effectiveSelectedProviderTarget,
@@ -230,6 +242,7 @@ export function useAgentGUINodeController({
     setIntent,
     setIsComposerHome,
     setIsLoadingMessages,
+    setIsUserProjectMutationPending,
     setSelectedProjectPath,
     setUserProjects,
     userProjects
@@ -356,6 +369,7 @@ export function useAgentGUINodeController({
     isMountedRef,
     loadDraftComposerOptionsRef,
     onDataChangeRef,
+    onComposerDefaultsAuthorityReloadedRef,
     pendingOpenSessionRequestRef,
     reloadSelectedConversationRef,
     selectedComposerTargetDataRef,
@@ -447,6 +461,9 @@ export function useAgentGUINodeController({
     const api = agentHostApi.userProjects;
     let disposed = false;
     setUserProjectsSnapshot(readAgentGUIUserProjectSnapshot(api));
+    setIsUserProjectMutationPending(
+      readAgentGUIUserProjectMutationPending(api)
+    );
     const loadUserProjects = async () => {
       const requestSeq = ++userProjectsLoadSeqRef.current;
       if (!api) {
@@ -470,13 +487,21 @@ export function useAgentGUINodeController({
     const unsubscribe = previewMode
       ? undefined
       : api?.subscribe?.(() => {
+          setIsUserProjectMutationPending(
+            readAgentGUIUserProjectMutationPending(api)
+          );
           void loadUserProjects();
         });
     return () => {
       disposed = true;
       unsubscribe?.();
     };
-  }, [agentHostApi.userProjects, previewMode, setUserProjectsSnapshot]);
+  }, [
+    agentHostApi.userProjects,
+    previewMode,
+    setIsUserProjectMutationPending,
+    setUserProjectsSnapshot
+  ]);
 
   // NOTE: project metadata is intentionally NOT written back into the shared
   // conversation store. `conversation.project` is a per-window JOIN of cwd ×
@@ -537,9 +562,11 @@ export function useAgentGUINodeController({
           id: string;
           path: string;
           label: string;
+          sectionKey?: string;
           createdAtUnixMs?: number;
           updatedAtUnixMs?: number;
           lastUsedAtUnixMs?: number | null;
+          pinnedAtUnixMs: number;
         };
       }
     ) => {
@@ -611,33 +638,35 @@ export function useAgentGUINodeController({
     workspaceId
   });
 
-  const { loadDraftComposerOptions } = useAgentGUIComposerOptionsSync({
-    activeConversationId,
-    activeConversationIdRef,
-    agentActivityRuntime,
-    composerTargetData,
-    conversationFilter,
-    currentUserId,
-    data,
-    dataRef,
-    defaultReasoningEffort,
-    draftSettingsBySessionIdRef,
-    isComposerHome,
-    isComposerHomeRef,
-    isCreatingConversation,
-    loadDraftComposerOptionsRef,
-    loadSessionState,
-    previewMode,
-    providerComposerOptions,
-    reloadSelectedConversation,
-    selectedComposerTargetDataRef,
-    selectedProjectPath,
-    selectedProjectPathRef,
-    sessionEngine,
-    syncConversationListProjection,
-    workspaceId,
-    workspacePath
-  });
+  const { loadDraftComposerOptions, reloadComposerOptionsForTarget } =
+    useAgentGUIComposerOptionsSync({
+      activeConversationId,
+      activeConversationIdRef,
+      agentActivityRuntime,
+      composerTargetData,
+      conversationFilter,
+      currentUserId,
+      data,
+      dataRef,
+      defaultReasoningEffort,
+      draftSettingsBySessionIdRef,
+      isComposerHome,
+      isComposerHomeRef,
+      isCreatingConversation,
+      loadDraftComposerOptionsRef,
+      loadSessionState,
+      onComposerDefaultsAuthorityReloadedRef,
+      previewMode,
+      providerComposerOptions,
+      reloadSelectedConversation,
+      selectedComposerTargetDataRef,
+      selectedProjectPath,
+      selectedProjectPathRef,
+      sessionEngine,
+      syncConversationListProjection,
+      workspaceId,
+      workspacePath
+    });
   const operationActions = useAgentGUIOperationActions({
     ...providerCatalogSelection,
     ...localState,
@@ -663,6 +692,7 @@ export function useAgentGUINodeController({
     isExplicitAgentGUIAgentTarget,
     isRespondingToInteraction: activeRelatedIsRespondingToInteraction,
     loadDraftComposerOptions,
+    reloadComposerOptionsForTarget,
     normalizedExplicitProviderTargets,
     normalizedProviderTargets,
     planActionsRef,

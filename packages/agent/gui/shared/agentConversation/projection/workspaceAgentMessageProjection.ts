@@ -35,9 +35,9 @@ export function projectWorkspaceAgentMessagesToConversationVM(
 export function projectWorkspaceAgentMessagesToTimelineItems(
   messages: readonly AgentActivityMessage[]
 ): WorkspaceAgentActivityTimelineItem[] {
-  const sortedMessages = latestMessageSnapshots(messages).sort(
-    compareMessagesByDisplayOrder
-  );
+  const sortedMessages = latestMessageSnapshots(messages)
+    .filter((message) => !isGoalControlAudit(message))
+    .sort(compareMessagesByDisplayOrder);
   const mergedToolPayloadByKey = new Map<string, Record<string, unknown>>();
 
   return sortedMessages.map((message, index) => {
@@ -174,6 +174,13 @@ export function projectWorkspaceAgentMessagesToTimelineItems(
       occurredAtUnixMs
     });
   });
+}
+
+function isGoalControlAudit(message: AgentActivityMessage): boolean {
+  return (
+    normalizeToken(message.kind) === "session_audit" &&
+    normalizedPayload(message.payload).goalControl === true
+  );
 }
 
 function normalizeLegacyCompactNotice(

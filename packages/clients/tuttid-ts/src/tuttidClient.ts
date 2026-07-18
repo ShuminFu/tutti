@@ -1,4 +1,5 @@
 import {
+  authenticateAgentTargetRuntime,
   addWorkspaceIssueContextRefs,
   addWorkspaceIssueTaskContextRefs,
   checkUserProjectPath,
@@ -26,6 +27,7 @@ import {
   getAccountUserInfo,
   dismissAccountRegistrationCreditsReward,
   getHealth,
+  getAgentTargetSetup,
   getStartupWorkspace,
   listAgentTargets,
   getWorkspaceFileTreeSnapshot,
@@ -40,6 +42,8 @@ import {
   listCliCapabilities,
   listWorkspaceAppMentionCandidates,
   listUserProjects,
+  moveUserProject,
+  pinUserProject,
   listWorkspaceIssues,
   listWorkspaceIssueTopics,
   listWorkspaceIssueRuns,
@@ -49,6 +53,7 @@ import {
   listWorkspaceFileDirectory,
   listWorkspaceRecentFiles,
   listWorkspaces,
+  installAgentTargetRuntime,
   logoutAccount,
   copyWorkspaceFileEntry,
   moveWorkspaceFileEntry,
@@ -120,6 +125,35 @@ export function createTuttidClient(
           path: { agentTargetID }
         }),
         "Agent target visibility update failed."
+      );
+    },
+    async getAgentTargetSetup(workspaceID, agentTargetID) {
+      return unwrapData(
+        await getAgentTargetSetup({
+          client,
+          path: { workspaceID, agentTargetID }
+        }),
+        "Agent target setup request failed."
+      );
+    },
+    async installAgentTargetRuntime(workspaceID, agentTargetID, request) {
+      return unwrapData(
+        await installAgentTargetRuntime({
+          client,
+          path: { workspaceID, agentTargetID },
+          body: request
+        }),
+        "Agent target runtime install request failed."
+      );
+    },
+    async authenticateAgentTargetRuntime(workspaceID, agentTargetID, request) {
+      return unwrapData(
+        await authenticateAgentTargetRuntime({
+          client,
+          path: { workspaceID, agentTargetID },
+          body: request
+        }),
+        "Agent target runtime authentication request failed."
       );
     },
     async startAccountLogin() {
@@ -595,6 +629,20 @@ export function createTuttidClient(
     async listUserProjects() {
       const response = await listUserProjects({ client });
       return unwrapData(response, "List user projects failed.");
+    },
+    async moveUserProject(request) {
+      const response = await moveUserProject({
+        client,
+        body: request
+      });
+      return unwrapData(response, "Move user project failed.");
+    },
+    async pinUserProject(request) {
+      const response = await pinUserProject({
+        client,
+        body: request
+      });
+      return unwrapData(response, "Pin user project failed.");
     },
     async deleteUserProject(request) {
       const response = await deleteUserProject({

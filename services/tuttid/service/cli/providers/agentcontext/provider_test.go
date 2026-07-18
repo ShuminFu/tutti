@@ -79,6 +79,9 @@ type fakeAgentSessions struct {
 	availabilityErr error
 	availabilityIn  []agentservice.ProviderAvailabilityInput
 	waitResult      agentservice.WaitResult
+	respondInput    agentservice.RespondInput
+	respondResult   agentservice.RespondResult
+	respondErr      error
 }
 
 func newTestProvider(workspaces cliservice.WorkspaceCatalog, sessions AgentSessions) Provider {
@@ -118,13 +121,18 @@ func (f *fakeAgentSessions) Create(_ context.Context, workspaceID string, input 
 	if input.Visible != nil {
 		visible = *input.Visible
 	}
-	return agentservice.Session{
+	session := agentservice.Session{
 		ID:            "SESSION-NEW",
 		AgentTargetID: input.AgentTargetID,
 		Provider:      input.Provider,
 		Cwd:           cwd,
 		Visible:       visible,
-	}, nil
+	}
+	if input.Isolation == "worktree" {
+		session.Isolation = &agentservice.SessionIsolation{Mode: "worktree", WorktreePath: "/state/worktree", Branch: "tutti/SESSION-NEW", BaseCommit: "abc123"}
+		session.Warnings = []agentservice.SessionWarning{{Code: "worktree_base_dirty", Message: "dirty source"}}
+	}
+	return session, nil
 }
 
 func (f *fakeAgentSessions) Get(_ context.Context, workspaceID string, sessionID string) (agentservice.Session, error) {
@@ -371,6 +379,18 @@ func (f *fakeAgentSessions) Wait(_ context.Context, input agentservice.WaitInput
 	}, nil
 }
 
+func (f *fakeAgentSessions) Respond(_ context.Context, input agentservice.RespondInput) (agentservice.RespondResult, error) {
+	f.workspaceID = input.WorkspaceID
+	f.sessionID = input.AgentSessionID
+	f.respondInput = input
+	if f.respondResult.RequestID != "" || f.respondResult.Disposition != "" || f.respondErr != nil {
+		return f.respondResult, f.respondErr
+	}
+	return agentservice.RespondResult{
+		RequestID: input.RequestID, TurnID: "turn-1", Disposition: agentservice.RuntimeInteractiveDispositionAnswered,
+	}, nil
+}
+
 type fakeAgentGUILaunchPublisher struct {
 	requests []agentgui.LaunchRequest
 }
@@ -408,6 +428,13 @@ func waitAfterVersionValue(value *uint64) (uint64, bool) {
 		return 0, false
 	}
 	return *value, true
+}
+
+func optionalTestString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func TestSessionSummaryCommandUsesLimitAndAfterVersion(t *testing.T) {
@@ -751,6 +778,141 @@ func TestWaitCommandUsesDefaultTimeout(t *testing.T) {
 	}
 }
 
+func TestWaitCommandReturnsFinalMessageAndDetailedInteractions(t *testing.T) {
+	t.Run("completed", func(t *testing.T) {
+		sessions := &fakeAgentSessions{waitResult: agentservice.WaitResult{
+			Session:      agentservice.Session{ID: "SESSION-1", Provider: "codex", Visible: true},
+			Reason:       agentservice.WaitReasonCompleted,
+			FinalMessage: &agentservice.WaitFinalMessage{TurnID: "turn-1", Text: strings.Repeat("complete ", 600)},
+		}}
+		command := newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, sessions).newWaitCommand()
+		output, err := command.Handler(context.Background(), cliservice.InvokeRequest{
+			Input: map[string]any{"session-id": "SESSION-1"}, OutputMode: cliservice.OutputModeJSON,
+		})
+		if err != nil {
+			t.Fatalf("Handler: %v", err)
+		}
+		final := output.Value["finalMessage"].(map[string]any)
+		if final["turnId"] != "turn-1" || final["text"] != sessions.waitResult.FinalMessage.Text {
+			t.Fatalf("finalMessage = %#v", final)
+		}
+		if _, ok := output.Value["interactions"]; ok {
+			t.Fatalf("completed output has interactions: %#v", output.Value)
+		}
+	})
+
+	t.Run("waiting approval", func(t *testing.T) {
+		sessions := &fakeAgentSessions{waitResult: agentservice.WaitResult{
+			Session: agentservice.Session{ID: "SESSION-1", Provider: "claude-code", Visible: true},
+			Reason:  agentservice.WaitReasonWaitingApproval,
+			Interactions: []agentservice.WaitInteraction{{
+				RequestID: "request-1", TurnID: "turn-1", Kind: "approval", ToolName: "Approval",
+				Actions:      []agentservice.InteractionAction{{ID: "allow", Label: "Allow", Semantic: "approve"}},
+				InputSummary: `{"command":"go test ./..."}`, InputTruncated: false,
+			}},
+		}}
+		command := newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, sessions).newWaitCommand()
+		output, err := command.Handler(context.Background(), cliservice.InvokeRequest{
+			Input: map[string]any{"session-id": "SESSION-1"}, OutputMode: cliservice.OutputModeJSON,
+		})
+		if err != nil {
+			t.Fatalf("Handler: %v", err)
+		}
+		interactions := output.Value["interactions"].([]any)
+		interaction := interactions[0].(map[string]any)
+		action := interaction["actions"].([]any)[0].(map[string]any)
+		input := interaction["input"].(map[string]any)
+		if interaction["requestId"] != "request-1" || interaction["toolName"] != "Approval" ||
+			action["id"] != "allow" || action["semantic"] != "approve" || input["truncated"] != false {
+			t.Fatalf("interaction = %#v", interaction)
+		}
+	})
+
+	t.Run("timeout shape unchanged", func(t *testing.T) {
+		sessions := &fakeAgentSessions{waitResult: agentservice.WaitResult{
+			Session: agentservice.Session{ID: "SESSION-1", Provider: "codex", Visible: true},
+			Reason:  agentservice.WaitReasonTimeout, TimedOut: true,
+			FinalMessage: &agentservice.WaitFinalMessage{TurnID: "ignored", Text: "ignored"},
+			Interactions: []agentservice.WaitInteraction{{RequestID: "ignored"}},
+		}}
+		command := newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, sessions).newWaitCommand()
+		output, err := command.Handler(context.Background(), cliservice.InvokeRequest{
+			Input: map[string]any{"session-id": "SESSION-1"}, OutputMode: cliservice.OutputModeJSON,
+		})
+		if err != nil {
+			t.Fatalf("Handler: %v", err)
+		}
+		for _, key := range []string{"finalMessage", "interactions", "messages", "hasMore"} {
+			if _, ok := output.Value[key]; ok {
+				t.Fatalf("timeout output should omit %q: %#v", key, output.Value)
+			}
+		}
+	})
+}
+
+func TestRespondCommandPassesResponseAndReturnsDisposition(t *testing.T) {
+	sessions := &fakeAgentSessions{respondResult: agentservice.RespondResult{
+		RequestID: "request-1", TurnID: "turn-1", Disposition: agentservice.RuntimeInteractiveDispositionSuperseded,
+	}}
+	command := newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, sessions).newRespondCommand()
+	output, err := command.Handler(context.Background(), cliservice.InvokeRequest{
+		Input: map[string]any{
+			"session-id": "SESSION-1", "request-id": "request-1", "action": "approve",
+			"option": "allow-once", "payload": `{"answer":"yes"}`,
+		},
+		OutputMode: cliservice.OutputModeJSON,
+	})
+	if err != nil {
+		t.Fatalf("Handler: %v", err)
+	}
+	if sessions.respondInput.WorkspaceID != "workspace-1" || sessions.respondInput.AgentSessionID != "SESSION-1" ||
+		sessions.respondInput.RequestID != "request-1" || optionalTestString(sessions.respondInput.Action) != "approve" ||
+		optionalTestString(sessions.respondInput.OptionID) != "allow-once" || sessions.respondInput.Payload["answer"] != "yes" {
+		t.Fatalf("respond input = %#v", sessions.respondInput)
+	}
+	if output.Value["requestId"] != "request-1" || output.Value["turnId"] != "turn-1" || output.Value["disposition"] != "superseded" {
+		t.Fatalf("output = %#v", output.Value)
+	}
+}
+
+func TestRespondCommandPassesSemanticWithoutProviderMapping(t *testing.T) {
+	sessions := &fakeAgentSessions{}
+	command := newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, sessions).newRespondCommand()
+	if _, err := command.Handler(context.Background(), cliservice.InvokeRequest{
+		Input:      map[string]any{"session-id": "SESSION-1", "request-id": "request-1", "semantic": "approve"},
+		OutputMode: cliservice.OutputModeJSON,
+	}); err != nil {
+		t.Fatalf("Handler: %v", err)
+	}
+	if sessions.respondInput.Semantic != "approve" || sessions.respondInput.Action != nil || sessions.respondInput.OptionID != nil {
+		t.Fatalf("respond input = %#v", sessions.respondInput)
+	}
+}
+
+func TestRespondCommandReturnsStructuredInputErrors(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		input    map[string]any
+		sessions *fakeAgentSessions
+	}{
+		{name: "missing response", input: map[string]any{"session-id": "SESSION-1", "request-id": "request-1"}, sessions: &fakeAgentSessions{}},
+		{name: "invalid payload", input: map[string]any{"session-id": "SESSION-1", "request-id": "request-1", "payload": `[]`}, sessions: &fakeAgentSessions{}},
+		{name: "action and semantic", input: map[string]any{"session-id": "SESSION-1", "request-id": "request-1", "action": "approve", "semantic": "approve"}, sessions: &fakeAgentSessions{}},
+		{name: "unknown request", input: map[string]any{"session-id": "SESSION-1", "request-id": "missing", "action": "approve"}, sessions: &fakeAgentSessions{respondErr: agentservice.ErrInteractionRequestNotFound}},
+		{name: "non pending", input: map[string]any{"session-id": "SESSION-1", "request-id": "answered", "action": "approve"}, sessions: &fakeAgentSessions{respondErr: agentservice.ErrInteractionRequestNotPending}},
+		{name: "semantic missing", input: map[string]any{"session-id": "SESSION-1", "request-id": "request-1", "semantic": "approve"}, sessions: &fakeAgentSessions{respondErr: agentservice.ErrInteractionSemanticNotFound}},
+		{name: "semantic ambiguous", input: map[string]any{"session-id": "SESSION-1", "request-id": "request-1", "semantic": "approve"}, sessions: &fakeAgentSessions{respondErr: agentservice.ErrInteractionSemanticAmbiguous}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			command := newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, test.sessions).newRespondCommand()
+			_, err := command.Handler(context.Background(), cliservice.InvokeRequest{Input: test.input, OutputMode: cliservice.OutputModeJSON})
+			if !errors.Is(err, cliservice.ErrInvalidInput) {
+				t.Fatalf("error = %v, want ErrInvalidInput", err)
+			}
+		})
+	}
+}
+
 func TestStartCommandPassesDisplayPrompt(t *testing.T) {
 	sessions := &fakeAgentSessions{}
 	command := newTestCodexStartCommand(newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, sessions))
@@ -812,7 +974,7 @@ func TestStartCommandRequiresOneSelectorAndPrompt(t *testing.T) {
 	}
 }
 
-func TestStartCommandUsesComposerDefaults(t *testing.T) {
+func TestStartCommandLeavesComposerDefaultsToAgentService(t *testing.T) {
 	sessions := &fakeAgentSessions{}
 	command := newTestCodexStartCommand(NewProviderWithLaunchPublisher(
 		fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}},
@@ -835,14 +997,14 @@ func TestStartCommandUsesComposerDefaults(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Handler: %v", err)
 	}
-	if sessions.createInput.Model == nil || *sessions.createInput.Model != "gpt-5.5" {
-		t.Fatalf("Model = %#v, want composer default", sessions.createInput.Model)
+	if sessions.createInput.Model != nil {
+		t.Fatalf("Model = %#v, want nil for daemon inheritance", sessions.createInput.Model)
 	}
-	if sessions.createInput.PermissionModeID == nil || *sessions.createInput.PermissionModeID != "full-access" {
-		t.Fatalf("PermissionModeID = %#v, want composer default", sessions.createInput.PermissionModeID)
+	if sessions.createInput.PermissionModeID != nil {
+		t.Fatalf("PermissionModeID = %#v, want nil for daemon inheritance", sessions.createInput.PermissionModeID)
 	}
-	if sessions.createInput.ReasoningEffort == nil || *sessions.createInput.ReasoningEffort != "high" {
-		t.Fatalf("ReasoningEffort = %#v, want composer default", sessions.createInput.ReasoningEffort)
+	if sessions.createInput.ReasoningEffort != nil {
+		t.Fatalf("ReasoningEffort = %#v, want nil for daemon inheritance", sessions.createInput.ReasoningEffort)
 	}
 	if sessions.createInput.ConversationDetailMode != preferencesbiz.DesktopAgentConversationDetailModeGeneral {
 		t.Fatalf("ConversationDetailMode = %q, want general", sessions.createInput.ConversationDetailMode)
@@ -939,7 +1101,7 @@ func TestComposerOptionsCommandCanDisableCapabilityCatalog(t *testing.T) {
 	}
 }
 
-func TestComposerOptionsCommandUsesComposerDefaultsFromPreferences(t *testing.T) {
+func TestComposerOptionsCommandLeavesComposerDefaultsToAgentService(t *testing.T) {
 	sessions := &fakeAgentSessions{}
 	command := NewProviderWithAgentTargets(
 		fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}},
@@ -968,9 +1130,9 @@ func TestComposerOptionsCommandUsesComposerDefaultsFromPreferences(t *testing.T)
 	if err != nil {
 		t.Fatalf("Handler: %v", err)
 	}
-	if sessions.composerInput.Settings.Model != "gpt-5" ||
-		sessions.composerInput.Settings.PermissionModeID != "full-access" ||
-		sessions.composerInput.Settings.ReasoningEffort != "high" ||
+	if sessions.composerInput.Settings.Model != "" ||
+		sessions.composerInput.Settings.PermissionModeID != "" ||
+		sessions.composerInput.Settings.ReasoningEffort != "" ||
 		sessions.composerInput.Settings.ConversationDetailMode != "" {
 		t.Fatalf("composer input = %#v", sessions.composerInput)
 	}
@@ -1291,6 +1453,33 @@ func TestStartCommandInheritsCallerSessionCwd(t *testing.T) {
 	}
 }
 
+func TestStartCommandExposesAndPassesWorktreeIsolation(t *testing.T) {
+	sessions := &fakeAgentSessions{}
+	command := newTestCodexStartCommand(newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, sessions))
+	properties := command.Capability.InputSchema["properties"].(map[string]any)
+	isolationSchema, ok := properties["isolation"].(map[string]any)
+	if !ok {
+		t.Fatalf("isolation schema = %#v", properties["isolation"])
+	}
+	enum, ok := isolationSchema["enum"].([]string)
+	if !ok || len(enum) != 1 || enum[0] != "worktree" {
+		t.Fatalf("isolation enum = %#v", isolationSchema["enum"])
+	}
+	output, err := command.Handler(context.Background(), cliservice.InvokeRequest{
+		Input:      map[string]any{"agent-id": agenttargetbiz.IDLocalCodex, "cwd": "/workspace/a", "isolation": "worktree", "prompt": "do work"},
+		OutputMode: cliservice.OutputModeJSON,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sessions.createInput.Isolation != "worktree" {
+		t.Fatalf("CreateSessionInput.Isolation = %q", sessions.createInput.Isolation)
+	}
+	if len(output.Warnings) != 1 || output.Warnings[0].Code != "worktree_base_dirty" {
+		t.Fatalf("output warnings = %#v", output.Warnings)
+	}
+}
+
 func TestStartCommandExplicitCwdOverridesCallerSessionCwd(t *testing.T) {
 	sessions := &fakeAgentSessions{
 		getSession: agentservice.Session{ID: "CALLER-1", Cwd: "/workspace/a"},
@@ -1517,7 +1706,7 @@ func TestAgentStartCommandAllowsOmittedModel(t *testing.T) {
 	}
 }
 
-func TestAgentStartCommandUsesComposerDefaults(t *testing.T) {
+func TestAgentStartCommandLeavesComposerDefaultsToAgentService(t *testing.T) {
 	sessions := &fakeAgentSessions{}
 	command := newTestCodexStartCommand(NewProviderWithLaunchPublisher(
 		fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}},
@@ -1540,14 +1729,14 @@ func TestAgentStartCommandUsesComposerDefaults(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Handler: %v", err)
 	}
-	if sessions.createInput.Model == nil || *sessions.createInput.Model != "gpt-5.5" {
-		t.Fatalf("Model = %#v, want composer default", sessions.createInput.Model)
+	if sessions.createInput.Model != nil {
+		t.Fatalf("Model = %#v, want nil for daemon inheritance", sessions.createInput.Model)
 	}
-	if sessions.createInput.PermissionModeID == nil || *sessions.createInput.PermissionModeID != "full-access" {
-		t.Fatalf("PermissionModeID = %#v, want composer default", sessions.createInput.PermissionModeID)
+	if sessions.createInput.PermissionModeID != nil {
+		t.Fatalf("PermissionModeID = %#v, want nil for daemon inheritance", sessions.createInput.PermissionModeID)
 	}
-	if sessions.createInput.ReasoningEffort == nil || *sessions.createInput.ReasoningEffort != "high" {
-		t.Fatalf("ReasoningEffort = %#v, want composer default", sessions.createInput.ReasoningEffort)
+	if sessions.createInput.ReasoningEffort != nil {
+		t.Fatalf("ReasoningEffort = %#v, want nil for daemon inheritance", sessions.createInput.ReasoningEffort)
 	}
 	if sessions.createInput.ConversationDetailMode != preferencesbiz.DesktopAgentConversationDetailModeGeneral {
 		t.Fatalf("ConversationDetailMode = %q, want general", sessions.createInput.ConversationDetailMode)

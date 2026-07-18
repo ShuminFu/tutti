@@ -1244,10 +1244,6 @@ export function WorkbenchHostDock({
     [nodeDefinitions, provideMinimizedNodePreview]
   );
 
-  if (dockItems.length === 0 && presentDockItems.length === 0) {
-    return null;
-  }
-
   const closePopup = () => {
     clearHoverPanelCloseTimer();
     clearHoverPanelOpenTimer();
@@ -1343,6 +1339,10 @@ export function WorkbenchHostDock({
     },
     [host, onDockEntryAction, pendingActionKeys]
   );
+
+  if (dockItems.length === 0 && presentDockItems.length === 0) {
+    return null;
+  }
 
   const popupEntry =
     activePopup === null

@@ -401,7 +401,12 @@ export const en = {
     },
     appCenter: {
       backToApps: "Back to apps",
-      dockLabel: "Apps"
+      dockLabel: "Apps",
+      tabs: {
+        close: "Close app tab",
+        label: "Open apps",
+        new: "Open another app"
+      }
     },
     info: {
       idDescription: "Stable identifier for preload and daemon coordination.",
@@ -826,6 +831,18 @@ export const en = {
         fileDefaultOpenersDescription:
           "Choose what opens first when a workspace file is activated by extension.",
         fileDefaultOpenersLabel: "Default file openers",
+        codebuddyAgentDescription:
+          "Show CodeBuddy Code across Tutti. Disabled by default while Agent Extensions are in preview.",
+        codebuddyAgentLabel: "Enable CodeBuddy Code Agent",
+        copilotAgentDescription:
+          "Show GitHub Copilot CLI across Tutti. Disabled by default while Agent Extensions are in preview.",
+        copilotAgentLabel: "Enable GitHub Copilot CLI Agent",
+        geminiAgentDescription:
+          "Show Gemini CLI across Tutti. Disabled by default while Agent Extensions are in preview.",
+        geminiAgentLabel: "Enable Gemini CLI Agent",
+        kiloAgentDescription:
+          "Show Kilo Code across Tutti. Disabled by default while Agent Extensions are in preview.",
+        kiloAgentLabel: "Enable Kilo Code Agent",
         labVisibilityDescription:
           "Shows experimental controls in a separate Settings tab.",
         labVisibilityLabel: "Show Lab tab",
@@ -837,6 +854,9 @@ export const en = {
         logsExported: "Exported {{count}} log files to {{path}}.",
         logsExportFailed: "We couldn't export local logs right now.",
         logsLoadFailed: "We couldn't load local log details right now.",
+        qwenAgentDescription:
+          "Show Qwen Code across Tutti. Disabled by default while Agent Extensions are in preview.",
+        qwenAgentLabel: "Enable Qwen Code Agent",
         logsSizeLabel: "Log size",
         logsSummary: "{{count}} files, {{size}} total",
         logsTitle: "Logs",

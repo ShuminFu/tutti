@@ -6,10 +6,7 @@ import type {
   AgentMessageContentVM,
   AgentMessageRowVM
 } from "../contracts/agentMessageRowVM";
-import {
-  closeAgentEnvPanel,
-  getAgentEnvPanelStore
-} from "../../agentEnv/agentEnvPanelStore";
+import { AgentEnvPanelActionProvider } from "../../agentEnv";
 
 function buildRow(
   visibleError: AgentMessageContentVM["visibleError"],
@@ -41,16 +38,22 @@ function renderBlock(
   provider?: string,
   onLinkAction?: ComponentProps<typeof AgentMessageBlock>["onLinkAction"]
 ) {
-  return render(
-    <AgentMessageBlock
-      workspaceRoot={null}
-      basePath="/"
-      row={row}
-      provider={provider}
-      onLinkAction={onLinkAction}
-      thinkingLabel="thinking"
-    />
-  );
+  const onOpenAgentEnvPanel = vi.fn();
+  return {
+    ...render(
+      <AgentEnvPanelActionProvider openPanel={onOpenAgentEnvPanel}>
+        <AgentMessageBlock
+          workspaceRoot={null}
+          basePath="/"
+          row={row}
+          provider={provider}
+          onLinkAction={onLinkAction}
+          thinkingLabel="thinking"
+        />
+      </AgentEnvPanelActionProvider>
+    ),
+    onOpenAgentEnvPanel
+  };
 }
 
 function buildFailedTextRow(body: string): AgentMessageRowVM {
@@ -86,13 +89,12 @@ function buildCompletedTextRow(body: string): AgentMessageRowVM {
 }
 
 afterEach(() => {
-  closeAgentEnvPanel();
   vi.restoreAllMocks();
 });
 
 describe("AgentVisibleErrorMessage", () => {
   it("routes an env-fixable run failure to the matching wizard step", () => {
-    const { getByText, getAllByRole } = renderBlock(
+    const { getByText, getAllByRole, onOpenAgentEnvPanel } = renderBlock(
       buildRow(
         {
           // The real code a missing CLI surfaces as at run time.
@@ -120,14 +122,14 @@ describe("AgentVisibleErrorMessage", () => {
     expect(action).toBeTruthy();
 
     fireEvent.click(action as HTMLButtonElement);
-    const store = getAgentEnvPanelStore();
-    expect(store.open).toBe(true);
-    expect(store.provider).toBe("codex");
-    expect(store.focus).toBe("install");
+    expect(onOpenAgentEnvPanel).toHaveBeenCalledWith({
+      provider: "codex",
+      focus: "install"
+    });
   });
 
   it("offers a self-detect escape hatch for ambiguous hard failures", () => {
-    const { getAllByRole } = renderBlock(
+    const { getAllByRole, onOpenAgentEnvPanel } = renderBlock(
       buildRow({
         code: "process_exited",
         phase: "turn",
@@ -142,11 +144,14 @@ describe("AgentVisibleErrorMessage", () => {
     );
     expect(action).toBeTruthy();
     fireEvent.click(action as HTMLButtonElement);
-    expect(getAgentEnvPanelStore().focus).toBe("detect");
+    expect(onOpenAgentEnvPanel).toHaveBeenCalledWith({
+      provider: "codex",
+      focus: "detect"
+    });
   });
 
   it("keeps the remediation action when the provider is unavailable", () => {
-    const { getAllByRole } = renderBlock(
+    const { getAllByRole, onOpenAgentEnvPanel } = renderBlock(
       buildRow({
         code: "cli_not_found",
         phase: "start",
@@ -161,10 +166,10 @@ describe("AgentVisibleErrorMessage", () => {
     );
     expect(action).toBeTruthy();
     fireEvent.click(action as HTMLButtonElement);
-    const store = getAgentEnvPanelStore();
-    expect(store.open).toBe(true);
-    expect(store.provider).toBeNull();
-    expect(store.focus).toBe("install");
+    expect(onOpenAgentEnvPanel).toHaveBeenCalledWith({
+      provider: null,
+      focus: "install"
+    });
   });
 
   it("tucks the raw payload behind a single 'Raw error' disclosure", () => {
@@ -246,7 +251,7 @@ describe("AgentVisibleErrorMessage", () => {
   });
 
   it("recovers a failed plain auth message into the wizard card (Claude 401)", () => {
-    const { getByText, getAllByRole } = renderBlock(
+    const { getByText, getAllByRole, onOpenAgentEnvPanel } = renderBlock(
       buildFailedTextRow(
         "Failed to authenticate. API Error: 401 Invalid authentication credentials"
       ),
@@ -261,10 +266,10 @@ describe("AgentVisibleErrorMessage", () => {
     );
     expect(action).toBeTruthy();
     fireEvent.click(action as HTMLButtonElement);
-    const store = getAgentEnvPanelStore();
-    expect(store.open).toBe(true);
-    expect(store.provider).toBe("claude-code");
-    expect(store.focus).toBe("auth");
+    expect(onOpenAgentEnvPanel).toHaveBeenCalledWith({
+      provider: "claude-code",
+      focus: "auth"
+    });
   });
 
   it("recovers Claude SDK's completed login notice into the wizard card", () => {

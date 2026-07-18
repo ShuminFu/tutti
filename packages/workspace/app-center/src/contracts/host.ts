@@ -193,6 +193,8 @@ export interface WorkspaceAppCenterViewState {
   activeAppTab: WorkspaceAppCenterAppTab;
   /** The app currently shown inside the app-center node, if any. */
   openAppId?: string | null;
+  /** Ordered app ids represented by open tabs inside the app-center node. */
+  openAppIds?: string[];
 }
 
 export type WorkspaceAppCenterReadableStoreState =

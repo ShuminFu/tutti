@@ -2,7 +2,7 @@ import type { JSX } from "react";
 import { Button } from "../../../app/renderer/components/ui/button";
 import { translate } from "../../../i18n/index";
 import { workspaceAgentProviderLabel } from "../../workspaceAgentProviderLabel";
-import { openAgentEnvPanel } from "../../agentEnv/agentEnvPanelStore";
+import { useOpenAgentEnvPanel } from "../../agentEnv";
 import {
   classifyRecoverableAgentMessage,
   isProviderPlanLimitMessage,
@@ -51,6 +51,7 @@ export function AgentVisibleErrorMessage({
   onExternalLink?: (href: string) => void;
 }): JSX.Element {
   "use memo";
+  const openAgentEnvPanel = useOpenAgentEnvPanel();
   const error = message.visibleError;
   const detail = error?.detail?.trim() ?? "";
 
@@ -101,7 +102,8 @@ export function AgentVisibleErrorMessage({
             />
           ) : null}
         </div>
-        {actionKey && (focus || (externalUrl && onExternalLink)) ? (
+        {actionKey &&
+        ((focus && openAgentEnvPanel) || (externalUrl && onExternalLink)) ? (
           <Button
             type="button"
             variant="ghost"
@@ -112,7 +114,7 @@ export function AgentVisibleErrorMessage({
                 onExternalLink?.(externalUrl);
                 return;
               }
-              if (focus) {
+              if (focus && openAgentEnvPanel) {
                 openAgentEnvPanel({
                   provider: error?.provider ?? null,
                   focus

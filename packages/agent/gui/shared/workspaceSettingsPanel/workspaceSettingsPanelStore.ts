@@ -7,7 +7,8 @@ import { proxy } from "valtio/vanilla";
  * Settings" popover). The host (apps/desktop) watches this singleton store and
  * opens its settings panel, navigating to `section` when provided.
  *
- * Mirrors `agentEnvPanelStore` — agent-gui stays decoupled from the desktop
+ * Workspace settings keeps this legacy request channel; Agent Env uses an
+ * injected host command and a desktop-owned service instead
  * settings service; it only publishes the intent as a plain string section.
  */
 export interface WorkspaceSettingsPanelRequest {

@@ -31,7 +31,7 @@ func (s *Service) UpdateTitle(ctx context.Context, workspaceID string, agentSess
 	if title == "" {
 		return Session{}, fmt.Errorf("%w: title is required", ErrInvalidArgument)
 	}
-	result, err := s.applicationHost(serviceHostPreparation{service: s}).UpdateTitle(ctx, agenthost.UpdateTitleInput{
+	result, err := s.ApplicationHost().UpdateTitle(ctx, agenthost.UpdateTitleInput{
 		WorkspaceID: workspaceID, AgentSessionID: agentSessionID, Title: title,
 	})
 	if err != nil {
@@ -53,6 +53,6 @@ func (s *Service) UpdateTitle(ctx context.Context, workspaceID string, agentSess
 	}
 	return sessionFromPersisted(
 		persisted,
-		persistedSessionCanResume(s.controller(), persisted),
+		s.persistedSessionCanResume(ctx, persisted),
 	), nil
 }

@@ -11,6 +11,7 @@ import (
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
+	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
 	userprojectbiz "github.com/tutti-os/tutti/services/tuttid/biz/userproject"
 	claudecodeservice "github.com/tutti-os/tutti/services/tuttid/service/claudecode"
 	reporterservice "github.com/tutti-os/tutti/services/tuttid/service/reporter"
@@ -31,12 +32,13 @@ type Service struct {
 	TurnStore                      TurnStore
 	RuntimeOperationStore          RuntimeOperationStore
 	GoalStateStore                 GoalStateStore
-	GoalAuditPublisher             GoalAuditPublisher
+	CommitObserver                 agenthost.CommitObserver
 	GoalReconcileInboxStore        GoalReconcileInboxStore
 	SubmitClaimStore               SubmitClaimStore
 	RuntimeOperationEventPublisher RuntimeOperationEventPublisher
 	RuntimeOperationClock          func() time.Time
 	RuntimeOperationOwner          string
+	StaleTurnSettler               agenthost.StaleTurnSettler
 	GoalOperationOwner             string
 	GoalOperationClock             func() time.Time
 	GoalOperationAttemptTimeout    time.Duration
@@ -44,11 +46,14 @@ type Service struct {
 	GoalOperationMaxAttempts       int
 	GoalOperationDispatchDeadline  time.Duration
 	SessionDirectoryAllocator      SessionDirectoryAllocator
+	WorktreeStateDir               string
+	WorkspaceIDs                   func(context.Context) ([]string, error)
 	PromptAttachmentStore          PromptAttachmentStore
 	RuntimePreparer                runtimeprep.Preparer
 	ComputerUseAvailable           func() bool
 	CapabilityLister               ComposerCapabilityLister
 	ExtensionComposerProfiles      ExtensionComposerProfileResolver
+	AgentComposerDefaultsReader    AgentComposerDefaultsReader
 	ProviderAvailabilityCacheTTL   time.Duration
 	CapabilityCatalogCacheTTL      time.Duration
 	LiveModelCacheTTL              time.Duration
@@ -66,8 +71,9 @@ type Service struct {
 	liveModelDiscoveryGroup        singleflight.Group
 	sessionSettingsMu              sync.Mutex
 	sessionSettingsLocks           map[string]*serviceSessionSettingsLock
-	goalActorsMu                   sync.Mutex
-	goalActors                     map[string]*goalActorEntry
+	applicationHostMu              sync.Mutex
+	applicationHost                *agenthost.Host
+	worktreeIsolationMu            sync.RWMutex
 	generatedFilesCacheMu          sync.Mutex
 	generatedFilesCache            map[string]generatedFilesCacheEntry
 	// liveModelPersistedScanMissAtUnixMS memoizes, per live-model cache key,
@@ -76,17 +82,7 @@ type Service struct {
 	liveModelPersistedScanMissAtUnixMS map[string]int64
 }
 
-type GoalAuditPublisher interface {
-	PublishGoalControlAudit(context.Context, string, string, agentactivitybiz.Message)
-}
-
-type GoalReconcileInboxStore interface {
-	ListClaimableGoalReconcileInbox(context.Context, int64, int) ([]agentactivitybiz.GoalReconcileInboxItem, error)
-	ClaimGoalReconcileInbox(context.Context, agentactivitybiz.ClaimGoalReconcileInboxInput) (agentactivitybiz.GoalReconcileInboxItem, bool, error)
-	CompleteGoalReconcileInbox(context.Context, string, string, int64) (bool, error)
-	ReleaseGoalReconcileInbox(context.Context, agentactivitybiz.ReleaseGoalReconcileInboxInput) (bool, error)
-	RequeueLeasedGoalReconcileInboxOnStartup(context.Context, int64) (int64, error)
-}
+type GoalReconcileInboxStore = agenthost.GoalReconcileInboxStore
 
 type SubmitClaimStore interface {
 	PrepareSubmitClaim(context.Context, agentactivitybiz.SubmitClaimPrepare) (agentactivitybiz.SubmitClaim, bool, error)
@@ -121,6 +117,10 @@ type AgentTargetStore interface {
 	GetAgentTarget(context.Context, string) (agenttargetbiz.Target, error)
 }
 
+type AgentComposerDefaultsReader interface {
+	GetAgentComposerDefaultsForTarget(context.Context, string) (preferencesbiz.AgentComposerDefaults, error)
+}
+
 type ComposerCapabilityLister interface {
 	ListComposerCapabilityOptions(context.Context, string, string, []ComposerSkillOption) ([]ComposerCapabilityOption, []string)
 }
@@ -130,7 +130,19 @@ type ExtensionComposerProfileResolver interface {
 }
 
 type ExtensionComposerProfile struct {
-	Skills *ExtensionComposerSkillProfile
+	Capabilities                     []string
+	ModelConfigOptionID              string
+	PermissionConfigOptionID         string
+	PermissionModes                  []ExtensionComposerPermissionMode
+	ReasoningConfigOptionID          string
+	Skills                           *ExtensionComposerSkillProfile
+	SlashCommands                    []ExtensionComposerSlashCommand
+	SlashCommandCatalogAuthoritative bool
+}
+
+type ExtensionComposerPermissionMode struct {
+	RuntimeID string
+	Semantic  PermissionModeSemantic
 }
 
 type ExtensionComposerSkillProfile struct {
@@ -142,6 +154,11 @@ type ExtensionComposerSkillProfile struct {
 type ExtensionComposerSkillRoot struct {
 	Scope string
 	Path  string
+}
+
+type ExtensionComposerSlashCommand struct {
+	Name   string
+	Effect string
 }
 
 type Session struct {
@@ -168,6 +185,8 @@ type Session struct {
 	UpdatedAt            *time.Time
 	EndedAt              *time.Time
 	Metadata             agentactivitybiz.SessionMetadata
+	Isolation            *SessionIsolation
+	Warnings             []SessionWarning
 	// Protocol v2 turn state (agent-gui refactor plan): the session keeps an
 	// activeTurnId reference; phase/outcome/error live on the turn entity.
 	ActiveTurnID           string
@@ -175,6 +194,18 @@ type Session struct {
 	LatestTurn             *agentactivitybiz.Turn
 	LatestTurnInteractions []agentactivitybiz.Interaction
 	PendingInteractions    []agentactivitybiz.Interaction
+}
+
+type SessionIsolation struct {
+	Mode         string `json:"mode"`
+	WorktreePath string `json:"worktreePath"`
+	Branch       string `json:"branch"`
+	BaseCommit   string `json:"baseCommit"`
+}
+
+type SessionWarning struct {
+	Code    string
+	Message string
 }
 
 type ListSessionsInput struct {
@@ -387,38 +418,10 @@ type RuntimeCancelInput = agenthost.RuntimeCancelInput
 type RuntimeCancelTarget = agenthost.RuntimeCancelTarget
 type RuntimeCancelResult = agenthost.RuntimeCancelResult
 
-type RuntimeGoalControlInput struct {
-	WorkspaceID    string
-	AgentSessionID string
-	Action         string
-	Objective      string
-	OperationID    string
-	GoalRevision   int64
-	RepairEpoch    int64
-	// SubmissionMetadata is present only when a typed /goal command entered
-	// through the composer. It preserves the client submit identity for the
-	// turnless transcript audit message; direct goal controls and recovery
-	// operations leave it empty.
-	SubmissionMetadata map[string]any
-}
-
-type RuntimeGoalControlResult struct {
-	AgentSessionID string
-	Goal           map[string]any
-	Evidence       map[string]any
-	ProviderPhase  string
-}
-
-type RuntimeGoalReconcileResult struct {
-	AgentSessionID string
-	Goal           map[string]any
-	Evidence       map[string]any
-}
-
-type RuntimeGoalRecoveryPolicy struct {
-	QuerySupported        bool
-	ReplaySetAfterRestart bool
-}
+type RuntimeGoalControlInput = agenthost.RuntimeGoalControlInput
+type RuntimeGoalControlResult = agenthost.RuntimeGoalControlResult
+type RuntimeGoalReconcileResult = agenthost.RuntimeGoalReconcileResult
+type RuntimeGoalRecoveryPolicy = agenthost.RuntimeGoalRecoveryPolicy
 type RuntimeGoalRecoveryPolicyResolver interface {
 	GoalRecoveryPolicy(context.Context, RuntimeGoalControlInput) (RuntimeGoalRecoveryPolicy, error)
 }
@@ -458,6 +461,7 @@ type CreateSessionInput struct {
 	InitialContent         []PromptContentBlock
 	InitialDisplayPrompt   string
 	Metadata               map[string]any
+	ClientSubmitID         string
 	Title                  *string
 	Cwd                    *string
 	PermissionModeID       *string
@@ -468,6 +472,7 @@ type CreateSessionInput struct {
 	ProviderTargetRef      map[string]any
 	ReasoningEffort        *string
 	RuntimeContext         map[string]any
+	Isolation              string
 	Speed                  *string
 	ConversationDetailMode string
 	Visible                *bool
@@ -502,6 +507,28 @@ type PromptAttachment = agenthost.PromptAttachment
 type SubmitInteractiveInput = agenthost.SubmitInteractiveInput
 type SubmitPlanDecisionInput = agenthost.SubmitPlanDecisionInput
 
+type InteractionAction struct {
+	ID       string
+	Label    string
+	Semantic string
+}
+
+type RespondInput struct {
+	WorkspaceID    string
+	AgentSessionID string
+	RequestID      string
+	Action         *string
+	OptionID       *string
+	Payload        map[string]any
+	Semantic       string
+}
+
+type RespondResult struct {
+	RequestID   string
+	TurnID      string
+	Disposition RuntimeInteractiveDisposition
+}
+
 type StreamInput struct {
 	WorkspaceID    string
 	AgentSessionID string
@@ -532,11 +559,28 @@ const (
 type WaitResult struct {
 	Session        Session
 	Messages       []SessionMessage
+	FinalMessage   *WaitFinalMessage
+	Interactions   []WaitInteraction
 	LatestVersion  uint64
 	HasMore        bool
 	Reason         WaitReason
 	TimedOut       bool
 	EffectiveAfter uint64
+}
+
+type WaitFinalMessage struct {
+	TurnID string
+	Text   string
+}
+
+type WaitInteraction struct {
+	RequestID      string
+	TurnID         string
+	Kind           string
+	ToolName       string
+	Actions        []InteractionAction
+	InputSummary   string
+	InputTruncated bool
 }
 
 type StreamEvent struct {

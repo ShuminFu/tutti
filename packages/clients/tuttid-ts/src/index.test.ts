@@ -14,7 +14,6 @@ import {
   type AgentProviderComposerOptionsResponse,
   type AppReferenceListResponse,
   type CliCapabilitiesResponse,
-  type CreateWorkspaceAgentSessionRequest,
   type IssueManagerReferenceSearchResponse,
   type ListAgentTargetsResponse,
   type ListWorkspacesResponse,
@@ -23,16 +22,65 @@ import {
   type WorkspaceGitPatchResponse
 } from "./index.ts";
 
-test("create workspace agent session request supports target-only authority", () => {
-  const request = {
-    agentSessionId: "11111111-1111-4111-8111-111111111111",
-    agentTargetId: "local:codex",
-    clientSubmitId: "submit-1",
-    initialContent: [{ type: "text", text: "hello" }]
-  } satisfies CreateWorkspaceAgentSessionRequest;
+type CapturedRequest = {
+  authorization: string | null;
+  body: unknown;
+  method: string;
+  path: string;
+  query: Record<string, string>;
+  signal: AbortSignal;
+};
 
-  assert.equal(request.agentTargetId, "local:codex");
-});
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "content-type": "application/json" }
+  });
+}
+
+function captureClient(
+  response:
+    | Response
+    | ((request: CapturedRequest) => Response | Promise<Response>),
+  options: Omit<Parameters<typeof createTuttidClient>[0], "fetch"> = {}
+) {
+  const requests: CapturedRequest[] = [];
+  return {
+    client: createTuttidClient({
+      ...options,
+      fetch: async (input, init) => {
+        const request =
+          input instanceof Request ? input : new Request(input, init);
+        const url = new URL(request.url);
+        const captured: CapturedRequest = {
+          authorization: request.headers.get("authorization"),
+          body: request.body ? JSON.parse(await request.text()) : null,
+          method: request.method,
+          path: url.pathname,
+          query: Object.fromEntries(url.searchParams.entries()),
+          signal: request.signal
+        };
+        requests.push(captured);
+        return typeof response === "function"
+          ? response(captured)
+          : response.clone();
+      }
+    }),
+    requests
+  };
+}
+
+function assertRequest(
+  request: CapturedRequest,
+  expected: Omit<CapturedRequest, "signal"> & { signal?: AbortSignal }
+): void {
+  assert.equal(request.method, expected.method);
+  assert.equal(request.path, expected.path);
+  assert.deepEqual(request.query, expected.query);
+  assert.deepEqual(request.body, expected.body);
+  assert.equal(request.authorization, expected.authorization);
+  if (expected.signal) assert.equal(request.signal, expected.signal);
+}
 
 test("generated tuttid client returns parsed health response", async () => {
   const client = createClient({
@@ -82,29 +130,6 @@ test("generated tuttid client surfaces structured protocol errors", async () => 
   } satisfies ApiErrorResponse);
 });
 
-test("generated tuttid client returns typed workspace lists", async () => {
-  const client = createClient({
-    baseUrl: "http://localhost:4545/",
-    fetch: async () =>
-      new Response(
-        JSON.stringify({
-          workspaces: [{ id: "ws-1", name: "One", lastOpenedAt: null }],
-          totalCount: 1
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      )
-  });
-
-  const response = await listWorkspaces({ client });
-  assert.deepEqual(response.data, {
-    totalCount: 1,
-    workspaces: [{ id: "ws-1", name: "One", lastOpenedAt: null }]
-  } satisfies ListWorkspacesResponse);
-});
-
 test("shared tuttid client unwraps workspace list responses", async () => {
   const client = createTuttidClient({
     fetch: async () =>
@@ -126,181 +151,114 @@ test("shared tuttid client unwraps workspace list responses", async () => {
   } satisfies ListWorkspacesResponse);
 });
 
-test("shared tuttid client unwraps agent target responses", async () => {
-  const client = createTuttidClient({
-    fetch: async (input, init) => {
-      const request =
-        input instanceof Request ? input : new Request(input, init);
-      assert.equal(new URL(request.url).pathname, "/v1/agent-targets");
-
-      return new Response(
-        JSON.stringify({
-          targets: [
-            {
-              id: "local:codex",
-              provider: "codex",
-              launchRef: {
-                type: "builtin_local",
-                provider: "codex"
-              },
-              name: "Codex",
-              iconKey: "codex",
-              enabled: true,
-              source: "system",
-              sortOrder: 10,
-              createdAtUnixMs: 1,
-              updatedAtUnixMs: 1
-            }
-          ]
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      );
+test("shared tuttid client preserves target, turn, goal, and auth route contracts", async (t) => {
+  const codexTarget = {
+    id: "local:codex",
+    provider: "codex",
+    launchRef: { type: "builtin_local", provider: "codex" },
+    name: "Codex",
+    iconKey: "codex",
+    enabled: true,
+    source: "system",
+    sortOrder: 10,
+    createdAtUnixMs: 1,
+    updatedAtUnixMs: 1
+  } as const;
+  const tuttiTarget = {
+    id: "local:tutti-agent",
+    provider: "tutti-agent",
+    launchRef: { type: "builtin_local", provider: "tutti-agent" },
+    name: "Tutti Agent",
+    iconKey: "tutti-agent",
+    enabled: false,
+    source: "system",
+    sortOrder: 30,
+    createdAtUnixMs: 1,
+    updatedAtUnixMs: 2
+  } as const;
+  const goal = {
+    session: { id: "session-1" },
+    state: {
+      revision: 2,
+      tombstoned: true,
+      syncStatus: "synced",
+      lastEvidence: {},
+      updatedAtUnixMs: 10
     }
-  });
-
-  assert.deepEqual(await client.listAgentTargets(), {
-    targets: [
-      {
-        id: "local:codex",
-        provider: "codex",
-        launchRef: {
-          type: "builtin_local",
-          provider: "codex"
-        },
-        name: "Codex",
-        iconKey: "codex",
-        enabled: true,
-        source: "system",
-        sortOrder: 10,
-        createdAtUnixMs: 1,
-        updatedAtUnixMs: 1
-      }
-    ]
-  } satisfies ListAgentTargetsResponse);
-});
-
-test("shared tuttid client updates system agent target visibility", async () => {
-  const client = createTuttidClient({
-    fetch: async (input, init) => {
-      const request =
-        input instanceof Request ? input : new Request(input, init);
-      assert.equal(
-        new URL(request.url).pathname,
-        "/v1/agent-targets/local%3Atutti-agent/enabled"
-      );
-      assert.equal(request.method, "PATCH");
-      assert.deepEqual(await request.json(), { enabled: false });
-      return Response.json({
-        id: "local:tutti-agent",
-        provider: "tutti-agent",
-        launchRef: { type: "builtin_local", provider: "tutti-agent" },
-        name: "Tutti Agent",
-        iconKey: "tutti-agent",
-        enabled: false,
-        source: "system",
-        sortOrder: 30,
-        createdAtUnixMs: 1,
-        updatedAtUnixMs: 2
-      });
-    }
-  });
-
-  const target = await client.setSystemAgentTargetEnabled(
-    "local:tutti-agent",
-    false
-  );
-
-  assert.equal(target.id, "local:tutti-agent");
-  assert.equal(target.enabled, false);
-});
-
-test("shared tuttid client cancels one exact workspace agent turn", async () => {
-  const client = createTuttidClient({
-    fetch: async (input, init) => {
-      const request =
-        input instanceof Request ? input : new Request(input, init);
-      assert.equal(request.method, "POST");
-      assert.equal(
-        new URL(request.url).pathname,
-        "/v1/workspaces/ws-1/agent-sessions/session-1/turns/turn-1/cancel"
-      );
-      return Response.json({
-        cancel: { canceled: true, reason: "turn_canceled" }
-      });
-    }
-  });
-
-  assert.deepEqual(
-    await client.cancelWorkspaceAgentTurn("ws-1", "session-1", "turn-1"),
-    { cancel: { canceled: true, reason: "turn_canceled" } }
-  );
-});
-
-test("shared tuttid client exposes goal state calibration routes", async () => {
-  const requests: Array<{ method: string; path: string }> = [];
-  const client = createTuttidClient({
-    fetch: async (input, init) => {
-      const request =
-        input instanceof Request ? input : new Request(input, init);
-      requests.push({
-        method: request.method,
-        path: new URL(request.url).pathname
-      });
-      return Response.json({
-        session: { id: "session-1" },
-        state: {
-          revision: 2,
-          tombstoned: true,
-          syncStatus: "synced",
-          lastEvidence: {},
-          updatedAtUnixMs: 10
-        }
-      });
-    }
-  });
-
-  await client.getWorkspaceAgentSessionGoal("ws-1", "session-1");
-  await client.reconcileWorkspaceAgentSessionGoal("ws-1", "session-1");
-  assert.deepEqual(requests, [
-    {
-      method: "GET",
-      path: "/v1/workspaces/ws-1/agent-sessions/session-1/goal"
+  };
+  const { client, requests } = captureClient(
+    (request) => {
+      if (request.path === "/v1/agent-targets")
+        return jsonResponse({ targets: [codexTarget] });
+      if (request.path.endsWith("/enabled")) return jsonResponse(tuttiTarget);
+      if (request.path.endsWith("/cancel"))
+        return jsonResponse({
+          cancel: { canceled: true, reason: "turn_canceled" }
+        });
+      if (request.path.includes("/goal")) return jsonResponse(goal);
+      return jsonResponse({ service: "tuttid", status: "ok" });
     },
-    {
-      method: "POST",
-      path: "/v1/workspaces/ws-1/agent-sessions/session-1/goal/reconcile"
-    }
-  ]);
-});
-
-test("shared tuttid client forwards bearer auth tokens", async () => {
-  let authorizationHeader = "";
-
-  const client = createTuttidClient({
-    auth: "desktop-session-token",
-    fetch: async (input, init) => {
-      const request =
-        input instanceof Request ? input : new Request(input, init);
-      authorizationHeader = request.headers.get("authorization") ?? "";
-
-      return new Response(
-        JSON.stringify({
-          service: "tuttid",
-          status: "ok"
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      );
-    }
+    { auth: "desktop-session-token" }
+  );
+  const expected = (method: string, path: string, body: unknown = null) => ({
+    authorization: "Bearer desktop-session-token",
+    body,
+    method,
+    path,
+    query: {}
   });
 
-  await client.getHealth();
-  assert.equal(authorizationHeader, "Bearer desktop-session-token");
+  await t.test("list targets", async () => {
+    assert.deepEqual(await client.listAgentTargets(), {
+      targets: [codexTarget]
+    } satisfies ListAgentTargetsResponse);
+    assertRequest(requests[0]!, expected("GET", "/v1/agent-targets"));
+  });
+  await t.test("update target", async () => {
+    assert.equal(
+      (await client.setSystemAgentTargetEnabled("local:tutti-agent", false))
+        .enabled,
+      false
+    );
+    assertRequest(
+      requests[1]!,
+      expected("PATCH", "/v1/agent-targets/local%3Atutti-agent/enabled", {
+        enabled: false
+      })
+    );
+  });
+  await t.test("cancel turn", async () => {
+    assert.deepEqual(
+      await client.cancelWorkspaceAgentTurn("ws-1", "session-1", "turn-1"),
+      { cancel: { canceled: true, reason: "turn_canceled" } }
+    );
+    assertRequest(
+      requests[2]!,
+      expected(
+        "POST",
+        "/v1/workspaces/ws-1/agent-sessions/session-1/turns/turn-1/cancel"
+      )
+    );
+  });
+  await t.test("get and reconcile goal", async () => {
+    await client.getWorkspaceAgentSessionGoal("ws-1", "session-1");
+    await client.reconcileWorkspaceAgentSessionGoal("ws-1", "session-1");
+    assertRequest(
+      requests[3]!,
+      expected("GET", "/v1/workspaces/ws-1/agent-sessions/session-1/goal")
+    );
+    assertRequest(
+      requests[4]!,
+      expected(
+        "POST",
+        "/v1/workspaces/ws-1/agent-sessions/session-1/goal/reconcile"
+      )
+    );
+  });
+  await t.test("health auth", async () => {
+    await client.getHealth();
+    assertRequest(requests[5]!, expected("GET", "/v1/health"));
+  });
 });
 
 test("shared tuttid client lists CLI capabilities with discovery options", async () => {
@@ -962,40 +920,31 @@ test("shared tuttid client searches workspace issue references with exact body",
   assert.equal(response.items[0]?.output.displayName, "login.html");
 });
 
-test("shared tuttid client deletes user projects with bearer auth", async () => {
-  let authorizationHeader = "";
-  let requestMethod = "";
-  let requestPath = "";
-  let requestBody: unknown;
-
-  const client = createTuttidClient({
-    auth: "desktop-session-token",
-    fetch: async (input, init) => {
-      const request =
-        input instanceof Request ? input : new Request(input, init);
-      authorizationHeader = request.headers.get("authorization") ?? "";
-      requestMethod = request.method;
-      requestPath = new URL(request.url).pathname;
-      requestBody = await request.json();
-
-      return new Response(null, { status: 204 });
-    }
+test("shared tuttid client sends authenticated project mutations and analytics", async (t) => {
+  const project = (id: string, pinnedAtUnixMs: number) => ({
+    createdAtUnixMs: 1,
+    id,
+    label: id,
+    lastUsedAtUnixMs: 1,
+    path: `/workspace/${id}`,
+    pinnedAtUnixMs,
+    sectionKey: `project:/workspace/${id}`,
+    updatedAtUnixMs: pinnedAtUnixMs || 1
   });
-
-  await client.deleteUserProject({ path: "/workspace/app" });
-
-  assert.equal(authorizationHeader, "Bearer desktop-session-token");
-  assert.equal(requestMethod, "DELETE");
-  assert.equal(requestPath, "/v1/user-projects");
-  assert.deepEqual(requestBody, { path: "/workspace/app" });
-});
-
-test("shared tuttid client tracks analytics events with bearer auth", async () => {
-  let authorizationHeader = "";
-  let requestMethod = "";
-  let requestPath = "";
-  let requestBody: unknown;
-
+  const { client, requests } = captureClient(
+    (request) => {
+      if (request.path === "/v1/user-projects")
+        return new Response(null, { status: 204 });
+      if (request.path === "/v1/track")
+        return new Response(null, { status: 202 });
+      if (request.path.endsWith("/move"))
+        return jsonResponse({
+          projects: [project("project-2", 0), project("project-1", 0)]
+        });
+      return jsonResponse({ projects: [project("project-1", 2)] });
+    },
+    { auth: "desktop-session-token" }
+  );
   const events = [
     {
       name: "workspace.opened",
@@ -1004,26 +953,57 @@ test("shared tuttid client tracks analytics events with bearer auth", async () =
     }
   ];
 
-  const client = createTuttidClient({
-    auth: "desktop-session-token",
-    fetch: async (input, init) => {
-      const request =
-        input instanceof Request ? input : new Request(input, init);
-      authorizationHeader = request.headers.get("authorization") ?? "";
-      requestMethod = request.method;
-      requestPath = new URL(request.url).pathname;
-      requestBody = await request.json();
-
-      return new Response(null, { status: 202 });
-    }
+  await t.test("delete", async () => {
+    await client.deleteUserProject({ path: "/workspace/app" });
+    assertRequest(requests[0]!, {
+      authorization: "Bearer desktop-session-token",
+      body: { path: "/workspace/app" },
+      method: "DELETE",
+      path: "/v1/user-projects",
+      query: {}
+    });
   });
-
-  await client.trackEvents(events);
-
-  assert.equal(authorizationHeader, "Bearer desktop-session-token");
-  assert.equal(requestMethod, "POST");
-  assert.equal(requestPath, "/v1/track");
-  assert.deepEqual(requestBody, { events });
+  await t.test("move", async () => {
+    const response = await client.moveUserProject({
+      beforeProjectId: "project-1",
+      projectId: "project-2"
+    });
+    assertRequest(requests[1]!, {
+      authorization: "Bearer desktop-session-token",
+      body: { beforeProjectId: "project-1", projectId: "project-2" },
+      method: "POST",
+      path: "/v1/user-projects/move",
+      query: {}
+    });
+    assert.deepEqual(
+      response.projects.map((item) => item.id),
+      ["project-2", "project-1"]
+    );
+  });
+  await t.test("pin", async () => {
+    const response = await client.pinUserProject({
+      pinned: true,
+      projectId: "project-1"
+    });
+    assertRequest(requests[2]!, {
+      authorization: "Bearer desktop-session-token",
+      body: { pinned: true, projectId: "project-1" },
+      method: "POST",
+      path: "/v1/user-projects/pin",
+      query: {}
+    });
+    assert.equal(response.projects[0]?.pinnedAtUnixMs, 2);
+  });
+  await t.test("analytics", async () => {
+    await client.trackEvents(events);
+    assertRequest(requests[3]!, {
+      authorization: "Bearer desktop-session-token",
+      body: { events },
+      method: "POST",
+      path: "/v1/track",
+      query: {}
+    });
+  });
 });
 
 test("shared tuttid client reads workspace file preview bytes", async () => {
@@ -1224,7 +1204,9 @@ test("shared tuttid client loads agent provider composer options", async () => {
             prewarmDraftSession: false,
             planModeExclusiveWithPermissionMode: false
           },
-          capabilityCatalog: []
+          capabilityCatalog: [],
+          reasoningOptionsByModel: {},
+          commands: []
         } satisfies AgentProviderComposerOptionsResponse),
         {
           status: 200,
@@ -1306,7 +1288,9 @@ test("shared tuttid client loads agent provider composer options", async () => {
       prewarmDraftSession: false,
       planModeExclusiveWithPermissionMode: false
     },
-    capabilityCatalog: []
+    capabilityCatalog: [],
+    reasoningOptionsByModel: {},
+    commands: []
   } satisfies AgentProviderComposerOptionsResponse);
 });
 
@@ -1364,7 +1348,9 @@ test("shared tuttid client loads app factory provider composer options", async (
             prewarmDraftSession: false,
             planModeExclusiveWithPermissionMode: false
           },
-          capabilityCatalog: []
+          capabilityCatalog: [],
+          reasoningOptionsByModel: {},
+          commands: []
         } satisfies AgentProviderComposerOptionsResponse),
         {
           status: 200,
@@ -1398,139 +1384,84 @@ test("shared tuttid client loads app factory provider composer options", async (
   assert.equal(result.effectiveSettings.model, "sonnet");
 });
 
-test("shared tuttid client probes agent providers", async () => {
-  let requestMethod = "";
-  let requestPath = "";
-
-  const client = createTuttidClient({
-    fetch: async (input, init) => {
-      const request =
-        input instanceof Request ? input : new Request(input, init);
-      requestMethod = request.method;
-      requestPath = new URL(request.url).pathname;
-
-      return new Response(
-        JSON.stringify({
-          checkedAt: "2026-06-02T08:00:00.000Z",
-          command: ["/usr/local/bin/codex"],
-          provider: "codex",
-          status: "ready"
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      );
-    }
-  });
-
-  const result = await client.probeAgentProvider("codex");
-
-  assert.equal(requestMethod, "POST");
-  assert.equal(requestPath, "/v1/agent-providers/codex/probe");
-  assert.deepEqual(result, {
-    checkedAt: "2026-06-02T08:00:00.000Z",
-    command: ["/usr/local/bin/codex"],
-    provider: "codex",
-    status: "ready"
-  });
-});
-
-test("shared tuttid client runs agent provider actions", async () => {
-  let requestMethod = "";
-  let requestPath = "";
-
-  const client = createTuttidClient({
-    fetch: async (input, init) => {
-      const request =
-        input instanceof Request ? input : new Request(input, init);
-      requestMethod = request.method;
-      requestPath = new URL(request.url).pathname;
-
-      return new Response(
-        JSON.stringify({
-          actionID: "install",
-          completedAt: "2026-06-02T08:00:00.000Z",
-          provider: "codex",
-          status: "completed"
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      );
-    }
-  });
-
-  const result = await client.runAgentProviderAction("codex", "install");
-
-  assert.equal(requestMethod, "POST");
-  assert.equal(requestPath, "/v1/agent-providers/codex/actions/install/run");
-  assert.deepEqual(result, {
-    actionID: "install",
-    completedAt: "2026-06-02T08:00:00.000Z",
-    provider: "codex",
-    status: "completed"
-  });
-});
-
-test("shared tuttid client deletes workspace agent sessions", async () => {
-  let requestMethod = "";
-  let requestPath = "";
-
-  const client = createTuttidClient({
-    fetch: async (input, init) => {
-      const request =
-        input instanceof Request ? input : new Request(input, init);
-      requestMethod = request.method;
-      requestPath = new URL(request.url).pathname;
-
-      return new Response(JSON.stringify({ removed: true }), {
-        status: 200,
-        headers: { "content-type": "application/json" }
+test("shared tuttid client sends route-only provider and session commands", async (t) => {
+  const { client, requests } = captureClient((request) => {
+    if (request.path.endsWith("/probe"))
+      return jsonResponse({
+        checkedAt: "2026-06-02T08:00:00.000Z",
+        command: ["/usr/local/bin/codex"],
+        provider: "codex",
+        status: "ready"
       });
-    }
+    if (request.path.endsWith("/run"))
+      return jsonResponse({
+        actionID: "install",
+        completedAt: "2026-06-02T08:00:00.000Z",
+        provider: "codex",
+        status: "completed"
+      });
+    return jsonResponse(
+      request.path.endsWith("agent-sessions")
+        ? { removedMessages: 5, removedSessions: 2 }
+        : { removed: true }
+    );
   });
-
-  const result = await client.deleteWorkspaceAgentSession(
-    "ws-1",
-    "agent-session-1"
-  );
-
-  assert.equal(requestMethod, "DELETE");
-  assert.equal(
-    requestPath,
-    "/v1/workspaces/ws-1/agent-sessions/agent-session-1"
-  );
-  assert.deepEqual(result, { removed: true });
-});
-
-test("shared tuttid client clears workspace agent sessions", async () => {
-  let requestMethod = "";
-  let requestPath = "";
-
-  const client = createTuttidClient({
-    fetch: async (input, init) => {
-      const request =
-        input instanceof Request ? input : new Request(input, init);
-      requestMethod = request.method;
-      requestPath = new URL(request.url).pathname;
-
-      return new Response(
-        JSON.stringify({ removedMessages: 5, removedSessions: 2 }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      );
-    }
+  await t.test("probe", async () => {
+    assert.deepEqual(await client.probeAgentProvider("codex"), {
+      checkedAt: "2026-06-02T08:00:00.000Z",
+      command: ["/usr/local/bin/codex"],
+      provider: "codex",
+      status: "ready"
+    });
+    assertRequest(requests[0]!, {
+      authorization: null,
+      body: null,
+      method: "POST",
+      path: "/v1/agent-providers/codex/probe",
+      query: {}
+    });
   });
-
-  const result = await client.clearWorkspaceAgentSessions("ws-1");
-
-  assert.equal(requestMethod, "DELETE");
-  assert.equal(requestPath, "/v1/workspaces/ws-1/agent-sessions");
-  assert.deepEqual(result, { removedMessages: 5, removedSessions: 2 });
+  await t.test("action", async () => {
+    assert.deepEqual(await client.runAgentProviderAction("codex", "install"), {
+      actionID: "install",
+      completedAt: "2026-06-02T08:00:00.000Z",
+      provider: "codex",
+      status: "completed"
+    });
+    assertRequest(requests[1]!, {
+      authorization: null,
+      body: null,
+      method: "POST",
+      path: "/v1/agent-providers/codex/actions/install/run",
+      query: {}
+    });
+  });
+  await t.test("delete session", async () => {
+    assert.deepEqual(
+      await client.deleteWorkspaceAgentSession("ws-1", "agent-session-1"),
+      { removed: true }
+    );
+    assertRequest(requests[2]!, {
+      authorization: null,
+      body: null,
+      method: "DELETE",
+      path: "/v1/workspaces/ws-1/agent-sessions/agent-session-1",
+      query: {}
+    });
+  });
+  await t.test("clear sessions", async () => {
+    assert.deepEqual(await client.clearWorkspaceAgentSessions("ws-1"), {
+      removedMessages: 5,
+      removedSessions: 2
+    });
+    assertRequest(requests[3]!, {
+      authorization: null,
+      body: null,
+      method: "DELETE",
+      path: "/v1/workspaces/ws-1/agent-sessions",
+      query: {}
+    });
+  });
 });
 
 test("shared tuttid client submits one scoped workspace agent plan decision", async () => {

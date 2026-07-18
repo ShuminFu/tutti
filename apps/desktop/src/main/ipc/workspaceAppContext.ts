@@ -22,6 +22,12 @@ import {
 } from "../../shared/contracts/ipc";
 import {
   normalizeTuttiExternalAtQueryInput,
+  normalizeTuttiExternalAtResolveInput,
+  normalizeTuttiExternalAtInvalidation,
+  normalizeTuttiExternalAgentActivityActivateSessionInput,
+  normalizeTuttiExternalAgentActivityCancelTurnInput,
+  normalizeTuttiExternalAgentActivityComposerOptionsInput,
+  normalizeTuttiExternalAgentActivitySendInput,
   normalizeTuttiExternalFileOpenInput,
   normalizeTuttiExternalFileSelectInput,
   normalizeTuttiExternalFileUploadInput,
@@ -31,6 +37,7 @@ import {
   normalizeTuttiExternalReferenceOpenInput,
   normalizeTuttiExternalSettingsOpenInput,
   normalizeTuttiExternalUserProjectCreateInput,
+  normalizeTuttiExternalUserProjectMoveInput,
   normalizeTuttiExternalUserProjectPathInput,
   normalizeTuttiExternalUserProjectRememberDefaultSelectionInput,
   normalizeTuttiExternalUserProjectSelectionPreparationInput,
@@ -38,6 +45,13 @@ import {
 } from "@tutti-os/workspace-external-core/core";
 import type {
   TuttiExternalAtQueryResult,
+  TuttiExternalAtResolveResult,
+  TuttiExternalAgentActivityActivateSessionResult,
+  TuttiExternalAgentActivityCancelTurnResult,
+  TuttiExternalAgentActivityComposerOptions,
+  TuttiExternalAgentActivitySendResult,
+  TuttiExternalAgentActivitySnapshot,
+  TuttiExternalAgentTargetCatalog,
   TuttiExternalFileOpenInput,
   TuttiExternalFileSelectResult,
   TuttiExternalManagedAiModel,
@@ -165,6 +179,106 @@ export function registerWorkspaceAppContextIpc(
     }
   );
   registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.agentActivityActivateSession,
+    async (event, payload) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      const input =
+        normalizeTuttiExternalAgentActivityActivateSessionInput(payload);
+      return requestWorkspaceAppExternalRenderer<TuttiExternalAgentActivityActivateSessionResult>(
+        context,
+        {
+          appId: context.appID,
+          input,
+          operation: "agentActivity.activateSession",
+          requestId: randomUUID(),
+          workspaceId: context.workspaceID
+        }
+      );
+    }
+  );
+  registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.agentActivityCancelTurn,
+    async (event, payload) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      const input = normalizeTuttiExternalAgentActivityCancelTurnInput(payload);
+      return requestWorkspaceAppExternalRenderer<TuttiExternalAgentActivityCancelTurnResult>(
+        context,
+        {
+          appId: context.appID,
+          input,
+          operation: "agentActivity.cancelTurn",
+          requestId: randomUUID(),
+          workspaceId: context.workspaceID
+        }
+      );
+    }
+  );
+  registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.agentActivityGetComposerOptions,
+    async (event, payload) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      const input =
+        normalizeTuttiExternalAgentActivityComposerOptionsInput(payload);
+      return requestWorkspaceAppExternalRenderer<TuttiExternalAgentActivityComposerOptions>(
+        context,
+        {
+          appId: context.appID,
+          input,
+          operation: "agentActivity.getComposerOptions",
+          requestId: randomUUID(),
+          workspaceId: context.workspaceID
+        }
+      );
+    }
+  );
+  registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.agentActivityGetSnapshot,
+    (event) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      return requestWorkspaceAppExternalRenderer<TuttiExternalAgentActivitySnapshot>(
+        context,
+        {
+          appId: context.appID,
+          operation: "agentActivity.getSnapshot",
+          requestId: randomUUID(),
+          workspaceId: context.workspaceID
+        }
+      );
+    }
+  );
+  registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.agentActivityListTargets,
+    (event) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      return requestWorkspaceAppExternalRenderer<TuttiExternalAgentTargetCatalog>(
+        context,
+        {
+          appId: context.appID,
+          operation: "agentActivity.listTargets",
+          requestId: randomUUID(),
+          workspaceId: context.workspaceID
+        }
+      );
+    }
+  );
+  registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.agentActivitySendInput,
+    async (event, payload) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      const input = normalizeTuttiExternalAgentActivitySendInput(payload);
+      return requestWorkspaceAppExternalRenderer<TuttiExternalAgentActivitySendResult>(
+        context,
+        {
+          appId: context.appID,
+          input,
+          operation: "agentActivity.sendInput",
+          requestId: randomUUID(),
+          workspaceId: context.workspaceID
+        }
+      );
+    }
+  );
+  registerDesktopIpcHandler(
     desktopIpcChannels.appExternal.atQuery,
     async (event, payload) => {
       const context = requireWorkspaceAppGuestContext(event.sender);
@@ -175,6 +289,23 @@ export function registerWorkspaceAppContextIpc(
           appId: context.appID,
           input,
           operation: "at.query",
+          requestId: randomUUID(),
+          workspaceId: context.workspaceID
+        }
+      );
+    }
+  );
+  registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.atResolve,
+    async (event, payload) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      const input = normalizeTuttiExternalAtResolveInput(payload);
+      return requestWorkspaceAppExternalRenderer<TuttiExternalAtResolveResult | null>(
+        context,
+        {
+          appId: context.appID,
+          input,
+          operation: "at.resolve",
           requestId: randomUUID(),
           workspaceId: context.workspaceID
         }
@@ -359,6 +490,20 @@ export function registerWorkspaceAppContextIpc(
       return requestWorkspaceAppExternalRenderer(context, {
         appId: context.appID,
         operation: "userProjects.list",
+        requestId: randomUUID(),
+        workspaceId: context.workspaceID
+      });
+    }
+  );
+  registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.userProjectsMove,
+    async (event, payload) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      const input = normalizeTuttiExternalUserProjectMoveInput(payload);
+      return requestWorkspaceAppExternalRenderer(context, {
+        appId: context.appID,
+        input,
+        operation: "userProjects.move",
         requestId: randomUUID(),
         workspaceId: context.workspaceID
       });
@@ -1240,6 +1385,7 @@ function createWorkspaceAppContext(
   return {
     appId: context.appID,
     capabilities: [
+      "agentActivity@1",
       "browser.openUrl@1",
       "files.open@1",
       "files.upload@1",
@@ -1364,6 +1510,14 @@ function isWorkspaceAppExternalRendererEvent(
       typeof value.appId === "string" &&
       isWorkspaceAppOpenRouteIntent(value.intent)
     );
+  }
+  if (value.type === "at.invalidated") {
+    try {
+      normalizeTuttiExternalAtInvalidation(value.invalidation);
+      return true;
+    } catch {
+      return false;
+    }
   }
   if (value.type !== "userProjects.changed") {
     return false;

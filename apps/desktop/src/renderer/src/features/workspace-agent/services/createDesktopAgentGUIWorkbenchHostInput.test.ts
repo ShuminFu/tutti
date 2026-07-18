@@ -133,7 +133,7 @@ test("desktop agent GUI workbench host input reuses workspace runtime services",
   );
 });
 
-test("desktop agent GUI preserves dropped system file and folder references", async () => {
+test("desktop agent GUI prepares path-backed and in-memory external files", async () => {
   const droppedFileA = new File(["a"], "report.pdf", {
     type: "application/pdf"
   });
@@ -142,15 +142,28 @@ test("desktop agent GUI preserves dropped system file and folder references", as
   });
   const droppedFolder = new File([], "assets");
   const resolvedFiles: File[][] = [];
+  const archiveRequests: Parameters<
+    DesktopHostFilesApi["archiveAgentPromptFile"]
+  >[0][] = [];
   const hostInput = createDesktopAgentGUIWorkbenchHostInput({
-    hostFilesApi: createHostFilesApi(),
+    hostFilesApi: {
+      ...createHostFilesApi(),
+      async archiveAgentPromptFile(input) {
+        archiveRequests.push(input);
+        return {
+          name: input.displayName ?? "attachment",
+          path: `/prompt-assets/${input.displayName ?? "attachment"}`,
+          sizeBytes: 1
+        };
+      }
+    },
     tuttidClient: createTuttidClient(),
     platformApi: createPlatformApi({
       resolveDroppedEntries(files) {
         resolvedFiles.push([...files]);
         return [
           { kind: "file", path: "/Users/local/Downloads/report.pdf" },
-          { kind: "file", path: "/Users/local/Downloads/notes.txt" },
+          { kind: "file", path: "" },
           { kind: "folder", path: "/Users/local/Downloads/assets" }
         ];
       }
@@ -162,36 +175,57 @@ test("desktop agent GUI preserves dropped system file and folder references", as
   });
 
   assert.deepEqual(
-    await hostInput.resolveDroppedFileReferences([
+    await hostInput.prepareExternalPromptFiles([
       droppedFileA,
       droppedFileB,
       droppedFolder
     ]),
     [
       {
-        displayName: "report.pdf",
-        hostPath: "/Users/local/Downloads/report.pdf",
-        kind: "file",
-        path: "/Users/local/Downloads/report.pdf",
-        sourceId: "host-local-file"
+        sourceIndex: 0,
+        status: "prepared",
+        file: {
+          mimeType: "application/pdf",
+          name: "report.pdf",
+          path: "/prompt-assets/report.pdf",
+          sizeBytes: 1,
+          uploadStatus: "uploaded"
+        }
       },
       {
-        displayName: "notes.txt",
-        hostPath: "/Users/local/Downloads/notes.txt",
-        kind: "file",
-        path: "/Users/local/Downloads/notes.txt",
-        sourceId: "host-local-file"
+        sourceIndex: 1,
+        status: "prepared",
+        file: {
+          mimeType: "text/plain",
+          name: "notes.txt",
+          path: "/prompt-assets/notes.txt",
+          sizeBytes: 1,
+          uploadStatus: "uploaded"
+        }
       },
       {
-        displayName: "assets",
-        kind: "folder",
-        path: "/Users/local/Downloads/assets",
-        sourceId: "host-local-file"
+        sourceIndex: 2,
+        status: "error",
+        errorCode: "folder_unsupported"
       }
     ]
   );
   assert.deepEqual(resolvedFiles, [
     [droppedFileA, droppedFileB, droppedFolder]
+  ]);
+  assert.deepEqual(archiveRequests, [
+    {
+      displayName: "report.pdf",
+      hostPath: "/Users/local/Downloads/report.pdf",
+      mimeType: "application/pdf",
+      workspaceID: workspaceId
+    },
+    {
+      dataBase64: "Yg==",
+      displayName: "notes.txt",
+      mimeType: "text/plain",
+      workspaceID: workspaceId
+    }
   ]);
 });
 
@@ -564,17 +598,18 @@ test("desktop agent GUI workbench host input tracks runtime prompt sends", async
     workspaceId
   });
 
-  await hostInput.agentActivityRuntime.sendInput({
+  const sendInput = {
     clientSubmitId: "submit-runtime-send-1",
     workspaceId,
     agentSessionId: "session-runtime-send-1",
-    content: [
-      {
-        type: "text",
-        text: "/review [src/App.tsx](mention://file/src%2FApp.tsx?workspaceId=workspace-1)"
-      }
-    ]
-  });
+    content: [{ type: "text" as const, text: "Expanded runtime prompt" }],
+    displayPrompt:
+      "/review [src/App.tsx](mention://file/src%2FApp.tsx?workspaceId=workspace-1)",
+    submitDiagnostics: { queued: true }
+  };
+
+  await hostInput.agentActivityRuntime.sendInput(sendInput);
+  await hostInput.agentActivityRuntime.sendInput(sendInput);
 
   assert.deepEqual(reporterCalls, [
     [
@@ -586,7 +621,7 @@ test("desktop agent GUI workbench host input tracks runtime prompt sends", async
           conversation_index: 1,
           has_file_mention: true,
           has_slash_command: true,
-          is_queued: false,
+          is_queued: true,
           provider: "codex"
         }
       }
@@ -785,19 +820,26 @@ test("desktop agent GUI workbench host input tracks runtime new session activati
     workspaceId
   });
 
-  await hostInput.agentActivityRuntime.activateSession({
+  const activationInput = {
     workspaceId,
     agentSessionId: "session-runtime-start-1",
     agentTargetId: "local:codex",
     clientSubmitId: "submit-runtime-start-1",
     cwd: "/workspace",
-    initialContent: [{ type: "text", text: "Track initial prompt" }],
-    mode: "new",
+    initialContent: [
+      { type: "text" as const, text: "Expanded initial runtime prompt" }
+    ],
+    initialDisplayPrompt:
+      "/review [src/App.tsx](mention://file/src%2FApp.tsx?workspaceId=workspace-1)",
+    mode: "new" as const,
     settings: {
       model: "gpt-5",
       permissionModeId: "auto"
     }
-  });
+  };
+
+  await hostInput.agentActivityRuntime.activateSession(activationInput);
+  await hostInput.agentActivityRuntime.activateSession(activationInput);
 
   assert.deepEqual(reporterCalls, [
     [
@@ -821,8 +863,8 @@ test("desktop agent GUI workbench host input tracks runtime new session activati
         params: {
           agent_session_id: "session-runtime-start-1",
           conversation_index: 1,
-          has_file_mention: false,
-          has_slash_command: false,
+          has_file_mention: true,
+          has_slash_command: true,
           is_queued: false,
           provider: "codex"
         }
@@ -1455,6 +1497,7 @@ function userProject(
     id,
     label,
     path,
+    pinnedAtUnixMs: 0,
     sectionKey: `project:${path}`,
     updatedAtUnixMs: 1
   };
@@ -1466,6 +1509,7 @@ function agentGUIUserProject(project: WorkspaceUserProject): {
   label: string;
   lastUsedAtUnixMs?: number;
   path: string;
+  pinnedAtUnixMs: number;
   sectionKey?: string;
   updatedAtUnixMs?: number;
 } {
@@ -1479,6 +1523,7 @@ function agentGUIUserProject(project: WorkspaceUserProject): {
       ? { lastUsedAtUnixMs: project.lastUsedAtUnixMs }
       : {}),
     path: project.path,
+    pinnedAtUnixMs: project.pinnedAtUnixMs,
     ...(project.sectionKey === undefined
       ? {}
       : { sectionKey: project.sectionKey }),
@@ -1518,6 +1563,8 @@ function createWorkspaceUserProjectService(
     isNoProjectPath() {
       return false;
     },
+    async moveProject() {},
+    async pinProject() {},
     rememberNoProjectPath() {},
     async prepareSelection() {
       return {
@@ -1718,6 +1765,9 @@ function createWorkspaceAgentActivityService(
       return () => {};
     },
     onModelCatalogInvalidated() {
+      return () => {};
+    },
+    onComposerDefaultsInvalidated() {
       return () => {};
     },
     ensureSessionSynchronized() {

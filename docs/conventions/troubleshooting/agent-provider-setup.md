@@ -4,6 +4,46 @@
 
 Provider discovery, installation, authentication, models, configuration, and runtime reachability.
 
+### Clicking provider login repeatedly opens terminals and browser auth pages
+
+- Symptom:
+  One login click opens many terminal nodes and repeatedly launches the
+  provider's browser authentication page. The repeats may continue at the
+  provider-status polling interval and resume after reopening the app.
+- Quick checks:
+  Count `agent-provider.terminal-command.start` events for one provider and
+  compare their timestamps with provider status requests. If every status
+  snapshot is followed by another login command, inspect whether a React effect
+  reattaches the setup workflow when a status-derived callback changes identity.
+  Also check whether reattachment resets the request-sequence dedup marker and
+  whether login is excluded from pending/single-flight tracking.
+- Root cause:
+  The panel lifecycle and the setup workflow had competing ownership. A status
+  refresh replaced the status object, rebuilt the login callback, reran the
+  effect, reset wizard state, and accepted the same automatic login again. Each
+  command opened a new terminal; the CLI then opened another browser page. A
+  single terminal-handle map entry also allowed newer launches to overwrite the
+  only handle that could later be closed.
+- Fix:
+  Inject the panel-open host command into AgentGUI and let a window-scoped
+  Agent Env service/controller own the request session, automatic-action idempotency,
+  reveal/report state, and provider-status subscription. Route account and CLI
+  login through the provider-status service. Its per-provider login lifecycle
+  must reuse automatic requests, coalesce launches, replace an awaiting attempt
+  only for an explicit retry, reject stale terminal handles, and own one poll.
+  React should only subscribe and forward commands.
+- Validation:
+  Replay at least 60 provider-status ticks for one request and assert one
+  automatic login call. Cover rapid user clicks, explicit replacement, delayed
+  terminal resolution, account login without a terminal, timeout/dispose
+  cleanup, and a new request sequence. Verify one terminal and one browser page
+  for the original click.
+- References:
+  [agent-gui-node.md](../../architecture/agent-gui-node.md)
+  [desktop-layering.md](../desktop-layering.md)
+  [agentEnvService.ts](../../../apps/desktop/src/renderer/src/features/workspace-agent/services/internal/agentEnvService.ts)
+  [desktopAgentProviderLoginLifecycle.ts](../../../apps/desktop/src/renderer/src/features/workspace-agent/services/internal/desktopAgentProviderLoginLifecycle.ts)
+
 ### Codex `/status` shows a 5h limit for a weekly-only account window
 
 - Symptom:
@@ -621,6 +661,28 @@ file or directory`. If the CLI path exists but `codex app-server` cannot
 - Validation:
   Assert the sidecar start payload carries `allowedTools: ["Grep", "Glob"]`,
   and typecheck against the local `@anthropic-ai/claude-agent-sdk` definitions.
+
+### Provider process loses final stdout or a sidecar fails during startup
+
+- Symptom:
+  A short-lived provider helper exits successfully but its final stdout frame is
+  absent, or a long-lived SDK sidecar intermittently appears to exit before its
+  startup response is consumed.
+- Root cause:
+  `os/exec.Cmd.StdoutPipe` and `StderrPipe` make pipe draining and `Cmd.Wait`
+  ordering the caller's responsibility. Waiting for readers before `Cmd.Wait`
+  makes process reaping depend on pipe EOF, while calling `Cmd.Wait` first can
+  close a short-lived process's pipes before its last bytes are delivered.
+- Fix:
+  Give `Cmd.Stdout` and `Cmd.Stderr` frame writers instead of managing
+  `StdoutPipe`/`StderrPipe` directly. `os/exec` then owns the copy goroutines and
+  `Cmd.Wait` returns only after the final writes complete, without delaying
+  startup-time streaming for a live sidecar.
+- Validation:
+  Run the local-process transport tests together with the Claude SDK sidecar
+  start, approval, and controller tests repeatedly. Keep explicit assertions
+  that final stdout arrives before the exit frame and that a live process can
+  exchange frames before it exits.
 
 ### Concurrent agent CLI installs corrupt shared npm global state
 
@@ -1275,6 +1337,84 @@ invalid_grant`. Search `tuttid.log` for
 - References:
   [composer_options.go](../../../services/tuttid/service/agent/composer_options.go)
   [AgentGUINodeView.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/AgentGUINodeView.tsx)
+
+### Extension login returns to the login button without an error
+
+- Symptom:
+  Target setup opens the browser and waits for authentication, then silently
+  returns to `auth_required`. The runtime detection row may appear to restart
+  during each progress poll, and a pending `Ready` row can look like an
+  incorrect success state while login is still running.
+- Quick checks:
+  Inspect the setup snapshot's durable `action.status`, `errorCode`, and
+  `errorMessage`, then correlate its timestamp with the ACP `authenticate`
+  request in the daemon log. A successful browser callback does not prove that
+  the runtime accepted the account; the ACP response remains authoritative.
+- Root cause:
+  Setup polling reused the foreground refresh state, so every background
+  request set the whole panel to loading. Explicit ACP authentication failures
+  were also normalized into a successful `auth_required` probe result, losing
+  the provider error before the durable action was written. AgentGUI then
+  rendered errors only for top-level setup failure, not a failed authenticate
+  action. The terminal `Ready` row could never become successful because the
+  setup dialog closes as soon as the authoritative snapshot becomes ready.
+- Fix:
+  Keep background polling non-disruptive, preserve errors from explicit ACP
+  `authenticate` calls, and show failed/interrupted action details in both the
+  existing host toast and the setup dialog while keeping retry available. Fire
+  the toast only when the current action moves from running to failed so polling
+  cannot repeat it and restoring an old failure cannot replay it. Do not render
+  a terminal readiness row that only exists while setup is non-ready.
+- Validation:
+  Cover background polling without detection loading, an ACP authenticate
+  rejection retaining provider text through the durable setup action, one toast
+  per current-action failure, the persistent GUI failure presentation, and
+  absence of the misleading pending readiness row.
+  Run Agent daemon, setup service, AgentGUI, desktop watcher, i18n, typecheck,
+  and desktop build checks.
+- References:
+  [standard_acp_setup.go](../../../packages/agent/daemon/runtime/standard_acp_setup.go)
+  [setup.go](../../../services/tuttid/service/agentextension/setup.go)
+  [AgentTargetSetupGate.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentTargetSetupGate.tsx)
+  [agentTargetSetupNotificationController.ts](../../../packages/agent/gui/shared/agentEnv/agentTargetSetupNotificationController.ts)
+
+### Vertex setup reports ready but the first prompt cannot load credentials
+
+- Symptom:
+  Selecting Gemini `vertex-ai` completes Target setup and creates a session,
+  but the first prompt fails with `Could not load the default credentials` or
+  reports missing `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, or an API
+  key. The empty-home setup gate is gone, leaving no obvious way to change the
+  login method.
+- Quick checks:
+  Correlate the durable authenticate action with ACP traffic. If
+  `authenticate` returns an empty result and `session/new` succeeds, but the
+  later formal `session/prompt` returns the credential error, setup observed a
+  runtime false positive rather than losing the selected method.
+- Root cause:
+  Gemini can defer Vertex ADC and project/location validation until a real
+  prompt. ACP exposes no credential-validation request stronger than the
+  runtime's own `authenticate` plus `session/new`, so setup cannot prove request
+  usability without sending user-visible work. Extension Target setup was also
+  mounted only in empty-home state, unlike the persistent built-in provider
+  environment entry.
+- Fix:
+  Classify the formal prompt's credential error as an authentication failure
+  and feed it into Target setup detection. Override a later otherwise-ready ACP
+  probe to `auth_required`. Expose the same Target setup dialog from the
+  selected provider's config menu in both ready and non-ready states, permit
+  explicit re-authentication from ready, and reuse one Target watch across the
+  two UI hosts.
+- Validation:
+  Cover the real Vertex ADC error text, auth invalidation overriding a ready
+  probe, re-authentication clearing invalidation, ready-state auth method
+  selection, and one cached desktop watch per Target. Do not add a hidden
+  synthetic prompt to setup.
+- References:
+  [agent_run_outcome_reporter.go](../../../services/tuttid/agent_run_outcome_reporter.go)
+  [setup.go](../../../services/tuttid/service/agentextension/setup.go)
+  [AgentGUINodeView.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/AgentGUINodeView.tsx)
+  [AgentTargetSetupGate.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentTargetSetupGate.tsx)
 
 ### Extension messages appear sent but show no running or failure state
 

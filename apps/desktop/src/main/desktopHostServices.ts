@@ -28,6 +28,7 @@ export interface CreateDesktopHostServicesOptions {
   browserNodeGuestPreloadPath?: string;
   enableDevelopmentReloadShortcut?: boolean;
   fallbackLocale: DesktopLocale;
+  isPackaged?: boolean;
   logger: DesktopLogger;
   tuttidClient: Pick<
     TuttidClient,
@@ -44,6 +45,7 @@ export async function createDesktopHostServices(
   const preferences = await createDesktopHostPreferencesState({
     appVersion: options.appVersion,
     fallbackLocale: options.fallbackLocale,
+    isPackaged: options.isPackaged,
     logger: options.logger,
     tuttidClient: options.tuttidClient
   });

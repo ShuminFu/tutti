@@ -1,9 +1,13 @@
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentPermissionModeDropdown } from "./AgentComposerSettingsMenus";
 import type { AgentGUIComposerSettingsVM } from "./model/agentGuiNodeTypes";
+import {
+  CODEX_FULL_ACCESS_WARNING_ACKNOWLEDGEMENT_STORAGE_KEY,
+  isCodexFullAccessWarningAcknowledged
+} from "./view/agentFullAccessWarningPreference";
 
 beforeAll(() => {
   Object.defineProperties(HTMLElement.prototype, {
@@ -11,6 +15,10 @@ beforeAll(() => {
     releasePointerCapture: { configurable: true, value: () => undefined },
     setPointerCapture: { configurable: true, value: () => undefined }
   });
+});
+
+beforeEach(() => {
+  globalThis.localStorage.clear();
 });
 
 describe("AgentPermissionModeDropdown", () => {
@@ -82,6 +90,12 @@ describe("AgentPermissionModeDropdown", () => {
       permissionModeId: "full-access",
       planMode: false
     });
+    expect(isCodexFullAccessWarningAcknowledged()).toBe(true);
+    expect(
+      globalThis.localStorage.getItem(
+        CODEX_FULL_ACCESS_WARNING_ACKNOWLEDGEMENT_STORAGE_KEY
+      )
+    ).toBe("1");
   });
 
   it("keeps full access selected after confirmation", async () => {
@@ -159,6 +173,39 @@ describe("AgentPermissionModeDropdown", () => {
     expect(
       screen.queryByRole("dialog", { name: "Enable full access?" })
     ).not.toBeInTheDocument();
+  });
+
+  it("explains why permission changes are disabled during a running turn", async () => {
+    const onSettingsChange = vi.fn();
+    render(
+      <AgentPermissionModeDropdown
+        composerSettings={composerSettings()}
+        disabled
+        disabledTooltip="Permissions cannot change during a running turn"
+        provider="codex"
+        labels={{
+          loadingOptions: "Loading permission modes",
+          permissionLabel: "Permission mode"
+        }}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+
+    const trigger = screen.getByRole("combobox", {
+      name: "Permission mode"
+    });
+    expect(trigger).toBeDisabled();
+
+    const tooltipTarget = trigger.parentElement;
+    expect(tooltipTarget).not.toBeNull();
+    fireEvent.pointerMove(tooltipTarget as HTMLElement, {
+      pointerType: "mouse"
+    });
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Permissions cannot change during a running turn"
+    );
+    expect(onSettingsChange).not.toHaveBeenCalled();
   });
 });
 

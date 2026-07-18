@@ -216,6 +216,19 @@ following:
   unless that dependency is an intentional part of the public contract
 - a consumer-facing build emits or copies the asset only when the consumer
   explicitly imports the asset subpath
+- packed JavaScript does not contain raw XML SVG data URLs or bare relative SVG
+  strings; SVGs interpolated into runtime CSS `url(...)` values must use a
+  CSS-safe data URL or an absolute URL constructed relative to the module
+
+Emitting an SVG next to a bundled JavaScript file is not sufficient when the
+bundle only exports a string such as `./icon-HASH.svg`. CSS resolves that value
+relative to the consuming page, and consumer bundlers cannot discover the
+runtime string as an asset dependency.
+
+Do not use a workspace application build as the only validation for asset
+changes. Workspace exports can point at source while published exports point at
+`dist`, so the two paths may apply different asset transforms. The packed
+tarball is the consumer contract.
 
 ## Package Entrypoints
 
@@ -226,16 +239,20 @@ The stable package entrypoints are:
 @tutti-os/agent-gui
 @tutti-os/agent-gui/agent-conversation
 @tutti-os/agent-gui/agent-env
+@tutti-os/agent-gui/agent-env-ui
 @tutti-os/agent-gui/agent-message-center
 @tutti-os/agent-gui/context-mention-palette
 @tutti-os/agent-gui/i18n
 @tutti-os/agent-gui/styles.css
 @tutti-os/agent-gui/workbench
+@tutti-os/agent-gui/workbench/browser-element-context
+@tutti-os/agent-gui/workbench/tool-sidebar
 @tutti-os/browser-node
 @tutti-os/browser-node/assets/workspace-dock-website.png
 @tutti-os/browser-node/bridge
 @tutti-os/browser-node/electron-main
 @tutti-os/browser-node/electron-preload
+@tutti-os/browser-node/electron-renderer
 @tutti-os/browser-node/i18n
 @tutti-os/browser-node/react
 @tutti-os/browser-node/workbench

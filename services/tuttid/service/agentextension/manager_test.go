@@ -20,12 +20,27 @@ import (
 	"testing"
 
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
+	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
+	agentextensiondata "github.com/tutti-os/tutti/services/tuttid/data/agentextension"
 	workspacedata "github.com/tutti-os/tutti/services/tuttid/data/workspace"
 	tuttitypes "github.com/tutti-os/tutti/services/tuttid/types"
 )
 
 type targetStoreStub struct {
 	targets map[string]agenttargetbiz.Target
+}
+
+type preferencesStoreStub struct {
+	preferences preferencesbiz.DesktopPreferences
+}
+
+func (s *preferencesStoreStub) GetDesktopPreferences(context.Context) (preferencesbiz.DesktopPreferences, error) {
+	return s.preferences, nil
+}
+
+func (s *preferencesStoreStub) PutDesktopPreferences(_ context.Context, preferences preferencesbiz.DesktopPreferences) (preferencesbiz.DesktopPreferences, error) {
+	s.preferences = preferences
+	return preferences, nil
 }
 
 func (s *targetStoreStub) DeleteAgentTarget(_ context.Context, id string) error {
@@ -79,13 +94,16 @@ func TestManagerReconcileInstallsVerifiedPackageAndFallsBackOffline(t *testing.T
 	}))
 	baseURL = server.URL
 	store := &targetStoreStub{targets: map[string]agenttargetbiz.Target{}}
-	manager := Manager{StateDir: t.TempDir(), Store: store, Client: server.Client(), Sources: []tuttitypes.AgentExtensionSource{{Key: "gemini", ReleaseIndexURL: server.URL + "/versions.json", SigningKeyID: "test-key", SigningPublicKey: publicKeyPEM(t, publicKey), Enabled: true}}}
+	manager := Manager{Installations: agentextensiondata.NewFileInstallationStore(t.TempDir()), Store: store, Client: server.Client(), Sources: []tuttitypes.AgentExtensionSource{{Key: "gemini", ReleaseIndexURL: server.URL + "/versions.json", SigningKeyID: "test-key", SigningPublicKey: publicKeyPEM(t, publicKey), Enabled: true}}}
 	if errs := manager.Reconcile(context.Background()); len(errs) != 0 {
 		t.Fatalf("Reconcile() errors = %v", errs)
 	}
 	target := store.targets["extension:gemini"]
 	if target.Provider != "acp:gemini" || !strings.HasPrefix(target.IconURL, "data:image/svg+xml") {
 		t.Fatalf("registered target = %#v", target)
+	}
+	if !strings.HasPrefix(target.SidebarIconURL, "data:image/svg+xml") {
+		t.Fatalf("registered target sidebar icon = %q", target.SidebarIconURL)
 	}
 	if !strings.HasPrefix(target.HeroImageURL, "data:image/jpeg;base64,") {
 		t.Fatalf("registered target hero image = %q", target.HeroImageURL)
@@ -120,6 +138,120 @@ func TestManagerReconcileInstallsVerifiedPackageAndFallsBackOffline(t *testing.T
 	}
 }
 
+func TestManagerReconcileSnapshotsDevelopmentLocalPackage(t *testing.T) {
+	sourceDir := t.TempDir()
+	if err := extractPackage(testPackageZIP(t), sourceDir); err != nil {
+		t.Fatal(err)
+	}
+	store := &targetStoreStub{targets: map[string]agenttargetbiz.Target{}}
+	stateDir := t.TempDir()
+	manager := Manager{
+		Installations: agentextensiondata.NewFileInstallationStore(stateDir),
+		Store:         store,
+		Sources: []tuttitypes.AgentExtensionSource{{
+			Key: "gemini", LocalPackageDir: sourceDir, Enabled: true,
+		}},
+	}
+	if errs := manager.Reconcile(context.Background()); len(errs) != 0 {
+		t.Fatalf("Reconcile() errors = %v", errs)
+	}
+	first, err := manager.loadActive("gemini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(first.Version, "1.0.0+local.") || first.Manifest.Version != first.Version {
+		t.Fatalf("local installation version = %#v", first)
+	}
+	if first.PackageDir == sourceDir || !strings.HasPrefix(first.PackageDir, filepath.Join(stateDir, "agent", "extensions", "gemini")) {
+		t.Fatalf("local package was not snapshotted into daemon state: %q", first.PackageDir)
+	}
+	if target := store.targets["extension:gemini"]; !strings.Contains(target.LaunchRefJSON, first.ID) {
+		t.Fatalf("registered target = %#v, want installation %q", target, first.ID)
+	}
+
+	localePath := filepath.Join(sourceDir, "locales", "en.json")
+	if err := os.WriteFile(localePath, []byte(`{"agent.name":"Local Gemini"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if errs := manager.Reconcile(context.Background()); len(errs) != 0 {
+		t.Fatalf("second Reconcile() errors = %v", errs)
+	}
+	second, err := manager.loadActive("gemini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Version == first.Version || second.DisplayName != "Local Gemini" {
+		t.Fatalf("changed local package did not activate a new snapshot: first=%#v second=%#v", first, second)
+	}
+}
+
+func TestManagerReconcileUsesDesktopAgentExtensionFeatureFlag(t *testing.T) {
+	sourceDir := t.TempDir()
+	if err := extractPackage(testPackageZIP(t), sourceDir); err != nil {
+		t.Fatal(err)
+	}
+	store := &targetStoreStub{targets: map[string]agenttargetbiz.Target{
+		"extension:gemini": {ID: "extension:gemini"},
+	}}
+	preferences := &preferencesStoreStub{}
+	manager := Manager{
+		Installations: agentextensiondata.NewFileInstallationStore(t.TempDir()),
+		Store:         store,
+		Preferences:   preferences,
+		Sources: []tuttitypes.AgentExtensionSource{{
+			Key: "gemini", LocalPackageDir: sourceDir, Enabled: false,
+		}},
+	}
+
+	if errs := manager.Reconcile(context.Background()); len(errs) != 0 {
+		t.Fatalf("disabled Reconcile() errors = %v", errs)
+	}
+	if _, ok := store.targets["extension:gemini"]; ok {
+		t.Fatal("disabled source target was not removed")
+	}
+
+	previous := preferencesbiz.DesktopPreferences{FeatureFlags: map[string]bool{"unrelated": true}}
+	current := preferencesbiz.DesktopPreferences{FeatureFlags: map[string]bool{"agent.extension.gemini": true}}
+	preferences.preferences = current
+	if errs := manager.ReconcileDesktopPreferencesChange(context.Background(), previous, current); len(errs) != 0 {
+		t.Fatalf("enabled ReconcileDesktopPreferencesChange() errors = %v", errs)
+	}
+	if _, ok := store.targets["extension:gemini"]; !ok {
+		t.Fatal("enabled source target was not registered")
+	}
+
+	disabled := preferencesbiz.DesktopPreferences{FeatureFlags: map[string]bool{"agent.extension.gemini": false}}
+	preferences.preferences = disabled
+	if errs := manager.ReconcileDesktopPreferencesChange(context.Background(), current, disabled); len(errs) != 0 {
+		t.Fatalf("disabled ReconcileDesktopPreferencesChange() errors = %v", errs)
+	}
+	if _, ok := store.targets["extension:gemini"]; ok {
+		t.Fatal("disabled source target was not removed after preference change")
+	}
+}
+
+func TestCopyLocalPackageRejectsExecutableAndSymlink(t *testing.T) {
+	t.Run("executable", func(t *testing.T) {
+		sourceDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(sourceDir, "run.json"), []byte("{}"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := copyLocalPackage(sourceDir, t.TempDir()); err == nil || !strings.Contains(err.Error(), "forbidden file") {
+			t.Fatalf("copyLocalPackage() error = %v", err)
+		}
+	})
+
+	t.Run("symlink", func(t *testing.T) {
+		sourceDir := t.TempDir()
+		if err := os.Symlink(filepath.Join(sourceDir, "missing"), filepath.Join(sourceDir, "profile.json")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := copyLocalPackage(sourceDir, t.TempDir()); err == nil || !strings.Contains(err.Error(), "symlink") {
+			t.Fatalf("copyLocalPackage() error = %v", err)
+		}
+	})
+}
+
 func TestValidateComposerProfileAcceptsDeclarativeSkillRoots(t *testing.T) {
 	var profile ComposerProfile
 	if err := json.Unmarshal([]byte(`{
@@ -144,6 +276,175 @@ func TestValidateComposerProfileAcceptsDeclarativeSkillRoots(t *testing.T) {
 	}
 }
 
+func TestComposerProfileACPConfigOptionIDs(t *testing.T) {
+	t.Run("canonical", func(t *testing.T) {
+		profile := ComposerProfile{SchemaVersion: "tutti.agent.composer.v1"}
+		profile.ConfigOptions = &struct {
+			Model      ComposerConfigOptionReference `json:"model"`
+			Permission ComposerConfigOptionReference `json:"permission"`
+			Reasoning  ComposerConfigOptionReference `json:"reasoning"`
+		}{
+			Model:      ComposerConfigOptionReference{ACPOptionID: "model-choice"},
+			Permission: ComposerConfigOptionReference{ACPOptionID: "approval-mode"},
+			Reasoning:  ComposerConfigOptionReference{ACPOptionID: "thought-level"},
+		}
+		model, permission, reasoning := profile.ACPConfigOptionIDs()
+		if model != "model-choice" || permission != "approval-mode" || reasoning != "thought-level" {
+			t.Fatalf("config option ids = %q, %q, %q", model, permission, reasoning)
+		}
+	})
+
+	t.Run("legacy", func(t *testing.T) {
+		profile := ComposerProfile{
+			SchemaVersion: "tutti.agent.composer.v1",
+			Model:         json.RawMessage(`{"source":"acp-session-models"}`),
+			Permission:    json.RawMessage(`{"source":"acp-session-modes"}`),
+		}
+		model, permission, reasoning := profile.ACPConfigOptionIDs()
+		if model != "model" || permission != "mode" || reasoning != "reasoning_effort" {
+			t.Fatalf("legacy config option ids = %q, %q, %q", model, permission, reasoning)
+		}
+	})
+
+	t.Run("absent", func(t *testing.T) {
+		model, permission, reasoning := (ComposerProfile{}).ACPConfigOptionIDs()
+		if model != "" || permission != "" || reasoning != "" {
+			t.Fatalf("absent config option ids = %q, %q, %q", model, permission, reasoning)
+		}
+	})
+}
+
+func TestLoadComposerModesKeepsDistinctGenericRuntimeModes(t *testing.T) {
+	packageDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(packageDir, "profiles"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "profiles", "composer.json"), []byte(`{
+		"schemaVersion":"tutti.agent.composer.v1",
+		"model":{"source":"acp-session-modes"},
+		"permission":{"source":"acp-session-modes"},
+		"permissionModes":[
+			{"runtimeId":"default","semantic":"ask-before-write"},
+			{"runtimeId":"acceptEdits","semantic":"accept-edits"},
+			{"runtimeId":"auto","semantic":"auto"},
+			{"runtimeId":"dontAsk","semantic":"locked-down"},
+			{"runtimeId":"bypassPermissions","semantic":"full-access"},
+			{"runtimeId":"fullAccess","semantic":"full-access"},
+			{"runtimeId":"plan","semantic":"read-only"}
+		]
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest := Manifest{}
+	manifest.Profiles.Composer = "profiles/composer.json"
+	modes, planModeRuntimeID, err := loadComposerModes(Installation{
+		PackageDir: packageDir,
+		Manifest:   manifest,
+	})
+	if err != nil {
+		t.Fatalf("loadComposerModes() error = %v", err)
+	}
+	if modes["read-only"] != "default" ||
+		modes["accept-edits"] != "acceptEdits" ||
+		modes["auto"] != "auto" ||
+		modes["locked-down"] != "dontAsk" ||
+		modes["dontask"] != "dontAsk" ||
+		modes["full-access"] != "bypassPermissions" ||
+		modes["fullaccess"] != "fullAccess" ||
+		modes["plan"] != "plan" ||
+		planModeRuntimeID != "plan" {
+		t.Fatalf("composer modes = %#v, plan = %q", modes, planModeRuntimeID)
+	}
+}
+
+func TestValidateComposerProfileRejectsInvalidSignedCommandDeclarations(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{
+			name: "schema",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v2"}`,
+		},
+		{
+			name: "duplicate command",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","slashCommands":{"commands":[{"name":"status"},{"name":"STATUS"}]}}`,
+		},
+		{
+			name: "invalid command name",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","slashCommands":{"commands":[{"name":"bad command"}]}}`,
+		},
+		{
+			name: "unsupported effect",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","slashCommands":{"commands":[{"name":"status","effect":"runArbitraryCode"}]}}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var profile ComposerProfile
+			if err := json.Unmarshal([]byte(tt.raw), &profile); err != nil {
+				t.Fatal(err)
+			}
+			if err := validateComposerProfile(profile); err == nil {
+				t.Fatal("validateComposerProfile() error = nil, want signed profile rejection")
+			}
+		})
+	}
+}
+
+func TestLoadExtensionComposerSlashCommandsAndCapabilities(t *testing.T) {
+	packageDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(packageDir, "profiles"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "profiles", "composer.json"), []byte(`{
+		"schemaVersion":"tutti.agent.composer.v1",
+		"model":{"source":"acp-session-models"},
+		"permission":{"source":"acp-session-modes"},
+		"permissionModes":[
+			{"runtimeId":"default","semantic":"ask-before-write"}
+		],
+		"slashCommands":{
+			"commandCatalogAuthoritative":true,
+			"commands":[
+				{"name":"compact","effect":"submitImmediate"},
+				{"name":"status","effect":"showStatus"},
+				{"name":"goal","effect":"activateGoalMode"},
+				{"name":"plan","effect":"togglePlanMode"}
+			]
+		}
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "profiles", "capabilities.json"), []byte(`{
+		"schemaVersion":"tutti.agent.capabilities.v1",
+		"declared":{
+			"compact":true,
+			"planMode":true,
+			"modelSelection":true
+		}
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	installation := Installation{PackageDir: packageDir}
+	installation.Manifest.Profiles.Composer = "profiles/composer.json"
+	installation.Manifest.Profiles.Capabilities = "profiles/capabilities.json"
+	var profile ComposerProfile
+	if err := readJSON(filepath.Join(packageDir, "profiles", "composer.json"), &profile); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateComposerProfile(profile); err != nil {
+		t.Fatalf("validateComposerProfile() error = %v", err)
+	}
+	capabilities, err := loadDeclaredCapabilities(installation)
+	if err != nil {
+		t.Fatalf("loadDeclaredCapabilities() error = %v", err)
+	}
+	if strings.Join(capabilities, ",") != "compact,planMode" {
+		t.Fatalf("capabilities = %#v, want only known agent capability keys", capabilities)
+	}
+}
+
 func TestManagerReconcilePreservesRemoteErrorWhenNoOfflineInstallationExists(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
@@ -151,8 +452,8 @@ func TestManagerReconcilePreservesRemoteErrorWhenNoOfflineInstallationExists(t *
 	defer server.Close()
 
 	manager := Manager{
-		StateDir: t.TempDir(),
-		Client:   server.Client(),
+		Installations: agentextensiondata.NewFileInstallationStore(t.TempDir()),
+		Client:        server.Client(),
 		Sources: []tuttitypes.AgentExtensionSource{{
 			Key:             "gemini",
 			ReleaseIndexURL: server.URL + "/versions.json",
@@ -188,6 +489,10 @@ func TestExtractPackageRejectsExecutableEntry(t *testing.T) {
 }
 
 func testPackageZIP(t *testing.T) []byte {
+	return testPackageZIPFor(t, testManifest(), `{"schemaVersion":"tutti.agent.discovery.v1","candidates":[{"binaryNames":["gemini"],"version":{"args":["--version"],"constraint":">=0.50.0 <1.0.0"},"launchArgs":["--acp"],"probe":{"kind":"acp-initialize","timeoutMs":5000}}]}`)
+}
+
+func testPackageZIPFor(t *testing.T, manifest Manifest, discovery string) []byte {
 	t.Helper()
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
@@ -199,10 +504,11 @@ func testPackageZIP(t *testing.T) []byte {
 		}
 	}
 	files := map[string][]byte{
-		"tutti.agent.json":        mustJSON(t, testManifest()),
+		"tutti.agent.json":        mustJSON(t, manifest),
 		"assets/icon.svg":         []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`),
+		"assets/sidebar-icon.svg": []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`),
 		"assets/hero-image.jpg":   []byte("hero-image"),
-		"profiles/discovery.json": []byte(`{"schemaVersion":"tutti.agent.discovery.v1","candidates":[{"binaryNames":["gemini"],"version":{"args":["--version"],"constraint":">=0.50.0 <1.0.0"},"launchArgs":["--acp"],"probe":{"kind":"acp-initialize","timeoutMs":5000}}]}`),
+		"profiles/discovery.json": []byte(discovery),
 		"profiles/tools.json":     []byte(`{"schemaVersion":"tutti.agent.tools.v1","tools":[{"match":{"ids":["replace"]},"canonicalId":"Edit","category":"file-change","presentation":{"renderer":"diff","titleKey":"tools.edit.title"},"fileEffect":{"source":"acp-content-diff"}}]}`),
 		"profiles/composer.json":  []byte(`{"schemaVersion":"tutti.agent.composer.v1","model":{"source":"acp-session-config"},"permission":{"source":"acp-session-config"},"permissionModes":[{"runtimeId":"default","semantic":"ask-before-write"},{"runtimeId":"auto_edit","semantic":"accept-edits"},{"runtimeId":"yolo","semantic":"full-access"},{"runtimeId":"plan","semantic":"read-only"}]}`),
 		"locales/en.json":         []byte(`{"agent.name":"Gemini CLI"}`),
@@ -233,6 +539,8 @@ func testManifest() Manifest {
 	value.Description = "Gemini through ACP"
 	value.Icon.Type = "asset"
 	value.Icon.Src = "assets/icon.svg"
+	value.SidebarIcon.Type = "asset"
+	value.SidebarIcon.Src = "assets/sidebar-icon.svg"
 	value.HeroImage.Type = "asset"
 	value.HeroImage.Src = "assets/hero-image.jpg"
 	value.Runtime.Kind = "standard-acp"

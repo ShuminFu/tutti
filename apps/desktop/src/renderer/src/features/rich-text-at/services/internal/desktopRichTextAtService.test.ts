@@ -6,6 +6,7 @@ import type {
   TuttidClient,
   WorkspaceAgentProvider
 } from "@tutti-os/client-tuttid-ts";
+import type { RichTextTriggerProvider } from "@tutti-os/ui-rich-text/types";
 import {
   tuttiAgentAssetUrls,
   tuttiFileAssetUrls,
@@ -18,9 +19,49 @@ import {
   mapAgentTargetPresentationsToAgents
 } from "../../../workspace-agent/services/internal/desktopAgentsService.ts";
 import type {
+  DesktopRichTextAtCapability,
+  DesktopRichTextTriggerProviderRequest
+} from "../richTextAtService.interface.ts";
+import type {
   AgentsSnapshot,
   IAgentsService
 } from "../../../workspace-agent/services/agentsService.interface.ts";
+
+function createTuttidClient(methods: object = {}): TuttidClient {
+  return methods as unknown as TuttidClient;
+}
+
+function getProvider(
+  service: DesktopRichTextAtService,
+  capability: DesktopRichTextAtCapability,
+  overrides: Partial<DesktopRichTextTriggerProviderRequest> = {}
+): RichTextTriggerProvider {
+  const providers = service.getProviders({
+    capabilities: [capability],
+    surface: "agent-composer",
+    target: "agent-gui",
+    workspaceId: "workspace-1",
+    ...overrides
+  });
+  assert.equal(providers.length, 1);
+  const provider = providers[0];
+  assert.ok(provider);
+  return provider;
+}
+
+function queryProvider(
+  provider: RichTextTriggerProvider,
+  keyword = "",
+  overrides: Partial<Parameters<RichTextTriggerProvider["query"]>[0]> = {}
+) {
+  return provider.query({
+    context: {},
+    keyword,
+    maxResults: 5,
+    trigger: "@",
+    ...overrides
+  });
+}
 
 test("desktop rich text @ service assembles workspace file providers by capability", async () => {
   const searchCalls: Array<{
@@ -30,7 +71,7 @@ test("desktop rich text @ service assembles workspace file providers by capabili
     signal?: AbortSignal;
   }> = [];
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async searchWorkspaceFiles(
         workspaceId: string,
         input: { limit?: number; query: string },
@@ -80,25 +121,14 @@ test("desktop rich text @ service assembles workspace file providers by capabili
           workspaceID: workspaceId
         };
       }
-    } as unknown as TuttidClient
+    })
   });
 
-  const providers = service.getProviders({
-    capabilities: ["file"],
+  const provider = getProvider(service, "file", {
     surface: "issue",
-    target: "issue-manager",
-    workspaceId: "workspace-1"
+    target: "issue-manager"
   });
-
-  assert.equal(providers.length, 1);
-  const provider = providers[0];
-  assert.ok(provider);
-  const items = await provider.query({
-    context: {},
-    keyword: "readme",
-    maxResults: 3,
-    trigger: "@"
-  });
+  const items = await queryProvider(provider, "readme", { maxResults: 3 });
 
   assert.equal(searchCalls.length, 1);
   assert.deepEqual(searchCalls[0], {
@@ -121,12 +151,7 @@ test("desktop rich text @ service assembles workspace file providers by capabili
     label: "README.md"
   });
 
-  const folderItems = await provider.query({
-    context: {},
-    keyword: "docs",
-    maxResults: 3,
-    trigger: "@"
-  });
+  const folderItems = await queryProvider(provider, "docs", { maxResults: 3 });
   assert.deepEqual(folderItems, [
     {
       displayName: "docs",
@@ -153,7 +178,7 @@ test("desktop rich text @ service assembles workspace issue providers by capabil
     topicId?: string;
   }> = [];
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceIssueTopics(workspaceId: string) {
         return {
           topics: [
@@ -207,25 +232,11 @@ test("desktop rich text @ service assembles workspace issue providers by capabil
           tasks: []
         };
       }
-    } as unknown as TuttidClient
+    })
   });
 
-  const providers = service.getProviders({
-    capabilities: ["workspace-issue"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-
-  assert.equal(providers.length, 1);
-  const provider = providers[0];
-  assert.ok(provider);
-  const items = await provider.query({
-    context: {},
-    keyword: "login",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const provider = getProvider(service, "workspace-issue");
+  const items = await queryProvider(provider, "login");
 
   assert.deepEqual(listCalls, [
     {
@@ -283,7 +294,7 @@ test("workspace issue provider queries every topic in order and pages one group"
     signal?: AbortSignal;
   }> = [];
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceIssueTopics(
         workspaceId: string,
         options?: { signal?: AbortSignal }
@@ -343,15 +354,10 @@ test("workspace issue provider queries every topic in order and pages one group"
           totalCount: 11
         };
       }
-    } as unknown as TuttidClient
+    })
   });
-  const provider = service.getProviders({
-    capabilities: ["workspace-issue"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  })[0];
-  assert.ok(provider?.queryGroups);
+  const provider = getProvider(service, "workspace-issue");
+  assert.ok(provider.queryGroups);
   assert.ok(provider.queryGroupPage);
   const abortController = new AbortController();
   const result = await provider.queryGroups({
@@ -422,7 +428,7 @@ test("workspace issue provider limits first-page topic concurrency to four", asy
     release = resolve;
   });
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceIssueTopics(workspaceId: string) {
         return {
           topics: Array.from({ length: 8 }, (_, index) => ({
@@ -456,15 +462,10 @@ test("workspace issue provider limits first-page topic concurrency to four", asy
           totalCount: 1
         };
       }
-    } as unknown as TuttidClient
+    })
   });
-  const provider = service.getProviders({
-    capabilities: ["workspace-issue"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  })[0];
-  assert.ok(provider?.queryGroups);
+  const provider = getProvider(service, "workspace-issue");
+  assert.ok(provider.queryGroups);
   const pending = provider.queryGroups({
     context: {},
     keyword: "",
@@ -482,7 +483,7 @@ test("workspace issue provider limits first-page topic concurrency to four", asy
 test("desktop rich text @ service resolves workspace issue query by issue id", async () => {
   const detailCalls: Array<{ issueId: string; workspaceId: string }> = [];
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceIssueTopics(workspaceId: string) {
         return {
           topics: [
@@ -530,23 +531,12 @@ test("desktop rich text @ service resolves workspace issue query by issue id", a
           tasks: []
         };
       }
-    } as unknown as TuttidClient
+    })
   });
 
-  const provider = service.getProviders({
-    capabilities: ["workspace-issue"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  })[0];
-  assert.ok(provider);
+  const provider = getProvider(service, "workspace-issue");
 
-  const items = await provider.query({
-    context: {},
-    keyword: "issue-restore-1",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const items = await queryProvider(provider, "issue-restore-1");
   assert.ok(provider.queryGroups);
   const grouped = await provider.queryGroups({
     context: {},
@@ -599,7 +589,7 @@ test("desktop rich text @ service resolves workspace issue query by issue id", a
 
 test("workspace issue compatibility query interleaves topics before global truncation", async () => {
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceIssueTopics(workspaceId: string) {
         return {
           topics: ["topic-a", "topic-b"].map((topicId) => ({
@@ -640,34 +630,18 @@ test("workspace issue compatibility query interleaves topics before global trunc
           tasks: []
         };
       }
-    } as unknown as TuttidClient
+    })
   });
-  const provider = service.getProviders({
-    capabilities: ["workspace-issue"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  })[0];
-  assert.ok(provider);
+  const provider = getProvider(service, "workspace-issue");
 
-  const items = await provider.query({
-    context: {},
-    keyword: "",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const items = await queryProvider(provider);
 
   assert.deepEqual(
     items.slice(0, 5).map((item) => provider.getItemKey(item)),
     ["topic-a-1", "topic-b-1", "topic-a-2", "topic-b-2", "topic-a-3"]
   );
 
-  const exactItems = await provider.query({
-    context: {},
-    keyword: "issue-exact",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const exactItems = await queryProvider(provider, "issue-exact");
   assert.equal(provider.getItemKey(exactItems[0]), "issue-exact");
 });
 
@@ -678,7 +652,7 @@ test("desktop rich text @ service assembles agent session providers by capabilit
     workspaceId: string;
   }> = [];
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceAgentSessions(
         workspaceId: string,
         request?: {
@@ -721,24 +695,12 @@ test("desktop rich text @ service assembles agent session providers by capabilit
           ]
         };
       }
-    } as unknown as TuttidClient
+    })
   });
 
-  const providers = service.getProviders({
-    capabilities: ["agent-session"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-
-  assert.equal(providers.length, 1);
-  const provider = providers[0];
-  assert.ok(provider);
-  const items = await provider.query({
-    context: { metadata: { currentUserId: "account-user-1" } },
-    keyword: "mentions",
-    maxResults: 5,
-    trigger: "@"
+  const provider = getProvider(service, "agent-session");
+  const items = await queryProvider(provider, "mentions", {
+    context: { metadata: { currentUserId: "account-user-1" } }
   });
 
   assert.deepEqual(listCalls, [
@@ -788,7 +750,7 @@ test("desktop rich text @ service assembles agent session providers by capabilit
 test("desktop agent session mentions query each selected Agent before merging", async () => {
   const agentTargetIds: Array<string | undefined> = [];
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceAgentSessions(
         workspaceId: string,
         request?: { agentTargetId?: string }
@@ -819,17 +781,11 @@ test("desktop agent session mentions query each selected Agent before merging", 
           ]
         };
       }
-    } as unknown as TuttidClient
+    })
   });
-  const [provider] = service.getProviders({
-    capabilities: ["agent-session"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-  assert.ok(provider);
+  const provider = getProvider(service, "agent-session");
 
-  const items = await provider.query({
+  const items = await queryProvider(provider, "", {
     context: {
       metadata: {
         referenceProvenanceFilter: {
@@ -837,10 +793,7 @@ test("desktop agent session mentions query each selected Agent before merging", 
           memberIds: null
         }
       }
-    },
-    keyword: "",
-    maxResults: 5,
-    trigger: "@"
+    }
   });
 
   assert.deepEqual(agentTargetIds, ["agent-a", "agent-b"]);
@@ -870,7 +823,7 @@ test("desktop rich text @ service presents extension sessions with Agent Target 
       label: status,
       pulse: false
     }),
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceAgentSessions(workspaceId: string) {
         return {
           hasMore: false,
@@ -894,23 +847,12 @@ test("desktop rich text @ service presents extension sessions with Agent Target 
           ]
         };
       }
-    } as unknown as TuttidClient,
+    }),
     userAvatarPlaceholderUrl: "tutti-asset://user/placeholder.png"
   });
 
-  const [provider] = service.getProviders({
-    capabilities: ["agent-session"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-  assert.ok(provider);
-  const items = await provider.query({
-    context: {},
-    keyword: "",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const provider = getProvider(service, "agent-session");
+  const items = await queryProvider(provider);
   assert.equal(items.length, 1);
   assert.equal(
     provider.getItemIconUrl?.(items[0]),
@@ -936,7 +878,7 @@ test("desktop rich text @ service presents extension sessions with Agent Target 
 test("desktop rich text @ service assembles workspace app providers from mention candidates", async () => {
   const listCalls: string[] = [];
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceAppMentionCandidates(workspaceId: string) {
         listCalls.push(workspaceId);
         return {
@@ -951,30 +893,17 @@ test("desktop rich text @ service assembles workspace app providers from mention
               description: "Plan weather-sensitive work.",
               displayName: "Weather Desk",
               iconUrl: "data:image/png;base64,weather",
+              referencesListSupported: true,
               scopes: ["weather"]
             })
           ]
         };
       }
-    } as unknown as TuttidClient
+    })
   });
 
-  const providers = service.getProviders({
-    capabilities: ["workspace-app"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-
-  assert.equal(providers.length, 1);
-  const provider = providers[0];
-  assert.ok(provider);
-  const items = await provider.query({
-    context: {},
-    keyword: "weather",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const provider = getProvider(service, "workspace-app");
+  const items = await queryProvider(provider, "weather");
 
   assert.deepEqual(listCalls, ["workspace-1"]);
   assert.deepEqual(items, [
@@ -987,11 +916,15 @@ test("desktop rich text @ service assembles workspace app providers from mention
       commandSummaries: ["Get a forecast", "List weather alerts"],
       displayName: "Weather Desk",
       iconUrl: "data:image/png;base64,weather",
-      referencesListSupported: false,
+      referencesListSupported: true,
       scopes: ["weather"],
       workspaceId: "workspace-1"
     }
   ]);
+  assert.equal(
+    provider.getItemSubtitle?.(items[0]),
+    "Plan weather-sensitive work."
+  );
   assert.deepEqual(provider.toInsertResult(items[0]), {
     kind: "mention",
     mention: {
@@ -1000,6 +933,7 @@ test("desktop rich text @ service assembles workspace app providers from mention
       presentation: {
         description: "Plan weather-sensitive work.",
         iconUrl: "data:image/png;base64,weather",
+        referencesListSupported: "true",
         subtitle: "Plan weather-sensitive work."
       },
       scope: {
@@ -1011,56 +945,31 @@ test("desktop rich text @ service assembles workspace app providers from mention
 
 test("desktop rich text @ service excludes legacy provider agent pseudo apps from workspace app mentions", async () => {
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceAppMentionCandidates(workspaceId: string) {
         return {
           workspaceId,
           apps: [
             createWorkspaceAppMentionCandidate({
               appId: "agent-codex",
-              commandCount: 1,
-              commandDescriptions: [
-                "Start a Codex agent session in the current workspace."
-              ],
-              commandPaths: ["codex start"],
-              commandSummaries: ["Start a Codex agent session"],
               description:
                 "Start a Codex agent session in the current workspace.",
-              displayName: "Codex",
-              scopes: ["codex"]
+              displayName: "Codex"
             }),
             createWorkspaceAppMentionCandidate({
               appId: "agent-claude-code",
-              commandCount: 1,
-              commandDescriptions: [
-                "Start a Claude Code agent session in the current workspace."
-              ],
-              commandPaths: ["claude start"],
-              commandSummaries: ["Start a Claude Code agent session"],
               description:
                 "Start a Claude Code agent session in the current workspace.",
-              displayName: "Claude Code",
-              scopes: ["claude"]
+              displayName: "Claude Code"
             })
           ]
         };
       }
-    } as unknown as TuttidClient
+    })
   });
 
-  const [provider] = service.getProviders({
-    capabilities: ["workspace-app"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-  assert.ok(provider);
-  const items = await provider.query({
-    context: {},
-    keyword: "",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const provider = getProvider(service, "workspace-app");
+  const items = await queryProvider(provider);
 
   assert.deepEqual(items, []);
 });
@@ -1089,22 +998,11 @@ test("desktop rich text @ service assembles agent target mentions", async () => 
   ];
   const service = new DesktopRichTextAtService({
     agentsService: createAgentsService(targets),
-    tuttidClient: {} as unknown as TuttidClient
+    tuttidClient: createTuttidClient()
   });
 
-  const [provider] = service.getProviders({
-    capabilities: ["agent-target"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-  assert.ok(provider);
-  const items = await provider.query({
-    context: {},
-    keyword: "",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const provider = getProvider(service, "agent-target");
+  const items = await queryProvider(provider);
 
   assert.deepEqual(
     items.map((item) => provider.getItemKey(item)),
@@ -1144,22 +1042,11 @@ test("desktop rich text @ service includes ready open-provider extension targets
   ];
   const service = new DesktopRichTextAtService({
     agentsService: createAgentsService(targets),
-    tuttidClient: {} as unknown as TuttidClient
+    tuttidClient: createTuttidClient()
   });
 
-  const [provider] = service.getProviders({
-    capabilities: ["agent-target"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-  assert.ok(provider);
-  const items = await provider.query({
-    context: {},
-    keyword: "gemini",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const provider = getProvider(service, "agent-target");
+  const items = await queryProvider(provider, "gemini");
 
   assert.equal(items.length, 1);
   assert.equal(provider.getItemKey(items[0]), "extension:gemini");
@@ -1199,7 +1086,7 @@ test("desktop rich text @ service hides agent target mentions using cached provi
   ];
   const service = new DesktopRichTextAtService({
     agentsService: createAgentsService(targets),
-    tuttidClient: {} as unknown as TuttidClient,
+    tuttidClient: createTuttidClient(),
     agentProviderStatuses: () => [
       createAgentProviderStatus({
         availability: "ready",
@@ -1212,19 +1099,8 @@ test("desktop rich text @ service hides agent target mentions using cached provi
     ]
   });
 
-  const [provider] = service.getProviders({
-    capabilities: ["agent-target"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-  assert.ok(provider);
-  const items = await provider.query({
-    context: {},
-    keyword: "",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const provider = getProvider(service, "agent-target");
+  const items = await queryProvider(provider);
 
   assert.deepEqual(
     items.map((item) => provider.getItemKey(item)),
@@ -1232,52 +1108,9 @@ test("desktop rich text @ service hides agent target mentions using cached provi
   );
 });
 
-test("desktop rich text @ service keeps explicit workspace app queries scoped to apps", async () => {
-  const service = new DesktopRichTextAtService({
-    tuttidClient: {
-      async listWorkspaceAppMentionCandidates(workspaceId: string) {
-        return {
-          workspaceId,
-          apps: [
-            createWorkspaceAppMentionCandidate({
-              appId: "automation",
-              commandCount: 1,
-              description: "Manage automations.",
-              displayName: "Automation",
-              scopes: ["automation"]
-            })
-          ]
-        };
-      }
-    } as unknown as TuttidClient
-  });
-
-  const providers = service.getProviders({
-    capabilities: ["workspace-app"],
-    surface: "workspace-app-external",
-    target: "workspace-app",
-    workspaceId: "workspace-1"
-  });
-
-  assert.deepEqual(
-    providers.map((provider) => provider.id),
-    ["workspace-app"]
-  );
-  const items = await providers[0]!.query({
-    context: {},
-    keyword: "",
-    maxResults: 5,
-    trigger: "@"
-  });
-  assert.deepEqual(
-    items.map((item) => providers[0]!.getItemKey(item)),
-    ["automation"]
-  );
-});
-
 test("desktop rich text @ service uses task icon fallback for issue manager app mentions", async () => {
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceAppMentionCandidates(workspaceId: string) {
         return {
           workspaceId,
@@ -1295,22 +1128,11 @@ test("desktop rich text @ service uses task icon fallback for issue manager app 
           ]
         };
       }
-    } as unknown as TuttidClient
+    })
   });
 
-  const [provider] = service.getProviders({
-    capabilities: ["workspace-app"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-  assert.ok(provider);
-  const items = await provider.query({
-    context: {},
-    keyword: "task",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const provider = getProvider(service, "workspace-app");
+  const items = await queryProvider(provider, "task");
 
   assert.deepEqual(items, [
     {
@@ -1350,50 +1172,32 @@ test("desktop rich text @ service uses task icon fallback for issue manager app 
 
 test("desktop rich text @ service hides issue manager app mentions from issue manager", async () => {
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceAppMentionCandidates(workspaceId: string) {
         return {
           workspaceId,
           apps: [
             createWorkspaceAppMentionCandidate({
               appId: "issue-manager",
-              commandCount: 1,
-              commandDescriptions: ["List workspace tasks."],
-              commandPaths: ["issue list"],
-              commandSummaries: ["List tasks"],
               description: "Manage workspace tasks and runs.",
-              displayName: "Task Manager",
-              scopes: ["issue"]
+              displayName: "Task Manager"
             }),
             createWorkspaceAppMentionCandidate({
               appId: "app-weather",
-              commandCount: 1,
-              commandDescriptions: ["Inspect weather forecasts."],
-              commandPaths: ["weather forecast"],
-              commandSummaries: ["Get a forecast"],
               description: "Plan weather-sensitive work.",
-              displayName: "Weather Desk",
-              scopes: ["weather"]
+              displayName: "Weather Desk"
             })
           ]
         };
       }
-    } as unknown as TuttidClient
+    })
   });
 
-  const [provider] = service.getProviders({
-    capabilities: ["workspace-app"],
+  const provider = getProvider(service, "workspace-app", {
     surface: "task",
-    target: "issue-manager",
-    workspaceId: "workspace-1"
+    target: "issue-manager"
   });
-  assert.ok(provider);
-  const items = await provider.query({
-    context: {},
-    keyword: "",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const items = await queryProvider(provider);
 
   assert.deepEqual(
     items.map((item) => provider.getItemKey(item)),
@@ -1532,110 +1336,38 @@ function createAgentProviderStatus(input: {
   };
 }
 
-test("desktop rich text @ service uses mention candidate description for workspace app mentions", async () => {
-  const service = new DesktopRichTextAtService({
-    tuttidClient: {
-      async listWorkspaceAppMentionCandidates(workspaceId: string) {
-        return {
-          workspaceId,
-          apps: [
-            createWorkspaceAppMentionCandidate({
-              appId: "automation",
-              commandCount: 1,
-              commandPaths: ["automation list"],
-              commandSummaries: ["List automations"],
-              description: "Schedule and review recurring automation runs.",
-              displayName: "Automation",
-              scopes: ["automation"]
-            })
-          ]
-        };
-      }
-    } as unknown as TuttidClient
-  });
-
-  const [provider] = service.getProviders({
-    capabilities: ["workspace-app"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-  assert.ok(provider);
-  const items = await provider.query({
-    context: {},
-    keyword: "automation",
-    maxResults: 5,
-    trigger: "@"
-  });
-
-  const item = items[0] as
-    | { description: string; displayName: string }
-    | undefined;
-  assert.ok(item);
-  assert.equal(item.displayName, "Automation");
-  assert.equal(
-    item.description,
-    "Schedule and review recurring automation runs."
-  );
-  assert.equal(
-    provider.getItemSubtitle?.(item),
-    "Schedule and review recurring automation runs."
-  );
-});
-
 test("desktop rich text @ service only matches workspace app display names", async () => {
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceAppMentionCandidates(workspaceId: string) {
         return {
           workspaceId,
           apps: [
             createWorkspaceAppMentionCandidate({
               appId: "scheduler-core",
-              commandCount: 1,
-              commandDescriptions: ["List automation definitions."],
-              commandPaths: ["automation list"],
-              commandSummaries: ["List automations"],
               description: "Review recurring schedules.",
-              displayName: "Automation",
-              scopes: ["schedule"]
+              displayName: "Automation"
             })
           ]
         };
       }
-    } as unknown as TuttidClient
+    })
   });
 
-  const [provider] = service.getProviders({
-    capabilities: ["workspace-app"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-  assert.ok(provider);
+  const provider = getProvider(service, "workspace-app");
   for (const keyword of ["scheduler", "recurring", "automations", "schedule"]) {
-    const items = await provider.query({
-      context: {},
-      keyword,
-      maxResults: 5,
-      trigger: "@"
-    });
+    const items = await queryProvider(provider, keyword);
     assert.deepEqual(items, []);
   }
 
-  const items = await provider.query({
-    context: {},
-    keyword: "automation",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const items = await queryProvider(provider, "automation");
   assert.equal(items.length, 1);
   assert.equal((items[0] as { displayName: string }).displayName, "Automation");
 });
 
-test("desktop rich text @ service emits enriched app + session meta when enrichment deps supplied", async () => {
+test("desktop rich text @ service localizes workspace app presentation", async () => {
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceAppMentionCandidates(workspaceId: string) {
         return {
           workspaceId,
@@ -1661,93 +1393,13 @@ test("desktop rich text @ service emits enriched app + session meta when enrichm
             })
           ]
         };
-      },
-      async listWorkspaceAgentSessions(workspaceId: string) {
-        return {
-          hasMore: false,
-          workspaceId,
-          sessions: [
-            {
-              activeTurnId: "turn-1",
-              latestTurnInteractions: [],
-              pendingInteractions: [],
-              activeTurn: {
-                agentSessionId: "session-1",
-                completedCommand: null,
-                error: null,
-                fileChanges: null,
-                outcome: null,
-                phase: "running",
-                settledAtUnixMs: null,
-                startedAtUnixMs: 1780272000000,
-                turnId: "turn-1",
-                updatedAtUnixMs: 1780272000000
-              },
-              agentTargetId: "local:codex",
-              createdAtUnixMs: 1780272000000,
-              cwd: null,
-              id: "session-1",
-              provider: "codex",
-              title: "Codex run",
-              updatedAtUnixMs: 1780272000000
-            }
-          ]
-        };
-      },
-      async getWorkspaceAgentSession(workspaceId: string, id: string) {
-        return {
-          session: {
-            activeTurnId: "turn-1",
-            latestTurnInteractions: [],
-            pendingInteractions: [],
-            activeTurn: {
-              agentSessionId: id,
-              completedCommand: null,
-              error: null,
-              fileChanges: null,
-              outcome: null,
-              phase: "running",
-              settledAtUnixMs: null,
-              startedAtUnixMs: 1780272000000,
-              turnId: "turn-1",
-              updatedAtUnixMs: 1780272000000
-            },
-            createdAtUnixMs: 1780272000000,
-            cwd: null,
-            id,
-            provider: "codex",
-            title: "Codex run",
-            updatedAtUnixMs: 1780272000000,
-            workspaceId
-          },
-          childSessions: [],
-          turns: []
-        };
       }
-    } as unknown as TuttidClient,
-    getLocale: () => "fr-FR",
-    resolveAgentIconUrl: (provider) => `https://agents/${provider}.png`,
-    userAvatarPlaceholderUrl: "https://avatars/placeholder.png",
-    resolveSessionStatusView: (status) => ({
-      dataStatus: status,
-      label: status === "working" ? "Working" : status,
-      pulse: status === "working"
-    })
+    }),
+    getLocale: () => "fr-FR"
   });
 
-  const [appProvider] = service.getProviders({
-    capabilities: ["workspace-app"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-  assert.ok(appProvider);
-  const appItems = await appProvider.query({
-    context: {},
-    keyword: "",
-    maxResults: 5,
-    trigger: "@"
-  });
+  const appProvider = getProvider(service, "workspace-app");
+  const appItems = await queryProvider(appProvider);
   const appInsert = appProvider.toInsertResult(appItems[0]);
   assert.equal(appInsert.kind, "mention");
   assert.equal(appInsert.mention.label, "Bureau Météo");
@@ -1759,64 +1411,11 @@ test("desktop rich text @ service emits enriched app + session meta when enrichm
     appInsert.mention.presentation?.iconUrl,
     "https://icons/weather.png"
   );
-
-  const [sessionProvider] = service.getProviders({
-    capabilities: ["agent-session"],
-    surface: "agent-composer",
-    target: "agent-gui",
-    workspaceId: "workspace-1"
-  });
-  assert.ok(sessionProvider);
-  const sessionItems = await sessionProvider.query({
-    context: {},
-    keyword: "",
-    maxResults: 5,
-    trigger: "@"
-  });
-  const sessionInsert = sessionProvider.toInsertResult(sessionItems[0]);
-  assert.equal(sessionInsert.kind, "mention");
-  assert.equal(sessionInsert.mention.scope?.agentTargetId, "local:codex");
-  assert.equal(
-    sessionInsert.mention.presentation?.iconUrl,
-    "https://agents/codex.png"
-  );
-  assert.equal(
-    sessionInsert.mention.presentation?.agentIconUrl,
-    "https://agents/codex.png"
-  );
-  assert.equal(
-    sessionInsert.mention.presentation?.userAvatarPlaceholderUrl,
-    "https://avatars/placeholder.png"
-  );
-  assert.equal(sessionInsert.mention.presentation?.statusLabel, "Working");
-  assert.equal(sessionInsert.mention.presentation?.statusDataStatus, "working");
-  assert.equal(sessionInsert.mention.presentation?.statusPulse, "true");
-  const sessionResolved = await sessionProvider.resolveMention?.({
-    entityId: "session-1",
-    label: "Codex run",
-    providerId: "agent-session",
-    scope: {
-      workspaceId: "workspace-1"
-    }
-  });
-  assert.equal(
-    sessionResolved?.presentation?.iconUrl,
-    "https://agents/codex.png"
-  );
-  assert.equal(
-    sessionResolved?.presentation?.agentIconUrl,
-    "https://agents/codex.png"
-  );
-  assert.equal(
-    sessionResolved?.presentation?.userAvatarPlaceholderUrl,
-    "https://avatars/placeholder.png"
-  );
-  assert.equal(sessionResolved?.presentation?.statusLabel, "Working");
 });
 
 test("desktop rich text @ service returns no providers without requested capabilities", () => {
   const service = new DesktopRichTextAtService({
-    tuttidClient: {} as TuttidClient
+    tuttidClient: createTuttidClient()
   });
 
   const providers = service.getProviders({
@@ -1831,7 +1430,7 @@ test("desktop rich text @ service returns no providers without requested capabil
 
 test("desktop rich text @ service reuses provider instances for the same request", () => {
   const service = new DesktopRichTextAtService({
-    tuttidClient: {} as TuttidClient
+    tuttidClient: createTuttidClient()
   });
 
   const firstProviders = service.getProviders({
@@ -1853,7 +1452,7 @@ test("desktop rich text @ service reuses provider instances for the same request
 
 test("desktop rich text @ service enriches cached agent session providers", async () => {
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async listWorkspaceAgentSessions(workspaceId: string) {
         return {
           hasMore: false,
@@ -1874,7 +1473,7 @@ test("desktop rich text @ service enriches cached agent session providers", asyn
           ]
         };
       }
-    } as unknown as TuttidClient,
+    }),
     resolveAgentIconUrl: (provider) => `https://agents/${provider}.png`,
     userAvatarPlaceholderUrl: "https://avatars/placeholder.png",
     resolveSessionStatusView: (status) => ({
@@ -1910,7 +1509,7 @@ test("desktop rich text @ service enriches cached agent session providers", asyn
 test("desktop rich text @ service honors abort before provider search starts", async () => {
   let searchCallCount = 0;
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async searchWorkspaceFiles() {
         searchCallCount += 1;
         return {
@@ -1919,7 +1518,7 @@ test("desktop rich text @ service honors abort before provider search starts", a
           workspaceID: "workspace-1"
         };
       }
-    } as unknown as TuttidClient
+    })
   });
 
   const [provider] = service.getProviders({
@@ -1947,7 +1546,7 @@ test("desktop rich text @ service honors abort before provider search starts", a
 test("desktop rich text @ service passes abort signals through to tuttid search", async () => {
   let receivedSignal: AbortSignal | undefined;
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
+    tuttidClient: createTuttidClient({
       async searchWorkspaceFiles(
         _workspaceId: string,
         _input: { limit?: number; query: string },
@@ -1960,7 +1559,7 @@ test("desktop rich text @ service passes abort signals through to tuttid search"
           workspaceID: "workspace-1"
         };
       }
-    } as unknown as TuttidClient
+    })
   });
 
   const [provider] = service.getProviders({
@@ -1985,7 +1584,7 @@ test("desktop rich text @ service passes abort signals through to tuttid search"
 
 test("desktop rich text @ service skips provider caching when metadata is present", () => {
   const service = new DesktopRichTextAtService({
-    tuttidClient: {} as TuttidClient
+    tuttidClient: createTuttidClient()
   });
 
   const firstProviders = service.getProviders({

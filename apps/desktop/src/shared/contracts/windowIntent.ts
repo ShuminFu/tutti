@@ -295,6 +295,9 @@ function normalizeAgentTarget(
       enabled: target.enabled,
       iconKey: readTrimmedString(target.iconKey),
       iconUrl: typeof target.iconUrl === "string" ? target.iconUrl : "",
+      maskIconUrl: readTrimmedString(target.maskIconUrl),
+      sidebarIconUrl: readTrimmedString(target.sidebarIconUrl),
+      heroImageUrl: readTrimmedString(target.heroImageUrl),
       availability: readAgentAvailability(target.availability),
       launchRefType:
         launchRefType as DesktopAgentTargetPresentation["launchRefType"],
@@ -356,6 +359,9 @@ function normalizeAgentWindowAgent(value: unknown): AgentGUIAgent[] {
   const name = readTrimmedString(agent.name);
   const description = readTrimmedString(agent.description);
   const iconUrl = readTrimmedString(agent.iconUrl);
+  const maskIconUrl = readTrimmedString(agent.maskIconUrl);
+  const sidebarIconUrl = readTrimmedString(agent.sidebarIconUrl);
+  const heroImageUrl = readTrimmedString(agent.heroImageUrl);
   const provider = readTrimmedString(agent.provider) as AgentGUIProvider | null;
   const availability = normalizeAgentWindowAvailability(agent.availability);
   if (!agentTargetId || !name || !iconUrl || !provider || !availability) {
@@ -372,7 +378,10 @@ function normalizeAgentWindowAgent(value: unknown): AgentGUIAgent[] {
       iconUrl,
       provider,
       availability,
+      ...(maskIconUrl ? { maskIconUrl } : {}),
       ...(description ? { description } : {}),
+      ...(sidebarIconUrl ? { sidebarIconUrl } : {}),
+      ...(heroImageUrl ? { heroImageUrl } : {}),
       ...(ownerName || ownerAvatarUrl
         ? {
             owner: {

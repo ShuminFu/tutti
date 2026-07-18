@@ -177,8 +177,8 @@ export function createWorkspaceAgentGuiContribution(input: {
         agentGUIWorkbenchHostInput.trackWorkspaceFileReferences,
       workspaceFileReferenceAdapter:
         agentGUIWorkbenchHostInput.workspaceFileReferenceAdapter,
-      resolveDroppedFileReferences:
-        agentGUIWorkbenchHostInput.resolveDroppedFileReferences,
+      prepareExternalPromptFiles:
+        agentGUIWorkbenchHostInput.prepareExternalPromptFiles,
       onRequestGitBranches: agentGUIWorkbenchHostInput.onRequestGitBranches,
       referenceSourceAggregator:
         agentGUIWorkbenchHostInput.referenceSourceAggregator,

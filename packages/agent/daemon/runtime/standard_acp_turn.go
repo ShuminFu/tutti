@@ -90,7 +90,7 @@ execLoop:
 			"sessionId": acpSession.providerSessionID,
 			"prompt":    promptParams,
 		}, func(ctx context.Context, message acpMessage) error {
-			slog.Info("agent session ACP exec received message",
+			slog.Debug("agent session ACP exec received message",
 				"event", "agent_session.acp.exec.message",
 				"provider", a.config.provider,
 				"adapter", a.config.adapterName,
@@ -102,19 +102,21 @@ execLoop:
 				"message_id", rawMessageLogValue(message.ID),
 			)
 			next, err := a.handleACPMessage(ctx, acpSession.client, session, turnID, message, normalizer, emitEvents, emitCommands)
-			slog.Info("agent session ACP exec handled message",
-				"event", "agent_session.acp.exec.message_handled",
-				"provider", a.config.provider,
-				"adapter", a.config.adapterName,
-				"room_id", session.RoomID,
-				"agent_session_id", session.AgentSessionID,
-				"provider_session_id", session.ProviderSessionID,
-				"turn_id", turnID,
-				"message_method", message.Method,
-				"event_count", len(next),
-				"event_type_counts", activityEventTypeCounts(next),
-				"error", errString(err),
-			)
+			if slog.Default().Enabled(ctx, slog.LevelDebug) {
+				slog.Debug("agent session ACP exec handled message",
+					"event", "agent_session.acp.exec.message_handled",
+					"provider", a.config.provider,
+					"adapter", a.config.adapterName,
+					"room_id", session.RoomID,
+					"agent_session_id", session.AgentSessionID,
+					"provider_session_id", session.ProviderSessionID,
+					"turn_id", turnID,
+					"message_method", message.Method,
+					"event_count", len(next),
+					"event_type_counts", activityEventTypeCounts(next),
+					"error", errString(err),
+				)
+			}
 			emitEvents(next)
 			if err != nil {
 				return err
@@ -361,10 +363,7 @@ func (a *standardACPAdapter) SubmitInteractive(ctx context.Context, session Sess
 		return SubmitInteractiveResult{}, fmt.Errorf("%w: %q", ErrInteractiveRequestNotLive, requestID)
 	}
 	if pending.callType == "approval" {
-		optionID := strings.TrimSpace(input.OptionID)
-		if optionID == "" && input.Payload != nil {
-			optionID = strings.TrimSpace(asString(input.Payload["optionId"]))
-		}
+		optionID := interactiveApprovalOptionID(input)
 		if optionID == "" {
 			return SubmitInteractiveResult{}, errors.New("interactive option id is required")
 		}

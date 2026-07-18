@@ -35,16 +35,9 @@ import {
 } from "./agentGuiController.draftMessageHelpers";
 import { unresolvedOptimisticGoalControl } from "./agentGuiOptimisticGoal";
 import { isNonRetryableResumeErrorCode } from "./agentGuiController.errors";
-import {
-  normalizeOptionalText,
-  projectAgentGUIMessagesToTimelineItems
-} from "./agentGuiController.promptHelpers";
+import { projectAgentGUIMessagesToTimelineItems } from "./agentGuiController.promptHelpers";
 import { promptRequestId } from "./agentGuiController.diagnostics";
 import { reportAgentGUIRenderStateDiagnostic } from "./agentGuiController.reporting";
-import {
-  maxFiniteMessageVersion,
-  minFiniteMessageVersion
-} from "./useAgentConversationMessagePaging";
 
 interface CurrentValue<T> {
   current: T;
@@ -78,7 +71,6 @@ interface UseAgentGUISessionPresentationInput {
   isLoadingMessages: boolean;
   isRespondingToInteraction: boolean;
   isSubmitting: boolean;
-  lastActiveModelByProviderRef: CurrentValue<Record<string, string>>;
   lastRenderStateDiagnosticKeyRef: CurrentValue<string | null>;
   pendingApproval: AgentApprovalItemVM | null;
   planImplementationTurnIdRef: CurrentValue<string | null>;
@@ -134,27 +126,6 @@ export function useAgentGUISessionPresentation(
       : null;
   const pendingInteractivePrompt =
     input.serverInteractivePrompt ?? planImplementationPrompt;
-
-  useEffect(() => {
-    const provider = normalizeOptionalText(
-      input.activeEngineSession?.provider ?? input.activeConversation?.provider
-    );
-    if (provider === null) return;
-    const model =
-      normalizeOptionalText(input.activeSessionState?.settings?.model) ??
-      normalizeOptionalText(input.activeEngineSession?.settings?.model);
-    if (model === null) return;
-    input.lastActiveModelByProviderRef.current = {
-      ...input.lastActiveModelByProviderRef.current,
-      [provider]: model
-    };
-  }, [
-    input.activeConversation?.provider,
-    input.activeEngineSession?.provider,
-    input.activeEngineSession?.settings?.model,
-    input.activeSessionState?.settings?.model,
-    input.lastActiveModelByProviderRef
-  ]);
 
   const activeHasPendingSubmittedTurn = Boolean(
     input.activeConversationId && input.activeLatestPendingSubmitTurnId
@@ -288,8 +259,6 @@ export function useAgentGUISessionPresentation(
   );
 
   useEffect(() => {
-    const firstVersion = minFiniteMessageVersion(input.activeMessages);
-    const lastVersion = maxFiniteMessageVersion(input.activeMessages);
     const diagnosticKey = [
       input.activeConversationId ?? "",
       input.activeConversation?.status ?? "",
@@ -308,10 +277,7 @@ export function useAgentGUISessionPresentation(
       activeSubmitBlocked ? "submit-blocked" : "submit-open",
       input.pendingApproval?.requestId ?? "",
       promptRequestId(pendingInteractivePrompt) ?? "",
-      input.conversation?.rows.length ?? "",
-      input.conversation?.sourceDetail.turns.length ?? "",
-      firstVersion ?? "",
-      lastVersion ?? "",
+      input.conversation?.activity.status ?? "",
       input.isCreatingConversation ? "creating" : "",
       input.isLoadingMessages ? "loading-messages" : "",
       input.isSubmitting ? "submitting" : "",
@@ -347,7 +313,6 @@ export function useAgentGUISessionPresentation(
     activeSubmitBlocked,
     canQueueWhileBusy,
     canSubmit,
-    hasSentUserMessage,
     input.activeConversation,
     input.activeConversationId,
     input.activeEngineActiveTurn,
@@ -355,7 +320,6 @@ export function useAgentGUISessionPresentation(
     input.activeEngineLatestTurn,
     input.activeEngineSession,
     input.activeLiveState,
-    input.activeMessages,
     input.activeSessionState,
     input.activityDisplayStatus,
     input.agentActivityRuntime,

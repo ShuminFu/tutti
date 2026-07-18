@@ -460,6 +460,153 @@ func (e AgentTargetExtensionLaunchRefType) Valid() bool {
 	}
 }
 
+// Defines values for AgentTargetInstallPlanRunner.
+const (
+	Npm  AgentTargetInstallPlanRunner = "npm"
+	Pnpm AgentTargetInstallPlanRunner = "pnpm"
+	Uv   AgentTargetInstallPlanRunner = "uv"
+)
+
+// Valid indicates whether the value is a known member of the AgentTargetInstallPlanRunner enum.
+func (e AgentTargetInstallPlanRunner) Valid() bool {
+	switch e {
+	case Npm:
+		return true
+	case Pnpm:
+		return true
+	case Uv:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentTargetRuntimeSource.
+const (
+	AgentTargetRuntimeSourceLocal   AgentTargetRuntimeSource = "local"
+	AgentTargetRuntimeSourceManaged AgentTargetRuntimeSource = "managed"
+)
+
+// Valid indicates whether the value is a known member of the AgentTargetRuntimeSource enum.
+func (e AgentTargetRuntimeSource) Valid() bool {
+	switch e {
+	case AgentTargetRuntimeSourceLocal:
+		return true
+	case AgentTargetRuntimeSourceManaged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentTargetSetupActionKind.
+const (
+	AgentTargetSetupActionKindAuthenticate AgentTargetSetupActionKind = "authenticate"
+	AgentTargetSetupActionKindInstall      AgentTargetSetupActionKind = "install"
+)
+
+// Valid indicates whether the value is a known member of the AgentTargetSetupActionKind enum.
+func (e AgentTargetSetupActionKind) Valid() bool {
+	switch e {
+	case AgentTargetSetupActionKindAuthenticate:
+		return true
+	case AgentTargetSetupActionKindInstall:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentTargetSetupActionPhase.
+const (
+	AgentTargetSetupActionPhaseActivating     AgentTargetSetupActionPhase = "activating"
+	AgentTargetSetupActionPhaseAuthenticating AgentTargetSetupActionPhase = "authenticating"
+	AgentTargetSetupActionPhaseComplete       AgentTargetSetupActionPhase = "complete"
+	AgentTargetSetupActionPhaseInstalling     AgentTargetSetupActionPhase = "installing"
+	AgentTargetSetupActionPhasePreparing      AgentTargetSetupActionPhase = "preparing"
+	AgentTargetSetupActionPhaseProbing        AgentTargetSetupActionPhase = "probing"
+	AgentTargetSetupActionPhaseVerifying      AgentTargetSetupActionPhase = "verifying"
+)
+
+// Valid indicates whether the value is a known member of the AgentTargetSetupActionPhase enum.
+func (e AgentTargetSetupActionPhase) Valid() bool {
+	switch e {
+	case AgentTargetSetupActionPhaseActivating:
+		return true
+	case AgentTargetSetupActionPhaseAuthenticating:
+		return true
+	case AgentTargetSetupActionPhaseComplete:
+		return true
+	case AgentTargetSetupActionPhaseInstalling:
+		return true
+	case AgentTargetSetupActionPhasePreparing:
+		return true
+	case AgentTargetSetupActionPhaseProbing:
+		return true
+	case AgentTargetSetupActionPhaseVerifying:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentTargetSetupActionStatus.
+const (
+	AgentTargetSetupActionStatusFailed      AgentTargetSetupActionStatus = "failed"
+	AgentTargetSetupActionStatusInterrupted AgentTargetSetupActionStatus = "interrupted"
+	AgentTargetSetupActionStatusQueued      AgentTargetSetupActionStatus = "queued"
+	AgentTargetSetupActionStatusRunning     AgentTargetSetupActionStatus = "running"
+	AgentTargetSetupActionStatusSucceeded   AgentTargetSetupActionStatus = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the AgentTargetSetupActionStatus enum.
+func (e AgentTargetSetupActionStatus) Valid() bool {
+	switch e {
+	case AgentTargetSetupActionStatusFailed:
+		return true
+	case AgentTargetSetupActionStatusInterrupted:
+		return true
+	case AgentTargetSetupActionStatusQueued:
+		return true
+	case AgentTargetSetupActionStatusRunning:
+		return true
+	case AgentTargetSetupActionStatusSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentTargetSetupStatus.
+const (
+	AgentTargetSetupStatusAuthRequired   AgentTargetSetupStatus = "auth_required"
+	AgentTargetSetupStatusAuthenticating AgentTargetSetupStatus = "authenticating"
+	AgentTargetSetupStatusFailed         AgentTargetSetupStatus = "failed"
+	AgentTargetSetupStatusInstalling     AgentTargetSetupStatus = "installing"
+	AgentTargetSetupStatusNotInstalled   AgentTargetSetupStatus = "not_installed"
+	AgentTargetSetupStatusReady          AgentTargetSetupStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the AgentTargetSetupStatus enum.
+func (e AgentTargetSetupStatus) Valid() bool {
+	switch e {
+	case AgentTargetSetupStatusAuthRequired:
+		return true
+	case AgentTargetSetupStatusAuthenticating:
+		return true
+	case AgentTargetSetupStatusFailed:
+		return true
+	case AgentTargetSetupStatusInstalling:
+		return true
+	case AgentTargetSetupStatusNotInstalled:
+		return true
+	case AgentTargetSetupStatusReady:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentTargetSource.
 const (
 	AgentTargetSourceSystem AgentTargetSource = "system"
@@ -780,22 +927,22 @@ func (e DesktopDockPlacement) Valid() bool {
 
 // Defines values for DesktopFileDefaultOpener.
 const (
-	DesktopFileDefaultOpenerAppBrowser     DesktopFileDefaultOpener = "appBrowser"
-	DesktopFileDefaultOpenerDefaultBrowser DesktopFileDefaultOpener = "defaultBrowser"
-	DesktopFileDefaultOpenerFileViewer     DesktopFileDefaultOpener = "fileViewer"
-	DesktopFileDefaultOpenerSystem         DesktopFileDefaultOpener = "system"
+	AppBrowser     DesktopFileDefaultOpener = "appBrowser"
+	DefaultBrowser DesktopFileDefaultOpener = "defaultBrowser"
+	FileViewer     DesktopFileDefaultOpener = "fileViewer"
+	System         DesktopFileDefaultOpener = "system"
 )
 
 // Valid indicates whether the value is a known member of the DesktopFileDefaultOpener enum.
 func (e DesktopFileDefaultOpener) Valid() bool {
 	switch e {
-	case DesktopFileDefaultOpenerAppBrowser:
+	case AppBrowser:
 		return true
-	case DesktopFileDefaultOpenerDefaultBrowser:
+	case DefaultBrowser:
 		return true
-	case DesktopFileDefaultOpenerFileViewer:
+	case FileViewer:
 		return true
-	case DesktopFileDefaultOpenerSystem:
+	case System:
 		return true
 	default:
 		return false
@@ -1515,22 +1662,22 @@ func (e WorkspaceAgentTurnCancelResultReason) Valid() bool {
 
 // Defines values for WorkspaceAgentTurnOutcome.
 const (
-	Canceled    WorkspaceAgentTurnOutcome = "canceled"
-	Completed   WorkspaceAgentTurnOutcome = "completed"
-	Failed      WorkspaceAgentTurnOutcome = "failed"
-	Interrupted WorkspaceAgentTurnOutcome = "interrupted"
+	WorkspaceAgentTurnOutcomeCanceled    WorkspaceAgentTurnOutcome = "canceled"
+	WorkspaceAgentTurnOutcomeCompleted   WorkspaceAgentTurnOutcome = "completed"
+	WorkspaceAgentTurnOutcomeFailed      WorkspaceAgentTurnOutcome = "failed"
+	WorkspaceAgentTurnOutcomeInterrupted WorkspaceAgentTurnOutcome = "interrupted"
 )
 
 // Valid indicates whether the value is a known member of the WorkspaceAgentTurnOutcome enum.
 func (e WorkspaceAgentTurnOutcome) Valid() bool {
 	switch e {
-	case Canceled:
+	case WorkspaceAgentTurnOutcomeCanceled:
 		return true
-	case Completed:
+	case WorkspaceAgentTurnOutcomeCompleted:
 		return true
-	case Failed:
+	case WorkspaceAgentTurnOutcomeFailed:
 		return true
-	case Interrupted:
+	case WorkspaceAgentTurnOutcomeInterrupted:
 		return true
 	default:
 		return false
@@ -2340,6 +2487,13 @@ type AgentProviderComposerBehavior struct {
 	RefreshModelOptionsAfterSettings    bool `json:"refreshModelOptionsAfterSettings"`
 }
 
+// AgentProviderComposerCommandOption defines model for AgentProviderComposerCommandOption.
+type AgentProviderComposerCommandOption struct {
+	Description *string `json:"description,omitempty"`
+	InputHint   *string `json:"inputHint,omitempty"`
+	Name        string  `json:"name"`
+}
+
 // AgentProviderComposerConfig defines model for AgentProviderComposerConfig.
 type AgentProviderComposerConfig struct {
 	Configurable bool                                     `json:"configurable"`
@@ -2362,17 +2516,32 @@ type AgentProviderComposerOptionsResponse struct {
 	Behavior AgentProviderComposerBehavior `json:"behavior"`
 
 	// Capabilities Protocol v2 daemon-issued capability descriptor. Clients branch on these booleans instead of provider identity. Field names mirror the canonical capability keys in packages/agent/daemon/runtime/capabilities.go.
-	Capabilities       *WorkspaceAgentCapabilities     `json:"capabilities,omitempty"`
-	CapabilityCatalog  []AgentProviderCapabilityOption `json:"capabilityCatalog"`
-	EffectiveSettings  AgentSessionComposerSettings    `json:"effectiveSettings"`
-	ModelConfig        AgentProviderComposerConfig     `json:"modelConfig"`
-	PermissionConfig   PermissionConfig                `json:"permissionConfig"`
-	Provider           WorkspaceAgentProvider          `json:"provider"`
-	ReasoningConfig    AgentProviderComposerConfig     `json:"reasoningConfig"`
-	RuntimeContext     map[string]interface{}          `json:"runtimeContext"`
-	Skills             []AgentProviderSkillOption      `json:"skills"`
-	SlashCommandPolicy *AgentSlashCommandPolicy        `json:"slashCommandPolicy,omitempty"`
-	SpeedConfig        *AgentProviderComposerConfig    `json:"speedConfig,omitempty"`
+	Capabilities      *WorkspaceAgentCapabilities     `json:"capabilities,omitempty"`
+	CapabilityCatalog []AgentProviderCapabilityOption `json:"capabilityCatalog"`
+
+	// Commands Commands advertised by the resolved runtime session.
+	Commands                []AgentProviderComposerCommandOption         `json:"commands"`
+	EffectiveSettings       AgentSessionComposerSettings                 `json:"effectiveSettings"`
+	ModelConfig             AgentProviderComposerConfig                  `json:"modelConfig"`
+	PermissionConfig        PermissionConfig                             `json:"permissionConfig"`
+	Provider                WorkspaceAgentProvider                       `json:"provider"`
+	ReasoningConfig         AgentProviderComposerConfig                  `json:"reasoningConfig"`
+	ReasoningOptionsByModel AgentProviderComposerReasoningOptionsByModel `json:"reasoningOptionsByModel"`
+
+	// RuntimeContext Opaque provider runtime metadata retained for legacy and diagnostic consumers. Typed composer fields are authoritative; new composer capabilities must not be added to this object.
+	RuntimeContext     map[string]interface{}       `json:"runtimeContext"`
+	Skills             []AgentProviderSkillOption   `json:"skills"`
+	SlashCommandPolicy *AgentSlashCommandPolicy     `json:"slashCommandPolicy,omitempty"`
+	SpeedConfig        *AgentProviderComposerConfig `json:"speedConfig,omitempty"`
+}
+
+// AgentProviderComposerReasoningOptionsByModel defines model for AgentProviderComposerReasoningOptionsByModel.
+type AgentProviderComposerReasoningOptionsByModel map[string]AgentProviderComposerReasoningProfile
+
+// AgentProviderComposerReasoningProfile defines model for AgentProviderComposerReasoningProfile.
+type AgentProviderComposerReasoningProfile struct {
+	DefaultValue *string                                  `json:"defaultValue,omitempty"`
+	Options      []AgentProviderComposerConfigOptionValue `json:"options"`
 }
 
 // AgentProviderNetworkEndpoint defines model for AgentProviderNetworkEndpoint.
@@ -2497,9 +2666,25 @@ type AgentTarget struct {
 	LaunchRef       AgentTargetLaunchRef       `json:"launchRef"`
 	Name            string                     `json:"name"`
 	Provider        AgentTargetProvider        `json:"provider"`
+	SidebarIconUrl  *string                    `json:"sidebarIconUrl,omitempty"`
 	SortOrder       int                        `json:"sortOrder"`
 	Source          AgentTargetSource          `json:"source"`
 	UpdatedAtUnixMs int64                      `json:"updatedAtUnixMs"`
+}
+
+// AgentTargetAuthMethod defines model for AgentTargetAuthMethod.
+type AgentTargetAuthMethod struct {
+	Description *string `json:"description,omitempty"`
+	Id          string  `json:"id"`
+	Name        string  `json:"name"`
+}
+
+// AgentTargetAuthenticatedAccount defines model for AgentTargetAuthenticatedAccount.
+type AgentTargetAuthenticatedAccount struct {
+	AuthMethodId string  `json:"authMethodId"`
+	DisplayName  string  `json:"displayName"`
+	Id           string  `json:"id"`
+	Organization *string `json:"organization,omitempty"`
 }
 
 // AgentTargetBuiltinLocalLaunchRef defines model for AgentTargetBuiltinLocalLaunchRef.
@@ -2520,6 +2705,27 @@ type AgentTargetExtensionLaunchRef struct {
 // AgentTargetExtensionLaunchRefType defines model for AgentTargetExtensionLaunchRef.Type.
 type AgentTargetExtensionLaunchRefType string
 
+// AgentTargetInstallPlan defines model for AgentTargetInstallPlan.
+type AgentTargetInstallPlan struct {
+	AgentKey                string                       `json:"agentKey"`
+	AgentTargetId           string                       `json:"agentTargetId"`
+	Executable              string                       `json:"executable"`
+	ExtensionInstallationId string                       `json:"extensionInstallationId"`
+	ExtensionVersion        string                       `json:"extensionVersion"`
+	InstallCommand          []string                     `json:"installCommand"`
+	InstallRoot             string                       `json:"installRoot"`
+	LaunchArgs              []string                     `json:"launchArgs"`
+	PackageName             string                       `json:"packageName"`
+	PackageVersion          string                       `json:"packageVersion"`
+	PlanDigest              string                       `json:"planDigest"`
+	Platform                string                       `json:"platform"`
+	Runner                  AgentTargetInstallPlanRunner `json:"runner"`
+	RuntimeKind             string                       `json:"runtimeKind"`
+}
+
+// AgentTargetInstallPlanRunner defines model for AgentTargetInstallPlan.Runner.
+type AgentTargetInstallPlanRunner string
+
 // AgentTargetLaunchRef defines model for AgentTargetLaunchRef.
 type AgentTargetLaunchRef struct {
 	union json.RawMessage
@@ -2527,6 +2733,48 @@ type AgentTargetLaunchRef struct {
 
 // AgentTargetProvider defines model for AgentTargetProvider.
 type AgentTargetProvider = string
+
+// AgentTargetRuntimeSource defines model for AgentTargetRuntimeSource.
+type AgentTargetRuntimeSource string
+
+// AgentTargetSetupAction defines model for AgentTargetSetupAction.
+type AgentTargetSetupAction struct {
+	ActionId        string                       `json:"actionId"`
+	ClientActionId  string                       `json:"clientActionId"`
+	CreatedAtUnixMs int64                        `json:"createdAtUnixMs"`
+	ErrorCode       *string                      `json:"errorCode,omitempty"`
+	ErrorMessage    *string                      `json:"errorMessage,omitempty"`
+	Kind            AgentTargetSetupActionKind   `json:"kind"`
+	Phase           AgentTargetSetupActionPhase  `json:"phase"`
+	Status          AgentTargetSetupActionStatus `json:"status"`
+	UpdatedAtUnixMs int64                        `json:"updatedAtUnixMs"`
+}
+
+// AgentTargetSetupActionKind defines model for AgentTargetSetupActionKind.
+type AgentTargetSetupActionKind string
+
+// AgentTargetSetupActionPhase defines model for AgentTargetSetupActionPhase.
+type AgentTargetSetupActionPhase string
+
+// AgentTargetSetupActionStatus defines model for AgentTargetSetupActionStatus.
+type AgentTargetSetupActionStatus string
+
+// AgentTargetSetupSnapshot defines model for AgentTargetSetupSnapshot.
+type AgentTargetSetupSnapshot struct {
+	Account        *AgentTargetAuthenticatedAccount `json:"account"`
+	Action         *AgentTargetSetupAction          `json:"action"`
+	AgentTargetId  string                           `json:"agentTargetId"`
+	AuthMethods    []AgentTargetAuthMethod          `json:"authMethods"`
+	Plan           *AgentTargetInstallPlan          `json:"plan"`
+	Reason         *string                          `json:"reason"`
+	RuntimeSource  *AgentTargetRuntimeSource        `json:"runtimeSource"`
+	RuntimeVersion *string                          `json:"runtimeVersion"`
+	Status         AgentTargetSetupStatus           `json:"status"`
+	WorkspaceId    string                           `json:"workspaceId"`
+}
+
+// AgentTargetSetupStatus defines model for AgentTargetSetupStatus.
+type AgentTargetSetupStatus string
 
 // AgentTargetSource defines model for AgentTargetSource.
 type AgentTargetSource string
@@ -2651,6 +2899,12 @@ type AppReferenceSearchResponse struct {
 	Items       []AppReferenceListReferenceItem `json:"items"`
 	NextCursor  *string                         `json:"nextCursor"`
 	WorkspaceId string                          `json:"workspaceId"`
+}
+
+// AuthenticateAgentTargetRuntimeRequest defines model for AuthenticateAgentTargetRuntimeRequest.
+type AuthenticateAgentTargetRuntimeRequest struct {
+	ClientActionId string `json:"clientActionId"`
+	MethodId       string `json:"methodId"`
 }
 
 // CheckUserProjectPathRequest defines model for CheckUserProjectPathRequest.
@@ -3253,6 +3507,12 @@ type ImportWorkspaceAppRequest struct {
 	ArchivePath string `json:"archivePath"`
 }
 
+// InstallAgentTargetRuntimeRequest defines model for InstallAgentTargetRuntimeRequest.
+type InstallAgentTargetRuntimeRequest struct {
+	ClientActionId string `json:"clientActionId"`
+	PlanDigest     string `json:"planDigest"`
+}
+
 // InstallWorkspaceAppRequest defines model for InstallWorkspaceAppRequest.
 type InstallWorkspaceAppRequest struct {
 	// RestartRunning Restart the app runtime after installing if it is already running.
@@ -3535,6 +3795,12 @@ type LoadLocalWorkspaceAppRequest struct {
 	SourceDir      string `json:"sourceDir"`
 }
 
+// MoveUserProjectRequest defines model for MoveUserProjectRequest.
+type MoveUserProjectRequest struct {
+	BeforeProjectId *string `json:"beforeProjectId"`
+	ProjectId       string  `json:"projectId"`
+}
+
 // MoveWorkspaceFileEntryRequest defines model for MoveWorkspaceFileEntryRequest.
 type MoveWorkspaceFileEntryRequest struct {
 	Path                string `json:"path"`
@@ -3558,6 +3824,12 @@ type PermissionModeOption struct {
 
 // PermissionModeSemantic defines model for PermissionModeSemantic.
 type PermissionModeSemantic string
+
+// PinUserProjectRequest defines model for PinUserProjectRequest.
+type PinUserProjectRequest struct {
+	Pinned    bool   `json:"pinned"`
+	ProjectId string `json:"projectId"`
+}
 
 // PreflightUploadWorkspaceFilesRequest defines model for PreflightUploadWorkspaceFilesRequest.
 type PreflightUploadWorkspaceFilesRequest struct {
@@ -3789,8 +4061,9 @@ type UserProject struct {
 	CreatedAtUnixMs  int64  `json:"createdAtUnixMs"`
 	Id               string `json:"id"`
 	Label            string `json:"label"`
-	LastUsedAtUnixMs *int64 `json:"lastUsedAtUnixMs,omitempty"`
+	LastUsedAtUnixMs int64  `json:"lastUsedAtUnixMs"`
 	Path             string `json:"path"`
+	PinnedAtUnixMs   int64  `json:"pinnedAtUnixMs"`
 	SectionKey       string `json:"sectionKey"`
 	UpdatedAtUnixMs  int64  `json:"updatedAtUnixMs"`
 }
@@ -5107,6 +5380,12 @@ type UseUserProjectJSONRequestBody = UseUserProjectRequest
 // CheckUserProjectPathJSONRequestBody defines body for CheckUserProjectPath for application/json ContentType.
 type CheckUserProjectPathJSONRequestBody = CheckUserProjectPathRequest
 
+// MoveUserProjectJSONRequestBody defines body for MoveUserProject for application/json ContentType.
+type MoveUserProjectJSONRequestBody = MoveUserProjectRequest
+
+// PinUserProjectJSONRequestBody defines body for PinUserProject for application/json ContentType.
+type PinUserProjectJSONRequestBody = PinUserProjectRequest
+
 // CreateWorkspaceJSONRequestBody defines body for CreateWorkspace for application/json ContentType.
 type CreateWorkspaceJSONRequestBody = CreateWorkspaceRequest
 
@@ -5148,6 +5427,12 @@ type SubmitWorkspaceAgentPlanDecisionJSONRequestBody = SubmitWorkspaceAgentPlanD
 
 // UpdateWorkspaceAgentSessionVisibilityJSONRequestBody defines body for UpdateWorkspaceAgentSessionVisibility for application/json ContentType.
 type UpdateWorkspaceAgentSessionVisibilityJSONRequestBody = UpdateWorkspaceAgentSessionVisibilityRequest
+
+// AuthenticateAgentTargetRuntimeJSONRequestBody defines body for AuthenticateAgentTargetRuntime for application/json ContentType.
+type AuthenticateAgentTargetRuntimeJSONRequestBody = AuthenticateAgentTargetRuntimeRequest
+
+// InstallAgentTargetRuntimeJSONRequestBody defines body for InstallAgentTargetRuntime for application/json ContentType.
+type InstallAgentTargetRuntimeJSONRequestBody = InstallAgentTargetRuntimeRequest
 
 // GetWorkspaceAppFactoryAgentTargetComposerOptionsJSONRequestBody defines body for GetWorkspaceAppFactoryAgentTargetComposerOptions for application/json ContentType.
 type GetWorkspaceAppFactoryAgentTargetComposerOptionsJSONRequestBody = GetWorkspaceAppFactoryAgentTargetComposerOptionsRequest

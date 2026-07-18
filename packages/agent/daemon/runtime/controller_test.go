@@ -13,6 +13,7 @@ import (
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
 
 func rootCancelInput(roomID string, agentSessionID string, turnID string, reason string) CancelInput {
@@ -5645,7 +5646,7 @@ func TestEnrichReportStatePatchesWithSessionMetadataDoesNotAttachTurnLifecycle(t
 	report := &agentsessionstore.ReportActivityInput{
 		StatePatches: []agentsessionstore.WorkspaceAgentStatePatch{{
 			AgentSessionID: "agent-session-1",
-			RootProviderTurn: &agentsessionstore.WorkspaceAgentRootProviderTurnTransition{
+			RootProviderTurn: &canonical.WorkspaceAgentRootProviderTurnTransition{
 				RootTurnID:     "root-turn-1",
 				ProviderTurnID: "provider-turn-1",
 				Phase:          agentsessionstore.RootProviderTurnPhaseCompleted,
@@ -5655,11 +5656,11 @@ func TestEnrichReportStatePatchesWithSessionMetadataDoesNotAttachTurnLifecycle(t
 	enrichReportStatePatchesWithSessionMetadata(report, agentsessionstore.WorkspaceAgentStatePatch{
 		AgentSessionID: "agent-session-1",
 		Provider:       ProviderClaudeCode,
-		TurnLifecycle: &agentsessionstore.WorkspaceAgentTurnLifecycle{
+		TurnLifecycle: &canonical.WorkspaceAgentTurnLifecycle{
 			ActiveTurnID: &activeTurnID,
 			Phase:        "waiting",
 		},
-		SubmitAvailability: &agentsessionstore.WorkspaceAgentSubmitAvailability{
+		SubmitAvailability: &canonical.WorkspaceAgentSubmitAvailability{
 			State:  "blocked",
 			Reason: "active_turn",
 		},

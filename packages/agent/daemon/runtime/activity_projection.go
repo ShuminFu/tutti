@@ -5,6 +5,7 @@ import (
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
 
 func ReportableActivityEvents(events []activityshared.Event) []activityshared.Event {
@@ -58,8 +59,8 @@ func ProjectActivityEventsToStreamEvents(session Session, events []activityshare
 	return out
 }
 
-func eventSourceFromSession(session Session) agentsessionstore.EventSource {
-	return agentsessionstore.EventSource{
+func eventSourceFromSession(session Session) canonical.EventSource {
+	return canonical.EventSource{
 		Provider:               strings.TrimSpace(session.Provider),
 		ProviderSessionID:      strings.TrimSpace(session.ProviderSessionID),
 		SessionCreatedAtUnixMS: session.CreatedAtUnixMS,

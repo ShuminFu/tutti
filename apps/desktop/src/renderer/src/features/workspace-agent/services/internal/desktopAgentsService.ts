@@ -209,37 +209,48 @@ export function mapAgentTargetsToPresentations(
     }) => string;
   } = {}
 ): readonly AgentTargetPresentation[] {
-  return [...targets].sort(compareAgentTargetsForDisplay).map((target) => ({
-    agentTargetId: target.id,
-    createdAtUnixMs: target.createdAtUnixMs,
-    enabled: target.enabled === true,
-    iconKey: target.iconKey ?? null,
-    iconUrl:
-      target.iconUrl?.trim() ||
-      (options.resolveAgentTargetIconUrl?.({
+  return [...targets].sort(compareAgentTargetsForDisplay).map((target) => {
+    const isExtension = target.launchRef.type === "agent_extension";
+    const packageIconUrl = target.iconUrl?.trim() || "";
+    const packageSidebarIconUrl = target.sidebarIconUrl?.trim() || "";
+    const fallbackIconUrl =
+      options.resolveAgentTargetIconUrl?.({
         iconKey: target.iconKey?.trim() || null,
         provider: target.provider
-      }) ??
-        ""),
-    heroImageUrl: target.heroImageUrl?.trim() || null,
-    availability: {
-      status:
-        target.availability?.status === "not_installed"
-          ? "not_installed"
-          : target.availability?.status === "auth_required"
-            ? "auth_required"
-            : target.availability?.status === "unsupported" ||
-                target.availability?.status === "unknown"
-              ? "unavailable"
-              : "ready"
-    },
-    launchRefType: target.launchRef.type,
-    name: target.name,
-    provider: target.provider,
-    sortOrder: target.sortOrder,
-    source: target.source,
-    updatedAtUnixMs: target.updatedAtUnixMs
-  }));
+      }) ?? "";
+    const iconUrl = isExtension
+      ? packageSidebarIconUrl || packageIconUrl || fallbackIconUrl
+      : packageIconUrl || fallbackIconUrl;
+    return {
+      agentTargetId: target.id,
+      createdAtUnixMs: target.createdAtUnixMs,
+      enabled: target.enabled === true,
+      iconKey: target.iconKey ?? null,
+      iconUrl,
+      ...(isExtension && packageSidebarIconUrl && packageIconUrl
+        ? { maskIconUrl: packageIconUrl }
+        : {}),
+      sidebarIconUrl: target.sidebarIconUrl?.trim() || null,
+      heroImageUrl: target.heroImageUrl?.trim() || null,
+      availability: {
+        status:
+          target.availability?.status === "not_installed"
+            ? "not_installed"
+            : target.availability?.status === "auth_required"
+              ? "auth_required"
+              : target.availability?.status === "unsupported" ||
+                  target.availability?.status === "unknown"
+                ? "unavailable"
+                : "ready"
+      },
+      launchRefType: target.launchRef.type,
+      name: target.name,
+      provider: target.provider,
+      sortOrder: target.sortOrder,
+      source: target.source,
+      updatedAtUnixMs: target.updatedAtUnixMs
+    };
+  });
 }
 
 export function mapAgentTargetPresentationsToAgents(
@@ -251,9 +262,16 @@ export function mapAgentTargetPresentationsToAgents(
       agentTargetId: target.agentTargetId,
       name: target.name,
       iconUrl: target.iconUrl,
+      ...(target.maskIconUrl ? { maskIconUrl: target.maskIconUrl } : {}),
+      ...(target.sidebarIconUrl
+        ? { sidebarIconUrl: target.sidebarIconUrl }
+        : {}),
       ...(target.heroImageUrl ? { heroImageUrl: target.heroImageUrl } : {}),
       availability: target.availability,
-      provider: target.provider as AgentGUIProvider
+      provider: target.provider as AgentGUIProvider,
+      ...(target.launchRefType === "agent_extension"
+        ? { setupKind: "target_runtime" as const }
+        : {})
     }));
 }
 

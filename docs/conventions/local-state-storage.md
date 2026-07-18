@@ -135,6 +135,10 @@ Migrated agent runtime state should derive from the same root:
           assets/
     sessions/
       <date>-<sequence>/
+    worktrees/
+      <agent-session-id>/
+      .metadata/
+        <agent-session-id>.json
     runs/
       <agent-session-id>/
         sidecar-manifest.json
@@ -148,6 +152,8 @@ Migrated agent runtime state should derive from the same root:
         current/
           agent-context.json
   agent-providers/
+    claude-code/
+      current.json
     external-agent-registry/
       cache/
         registry.json
@@ -188,11 +194,74 @@ receive it through `CODEX_HOME`; Tutti Agent sessions use `tutti-agent-home`
 and receive it through `TUTTI_AGENT_HOME`. `agent/attachments` stores persisted
 prompt attachments by agent session.
 
+`agent/worktrees/<agent-session-id>` is a daemon-managed Git checkout for a
+worktree-isolated agent session. The tuttid agent adapter owns the corresponding
+`.metadata/<agent-session-id>.json` record used for enumeration, failed-create
+rollback, and orphan recovery; it records the repository root, branch, base
+commit, and session scope. Canonical isolation coordinates remain in the
+session's existing runtime-context/metadata JSON, so this layout does not add a
+SQLite schema. Host startup recovery and the periodic Host worker only schedule
+cleanup through the adapter port. A tree is deleted only when it is clean with
+no commits ahead of its base, its creator is absent or not resumable, and no
+session cwd is inside the tree. Turn/runtime completion and session end times
+must never trigger this cleanup.
+
 `agent/extensions` is daemon-owned verified Agent Extension state. Version
 directories are immutable after installation; `active.json` selects the
 currently registered version and is replaced atomically. Extension ZIPs do not
 contain runtimes or executables. Cached assets and profiles remain under each
 fixed installation for integrity checks and future session-pinned resume.
+Development-only local package overrides are copied into the same state as
+content-addressed `+local.<digest>` versions; the daemon never launches against
+the mutable source directory. Only the `data/agentextension` installation
+adapter derives these paths or persists `installation.json` and `active.json`;
+the service layer retains verification and activation workflow ownership.
+Agent Extension executables are user-local programs rather than daemon state:
+
+```text
+~/.local/bin/
+  <agent-command> -> ~/.local/share/tutti/agent-runtimes/<agent-key>/bin/<agent-command>
+
+~/.local/share/tutti/agent-runtimes/
+  <agent-key>/
+    bin/
+      <agent-command> -> ../<runtime-identity>/<runtime-executable>
+    <runtime-identity>/
+      activation.json
+      node_modules/
+  claude-code/
+    versions/
+      <claude-version>/
+        claude
+```
+
+A compatible user-local executable remains preferred; otherwise one explicitly
+confirmed, pinned runtime is installed per extension version and reused across
+development, production, and all workspaces. Runtime installation never writes
+under a user project. Setup action records, extension packages, discovery CWDs,
+and session state remain under the selected `~/.tutti[-dev]` state root. The
+Claude SDK sidecar's `current.json` pointer is state metadata, while its pinned
+native executable uses the shared user-local runtime root.
+
+Agent Extension activation publishes its command through the stable two-link
+chain above. Development and production share that command and underlying
+versioned runtime; environment separation applies only to daemon state. Tutti
+never replaces a pre-existing regular file or foreign symlink in
+`~/.local/bin`. Its own published link remains classified as managed for
+fingerprint checks, persists across feature disablement and daemon shutdown,
+and requires explicit reinstall if either link is missing or invalid.
+
+Agent Extension setup uses these daemon-owned state paths:
+
+```text
+<state-dir>/agent/extension-runtime-actions/<scope-sha256>.json
+<state-dir>/agent/discovery/agent-extensions/
+```
+
+The action filename hashes exact Target plus fixed extension installation
+identity; workspace identity remains inside the record, not in a directory
+segment. The data adapter owns path derivation, strict JSON decoding, scope
+validation, `0700` directories, `0600` temporary files, sync, and atomic rename.
 Session-level runtime/profile pinning remains tracked in the Agent Extension
 architecture migration; `active.json` alone is not a durable session pin.
 

@@ -10,8 +10,11 @@ export type BusinessEventTopic =
   | "agent.activity.updated"
   | "agent.model.catalog.invalidated"
   | "analytics.debug.reported"
+  | "preferences.agent.composer.defaults.changed"
+  | "preferences.agent.composer.defaults.patch.requested"
   | "preferences.desktop.update.requested"
   | "preferences.desktop.updated"
+  | "user.project.updated"
   | "workspace.app.updated"
   | "workspace.appfactory.job.updated"
   | "workspace.issue.updated"
@@ -137,6 +140,17 @@ export interface PreferencesDesktopPreferencesV1 {
     enabled: boolean;
     shortcutPreset: "commandArrows" | "commandShiftArrows";
   };
+}
+
+export interface UserUserProjectV1 {
+  id: string;
+  path: string;
+  label: string;
+  sectionKey: string;
+  createdAtUnixMs: number;
+  updatedAtUnixMs: number;
+  lastUsedAtUnixMs: number;
+  pinnedAtUnixMs: number;
 }
 
 export interface WorkspaceWorkspaceAppFactoryJobV1 {
@@ -355,6 +369,21 @@ export interface AnalyticsDebugReportedPayloadV1 {
   }[];
 }
 
+export interface PreferencesAgentComposerDefaultsChangedPayloadV1 {
+  agentTargetId: string;
+}
+
+export interface PreferencesAgentComposerDefaultsPatchRequestedPayloadV1 {
+  agentTargetId: string;
+  patch: {
+    model?: string | null;
+    permissionModeId?: string | null;
+    reasoningEffort?: string | null;
+    speed?: string | null;
+  };
+  clientMutationId?: string;
+}
+
 export interface PreferencesDesktopUpdateRequestedPayloadV1 {
   preferences: PreferencesDesktopPreferencesV1;
 }
@@ -362,6 +391,10 @@ export interface PreferencesDesktopUpdateRequestedPayloadV1 {
 export interface PreferencesDesktopUpdatedPayloadV1 {
   initialized: boolean;
   preferences: PreferencesDesktopPreferencesV1;
+}
+
+export interface UserProjectUpdatedPayloadV1 {
+  projects: readonly UserUserProjectV1[];
 }
 
 export interface WorkspaceAppUpdatedPayloadV1 {
@@ -418,6 +451,20 @@ export type AnalyticsDebugReportedEventV1 = BusinessEventEnvelopeV1<
   1
 >;
 
+export type PreferencesAgentComposerDefaultsChangedEventV1 =
+  BusinessEventEnvelopeV1<
+    "preferences.agent.composer.defaults.changed",
+    PreferencesAgentComposerDefaultsChangedPayloadV1,
+    1
+  >;
+
+export type PreferencesAgentComposerDefaultsPatchRequestedEventV1 =
+  BusinessEventEnvelopeV1<
+    "preferences.agent.composer.defaults.patch.requested",
+    PreferencesAgentComposerDefaultsPatchRequestedPayloadV1,
+    1
+  >;
+
 export type PreferencesDesktopUpdateRequestedEventV1 = BusinessEventEnvelopeV1<
   "preferences.desktop.update.requested",
   PreferencesDesktopUpdateRequestedPayloadV1,
@@ -428,6 +475,12 @@ export type PreferencesDesktopUpdatedEventV1 = BusinessEventEnvelopeV1<
   "preferences.desktop.updated",
   PreferencesDesktopUpdatedPayloadV1,
   1
+>;
+
+export type UserProjectUpdatedEventV1 = BusinessEventEnvelopeV1<
+  "user.project.updated",
+  UserProjectUpdatedPayloadV1,
+  2
 >;
 
 export type WorkspaceAppUpdatedEventV1 = BusinessEventEnvelopeV1<
@@ -455,25 +508,33 @@ export type WorkspaceWorkbenchNodeLaunchRequestedEventV1 =
     1
   >;
 
-export type ClientToServerEventTopic = "preferences.desktop.update.requested";
+export type ClientToServerEventTopic =
+  | "preferences.agent.composer.defaults.patch.requested"
+  | "preferences.desktop.update.requested";
 
 export type ServerToClientEventTopic =
   | "agent.activity.updated"
   | "agent.model.catalog.invalidated"
   | "analytics.debug.reported"
+  | "preferences.agent.composer.defaults.changed"
   | "preferences.desktop.updated"
+  | "user.project.updated"
   | "workspace.app.updated"
   | "workspace.appfactory.job.updated"
   | "workspace.issue.updated"
   | "workspace.workbench.node.launch.requested";
 
-export type ClientToServerEventV1 = PreferencesDesktopUpdateRequestedEventV1;
+export type ClientToServerEventV1 =
+  | PreferencesAgentComposerDefaultsPatchRequestedEventV1
+  | PreferencesDesktopUpdateRequestedEventV1;
 
 export type ServerToClientEventV1 =
   | AgentActivityUpdatedEventV1
   | AgentModelCatalogInvalidatedEventV1
   | AnalyticsDebugReportedEventV1
+  | PreferencesAgentComposerDefaultsChangedEventV1
   | PreferencesDesktopUpdatedEventV1
+  | UserProjectUpdatedEventV1
   | WorkspaceAppUpdatedEventV1
   | WorkspaceAppfactoryJobUpdatedEventV1
   | WorkspaceIssueUpdatedEventV1

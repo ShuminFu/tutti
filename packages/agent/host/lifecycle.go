@@ -8,7 +8,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/tutti-os/tutti/packages/agent/daemon/titletext"
 	storesqlite "github.com/tutti-os/tutti/packages/agent/store-sqlite"
 )
 
@@ -23,7 +22,15 @@ func (h *Host) CreateSession(ctx context.Context, workspaceID string, input Crea
 	if err != nil {
 		return CreateSessionResult{}, err
 	}
-	claim, claimPending, err := h.prepareSubmitClaim(ctx, ref, input.Metadata)
+	typedGoal, isTypedGoal := ParseTypedGoalControl(normalized, false)
+	metadata := submissionMetadata(input.Metadata, input.ClientSubmitID)
+	goalMetadata := clonePayload(metadata)
+	claimMetadata := metadata
+	if isTypedGoal {
+		normalized = nil
+		claimMetadata = nil
+	}
+	claim, claimPending, err := h.prepareSubmitClaim(ctx, ref, claimMetadata)
 	if err != nil {
 		return CreateSessionResult{}, err
 	}
@@ -82,7 +89,7 @@ func (h *Host) CreateSession(ctx context.Context, workspaceID string, input Crea
 		return h.runtime.Start(ctx, RuntimeStartInput{
 			WorkspaceID: workspaceID, AgentSessionID: input.AgentSessionID, AgentTargetID: input.AgentTargetID,
 			Provider: input.Provider, Cwd: prepared.Cwd, Env: append([]string(nil), prepared.Env...),
-			Title: value(input.Title), InitialTitleEstablished: titletext.Normalize(value(input.Title)) != "",
+			Title: value(input.Title), InitialTitleEstablished: NormalizeTitle(value(input.Title)) != "",
 			PermissionModeID: value(input.PermissionModeID), Model: value(input.Model), PlanMode: valueBool(input.PlanMode),
 			BrowserUse: input.BrowserUse, ComputerUse: input.ComputerUse,
 			ProviderTargetRef: cloneMap(firstMap(prepared.ProviderTargetRef, input.ProviderTargetRef)),
@@ -108,8 +115,29 @@ func (h *Host) CreateSession(ctx context.Context, workspaceID string, input Crea
 		return CreateSessionResult{}, cleanup(identityErr, true, true)
 	}
 	h.observeStep(ctx, "session_create", "session_persisted", session.ID, session.Provider, startedAt, nil)
-	if len(normalized) == 0 {
+	if len(normalized) == 0 && !isTypedGoal {
 		return CreateSessionResult{Session: session, Canonical: canonicalSession}, nil
+	}
+	if isTypedGoal {
+		goalResult, goalErr := h.goalControl(ctx, GoalControlInput{
+			WorkspaceID: workspaceID, AgentSessionID: session.ID,
+			Action: typedGoal.Action, Objective: typedGoal.Objective,
+			SubmissionMetadata: goalMetadata,
+		})
+		if goalErr != nil {
+			// A typed goal starts from a non-provisional, already published
+			// session. Preserve that canonical session on command failure just as
+			// the legacy Service did; rolling it back would leave subscribers with
+			// an unpaired session-created event.
+			return CreateSessionResult{}, cleanup(goalErr, true, false)
+		}
+		if refreshed, ok := h.runtime.Session(workspaceID, session.ID); ok {
+			session = refreshed
+		}
+		return CreateSessionResult{
+			Session: session, Canonical: goalResult.Canonical,
+			Kind: "goalControl", GoalControl: &goalResult,
+		}, nil
 	}
 	startedAt = h.now()
 	if err := h.runtime.ValidatePromptContent(ctx, RuntimeExecInput{WorkspaceID: workspaceID, AgentSessionID: session.ID, Content: normalized}); err != nil {
@@ -127,13 +155,13 @@ func (h *Host) CreateSession(ctx context.Context, workspaceID string, input Crea
 	displayPrompt := strings.TrimSpace(input.InitialDisplayPrompt)
 	initialTitle := ""
 	if !session.InitialTitleEstablished {
-		initialTitle = titletext.DeriveInitial(session.Title, firstNonEmpty(displayPrompt, promptText, preparedDisplay))
+		initialTitle = DeriveInitialTitle(session.Title, firstNonEmpty(displayPrompt, promptText, preparedDisplay))
 	}
 	startedAt = h.now()
 	execResult, err := h.runtime.Exec(ctx, RuntimeExecInput{
 		WorkspaceID: workspaceID, AgentSessionID: session.ID, Content: content,
 		DisplayPrompt: displayPrompt, InitialTitle: initialTitle, InitialTitleBase: session.Title,
-		Metadata: cloneMap(input.Metadata),
+		Metadata: cloneMap(metadata),
 	})
 	if err != nil {
 		h.observeStep(ctx, "session_create", "runtime_exec", session.ID, session.Provider, startedAt, err)
@@ -240,7 +268,23 @@ func (h *Host) SendInput(ctx context.Context, ref SessionRef, input SendInput) (
 	if err != nil {
 		return SendInputResult{}, err
 	}
-	claim, claimPending, err := h.prepareSubmitClaim(ctx, ref, input.Metadata)
+	metadata := submissionMetadata(input.Metadata, input.ClientSubmitID)
+	if typedGoal, ok := ParseTypedGoalControl(normalized, input.Guidance); ok {
+		goalResult, goalErr := h.goalControl(ctx, GoalControlInput{
+			WorkspaceID: ref.WorkspaceID, AgentSessionID: ref.AgentSessionID,
+			Action: typedGoal.Action, Objective: typedGoal.Objective,
+			SubmissionMetadata: metadata,
+		})
+		if goalErr != nil {
+			return SendInputResult{}, goalErr
+		}
+		session, _ := h.runtime.Session(ref.WorkspaceID, ref.AgentSessionID)
+		return SendInputResult{
+			Session: session, Canonical: goalResult.Canonical,
+			Kind: "goalControl", GoalControl: &goalResult,
+		}, nil
+	}
+	claim, claimPending, err := h.prepareSubmitClaim(ctx, ref, metadata)
 	if err != nil {
 		return SendInputResult{}, err
 	}
@@ -282,7 +326,7 @@ func (h *Host) SendInput(ctx context.Context, ref SessionRef, input SendInput) (
 	h.observeStep(ctx, "message_send", "prompt_prepared", ref.AgentSessionID, session.Provider, startedAt, nil)
 	displayPrompt, initialTitle := strings.TrimSpace(input.DisplayPrompt), ""
 	if !input.Guidance && !session.InitialTitleEstablished {
-		initialTitle = titletext.DeriveInitial(session.Title, firstNonEmpty(displayPrompt, promptText, preparedDisplay))
+		initialTitle = DeriveInitialTitle(session.Title, firstNonEmpty(displayPrompt, promptText, preparedDisplay))
 	}
 	startedAt = h.now()
 	releaseStartup, err := h.acquireStartup(ctx, session.Provider)
@@ -295,7 +339,7 @@ func (h *Host) SendInput(ctx context.Context, ref SessionRef, input SendInput) (
 		return h.runtime.Exec(ctx, RuntimeExecInput{
 			WorkspaceID: ref.WorkspaceID, AgentSessionID: ref.AgentSessionID, Content: content,
 			DisplayPrompt: displayPrompt, InitialTitle: initialTitle, InitialTitleBase: session.Title,
-			Guidance: input.Guidance, Metadata: cloneMap(input.Metadata),
+			Guidance: input.Guidance, Metadata: cloneMap(metadata),
 		})
 	}()
 	if err != nil {
@@ -339,7 +383,7 @@ func (h *Host) UpdateTitle(ctx context.Context, input UpdateTitleInput) (UpdateT
 	if h == nil || h.store == nil || h.runtime == nil || input.WorkspaceID == "" || input.AgentSessionID == "" {
 		return UpdateTitleResult{}, ErrInvalidArgument
 	}
-	if utf8.RuneCountInString(input.Title) > titletext.MaxSessionTitleRunes {
+	if utf8.RuneCountInString(input.Title) > MaxSessionTitleRunes {
 		return UpdateTitleResult{}, ErrSessionTitleTooLong
 	}
 	canonicalSession, updated, err := h.store.UpdateSessionTitle(ctx, input.WorkspaceID, input.AgentSessionID, input.Title)

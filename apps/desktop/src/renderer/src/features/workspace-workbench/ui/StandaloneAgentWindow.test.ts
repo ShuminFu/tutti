@@ -9,6 +9,10 @@ const standaloneWindowSource = readFileSync(
   resolve(currentDirectory, "StandaloneAgentWindow.tsx"),
   "utf8"
 );
+const standaloneWindowLayoutSource = readFileSync(
+  resolve(currentDirectory, "useStandaloneAgentWindowLayout.ts"),
+  "utf8"
+);
 const standaloneWindowPanelHostsSource = readFileSync(
   resolve(currentDirectory, "StandaloneAgentWindowPanelHosts.tsx"),
   "utf8"
@@ -48,7 +52,11 @@ test("standalone Agent reuses the OS account menu in the sidebar footer", () => 
   );
   assert.match(
     workbenchBodySource,
-    /renderSlots=\{\{[\s\S]*sidebarFooter: previewMode \? undefined : renderSidebarFooter[\s\S]*\}\}/
+    /renderSlots:\s*\{\s*sidebarFooter: previewMode \? undefined : renderSidebarFooter\s*\}/
+  );
+  assert.match(
+    workbenchBodySource,
+    /renderSlots=\{agentGUIHostProps\.renderSlots\}/
   );
 });
 
@@ -101,7 +109,7 @@ test("standalone Agent opens files like Finder and routes links into the right s
   assert.match(standaloneWindowSource, /workspaceFilePreviewMode: "canvas"/);
   assert.match(
     standaloneLaunchRoutingSource,
-    /runDesktopAgentGUILinkAction\(action,[\s\S]*?launchWorkspaceFiles: \(\{ path, validateExists \}\) =>[\s\S]*?openFileInSidebar\(path, validateExists\)/
+    /runStandaloneAgentLinkAction\(action,[\s\S]*?launchWorkspaceFiles: \(\{ path, validateExists \}\) =>[\s\S]*?openFileInSidebar\(path, validateExists\)/
   );
   assert.match(
     standaloneWindowSource,
@@ -109,12 +117,13 @@ test("standalone Agent opens files like Finder and routes links into the right s
   );
   assert.match(
     standaloneLaunchRoutingSource,
-    /openBrowserUrl: async \(\{ url \}\) => \{[\s\S]*?await openExternalUrl\(url\);[\s\S]*?return true;/
+    /openExternalUrl,[\s\S]*?runtimeApi,[\s\S]*?workspaceId/
   );
   assert.doesNotMatch(
     standaloneLaunchRoutingSource,
     /openBrowserUrl: \(\) => false/
   );
+  assert.match(standaloneWindowSource, /runtimeApi: desktopApi\.runtime/);
   assert.match(
     standaloneWindowSource,
     /validateExists &&[\s\S]*?workspaceFileManagerService\.entryExists\([\s\S]*?showWorkspaceFileMissingToast\(\)/
@@ -201,7 +210,22 @@ test("standalone Agent auto-hides the conversation rail below the standalone wid
 test("standalone Agent widens a narrow window before expanding the conversation rail", () => {
   assert.match(
     standaloneWindowSource,
-    /AGENT_GUI_EXPANDED_TARGET_WIDTH_PX[\s\S]*?frame\.width < 640[\s\S]*?resizeContentWidth\(\{\s*width: AGENT_GUI_EXPANDED_TARGET_WIDTH_PX\s*\}\)/
+    /frame\.width < 640[\s\S]*?resizeContentWidth\(AGENT_GUI_EXPANDED_TARGET_WIDTH_PX\)/
+  );
+});
+
+test("standalone Agent commits window frame only after host resize completion", () => {
+  assert.doesNotMatch(
+    `${standaloneWindowSource}\n${standaloneWindowLayoutSource}`,
+    /window\.addEventListener\("resize"/
+  );
+  assert.match(
+    standaloneWindowLayoutSource,
+    /const commitWindowFrame = useCallback\(\(\) => \{[\s\S]*?currentFrame\.width === nextFrame\.width[\s\S]*?currentFrame\.height === nextFrame\.height/
+  );
+  assert.match(
+    standaloneWindowLayoutSource,
+    /hostWindowApi\.onLayout\(\(\{ maximized \}\) => \{[\s\S]*?commitWindowFrame\(\);[\s\S]*?setIsWindowMaximized\(maximized\)/
   );
 });
 
@@ -232,14 +256,6 @@ test("standalone Agent hides home identity and shows it after local session star
   );
 });
 
-test("standalone Agent shows the generic app title", () => {
-  assert.match(standaloneWindowSource, /showAppTitle\b(?!=\{false\})/);
-  assert.match(
-    standaloneWindowSource,
-    /title=\{i18n\.t\("workspace\.agentGui\.fallbackAgentLabel"\)\}/
-  );
-});
-
 test("standalone Agent hides panel toggles until its content mounts", () => {
   assert.match(
     standaloneWindowSource,
@@ -256,21 +272,6 @@ test("standalone Agent hides panel toggles until its content mounts", () => {
   assert.match(
     standaloneWindowSource,
     /<StandaloneAgentWindowContentReady onReady=\{handleContentReady\}>[\s\S]*?<DesktopAgentGUISurface/
-  );
-});
-
-test("standalone Agent loads its body with the route instead of adding a second lazy boundary", () => {
-  assert.match(
-    standaloneWindowSource,
-    /import \{ DesktopAgentGUISurface \} from "@renderer\/features\/workspace-agent\/ui\/DesktopAgentGUIWorkbenchBody\.tsx"/
-  );
-  assert.doesNotMatch(
-    standaloneWindowSource,
-    /LazyDesktopAgentGUIWorkbenchBody/
-  );
-  assert.doesNotMatch(
-    standaloneWindowSource,
-    /import\("@renderer\/features\/workspace-agent\/ui\/DesktopAgentGUIWorkbenchBody\.tsx"\)/
   );
 });
 

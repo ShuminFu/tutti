@@ -61,6 +61,8 @@ export function createSharedAgentGUIAgentTarget(input: {
   badge?: AgentGUIAgentTargetBadge | null;
   ownerLabel?: string | null;
   iconUrl?: string | null;
+  maskIconUrl?: string | null;
+  sidebarIconUrl?: string | null;
   unavailableReason?: string | null;
   disabled?: boolean;
   ref?: Record<string, unknown> | null;
@@ -86,6 +88,12 @@ export function createSharedAgentGUIAgentTarget(input: {
       ? { ownerLabel: input.ownerLabel.trim() }
       : {}),
     ...(input.iconUrl?.trim() ? { iconUrl: input.iconUrl.trim() } : {}),
+    ...(input.maskIconUrl?.trim()
+      ? { maskIconUrl: input.maskIconUrl.trim() }
+      : {}),
+    ...(input.sidebarIconUrl?.trim()
+      ? { sidebarIconUrl: input.sidebarIconUrl.trim() }
+      : {}),
     ...(input.unavailableReason?.trim()
       ? { unavailableReason: input.unavailableReason.trim() }
       : {}),
@@ -173,16 +181,18 @@ export function resolveAgentGUIAgentTarget(input: {
   agentTargets: readonly AgentGUIAgentTarget[];
   useStaticCatalog?: boolean;
 }): AgentGUIAgentTarget | null {
+  const explicitAgentTargetId = input.agentTargetId?.trim() ?? "";
   const targetByAgentTargetId = new Map(
     input.agentTargets.flatMap((target) =>
       target.agentTargetId ? [[target.agentTargetId, target] as const] : []
     )
   );
-  const agentTarget = targetByAgentTargetId.get(
-    input.agentTargetId?.trim() ?? ""
-  );
+  const agentTarget = targetByAgentTargetId.get(explicitAgentTargetId);
   if (agentTarget) {
     return agentTarget;
+  }
+  if (explicitAgentTargetId) {
+    return null;
   }
   const agentTargets = input.agentTargets.filter(
     (target) => target.provider === input.provider
@@ -240,6 +250,8 @@ function normalizeAgentGUIAgentTarget(
     badge,
     description,
     iconUrl,
+    maskIconUrl,
+    sidebarIconUrl,
     heroImageUrl,
     ownerLabel,
     unavailableReason,
@@ -268,6 +280,10 @@ function normalizeAgentGUIAgentTarget(
     ...(normalizedBadge ? { badge: normalizedBadge } : {}),
     ...(description?.trim() ? { description: description.trim() } : {}),
     ...(iconUrl?.trim() ? { iconUrl: iconUrl.trim() } : {}),
+    ...(maskIconUrl?.trim() ? { maskIconUrl: maskIconUrl.trim() } : {}),
+    ...(sidebarIconUrl?.trim()
+      ? { sidebarIconUrl: sidebarIconUrl.trim() }
+      : {}),
     ...(heroImageUrl?.trim() ? { heroImageUrl: heroImageUrl.trim() } : {}),
     ...(ownerLabel?.trim() ? { ownerLabel: ownerLabel.trim() } : {}),
     ...(unavailableReason?.trim()

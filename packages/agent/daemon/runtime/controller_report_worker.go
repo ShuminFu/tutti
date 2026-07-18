@@ -8,6 +8,7 @@ import (
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
 
 func (c *Controller) enqueueSessionReport(ctx context.Context, session Session, events []activityshared.Event) {
@@ -49,7 +50,7 @@ func (c *Controller) reportGoalReconcileControl(ctx context.Context, report agen
 func (c *Controller) reportGoalReconcileDurable(ctx context.Context, session Session, request GoalReconcileDurableRequest) error {
 	report := agentsessionstore.ReportActivityInput{
 		WorkspaceID: session.RoomID,
-		Connector:   &agentsessionstore.ConnectorInfo{ID: session.Provider, Version: "agent-gui-runtime"},
+		Connector:   &canonical.ConnectorInfo{ID: session.Provider, Version: "agent-gui-runtime"},
 		Source:      eventSourceFromSession(session),
 		GoalReconcileRequests: []agentsessionstore.WorkspaceAgentGoalReconcileRequest{{
 			RequestID: request.RequestID, Phase: request.Phase, AgentSessionID: session.AgentSessionID,
@@ -65,7 +66,7 @@ func (c *Controller) reportGoalReconcileDurable(ctx context.Context, session Ses
 func (c *Controller) enqueueSessionSnapshotReport(ctx context.Context, session Session) {
 	report := agentsessionstore.ReportActivityInput{
 		WorkspaceID: session.RoomID,
-		Connector: &agentsessionstore.ConnectorInfo{
+		Connector: &canonical.ConnectorInfo{
 			ID:      session.Provider,
 			Version: "agent-gui-runtime",
 		},
@@ -82,7 +83,7 @@ func (c *Controller) enqueueSessionStatePatchReport(
 ) {
 	report := agentsessionstore.ReportActivityInput{
 		WorkspaceID: session.RoomID,
-		Connector: &agentsessionstore.ConnectorInfo{
+		Connector: &canonical.ConnectorInfo{
 			ID:      session.Provider,
 			Version: "agent-gui-runtime",
 		},

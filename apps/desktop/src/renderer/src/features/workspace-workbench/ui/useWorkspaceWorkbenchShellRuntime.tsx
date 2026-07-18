@@ -138,7 +138,8 @@ export function useWorkspaceWorkbenchShellRuntime({
   };
 }): WorkspaceWorkbenchShellRuntime {
   const { i18n: appI18n, locale } = useTranslation();
-  const { state: appCenterState } = useWorkspaceAppCenterService();
+  const { service: workspaceAppCenterService, state: appCenterState } =
+    useWorkspaceAppCenterService();
   const { state: desktopPreferencesState } = useDesktopPreferencesService();
   const { service: workspaceSettingsService } = useWorkspaceSettingsService();
   const agentsService = useService(IAgentsService);
@@ -367,11 +368,20 @@ export function useWorkspaceWorkbenchShellRuntime({
     }
     return workspaceAppSurfaceHost.registerPresenter(
       createWorkbenchWorkspaceAppSurfacePresenter({
+        getViewState: (workspaceId) =>
+          workspaceAppCenterService.getViewState(workspaceId),
         host: workbenchHost,
+        setViewState: (request) =>
+          workspaceAppCenterService.setViewState(request),
         workspaceId: state.workspace.id
       })
     );
-  }, [workbenchHost, state.workspace.id, workspaceAppSurfaceHost]);
+  }, [
+    workbenchHost,
+    state.workspace.id,
+    workspaceAppCenterService,
+    workspaceAppSurfaceHost
+  ]);
 
   useEffect(() => {
     if (!enableWindowCloseGuard) {

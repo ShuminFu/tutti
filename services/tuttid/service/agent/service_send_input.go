@@ -12,29 +12,35 @@ import (
 func (s *Service) SendInput(ctx context.Context, workspaceID string, agentSessionID string, input SendInput) (SendInputResult, error) {
 	logAgentSubmitTrace("service.send.entered", workspaceID, agentSessionID, input.Metadata, nil)
 	nodeStartedAt := time.Now()
-	normalizedContent, normalizedPromptText, err := normalizePromptContent(input.Content)
+	normalizedContent, _, err := normalizePromptContent(input.Content)
 	if err != nil {
 		s.reportAgentServiceNodeFailure(ctx, agentSessionID, "message_send", "content_normalized", "", nodeStartedAt, err)
 		return SendInputResult{}, err
 	}
 	s.reportAgentServiceNodeSuccess(ctx, agentSessionID, "message_send", "content_normalized", "", nodeStartedAt)
-	visiblePrompt := firstNonEmptyString(strings.TrimSpace(input.DisplayPrompt), normalizedPromptText)
-	if goal, ok := parseTypedGoalControl(normalizedContent, visiblePrompt, input.Guidance); ok {
-		result, err := s.goalControl(ctx, workspaceID, agentSessionID, goal.Action, goal.Objective, input.Metadata)
-		if err != nil {
-			return SendInputResult{}, err
-		}
-		return SendInputResult{Session: result.Session, Kind: "goalControl", GoalControl: &result}, nil
-	}
 	logAgentSubmitTrace("service.send.content_normalized", workspaceID, agentSessionID, input.Metadata, map[string]any{
 		"content_block_count": len(normalizedContent),
 	})
-	hostResult, err := s.applicationHost(serviceHostPreparation{service: s}).SendInput(ctx,
+	hostResult, err := s.ApplicationHost().SendInput(ctx,
 		agenthost.SessionRef{WorkspaceID: workspaceID, AgentSessionID: agentSessionID},
-		agenthost.SendInput{Content: normalizedContent, DisplayPrompt: input.DisplayPrompt, Metadata: input.Metadata, Guidance: input.Guidance},
+		agenthost.SendInput{
+			Content: normalizedContent, DisplayPrompt: input.DisplayPrompt,
+			Metadata: input.Metadata, ClientSubmitID: input.ClientSubmitID, Guidance: input.Guidance,
+		},
 	)
 	if err != nil {
 		return SendInputResult{}, err
+	}
+	if hostResult.Kind == "goalControl" && hostResult.GoalControl != nil {
+		session, getErr := s.Get(ctx, workspaceID, agentSessionID)
+		if getErr != nil {
+			return SendInputResult{}, getErr
+		}
+		goal := GoalControlSessionResult{
+			Session: session, Goal: clonePayload(hostResult.GoalControl.Goal),
+			OperationID: hostResult.GoalControl.OperationID, GoalState: hostResult.GoalControl.GoalState,
+		}
+		return SendInputResult{Session: session, Kind: "goalControl", GoalControl: &goal}, nil
 	}
 	turnID := hostResult.TurnID
 	provider := strings.TrimSpace(hostResult.Session.Provider)

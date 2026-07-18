@@ -9,8 +9,8 @@ import {
 import { projectCanonicalAgentGUIConversationSummaries } from "../../../contexts/workspace/presentation/renderer/agentGuiConversationList/useAgentGuiConversationList";
 import { createAgentGUIConversationRailTitlePromptSelector } from "../../../shared/agentConversationRailTitlePromptSelector";
 import {
-  conversationSummariesRenderEqual,
-  mergeConversationRailSessionIds
+  mergeConversationRailSessionIds,
+  stabilizeConversationSectionItems
 } from "../model/agentGuiConversationRail";
 import type { AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
 
@@ -130,21 +130,46 @@ export function createConversationRailQuerySnapshotSelector(): (
   const selectRailTitlePrompts =
     createAgentGUIConversationRailTitlePromptSelector();
   return (input, previous, force = false) => {
-    const runtimeRailConversations =
+    const workspaceSessions = selectWorkspaceAgentConsumerSessions(
+      input.engineState
+    );
+    const projectionSessionIds = new Set<string>();
+    if (!input.runtimeSectionsEnabled) {
+      for (const session of workspaceSessions) {
+        projectionSessionIds.add(session.session.agentSessionId);
+      }
+    }
+    for (const section of input.queryState.sections ?? []) {
+      for (const sessionId of section.sessionIds) {
+        projectionSessionIds.add(sessionId);
+      }
+    }
+    for (const sessionId of input.queryState.reconcilingSessionIds) {
+      projectionSessionIds.add(sessionId);
+    }
+    if (
+      input.searchEnabled &&
+      input.searchState.requestKey === input.searchRequestKey &&
+      input.searchState.resolvedQuery === input.searchQuery
+    ) {
+      for (const sessionId of input.searchState.sessionIds) {
+        projectionSessionIds.add(sessionId);
+      }
+    }
+    const projectedRailConversations =
       projectCanonicalAgentGUIConversationSummaries(
-        selectWorkspaceAgentConsumerSessions(input.engineState),
+        workspaceSessions.filter((session) =>
+          projectionSessionIds.has(session.session.agentSessionId)
+        ),
         selectRailTitlePrompts(input.engineState)
       );
+    const runtimeRailConversations = stabilizeConversationSectionItems(
+      previous?.runtimeRailConversations ?? [],
+      projectedRailConversations
+    );
     if (
       !force &&
-      previous?.runtimeRailConversations.length ===
-        runtimeRailConversations.length &&
-      previous.runtimeRailConversations.every((conversation, index) =>
-        conversationSummariesRenderEqual(
-          conversation,
-          runtimeRailConversations[index]!
-        )
-      )
+      previous?.runtimeRailConversations === runtimeRailConversations
     ) {
       return previous;
     }

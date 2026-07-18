@@ -12,7 +12,12 @@ import type { AgentTranscriptRowVM } from "../contracts/agentTranscriptRowVM";
 
 const virtualizerMockState = vi.hoisted(() => ({
   virtualIndexes: [100, 101, 102, 103, 104],
-  scrollToIndex: vi.fn()
+  scrollToIndex: vi.fn(),
+  instance: {
+    shouldAdjustScrollPositionOnItemSizeChange: undefined as
+      | undefined
+      | (() => boolean)
+  }
 }));
 
 vi.mock("../../../i18n/index", () => ({
@@ -24,18 +29,20 @@ vi.mock("../../../i18n/index", () => ({
 }));
 
 vi.mock("@tanstack/react-virtual", () => ({
-  useVirtualizer: vi.fn(() => ({
-    getTotalSize: () => 20000,
-    getVirtualItems: () =>
-      virtualizerMockState.virtualIndexes.map((index) => ({
-        index,
-        key: `virtual-${index}`,
-        start: index * 100,
-        size: 100
-      })),
-    measureElement: vi.fn(),
-    scrollToIndex: virtualizerMockState.scrollToIndex
-  }))
+  useVirtualizer: vi.fn(() =>
+    Object.assign(virtualizerMockState.instance, {
+      getTotalSize: () => 20000,
+      getVirtualItems: () =>
+        virtualizerMockState.virtualIndexes.map((index) => ({
+          index,
+          key: `virtual-${index}`,
+          start: index * 100,
+          size: 100
+        })),
+      measureElement: vi.fn(),
+      scrollToIndex: virtualizerMockState.scrollToIndex
+    })
+  )
 }));
 
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -44,6 +51,8 @@ import { AgentTranscriptView } from "./AgentTranscriptView";
 describe("AgentTranscriptView virtual rendering", () => {
   beforeEach(() => {
     virtualizerMockState.scrollToIndex.mockClear();
+    virtualizerMockState.instance.shouldAdjustScrollPositionOnItemSizeChange =
+      undefined;
   });
 
   it("does not virtualize normal short conversations", () => {
@@ -144,6 +153,14 @@ describe("AgentTranscriptView virtual rendering", () => {
     expect(
       screen.queryByRole("button", { name: "Thought process" })
     ).toBeNull();
+    const timeline = screen.getByTestId("agent-gui-timeline");
+    const header = document.querySelector<HTMLElement>(
+      "[data-agent-turn-work-header='turn-10']"
+    )!;
+    timeline.scrollTop = 900;
+    vi.spyOn(header, "getBoundingClientRect").mockImplementation(
+      () => ({ top: 80 - (timeline.scrollTop - 900) }) as DOMRect
+    );
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -151,10 +168,21 @@ describe("AgentTranscriptView virtual rendering", () => {
       })
     );
 
-    await flushCollapsibleRevealFrames();
+    expect(vi.mocked(useVirtualizer).mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({ anchorTo: "start" })
+    );
     expect(
-      screen.getByRole("button", { name: "Thought process" })
-    ).toBeTruthy();
+      virtualizerMockState.instance.shouldAdjustScrollPositionOnItemSizeChange?.()
+    ).toBe(false);
+    expect(timeline.style.getPropertyValue("overflow-anchor")).toBe("none");
+    timeline.scrollTop = 940;
+    fireEvent.scroll(timeline);
+    expect(timeline.scrollTop).toBe(900);
+
+    await flushCollapsibleRevealFrames();
+    const reveal = screen
+      .getByRole("button", { name: "Thought process" })
+      .closest(".agent-collapsible-reveal");
     expect(
       document.querySelector("[data-agent-transcript-virtual-turn='turn-10']")
     ).toBeTruthy();
@@ -163,6 +191,59 @@ describe("AgentTranscriptView virtual rendering", () => {
         "[data-agent-transcript-virtual-turn='turn-10']"
       )?.style.paddingBottom
     ).toBe("24px");
+    fireEvent.transitionEnd(reveal as HTMLElement, {
+      propertyName: "height"
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(useVirtualizer).mock.calls.at(-1)?.[0]).toEqual(
+        expect.objectContaining({ anchorTo: "end" })
+      );
+      expect(
+        virtualizerMockState.instance.shouldAdjustScrollPositionOnItemSizeChange
+      ).toBeUndefined();
+    });
+    timeline.scrollTop = 940;
+    fireEvent.scroll(timeline);
+    expect(timeline.scrollTop).toBe(940);
+    expect(timeline.style.getPropertyValue("overflow-anchor")).toBe("");
+  });
+
+  it("pins a disclosure row in a non-virtual transcript", () => {
+    render(
+      <div
+        data-testid="agent-gui-timeline"
+        style={{ height: "480px", overflow: "auto" }}
+      >
+        <AgentTranscriptView
+          conversation={conversationWithCollapsibleTurns(2)}
+          labels={{
+            thinkingLabel: "Thought process",
+            toolCallsLabel: (count) => `Tool calls (${count})`,
+            processing: "Planning next moves",
+            turnSummary: "Changed files"
+          }}
+        />
+      </div>
+    );
+    const timeline = screen.getByTestId("agent-gui-timeline");
+    const header = document.querySelector<HTMLElement>(
+      "[data-agent-turn-work-header='turn-0']"
+    )!;
+    timeline.scrollTop = 200;
+    vi.spyOn(header, "getBoundingClientRect").mockImplementation(
+      () => ({ top: 40 - (timeline.scrollTop - 200) }) as DOMRect
+    );
+
+    fireEvent.click(
+      screen.getAllByRole("button", {
+        name: "agentHost.agentGui.expandTurnWork"
+      })[0]!
+    );
+    timeline.scrollTop = 240;
+    fireEvent.scroll(timeline);
+
+    expect(timeline.scrollTop).toBe(200);
   });
 
   it("enables virtualization once the transcript reaches 30 turns", () => {

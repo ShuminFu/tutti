@@ -183,6 +183,7 @@ describe("agent gui provider targets", () => {
         },
         ownerLabel: " Alice ",
         iconUrl: " app://alice.png ",
+        sidebarIconUrl: " app://alice-sidebar.png ",
         unavailableReason: " owner_offline ",
         disabled: true,
         ref: {
@@ -206,6 +207,7 @@ describe("agent gui provider targets", () => {
       },
       ownerLabel: "Alice",
       iconUrl: "app://alice.png",
+      sidebarIconUrl: "app://alice-sidebar.png",
       unavailableReason: "owner_offline",
       disabled: true
     });
@@ -230,6 +232,7 @@ describe("agent gui provider targets", () => {
           description: " ",
           ownerLabel: " ",
           iconUrl: " ",
+          sidebarIconUrl: " ",
           unavailableReason: " "
         }
       ],
@@ -329,7 +332,7 @@ describe("agent gui provider targets", () => {
     );
   });
 
-  it("resolves targets only within the selected real provider", () => {
+  it("does not replace a missing explicit target with a provider sibling", () => {
     const targets = normalizeAgentGUIAgentTargets([
       {
         targetId: "shared-agent:codex-1",
@@ -360,10 +363,7 @@ describe("agent gui provider targets", () => {
         provider: "codex",
         agentTargets: targets
       })
-    ).toMatchObject({
-      targetId: "shared-agent:codex-1",
-      provider: "codex"
-    });
+    ).toBeNull();
   });
 
   it("resolves agent target ids across providers before using provider fallback", () => {

@@ -46,13 +46,20 @@ Rules:
 
 ## `pre-push`
 
-`pre-push` is the local full-validation gate before code leaves the machine.
+`pre-push` is the changed-aware push-readiness gate before code leaves the
+machine.
 
 Current behavior:
 
-- `pnpm check:full`
+- `pnpm check:changed -- --push-ready`
 
-`check:full` should remain the stable root command for local full validation.
+The hook compares the branch and working tree with the default base ref,
+selects only the relevant validation lanes, and adds build lanes for changed Go
+or package surfaces that require push-time build confidence. Unrelated
+TypeScript, Go, package, and boundary lanes do not run.
+
+`check:full` remains the stable root command for explicit local full validation
+and CI. It is no longer the default gate for every push.
 
 That root command now uses a repository-owned Node orchestration script so the stable entrypoint stays the same while independent checks can run in parallel in bounded phases:
 
@@ -91,9 +98,12 @@ typechecking uses native TypeScript via `tsgo`.
 
 Rules:
 
-- `pre-push` should stay aligned with first-pass pull-request CI checks
-- slower cross-workspace validation belongs here rather than in `pre-commit`
-- if a check is too expensive for `pre-commit`, keep it in `pre-push` and CI
+- `pre-push` should stay aligned with first-pass pull-request CI through
+  changed-file risk selection
+- slower cross-workspace validation should run only when the changed surface
+  selects it
+- explicit full validation remains available for releases, broad migrations,
+  manual confidence checks, and checked force-push workflows
 
 TypeScript package tests and Go workspace tests use discovery-based runners
 instead of root package/module whitelists. Successful runs print compact
@@ -116,14 +126,24 @@ matches the pushed `HEAD`.
 
 ## Changed-Aware Validation
 
-Use `pnpm check:changed` as the preferred local iteration check before running
-broader validation. It selects checks from the changed file set, runs
-independent lanes concurrently, prints compact summaries, and stores full logs
-under `.tmp/check-runs`.
+The selection and non-duplication policy lives in
+[Testing](./testing.md#validation-selection). This section only defines the
+changed-aware runner and hook behavior.
+
+The runner selects checks from the changed file set, runs independent lanes
+concurrently, prints compact summaries, and stores full logs under
+`.tmp/check-runs`.
+
+`pnpm check:changed -- --push-ready` is the `pre-push` mode. In addition to the
+normal changed-aware lanes, it schedules Go or package builds when the changed
+surface requires them.
 
 Failure output prints an 80-line tail by default. Use
 `pnpm check:changed -- --tail-lines <n>` when a larger or smaller tail is more
 useful; full logs remain in `.tmp/check-runs`.
+
+After failures, prefer `pnpm check:changed -- --failed-only` to rerun failed
+lanes instead of repeating successful lanes.
 
 When the changed set includes deleted package test files, `check:changed` should
 not pass those missing paths to Vitest as explicit targets. Deleting source files
@@ -140,7 +160,7 @@ boundary checks and package validation.
 The shared UI boundary is enforced in two modes:
 
 - `pnpm check:ui-boundaries:staged` for `pre-commit`
-- `pnpm check:ui-boundaries` for `pre-push` and CI
+- `pnpm check:ui-boundaries` when selected by changed-aware `pre-push` or CI
 
 This keeps commit-time feedback narrow to the staged change while still preserving a full-repository guard later in the flow.
 The durable details of what the script enforces, including the single allowed non-UI-system workbench stylesheet, belong in the script output and [UI System](../../packages/ui/system/ui-system.md), not duplicated here.
@@ -150,7 +170,7 @@ The durable details of what the script enforces, including the single allowed no
 Renderer feature internals are enforced in two modes:
 
 - `pnpm check:renderer-boundaries:staged` for `pre-commit`
-- `pnpm check:renderer-boundaries` for `pre-push` and CI
+- `pnpm check:renderer-boundaries` when selected by changed-aware `pre-push` or CI
 
 The script prevents files outside a feature from importing that feature's `services/internal/**` implementation surface. It also prevents ordinary renderer files from reading `window.tutti` directly; window container files pass that preload API into feature registrations instead.
 
@@ -159,7 +179,8 @@ The script prevents files outside a feature from importing that feature's `servi
 Electron runtime import boundaries are enforced in two modes:
 
 - `pnpm check:electron-runtime-boundaries:staged` for `pre-commit`
-- `pnpm check:electron-runtime-boundaries` for `pre-push` and CI
+- `pnpm check:electron-runtime-boundaries` when selected by changed-aware
+  `pre-push` or CI
 
 The script walks the runtime import graph reachable from `apps/desktop/src/main/**` and `apps/desktop/src/preload/**`.
 It rejects:

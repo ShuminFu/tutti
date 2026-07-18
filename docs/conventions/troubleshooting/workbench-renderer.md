@@ -261,6 +261,29 @@
   [WorkspaceFileReferencePickerTree.tsx](../../../packages/workspace/file-reference/src/ui/internal/reference/WorkspaceFileReferencePickerTree.tsx)
   [IssueManagerSidebarSections.tsx](../../../packages/workspace/issue-manager/src/ui/internal/shell/IssueManagerSidebarSections.tsx)
 
+### Controlled list input loses focus after every edit
+
+- Symptom:
+  Typing or deleting one character in a controlled input inside a rendered list
+  immediately ends the input state or clears focus.
+- Quick checks:
+  Inspect the nearest mapped row's React `key`. Confirm the key does not include
+  the input value or another field that changes in the input's `onChange` path.
+- Root cause:
+  Each edit changes the row key, so React treats the row as a different element
+  and unmounts the focused input before mounting its replacement.
+- Fix:
+  Build list-row keys only from stable row identity. For append/remove-only
+  drafts without a persisted row ID, a stable parent identity plus the row
+  position is acceptable; do not include editable values merely to make the key
+  look unique.
+- Validation:
+  Keep a regression test that rejects editable values in the row key. Manually
+  type and backspace repeatedly in each affected input and confirm that focus
+  and selection remain in the same field.
+- References:
+  [WorkspaceSettingsPanel.tsx](../../../apps/desktop/src/renderer/src/features/workspace-workbench/ui/WorkspaceSettingsPanel.tsx)
+
 ### External-store snapshots churn because derived reads lose reference stability
 
 - Symptom:
@@ -301,6 +324,32 @@
   [packages/workbench/surface/src/store/createDerivedSnapshotGetter.ts](../../../packages/workbench/surface/src/store/createDerivedSnapshotGetter.ts)
   [packages/workbench/surface/src/host/missionControlAdapter.ts](../../../packages/workbench/surface/src/host/missionControlAdapter.ts)
   [packages/workbench/surface/src/host/missionControlAdapter.test.ts](../../../packages/workbench/surface/src/host/missionControlAdapter.test.ts)
+
+### React Compiler removes a manual identity memo
+
+- Symptom:
+  React profiling reports a grouped prop as referentially unequal but deeply
+  equal on every render even though source code wraps it in `useMemo`.
+- Quick checks:
+  Inspect the renderer's dev transform and production bundle. A source pattern
+  such as `useMemo(() => nextValue, [nextValue.field])` may compile to
+  `const value = nextValue`, restoring the fresh input reference.
+- Root cause:
+  The memo callback returns an existing input object while its dependency list
+  intentionally describes selected fields. React Compiler infers the input
+  object as the value dependency and may remove this identity-only memo.
+- Fix:
+  Build an explicit projection object from every semantic field and let React
+  Compiler cache that allocation by those fields. Do not use a component ref or
+  `useMemo(() => freshInput)` to absorb upstream reference churn.
+- Validation:
+  Add a compiler regression test for the projection, run the desktop production
+  build, and inspect the emitted cache conditions. They must compare semantic
+  fields rather than assign the fresh input object directly. Re-record a React
+  performance trace to verify deeply-equal grouped-prop changes disappear.
+- References:
+  [useStableDesktopAgentGUIHostProps.ts](../../../apps/desktop/src/renderer/src/features/workspace-agent/ui/useStableDesktopAgentGUIHostProps.ts)
+  [useStableDesktopAgentGUIHostProps.test.ts](../../../apps/desktop/src/renderer/src/features/workspace-agent/ui/useStableDesktopAgentGUIHostProps.test.ts)
 
 ### Workbench host rebuilds when dock business status changes
 
@@ -455,6 +504,12 @@
   `engine -> selector -> projection -> controller -> section` chain. Separate
   real summary-field changes from reference-only array, object, or callback
   changes; a memoized leaf cannot contain churn created at the selector boundary.
+  On a Rail click, count updated sections and rows, then inspect whether a global
+  active ID, the full provider-dependent label object, or scope-dependent action
+  callbacks changed on every section. Thousands of Tooltip, Popper, Dropdown,
+  or ContextMenu component renders usually amplify that upstream fan-out rather
+  than identify its owner. React DevTools component tracks add profiling cost,
+  so use them to locate the chain but recapture without the profiler for timing.
   When the stack starts in `setRef`, inspect Radix `asChild` composition before
   changing business state. In particular, check whether Tooltip and Dropdown
   triggers both clone the same DOM child and merge callback refs, or whether a
@@ -470,7 +525,25 @@
   list for every unrelated engine event, after which a container rebuilds command
   callbacks and fans one update out to every list section. A render-budget test
   that injects an already-stable view model bypasses this production chain and
-  cannot detect that regression.
+  cannot detect that regression. A container-owned relative-time interval can
+  cause the same fan-out when its timestamp is passed through every section and
+  row instead of being consumed at the timestamp leaf. A globally threaded
+  selection ID, a provider-dependent full label object passed into Rail, or
+  callbacks rebuilt for each target scope can likewise invalidate every
+  section even though only one or two rows changed visually. If every section
+  owns closed Tooltip/Popper/Dropdown/ContextMenu content, that upstream
+  invalidation also executes thousands of invisible primitive components. A
+  changing lock, drag-disabled, or batch-disabled prop on one memoized section
+  header has the same effect: React must execute the whole header and its
+  mounted Radix trigger tree even when only one native attribute or one open
+  menu item changes. A combined Context object merely moves that fan-out from
+  props to every Context consumer. Keeping those Context providers inside the
+  memoized section also executes item projection before the update reaches the
+  narrow consumer. A project reorder can show a valid insertion indicator but
+  never commit when only the section owns `drop`: releasing over a gap bypasses
+  that handler and global cleanup clears the valid drag state. A measurement
+  effect that includes the state it writes in its dependencies can repeat the
+  resulting layout read once more.
 - Fix:
   Stabilize the value at the ownership boundary, or remove derived presentation
   values from bidirectional state. For external/workbench state, only sync
@@ -480,7 +553,34 @@
   from active-session semantic equality. Stabilize usage, commands, prompt
   queue, quota, session-chrome, and host callback projections at their owning
   selector/controller boundary; do not clone canonical arrays while assembling
-  the view model. During Rail reconciliation, expose a stable lock reader so
+  the view model. For a paged Rail, project only canonical sessions referenced
+  by current section, search-result, or reconciliation ids, then structurally
+  share unchanged summary items. Let time-label consumers subscribe directly
+  to a shared renderer-realm relative-time external store. The store starts one
+  timer for its first subscriber and clears it after its last unsubscribe.
+  Project selection into the section that owns the active canonical or overlay
+  row, passing `null` to unrelated sections. Give Rail a dedicated locale-bound
+  label projection instead of the provider-dependent full view labels. Keep
+  shared section actions referentially stable and read the latest scope at event
+  time. Split stable section header/action chrome from changing item data: pass
+  scalar presentation fields and stable event-time actions, never the section
+  object. Keep menu root and trigger mounted, while rendering portaled menu
+  content only during its view-local open state. Do not move disclosure into a
+  controller/store or copy Session/project semantics to obtain this isolation.
+  Split large headers into stable identity, create-action, menu, and frame
+  render islands. Project frequently changing derived booleans through
+  separate primitive view Contexts owned outside the memoized Section so
+  project drag state reaches only the native draggable frame, project action
+  lock reaches only the forwarded-ref button leaf and open project menu, and
+  batch deletion state reaches only open menu content. Keep event-time lock
+  readers as the action-delivery guard; Context is only the current
+  presentation projection. Closed menus should have no batch-state consumer.
+  Keep the project header as the drag source and let each project section update
+  insertion position across its full area. Let the Rail scroll viewport own the
+  final drop so section gaps commit the last visible valid position.
+  Remove a measured state value from an effect dependency when the effect only
+  writes, but never reads, that value.
+  During Rail reconciliation, expose a stable lock reader so
   portaled menu actions can check current state without passing a changing
   boolean through every section. For composed menu actions, attach the Tooltip
   trigger to a stable wrapper and the Dropdown trigger to the actual
@@ -497,17 +597,58 @@
   and run the affected renderer tests plus desktop typecheck. AgentGUI budget
   tests must dispatch a real engine update and assert the unrelated Rail subtree
   stays at zero renders; do not replace this with a manual view-model rerender
-  that reuses the Rail reference by construction. Add a composition regression
-  test for shared Tooltip/Dropdown actions and manually create a new
-  conversation, since an empty-to-populated Rail transition can be the first
-  time the faulty trigger mounts.
+  that reuses the Rail reference by construction. For relative-time clocks,
+  assert multiple time-label consumers share one interval, the last unmount
+  clears it, and a tick updates labels without rerendering the parent rows. Add
+  identity tests for locale-bound Rail labels and scope-bound actions, including
+  invoking a callback retained before a scope switch. Assert active selection
+  projects only into its owning section. Then recapture the same interaction
+  without React Profiler instrumentation before claiming timing improvement.
+  Add a render-budget test proving item replacement does not rerender stable
+  section chrome, including an item-empty transition that changes batch-action
+  availability. While a menu is open, assert lock changes still update its
+  trigger and disabled items. For lazy menu content, test pointer/context-menu
+  opening, keyboard-origin focus, Escape dismissal, action delivery, and
+  event-time lock rejection. Add a composition regression test for shared
+  Tooltip/Dropdown actions and manually create a new conversation, since an
+  empty-to-populated Rail transition can be the first time the faulty trigger
+  mounts.
 - References:
   [main.tsx](../../../apps/desktop/src/renderer/src/main.tsx)
   [whyDidYouRender.ts](../../../apps/desktop/src/renderer/src/lib/whyDidYouRender.ts)
   [useAgentGUIConversationRailQuery.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUIConversationRailQuery.ts)
   [useAgentGUIConversationRailQuery.search.spec.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUIConversationRailQuery.search.spec.tsx)
+  [agentGuiConversationRailQuerySnapshot.spec.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/agentGuiConversationRailQuerySnapshot.spec.ts)
+  [AgentGUIConversationRailClock.spec.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIConversationRailClock.spec.tsx)
+  [agentGUIConversationRailLabels.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/view/agentGUIConversationRailLabels.ts)
+  [useAgentGUIConversationRailViewState.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/view/useAgentGUIConversationRailViewState.ts)
   [AgentGUIConversationRailSection.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIConversationRailSection.tsx)
+  [AgentGUIConversationRailSectionHeader.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIConversationRailSectionHeader.tsx)
+  [AgentGUIConversationRailItem.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIConversationRailItem.tsx)
   [AgentSessionChrome.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/AgentSessionChrome.tsx)
+
+### Provider Rail tile drags but does not reorder
+
+- Symptom:
+  A Provider Rail tile shows the native drag image, but the insertion indicator
+  does not follow rail gaps and dropping does not persist a new order.
+- Quick checks:
+  Inspect each `[data-provider-tile="true"]` element. Confirm the rendered
+  `data-*` identity and its camel-cased `dataset` reader name match exactly.
+- Root cause:
+  A terminology migration can rename the dataset reader without renaming the
+  DOM attribute. Container-level hit testing then discards every tile because
+  each target ID appears empty, while native dragging still makes the feature
+  look partially functional.
+- Fix:
+  Keep the DOM identity attribute and dataset reader aligned. Cover the Rail
+  container path, not only a tile's own `dragover`: simulate dragging over a
+  gap, assert the insertion indicator, drop, and verify persisted order.
+- Validation:
+  Reorder through a rail gap, reload, and confirm the new order remains.
+- References:
+  [AgentGUIProviderRail.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIProviderRail.tsx)
+  [AgentGUIProviderRail.spec.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIProviderRail.spec.tsx)
 
 ### Dense list panel stutters when mounted or resized
 

@@ -1285,12 +1285,13 @@ func TestStoreTargetNormalizationAndSkippableRows(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := store.PutAgentTarget(ctx, Target{
-		ID:            "custom",
-		Provider:      "codex",
-		LaunchRefJSON: `{"type":"local_cli","provider":"codex"}`,
-		Name:          " Custom ",
-		Enabled:       true,
-		Source:        "user",
+		ID:             "custom",
+		Provider:       "codex",
+		LaunchRefJSON:  `{"type":"local_cli","provider":"codex"}`,
+		Name:           " Custom ",
+		SidebarIconURL: " data:image/svg+xml;base64,sidebar ",
+		Enabled:        true,
+		Source:         "user",
 	}); err != nil {
 		t.Fatalf("PutAgentTarget() error = %v", err)
 	}
@@ -1300,6 +1301,9 @@ func TestStoreTargetNormalizationAndSkippableRows(t *testing.T) {
 	}
 	if target.Name != "Custom" {
 		t.Fatalf("target name = %q, want normalized Custom", target.Name)
+	}
+	if target.SidebarIconURL != " data:image/svg+xml;base64,sidebar " {
+		t.Fatalf("target sidebar icon URL = %q", target.SidebarIconURL)
 	}
 
 	if _, err := store.PutAgentTarget(ctx, Target{ID: "bad", Name: "broken row"}); !errors.Is(err, errInvalidTestTarget) {

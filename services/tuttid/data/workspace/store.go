@@ -17,6 +17,8 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 var ErrWorkbenchSnapshotNotFound = errors.New("workspace workbench snapshot not found")
 var ErrWorkspaceAppNotFound = errors.New("workspace app not found")
 var ErrWorkspaceAppFactoryJobNotFound = errors.New("workspace app factory job not found")
+var ErrUserProjectNotFound = errors.New("user project not found")
+var ErrUserProjectPartitionMismatch = errors.New("user project move crosses pinned partition")
 
 // ErrAgentTargetNotFound aliases the embedded agent store's sentinel so
 // existing errors.Is checks keep working across the delegation boundary.
@@ -39,6 +41,9 @@ type WorkbenchStore interface {
 
 type AgentActivityStore interface {
 	agentactivitybiz.Repository
+	CheckpointRuntimeOperation(context.Context, agentactivitybiz.CheckpointRuntimeOperationInput) (agentactivitybiz.RuntimeOperation, bool, error)
+	CompletePlanDecisionRuntimeOperation(context.Context, agentactivitybiz.CompletePlanDecisionRuntimeOperationInput) (agentactivitybiz.RuntimeOperationCompletion, bool, error)
+	FindTurnByClientSubmitID(context.Context, string, string, string) (string, bool, error)
 	PrepareGoalControlOperation(context.Context, agentactivitybiz.GoalControlOperationPrepare) (agentactivitybiz.GoalControlOperation, agentactivitybiz.SessionGoalState, bool, error)
 	GetGoalControlAudit(context.Context, string, string, string) (agentactivitybiz.Message, bool, error)
 	MarkGoalControlOperationDispatched(context.Context, string, string, int64) (agentactivitybiz.GoalControlOperation, bool, error)
@@ -71,6 +76,10 @@ type PreferencesStore interface {
 	PutDesktopPreferences(context.Context, preferencesbiz.DesktopPreferences) (preferencesbiz.DesktopPreferences, error)
 }
 
+type AgentComposerDefaultsPatchStore interface {
+	PatchAgentComposerDefaultsForTarget(context.Context, string, preferencesbiz.AgentComposerDefaultsPatch) (preferencesbiz.AgentComposerDefaults, error)
+}
+
 type ManagedCredentialsStore interface {
 	DeleteManagedModelGrant(context.Context, string, string, string) error
 	DeleteManagedModelProviderConfig(context.Context, string, managedcredentialsbiz.ProviderID) error
@@ -86,6 +95,8 @@ type UserProjectStore interface {
 	DeleteUserProject(context.Context, string) error
 	DeleteUserProjectByPath(context.Context, string) error
 	ListUserProjects(context.Context) ([]userprojectbiz.Project, error)
+	MoveUserProject(context.Context, string, *string) ([]userprojectbiz.Project, error)
+	PinUserProject(context.Context, string, bool) ([]userprojectbiz.Project, bool, error)
 	PutUserProject(context.Context, userprojectbiz.Project) (userprojectbiz.Project, error)
 	TouchUserProject(context.Context, string, int64) error
 }

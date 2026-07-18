@@ -21,7 +21,10 @@ import { registerWorkspaceFileManagerServices } from "@renderer/features/workspa
 import { registerWorkspaceUserProjectServices } from "@renderer/features/workspace-user-project/services/registerWorkspaceUserProjectServices.ts";
 import { createAgentProviderTerminalCommandRunner } from "@renderer/features/workspace-workbench/services/createAgentProviderTerminalCommandRunner";
 import { createWorkspaceAgentOutcomeNotificationController } from "@renderer/features/workspace-workbench/services/workspaceAgentOutcomeNotification";
-import { registerWorkspaceWorkbenchServices } from "@renderer/features/workspace-workbench/services/registerWorkspaceWorkbenchServices";
+import {
+  registerWorkspaceAccountService,
+  registerWorkspaceWorkbenchServices
+} from "@renderer/features/workspace-workbench/services/registerWorkspaceWorkbenchServices";
 import { createWorkspaceWorkbenchSnapshotRepository } from "@renderer/features/workspace-workbench/services/createWorkspaceWorkbenchSnapshotRepository.ts";
 import { createWorkspaceAgentOutcomeForegroundNotificationPresenter } from "@renderer/features/workspace-workbench/ui/WorkspaceAgentOutcomeNotificationToast";
 import {
@@ -120,7 +123,8 @@ export function createWorkspaceWindowContainer(): WorkspaceWindowContainerResult
     eventStreamClient: tuttidEventStreamClient
   });
   const reporterService = registerReporterServices(registry, {
-    tuttidClient
+    tuttidClient,
+    mode: routeView === "agent" ? "agent" : "os"
   });
   const predefinePageviewAnalytics = shouldReportPredefinePageview(
     window.location.search
@@ -169,6 +173,15 @@ export function createWorkspaceWindowContainer(): WorkspaceWindowContainerResult
     {
       hostFilesApi: desktopApi.host.files,
       tuttidClient,
+      eventStreamClient: tuttidEventStreamClient,
+      logDiagnostic: (payload) => {
+        void desktopApi.runtime.logTerminalDiagnostic({
+          details: { payload: JSON.stringify(payload).slice(0, 1000) },
+          event: "workspace.user-project.diagnostic",
+          level: "debug",
+          workspaceId: activeWorkspaceID
+        });
+      },
       notifications: notificationService,
       platformApi: desktopApi.platform,
       workspaceId: activeWorkspaceID
@@ -182,7 +195,15 @@ export function createWorkspaceWindowContainer(): WorkspaceWindowContainerResult
     reporterService,
     workspaceUserProjectService
   });
+  const accountService = registerWorkspaceAccountService(registry, {
+    hostFilesApi: desktopApi.host.files,
+    tuttidClient
+  });
   const workspaceAgentServices = registerWorkspaceAgentServices(registry, {
+    accountLogin: accountService,
+    clipboard: {
+      writeText: (text) => navigator.clipboard.writeText(text)
+    },
     eventStreamClient: tuttidEventStreamClient,
     hostFilesApi: desktopApi.host.files,
     tuttidClient,
@@ -193,6 +214,7 @@ export function createWorkspaceWindowContainer(): WorkspaceWindowContainerResult
     terminalCommandRunner: createAgentProviderTerminalCommandRunner(
       desktopApi.runtime
     ),
+    workspaceId: activeWorkspaceID,
     workspaceUserProjectService
   });
   const agentOutcomeNotificationController =

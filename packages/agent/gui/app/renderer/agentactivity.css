@@ -209,7 +209,7 @@
   overflow: hidden;
   border: 1px solid var(--line-2);
   border-radius: 8px;
-  background: var(--background-panel);
+  background: var(--background-fronted);
   box-shadow: 0 18px 40px color-mix(in srgb, black 26%, transparent);
   color: var(--text-primary);
   padding: 4px;
@@ -274,9 +274,12 @@
 }
 
 .tsh-zoom-dialog__icon-button:hover,
-.tsh-zoom-dialog__image-actions button:hover,
-.tsh-image-context-menu button:hover {
+.tsh-zoom-dialog__image-actions button:hover {
   background: color-mix(in srgb, var(--background-panel) 82%, white 12%);
+}
+
+.tsh-image-context-menu button:hover {
+  background: var(--transparency-hover);
 }
 
 .tsh-zoom-dialog__zoom-controls button:not(:disabled):hover {
@@ -4400,6 +4403,12 @@ aside.workspace-agents-status-panel
   color: var(--folder);
 }
 
+[data-agent-file-mention="true"][data-agent-mention-kind="file"][data-upload-error="true"].tsh-agent-object-token--file {
+  border-color: color-mix(in srgb, var(--state-danger) 42%, transparent);
+  background: color-mix(in srgb, var(--state-danger) 8%, transparent);
+  color: var(--state-danger);
+}
+
 [data-agent-file-mention="true"][data-agent-mention-kind="file"][data-agent-file-entry-kind="directory"]
   .tsh-agent-object-token__icon {
   mask-image: url("./assets/icons/folder-filled.svg");
@@ -5881,9 +5890,67 @@ aside.workspace-agents-status-panel
 }
 
 .agent-gui-node__conversation-section {
+  position: relative;
   display: grid;
   min-width: 0;
   max-width: 100%;
+}
+
+.agent-gui-node__pinned-project-rail-header {
+  min-width: 0;
+  padding: 4px 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.agent-gui-node__conversation-section[data-project-dragging="true"] {
+  opacity: 0.42;
+}
+
+.agent-gui-node__conversation-section[data-project-drop-indicator]::before {
+  position: absolute;
+  right: 6px;
+  left: 6px;
+  z-index: 4;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--agent-gui-accent);
+  content: "";
+  pointer-events: none;
+}
+
+.agent-gui-node__conversation-section[data-project-drop-indicator="before"]::before {
+  top: -1px;
+}
+
+.agent-gui-node__conversation-section[data-project-drop-indicator="after"]::before {
+  bottom: -1px;
+}
+
+.agent-gui-node__project-drag-image {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  display: flex;
+  max-width: 220px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: var(--agent-gui-surface-raised);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text-primary);
+  padding: 7px 10px;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.agent-gui-node__project-drag-image > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .agent-gui-node__conversation-section + .agent-gui-node__conversation-section {
@@ -8703,7 +8770,9 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   opacity: 1;
 }
 
-.agent-gui-node__composer-handoff-icon[data-playing="true"]
+.agent-gui-node__composer-handoff-icon:has(
+    .agent-gui-node__composer-handoff-icon-animated[data-active="true"]
+  )
   .agent-gui-node__composer-handoff-icon-static {
   opacity: 0;
 }
@@ -8711,7 +8780,9 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
 .agent-gui-node__composer-handoff-icon-animated {
   position: absolute;
   inset: 0;
-  filter: var(--agent-gui-handoff-lottie-filter, none);
+  /* Match the APNG's padded 44px canvas to the static icon's visual size. */
+  transform: scale(1.3);
+  filter: var(--agent-gui-handoff-animation-filter, none);
   opacity: 0;
   pointer-events: none;
 }
@@ -8726,13 +8797,13 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
 }
 
 :root[data-theme="dark"] .agent-gui-node__composer-handoff-icon-animated {
-  --agent-gui-handoff-lottie-filter: brightness(0) invert(1);
+  --agent-gui-handoff-animation-filter: brightness(0) invert(1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"])
     .agent-gui-node__composer-handoff-icon-animated {
-    --agent-gui-handoff-lottie-filter: brightness(0) invert(1);
+    --agent-gui-handoff-animation-filter: brightness(0) invert(1);
   }
 }
 
@@ -9377,6 +9448,7 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   width: 32px;
   height: 32px;
   place-items: center;
+  overflow: visible;
   border: 2px solid transparent;
   border-radius: 8px;
   background: transparent;
@@ -9976,6 +10048,31 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   border-radius: 6px;
   background: linear-gradient(#b0b2b5, #ced0d3);
   box-shadow: inset 0 2px 5px rgb(0 0 0 / 30%);
+}
+
+/* Match the WebGL carousel's historical BADGE_DIAMETER (0.36) and
+   BADGE_OFFSET (0.4): the selected DOM player must keep the same owner-marker
+   geometry as the records that move into and out of the center slot. */
+.agent-gui-vinyl-player__owner-badge {
+  position: absolute;
+  right: -8%;
+  bottom: -8%;
+  z-index: 5;
+  box-sizing: border-box;
+  display: grid;
+  width: 36%;
+  aspect-ratio: 1;
+  place-items: center;
+  overflow: hidden;
+  border: 8px solid var(--background-fronted);
+  border-radius: 999px;
+  background: var(--background-fronted);
+}
+
+.agent-gui-vinyl-player__owner-badge > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .agent-gui-node__empty-hero-carousel:has(:focus-visible) {
@@ -10584,7 +10681,7 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
 }
 
 .workspace-agents-status-panel__detail-subagent-name {
-  color: var(--text-primary);
+  color: var(--text-secondary);
   margin-left: 4px;
 }
 

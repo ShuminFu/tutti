@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
+import {
+  AgentTargetPresentationProvider,
+  type AgentMessageMarkdownAgentTarget
+} from "../../../shared/AgentTargetPresentationContext";
 import type { AgentGUIViewLabels } from "./AgentGUINodeView.types";
 import { AgentGUIConversationRailItem } from "./AgentGUIConversationRailItem";
 
@@ -69,7 +73,7 @@ describe("AgentGUIConversationRailItem interaction lock", () => {
     }
   );
 
-  it("keeps the file marker for a projected file reference", () => {
+  it("keeps a projected file reference as @ text without a mention icon", () => {
     const { container } = renderRailItem({
       isRailInteractionLocked: () => false,
       item: {
@@ -82,9 +86,13 @@ describe("AgentGUIConversationRailItem interaction lock", () => {
       container.querySelector(
         '[data-agent-gui-conversation-title-mention-icon="file"]'
       )
-    ).not.toBeNull();
-    expect(container.textContent).toContain("notes.md inspect");
-    expect(container.textContent).not.toContain("@notes.md inspect");
+    ).toBeNull();
+    expect(
+      container.querySelectorAll(
+        "[data-agent-gui-conversation-title-mention-icon]"
+      )
+    ).toHaveLength(0);
+    expect(container.textContent).toContain("@notes.md inspect");
   });
 
   it("leaves an ordinary conversation row unchanged", () => {
@@ -101,6 +109,35 @@ describe("AgentGUIConversationRailItem interaction lock", () => {
       )
     ).toBeNull();
     expect(container.textContent).toContain("Session 1");
+  });
+
+  it("renders an open extension target icon through the monochrome mask", () => {
+    const iconUrl = "data:image/svg+xml;base64,kilo-colored";
+    const maskIconUrl = "data:image/svg+xml;base64,kilo-mask";
+    const { container } = renderRailItem({
+      agentTargets: [
+        {
+          agentTargetId: "extension:kilo",
+          iconUrl,
+          maskIconUrl,
+          provider: "acp:kilo",
+          workspaceId: "workspace-1"
+        }
+      ],
+      isRailInteractionLocked: () => false,
+      item: {
+        agentTargetId: "extension:kilo",
+        provider: "acp:kilo"
+      }
+    });
+
+    const icon = container.querySelector<HTMLElement>(
+      ".agent-gui-node__conversation-provider-icon"
+    );
+    expect(icon).not.toBeNull();
+    expect(
+      icon?.style.getPropertyValue("--agent-gui-conversation-provider-icon-url")
+    ).toBe(`url("${maskIconUrl}")`);
   });
 
   it("blocks the div context-menu trigger while rail reconciliation is pending", () => {
@@ -137,9 +174,45 @@ describe("AgentGUIConversationRailItem interaction lock", () => {
       expect(onRequestRenameConversation).not.toHaveBeenCalled()
     );
   });
+
+  it("keeps the focused trigger mounted and unmounts content after Escape", async () => {
+    renderRailItem({ isRailInteractionLocked: () => false });
+
+    expect(screen.queryByRole("menuitem")).toBeNull();
+    const trigger = screen.getByTestId("agent-gui-conversation-item-session-1");
+    const selectButton = screen.getByRole("button", { name: /Session 1/ });
+    selectButton.focus();
+    fireEvent.contextMenu(trigger, { button: 0, detail: 0 });
+    expect(
+      await screen.findByRole("menuitem", { name: "Rename" })
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("menuitem")).toBeNull());
+  });
+
+  it("runs an unlocked action before lazy menu content unmounts", async () => {
+    const onRequestRenameConversation = vi.fn();
+    renderRailItem({
+      isRailInteractionLocked: () => false,
+      onRequestRenameConversation
+    });
+
+    fireEvent.contextMenu(
+      screen.getByTestId("agent-gui-conversation-item-session-1")
+    );
+    const renameItem = await screen.findByRole("menuitem", { name: "Rename" });
+    fireEvent.pointerUp(renameItem, { button: 0 });
+
+    await waitFor(() =>
+      expect(onRequestRenameConversation).toHaveBeenCalledTimes(1)
+    );
+    expect(screen.queryByRole("menuitem")).toBeNull();
+  });
 });
 
 function renderRailItem(overrides: {
+  agentTargets?: readonly AgentMessageMarkdownAgentTarget[];
   isRailInteractionLocked: () => boolean;
   item?: Partial<AgentGUIConversationSummary>;
   onRequestRenameConversation?: (
@@ -147,10 +220,9 @@ function renderRailItem(overrides: {
   ) => void;
   onSelectConversation?: (agentSessionId: string) => void;
 }) {
-  return render(
+  const item = (
     <AgentGUIConversationRailItem
       active={false}
-      currentTimeMs={1}
       isDeletingConversation={false}
       isPendingDeleteConversation={false}
       isRailInteractionLocked={overrides.isRailInteractionLocked}
@@ -179,6 +251,15 @@ function renderRailItem(overrides: {
       onToggleConversationPinned={() => {}}
     />
   );
+  return render(
+    overrides.agentTargets ? (
+      <AgentTargetPresentationProvider agentTargets={overrides.agentTargets}>
+        {item}
+      </AgentTargetPresentationProvider>
+    ) : (
+      item
+    )
+  );
 }
 
 const RAIL_ITEM_LABELS = {
@@ -189,6 +270,12 @@ const RAIL_ITEM_LABELS = {
   markSessionUnread: "Mark unread",
   openConversationWindow: "Open in window",
   pinSession: "Pin",
+  relativeTimeDays: (value: number) => `${value} days`,
+  relativeTimeHours: (value: number) => `${value} hours`,
+  relativeTimeJustNow: "just now",
+  relativeTimeMinutes: (value: number) => `${value} minutes`,
+  relativeTimeMonths: (value: number) => `${value} months`,
+  relativeTimeYears: (value: number) => `${value} years`,
   renameSession: "Rename",
   unpinSession: "Unpin"
 } as AgentGUIViewLabels;

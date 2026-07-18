@@ -144,7 +144,9 @@ export function areAgentGUIUserProjectsEqual(
         candidate !== undefined &&
         project.id === candidate.id &&
         project.path === candidate.path &&
-        project.label === candidate.label
+        project.label === candidate.label &&
+        project.sectionKey === candidate.sectionKey &&
+        project.pinnedAtUnixMs === candidate.pinnedAtUnixMs
       );
     })
   );
@@ -156,9 +158,11 @@ export function upsertAgentGUIUserProject(
     id: string;
     path: string;
     label: string;
+    sectionKey?: string;
     createdAtUnixMs?: number;
     updatedAtUnixMs?: number;
     lastUsedAtUnixMs?: number | null;
+    pinnedAtUnixMs: number;
   }
 ): AgentHostUserProject[] {
   const normalizedProject: AgentHostUserProject = {
@@ -172,6 +176,10 @@ export function upsertAgentGUIUserProject(
       : { lastUsedAtUnixMs: project.lastUsedAtUnixMs }),
     label: project.label,
     path: project.path,
+    pinnedAtUnixMs: project.pinnedAtUnixMs,
+    ...(project.sectionKey === undefined
+      ? {}
+      : { sectionKey: project.sectionKey }),
     ...(project.updatedAtUnixMs === undefined
       ? {}
       : { updatedAtUnixMs: project.updatedAtUnixMs })
@@ -204,10 +212,20 @@ export function readAgentGUIUserProjectSnapshot(
       : { lastUsedAtUnixMs: project.lastUsedAtUnixMs }),
     label: project.label,
     path: project.path,
+    pinnedAtUnixMs: project.pinnedAtUnixMs,
+    ...(project.sectionKey === undefined
+      ? {}
+      : { sectionKey: project.sectionKey }),
     ...(project.updatedAtUnixMs === undefined
       ? {}
       : { updatedAtUnixMs: project.updatedAtUnixMs })
   }));
+}
+
+export function readAgentGUIUserProjectMutationPending(
+  api: AgentHostUserProjectsApi | undefined
+): boolean {
+  return api?.service?.getSnapshot?.().isMutationPending === true;
 }
 
 export function normalizeInteractiveQuestions(

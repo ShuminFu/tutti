@@ -28,7 +28,8 @@ import type {
 import type {
   AgentGUIOpenSessionRequest,
   AgentGUIPrefillPromptRequest,
-  AgentGUIRememberComposerDefaultsInput
+  AgentGUIRememberComposerDefaultsInput,
+  AgentGUIRememberComposerDefaultsResult
 } from "./controller/useAgentGUINodeController";
 import type {
   AgentGUISidebarFooterContext,
@@ -46,8 +47,10 @@ import type {
 } from "./AgentComposer";
 import type { AgentContextMentionProvider } from "./agentContextMentionProvider";
 import type { AgentMessageMarkdownWorkspaceAppIcon } from "../../shared/AgentMessageMarkdown";
+import type { RichTextMentionService } from "@tutti-os/ui-rich-text/service";
 import type { AgentGUIEngagementEventSink } from "./engagement/agentGUIEngagement.types";
 import type { AgentGUIComposerAppendRequest } from "./controller/useAgentGUIComposerAppendRequest";
+import type { OpenAgentEnvPanelInput } from "../../shared/agentEnv";
 
 export interface AgentGUINodeIdentity {
   nodeId: string;
@@ -61,7 +64,8 @@ export interface AgentGUINodeWorkspace {
   fileReferenceAdapter?: WorkspaceFileReferenceAdapter | null;
   onRequestGitBranches?: AgentComposerGitBranchLoader | null;
   selectProjectDirectory?: () => Promise<{ path: string } | null>;
-  resolveDroppedFileReferences?: AgentComposerProps["resolveDroppedFileReferences"];
+  prepareExternalPromptFiles?: AgentComposerProps["prepareExternalPromptFiles"];
+  promptAssetLimit?: number | null;
   referenceSourceAggregator?: ReferenceSourceAggregator | null;
   resolveReferenceEntryIconUrl?: (
     entry: WorkspaceFileEntry
@@ -119,6 +123,9 @@ export interface AgentGUINodeHostCapabilities {
   accountMenuState?: AgentGUIAccountMenuState | null;
   agentTargets?: readonly AgentGUIAgentTarget[];
   agentTargetsLoading?: boolean;
+  /** Launch-only targets for active-conversation handoff. */
+  handoffAgentTargets?: readonly AgentGUIAgentTarget[];
+  handoffAgentTargetsLoading?: boolean;
   providerRailAllPresentation?: AgentGUIProviderRailAllPresentation | null;
   providerRailMode?: AgentGUIProviderRailMode;
   comingSoonProviders?: readonly AgentGUIProvider[];
@@ -128,6 +135,7 @@ export interface AgentGUINodeHostCapabilities {
   defaultAgentTargetId?: string | null;
   providerAuthAccountLabels?: Partial<Record<string, string>>;
   contextMentionProviders?: readonly AgentContextMentionProvider[];
+  mentionService?: RichTextMentionService;
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
   disabledHomeSuggestions?: readonly AgentGUIHomeSuggestionId[];
 }
@@ -144,6 +152,7 @@ export interface AgentGUINodeHostActions {
     capability: AgentComposerCapabilitySettingsTarget
   ) => void;
   onAgentProviderLogin?: (provider: AgentGUIProvider) => void;
+  onAgentEnvPanelOpen?: (input?: OpenAgentEnvPanelInput) => void;
   onOpenConversationWindow?: (agentSessionId: string) => void;
   onClose: () => void;
   onResize: (frame: NodeFrame) => void;
@@ -152,7 +161,7 @@ export interface AgentGUINodeHostActions {
   ) => void;
   onRememberComposerDefaults?: (
     input: AgentGUIRememberComposerDefaultsInput
-  ) => void | Promise<void>;
+  ) => void | Promise<AgentGUIRememberComposerDefaultsResult>;
   isMuted?: boolean;
   onMinimize?: () => void;
   onToggleMaximize?: () => void;
@@ -308,7 +317,8 @@ export function areAgentGUINodePropsEqual(
     pw.fileReferenceAdapter === nw.fileReferenceAdapter &&
     pw.onRequestGitBranches === nw.onRequestGitBranches &&
     pw.selectProjectDirectory === nw.selectProjectDirectory &&
-    pw.resolveDroppedFileReferences === nw.resolveDroppedFileReferences &&
+    pw.prepareExternalPromptFiles === nw.prepareExternalPromptFiles &&
+    pw.promptAssetLimit === nw.promptAssetLimit &&
     pw.referenceSourceAggregator === nw.referenceSourceAggregator &&
     pw.resolveReferenceEntryIconUrl === nw.resolveReferenceEntryIconUrl &&
     pw.resolveMentionReferenceTarget === nw.resolveMentionReferenceTarget &&
@@ -346,6 +356,8 @@ export function areAgentGUINodePropsEqual(
     pc.accountMenuState === nc.accountMenuState &&
     pc.agentTargets === nc.agentTargets &&
     pc.agentTargetsLoading === nc.agentTargetsLoading &&
+    pc.handoffAgentTargets === nc.handoffAgentTargets &&
+    pc.handoffAgentTargetsLoading === nc.handoffAgentTargetsLoading &&
     pc.providerRailAllPresentation?.iconUrl ===
       nc.providerRailAllPresentation?.iconUrl &&
     pc.providerRailMode === nc.providerRailMode &&
@@ -354,12 +366,14 @@ export function areAgentGUINodePropsEqual(
     pc.defaultAgentTargetId === nc.defaultAgentTargetId &&
     pc.providerAuthAccountLabels === nc.providerAuthAccountLabels &&
     pc.contextMentionProviders === nc.contextMentionProviders &&
+    pc.mentionService === nc.mentionService &&
     pc.workspaceAppIcons === nc.workspaceAppIcons &&
     pc.disabledHomeSuggestions === nc.disabledHomeSuggestions &&
     pa.onLinkAction === na.onLinkAction &&
     pa.onHandoffConversation === na.onHandoffConversation &&
     pa.onCapabilitySettingsRequest === na.onCapabilitySettingsRequest &&
     pa.onAgentProviderLogin === na.onAgentProviderLogin &&
+    pa.onAgentEnvPanelOpen === na.onAgentEnvPanelOpen &&
     pa.onOpenConversationWindow === na.onOpenConversationWindow &&
     pa.onClose === na.onClose &&
     pa.onResize === na.onResize &&

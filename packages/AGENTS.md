@@ -10,6 +10,10 @@ If you are editing `packages/agent/gui/*`, read
 [docs/architecture/agent-gui-node.md](../docs/architecture/agent-gui-node.md)
 first, then [packages/agent/gui/AGENTS.md](agent/gui/AGENTS.md).
 
+If you are editing Agent session, Turn, Goal, runtime-operation, or recovery
+lifecycle under `packages/agent/*`, read the root `Agent Host Boundary` and
+[packages/agent/host/README.md](agent/host/README.md) first.
+
 If the task mentions AgentGUI, AgentGuiNode, Agent GUI, the agent conversation
 module, agent composer, workspace agent timeline, agent approvals, or
 interactive agent prompts, read
@@ -23,6 +27,7 @@ If you are editing `packages/ui/*`, also read [packages/ui/AGENTS.md](ui/AGENTS.
 
 - `clients/*`: shared domain-specific clients
 - `events/*`: shared schema-first business event protocol contracts and generated transport metadata
+- `agent/*`: Agent lifecycle Host, canonical store, frontend activity engine, replication contract, and GUI boundaries
 - `browser/*`: reusable browser/workbench node mechanics for desktop hosts
 - `configs/*`: shared TypeScript and formatting config
 - `ui/*`: shared frontend-foundation packages
@@ -71,10 +76,9 @@ external contract and is included in the durable npm release conventions.
 
 ## Testing defaults
 
-- For TypeScript package changes, run `pnpm typecheck`
-- If a package change affects `@tutti-os/ui-system` exports or import boundaries, also run `pnpm check:ui-boundaries`
-- If a package change affects desktop integration, also run `pnpm --filter @tutti-os/desktop build`
-- If a package change affects daemon behavior, also run the relevant `services/tuttid` checks
+Packages do not override the repository validation workflow. Follow
+[Validation Selection](../docs/conventions/testing.md#validation-selection)
+and add only checks required by the closest package `AGENTS.md`.
 
 ## Related docs
 

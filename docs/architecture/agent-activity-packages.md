@@ -7,6 +7,11 @@ GUI surfaces. The goal is to make the agent session data flow reusable by other
 repositories while keeping host-specific transport and desktop integration out
 of the shared packages.
 
+System-wide ownership and flow rules live in
+[Agent GUI Node](./agent-gui-node.md). This document is the detailed package
+contract for activity-core/runtime/adapter changes, not required reading for a
+presentation-only edit.
+
 ## Design Goals
 
 - Put reusable agent session state, event merging, and attention selectors
@@ -42,9 +47,12 @@ packages/agent/store-sqlite/canonical
 ```
 
 `packages/agent/store-sqlite/canonical` is the single authority for canonical
-activity contract vocabulary; other packages import its phase, outcome,
-origin, interaction-kind, and interaction-status definitions rather than
-redeclaring them.
+activity contracts. It owns phase, outcome, origin, interaction-kind and
+interaction-status vocabulary; pure activity projection snapshots and merge
+functions; commit-observer report types; and the provider identity,
+capability, and plan-decision vocabulary needed by canonical persistence.
+Daemon packages retain compatibility aliases, while runtime mechanics remain
+daemon-owned.
 
 ## Responsibilities
 
@@ -58,11 +66,36 @@ hooks. The `conformance` subpackage owns reusable typed lifecycle scenarios so
 the legacy `tuttid` service, the extracted Host, and downstream adapters can be
 checked against the same behavior baseline.
 
-The module does not own transport, authorization, room or device identity,
+Session read and metadata commands follow the same boundary. `GetSession`
+returns canonical truth with an optional live observation. Settings updates
+are serialized with resume and split between historical persistence and live
+runtime mutation; provider normalization stays in an adapter policy. Pin and
+canonical delete are Host commands, while authorization, transport DTOs,
+shared bindings, and local view cleanup remain adapter-owned.
+
+`store-sqlite` owns the transaction implementation. Its caller-owned
+`TransactionParticipant` seam lets an adapter append a durable outbox marker
+to the same transaction as runtime/goal operation intent, canonical facts, and
+non-re-derivable deletion tombstones without exposing `*sql.Tx` to Host domain
+code. The seam is reserved for facts that must commit or roll back together;
+re-derivable projection gates are repaired by consumers instead.
+
+After commit, Host emits typed `CommittedDelta` values through one
+`CommitObserver`. Activity state, messages, root settlement, runtime and goal
+operation milestones, projection-dirty identities, and canonical view
+invalidations all use that path. Observer failure cannot roll back an already
+committed command. Reliable delivery therefore depends on the durable marker,
+while event-stream publication and cache invalidation remain post-commit wake
+hints.
+
+The Host release module depends on `store-sqlite` and its `canonical` module,
+not on daemon, sidecar, or `tuttid` packages. It exposes `Run` to supervise the
+runtime-operation, goal-operation, and reconcile-inbox workers as one
+lifecycle, while retaining the individual worker entrypoints. The module does
+not own transport, authorization, room or device identity,
 process or VM implementations, HTTP/OpenAPI shapes, Electron integration, or
-control-plane DTOs. `tuttid` remains the production implementation until the
-later extraction slices explicitly switch its wiring; introducing this module
-does not change production routing.
+control-plane DTOs. `tuttid` production wiring delegates lifecycle decisions
+to Host and keeps only its adapter responsibilities.
 
 ### `packages/agent/activity-replication`
 
@@ -104,7 +137,7 @@ It owns:
   `src/engine/`): intent dispatch loop, domain-composed pure reducers,
   command-description effect executor, expiry-intent clock, and intent frame
   batching, with scheduler/clock/command ports injected by the host (see
-  `docs/architecture/agent-gui-refactor-plan.md` section 3.3)
+  [Agent GUI Node](./agent-gui-node.md#4-workspace-frontend-engine))
 
 It does not own:
 
@@ -136,9 +169,11 @@ It owns:
 It may depend on `@tutti-os/agent-activity-core`.
 
 Agent GUI must read and write agent session/activity data through
-`AgentActivityRuntime`. `AgentHostApi` remains available for host capabilities
-such as files, clipboard, runtime metadata, account lookup, composer options,
-and temporary desktop-only session-control behavior.
+`AgentActivityRuntime`. The effective `AgentHostApi` is limited to host
+capabilities such as files, clipboard, runtime metadata, account/project
+lookup, diagnostics, setup, and OS/Workbench helpers. Its input type still
+accepts a legacy `agentSessions` shape, but `toAgentHostRuntimeApi` strips that
+shape; production AgentGUI must not use it as an activity source.
 Conversation rail sections are also an `AgentActivityRuntime` contract:
 AgentGUI calls `listSessionSections` for the first page of every returned rail
 section and `listSessionSectionPage` for Show more by `sectionKey` and cursor.
@@ -328,11 +363,33 @@ before the historical call row resolves.
 Likewise, a runtime session snapshot may describe provider-local execution
 state but must not enrich a report with an Interaction transition. Runtime
 reports may submit only `pending` and `superseded`; `answered` belongs solely to
-the durable `interactive_response` operation. That operation reads the typed
-runtime disposition (`pending`, `resolving`, `answered`, `superseded`, or
-`interrupted`) and atomically commits the answered/superseded Interaction,
-completed operation, and outbox event. Absence from an in-memory request map is
-not evidence of success.
+the durable `interactive_response` operation. Preparing that operation
+atomically claims the interaction with a `pending` to `answered` transition and
+stores the requested action, option, and payload. Completion still records the
+typed runtime disposition (`pending`, `resolving`, `answered`, `superseded`, or
+`interrupted`) and commits the completed operation and outbox event. Competing
+responders compare against the claimed output and normalize to `answered` or
+`superseded`; absence from an in-memory request map is not evidence of success.
+The claim's provisional Interaction status must not overwrite the terminal
+runtime disposition: the completed operation result follows the runtime even
+when the claim already moved the Interaction to `answered`.
+
+Activity compatibility projection uses a causal, segmented write barrier. It
+scans state patches in provider order. Non-terminal state first creates the
+session, Turn, and Interaction required by message foreign keys; immediately
+before each terminal patch, it flushes that Turn's messages and the session
+audits, then commits the terminal state. Later non-terminal patches are never
+moved ahead of an earlier settlement. A completed root-provider transition is
+also terminal because, when no child remains active, SQLite uses it to settle
+the canonical root Turn. During the first SQLite settlement transaction, the
+store selects the latest already persisted assistant text message for that Turn
+and freezes its ID in the existing completed-command payload. A same-report
+anchor is only a validated fast path; cross-report provider event batches
+derive the same watermark from durable messages. The payload also records an
+explicit resolution marker when settlement found no assistant text, so a late
+message cannot become the result of an already settled Turn. Result readers use
+the exact frozen message, return no message for a resolved-empty watermark, and
+reserve the bounded fallback scan for legacy turns without resolution metadata.
 
 Cancellation of the caller waiting on an interactive-response operation is not
 a provider outcome and must not terminalize the runtime request. Before a
@@ -476,8 +533,14 @@ export interface AgentActivityAdapter {
   deleteSession(
     input: AgentActivityDeleteSessionInput
   ): Promise<AgentActivityDeleteSessionResult>;
+  deleteSessions(
+    input: AgentActivityDeleteSessionsInput
+  ): Promise<AgentActivityDeleteSessionsResult>;
   renameSession(
     input: AgentActivityRenameSessionInput
+  ): Promise<AgentActivitySession>;
+  setSessionPinned(
+    input: AgentActivitySetSessionPinnedInput
   ): Promise<AgentActivitySession>;
 }
 ```
@@ -550,10 +613,12 @@ invocation. UI packages must keep `provider` as the real provider identity and
 must not synthesize providers for shared or remote targets.
 
 The desktop service owns the event-stream connection. Its reconcile bridge
-maps normalized events to engine intents: append-only messages are folded
-inline, while turn, interaction, and state changes schedule authoritative HTTP
-reconciliation through the engine command port. UI consumers never retain a
-second per-session stream or merge canonical entities themselves.
+maps normalized events to engine intents: continuous versions of mutable message
+snapshots are folded inline, while a message-version gap or recovered connection
+schedules authoritative incremental message reconciliation through the engine
+command port. Turn, interaction, and state changes also schedule their
+authoritative HTTP reconciliation through that port. UI consumers never retain
+a second per-session stream or merge canonical entities themselves.
 
 Hosts may accept older provider/runtime reports with missing transcript
 ownership or ordering fields, but those gaps must be filled before events enter
@@ -605,8 +670,7 @@ The host owns:
 
 ## Needs Attention Contract
 
-The future Agent Message Center counts user-actionable items, not all session
-messages.
+Agent Message Center counts user-actionable items, not all session messages.
 
 The initial selector surface is:
 
@@ -664,7 +728,9 @@ For Agent GUI behavior:
 For runtime boundary enforcement:
 
 - `pnpm check:agent-activity-runtime-boundaries`
-- the same check is included in `pnpm check:full`
+- `pnpm check:agent-provider-strategy-boundaries`
+- `pnpm check:agent-gui-degradation`
+- these checks are included in `pnpm check:full`
 
 ## Non-Goals
 

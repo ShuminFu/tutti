@@ -5,6 +5,7 @@ import (
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
 
 func (c *Controller) Subscribe(roomID, agentSessionID string) (<-chan StreamEvent, func(), bool) {
@@ -89,7 +90,7 @@ func statePatchFromSessionStateSnapshot(snapshot SessionStateSnapshot) agentsess
 	}
 }
 
-func activityTurnLifecycleFromRuntime(value *TurnLifecycle) *agentsessionstore.WorkspaceAgentTurnLifecycle {
+func activityTurnLifecycleFromRuntime(value *TurnLifecycle) *canonical.WorkspaceAgentTurnLifecycle {
 	if value == nil {
 		return nil
 	}
@@ -103,7 +104,7 @@ func activityTurnLifecycleFromRuntime(value *TurnLifecycle) *agentsessionstore.W
 		next := strings.TrimSpace(*value.Outcome)
 		outcome = &next
 	}
-	return &agentsessionstore.WorkspaceAgentTurnLifecycle{
+	return &canonical.WorkspaceAgentTurnLifecycle{
 		ActiveTurnID:     activeTurnID,
 		Phase:            strings.TrimSpace(value.Phase),
 		Settling:         value.Settling,
@@ -112,21 +113,21 @@ func activityTurnLifecycleFromRuntime(value *TurnLifecycle) *agentsessionstore.W
 	}
 }
 
-func activityCompletedCommandFromRuntime(value *CompletedCommand) *agentsessionstore.WorkspaceAgentCompletedCommand {
+func activityCompletedCommandFromRuntime(value *CompletedCommand) *canonical.WorkspaceAgentCompletedCommand {
 	if value == nil {
 		return nil
 	}
-	return &agentsessionstore.WorkspaceAgentCompletedCommand{
+	return &canonical.WorkspaceAgentCompletedCommand{
 		Kind:   strings.TrimSpace(value.Kind),
 		Status: strings.TrimSpace(value.Status),
 	}
 }
 
-func activitySubmitAvailabilityFromRuntime(value *SubmitAvailability) *agentsessionstore.WorkspaceAgentSubmitAvailability {
+func activitySubmitAvailabilityFromRuntime(value *SubmitAvailability) *canonical.WorkspaceAgentSubmitAvailability {
 	if value == nil {
 		return nil
 	}
-	return &agentsessionstore.WorkspaceAgentSubmitAvailability{
+	return &canonical.WorkspaceAgentSubmitAvailability{
 		State:  strings.TrimSpace(value.State),
 		Reason: strings.TrimSpace(value.Reason),
 	}

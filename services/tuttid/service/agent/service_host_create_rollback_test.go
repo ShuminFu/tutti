@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	storesqlite "github.com/tutti-os/tutti/packages/agent/store-sqlite"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
 )
@@ -36,6 +37,36 @@ func TestHostCreateWithInitialInputRollsBackTurnlessCanonicalShell(t *testing.T)
 	}
 	if len(publisher.events) != 0 {
 		t.Fatalf("failed provisional create published turnless session events=%#v", publisher.events)
+	}
+}
+
+func TestHostCreateWithInvalidTypedGoalPreservesPublishedSession(t *testing.T) {
+	ctx := context.Background()
+	runtime := newFakeRuntime()
+	store := openAgentServiceSQLiteStore(t)
+	if err := store.Create(ctx, workspacebiz.Summary{ID: "ws-goal", Name: "Goal workspace"}); err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	projection := NewActivityProjection(store)
+	publisher := &activityUpdatePublisherStub{}
+	projection.SetPublisher(publisher)
+	service := newTestService(runtime)
+	service.SessionReader = projection
+	service.SessionInitializer = projection
+	service.GoalStateStore = store
+
+	_, err := service.Create(ctx, "ws-goal", CreateSessionInput{
+		AgentSessionID: "session-invalid-goal", AgentTargetID: agenttargetbiz.IDLocalCodex,
+		InitialContent: TextPromptContent("/goal pause"),
+	})
+	if !errors.Is(err, storesqlite.ErrGoalStateAbsent) {
+		t.Fatalf("Create() error=%v, want %v", err, storesqlite.ErrGoalStateAbsent)
+	}
+	if _, found, getErr := store.GetSession(ctx, "ws-goal", "session-invalid-goal"); getErr != nil || !found {
+		t.Fatalf("published canonical session found=%v error=%v", found, getErr)
+	}
+	if len(publisher.events) != 1 {
+		t.Fatalf("published session event count=%d, want 1", len(publisher.events))
 	}
 }
 

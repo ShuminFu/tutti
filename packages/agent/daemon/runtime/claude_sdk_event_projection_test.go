@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
 
 func TestClaudeCodeSDKAdapterMapsSyntheticTurnStarted(t *testing.T) {
@@ -113,7 +113,7 @@ func TestClaudeCodeSDKAdapterApprovalDoesNotMergeWithApprovedToolCall(t *testing
 	}
 
 	approvalUpdate, ok := callMessageUpdateFromSessionEvent(
-		agentsessionstore.EventSource{Provider: ProviderClaudeCode},
+		canonical.EventSource{Provider: ProviderClaudeCode},
 		approvalEvents[1],
 		session.AgentSessionID,
 		approvalEvents[1].OccurredAtUnixMS,
@@ -122,7 +122,7 @@ func TestClaudeCodeSDKAdapterApprovalDoesNotMergeWithApprovedToolCall(t *testing
 		t.Fatal("approval event did not convert to message update")
 	}
 	toolUpdate, ok := callMessageUpdateFromSessionEvent(
-		agentsessionstore.EventSource{Provider: ProviderClaudeCode},
+		canonical.EventSource{Provider: ProviderClaudeCode},
 		toolEvents[0],
 		session.AgentSessionID,
 		toolEvents[0].OccurredAtUnixMS,
@@ -172,7 +172,7 @@ func TestClaudeCodeSDKAdapterPreservesSubagentParentToolUseID(t *testing.T) {
 		t.Fatalf("event metadata = %#v, want parentToolUseId", events[0].Payload.Metadata)
 	}
 	update, ok := callMessageUpdateFromSessionEvent(
-		agentsessionstore.EventSource{Provider: ProviderClaudeCode},
+		canonical.EventSource{Provider: ProviderClaudeCode},
 		events[0],
 		session.AgentSessionID,
 		events[0].OccurredAtUnixMS,

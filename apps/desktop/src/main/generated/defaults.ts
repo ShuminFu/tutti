@@ -52,6 +52,33 @@ export const generatedDefaults = {
         signingPublicKey:
           "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAfzdtf41+SN0hrZqK0JX2pdDluCwpUbn1HPDoz4D7OxA=\n-----END PUBLIC KEY-----\n",
         enabled: false
+      },
+      {
+        key: "copilot",
+        releaseIndexUrl:
+          "https://d1x7gb6wqsqmnm.cloudfront.net/tutti-agent-releases/agents/copilot/versions.json",
+        signingKeyId: "tutti-copilot-release-v1",
+        signingPublicKey:
+          "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA1U8JW/V2ZwXbflqpktbpC68cuI3xq0OU2yV4H5vsz+c=\n-----END PUBLIC KEY-----\n",
+        enabled: false
+      },
+      {
+        key: "kilo",
+        releaseIndexUrl:
+          "https://d1x7gb6wqsqmnm.cloudfront.net/tutti-agent-releases/agents/kilo/versions.json",
+        signingKeyId: "tutti-kilo-release-v1",
+        signingPublicKey:
+          "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAc0h7Dl9Vw1FnNGBm612Pj/yVsQW+UKXfDskBEVHeMGI=\n-----END PUBLIC KEY-----\n",
+        enabled: false
+      },
+      {
+        key: "qwen",
+        releaseIndexUrl:
+          "https://d1x7gb6wqsqmnm.cloudfront.net/tutti-agent-releases/agents/qwen/versions.json",
+        signingKeyId: "tutti-qwen-release-v1",
+        signingPublicKey:
+          "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEANqN38E9u53Ohnyzy8IC9lPXOmOCrZwxTb7Do2hM22t0=\n-----END PUBLIC KEY-----\n",
+        enabled: false
       }
     ]
   }

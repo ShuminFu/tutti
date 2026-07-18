@@ -7,6 +7,7 @@ import (
 	"time"
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 )
 
@@ -42,12 +43,12 @@ func (p *ActivityProjection) InitializeRuntimeSession(
 		occurredAtUnixMS = time.Now().UnixMilli()
 	}
 
-	_, err := p.reportSessionState(ctx, agentsessionstore.ReportSessionStateInput{
+	_, err := p.reportSessionState(ctx, canonical.ReportSessionStateInput{
 		WorkspaceID:    workspaceID,
 		AgentSessionID: agentSessionID,
 		AgentTargetID:  strings.TrimSpace(session.AgentTargetID),
 		SessionOrigin:  agentsessionstore.WorkspaceAgentSessionOriginRuntime,
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			Provider:               strings.TrimSpace(session.Provider),
 			ProviderSessionID:      strings.TrimSpace(session.ProviderSessionID),
 			SessionCreatedAtUnixMS: session.CreatedAtUnixMS,
@@ -57,7 +58,7 @@ func (p *ActivityProjection) InitializeRuntimeSession(
 			SessionOrigin:          agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 			UserID:                 strings.TrimSpace(session.UserID),
 		},
-		State: agentsessionstore.WorkspaceAgentSessionStateUpdate{
+		State: canonical.WorkspaceAgentSessionStateUpdate{
 			Kind:              agentactivitybiz.SessionKindRoot,
 			AgentTargetID:     strings.TrimSpace(session.AgentTargetID),
 			Provider:          strings.TrimSpace(session.Provider),

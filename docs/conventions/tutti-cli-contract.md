@@ -155,16 +155,44 @@ recovery.
 `agent wait --json` is the blocking progress helper for launched or continued
 agent sessions. It should wait for the next meaningful stop point such as turn
 completion, failure, cancellation, waiting for approval, waiting for user
-input, or timeout. Its JSON result should stay narrow: compact session status,
-wait reason, latest version, effective wait cursor, and timeout flag. It must
-not return execution messages, pagination state, or a full transcript; callers
-that need broader context should follow with `agent session-summary`. Keep
-message window controls such as `limit` out of the public wait command shape.
+input, or timeout. Its JSON result stays narrow: compact session status, wait
+reason, latest version, effective wait cursor, and timeout flag. A completed or
+failed turn additionally returns its last assistant text as `finalMessage`
+with the owning `turnId`; an approval or input stop additionally returns the
+pending `interactions` with self-described actions and a JSON input summary of
+at most 2 KiB. It must not return execution-message pagination or a full
+transcript; callers that need broader context should follow with
+`agent session-summary`. Keep message window controls such as `limit` out of
+the public wait command shape, and keep timeout output free of result or
+interaction detail.
+The wait implementation skips transcript pagination and performs result
+enrichment separately. New settled turns carry a durable final-assistant
+resolution marker and, when present at settlement, the exact message anchor.
+Anchored reads select that exact message; a resolved marker with no anchor means
+the Turn had no final assistant text and must return no `finalMessage`, even if
+an assistant message arrives later. Only legacy turns without resolution
+metadata fall back to at most three descending message pages. If neither path
+finds the message, omit `finalMessage` rather than returning an older assistant
+response.
 When a caller continues an existing session with `agent send`, the send action
 should return a `waitAfterVersion` cursor, and the next wait call should pass
 that cursor as `agent wait --after-version <waitAfterVersion> ...` so the wait
 blocks for the new stop point instead of immediately replaying the previous
 session stop state.
+
+`agent respond --json` answers one pending interaction selected by
+`--session-id` and `--request-id`. `--action`, `--option`, and object-valued
+`--payload` map directly to the Host interactive input. `--semantic` is a thin
+shortcut that resolves exactly one matching `actions[].semantic` from the
+stored interaction; the CLI must not keep a provider-to-semantic mapping.
+Unknown requests and missing or ambiguous semantics are invalid input errors.
+The first responder atomically claims the pending interaction. Later responses
+with the same action/option/payload return `answered`; different responses
+return `superseded`. The result exposes the request and turn ids plus that Host
+disposition, without surfacing raw operation conflict or in-progress errors.
+After a successful claim, an authoritative terminal runtime disposition still
+wins; for example, a runtime `superseded` result must not be rewritten to
+`answered` merely because the durable claim already marked the Interaction.
 
 `agent turn-resources --json` is the narrow helper for looking up resources from
 one explicit session turn. It requires `--session-id` and `--turn-id`, filters at
@@ -214,6 +242,28 @@ change the created session's visibility. User-started sessions should stay on
 the normal visible default; only an explicit `--hidden` launcher input should
 create a hidden session.
 
+`agent start --isolation worktree` creates the session in
+`<state-dir>/agent/worktrees/<session-id>` on branch `tutti/<session-id>`, based
+on the resolved launch cwd's `HEAD`. The resolved cwd follows the normal
+explicit-cwd then caller-session-cwd chain. Isolation is fail-closed: a missing
+git executable, non-git cwd, nested repository or submodule, or failed
+`git worktree add` rejects the launch before a session is created. Source
+checkout changes are not copied; a dirty source checkout produces a warning.
+The session runtime context persists the worktree path, branch, and base commit,
+and compact session/action JSON exposes those coordinates as `isolation`.
+
+Successful isolated worktrees are reclaimed only by the startup and periodic
+agent worktree GC. GC retains a tree when it is dirty, its branch is ahead of
+the recorded base commit, its creating session remains resumable, or another
+session cwd points inside it. Runtime idleness, turn completion, and session
+end timestamps must not trigger worktree deletion. Every session create is
+synchronized with GC from cwd resolution through canonical session persistence
+or failure rollback. This prevents a sweep both from observing an isolated tree
+as an in-progress orphan and from deleting a managed tree while a non-isolated
+session is adopting a cwd inside it. Session creates remain concurrent with one
+another; only a GC sweep takes the exclusive side of this synchronization
+boundary.
+
 ## Naming Rules
 
 Command path segments and input names use lowercase kebab-case.
@@ -222,6 +272,7 @@ Examples:
 
 - `issue list`
 - `agent session-summary`
+- `agent respond`
 - `topic-id`
 - `wait`
 - `page-size`

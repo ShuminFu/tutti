@@ -103,6 +103,27 @@ func TestProcessExists(t *testing.T) {
 	}
 }
 
+func TestWiringUsesSupervisedAgentHostRun(t *testing.T) {
+	raw, err := os.ReadFile("wiring.go")
+	if err != nil {
+		t.Fatalf("read wiring.go: %v", err)
+	}
+	source := string(raw)
+	if !strings.Contains(source, "agentHost.Run(ctx)") {
+		t.Fatal("production wiring does not start the supervised Agent Host lifecycle")
+	}
+	for _, legacy := range []string{
+		"agentHost.RunRuntimeOperationWorker(ctx)",
+		"agentHost.RunGoalOperationWorker(ctx)",
+		"agentHost.RunGoalReconcileInboxWorker(ctx)",
+		"agentHost.RunWorktreeGarbageCollectionWorker(ctx)",
+	} {
+		if strings.Contains(source, legacy) {
+			t.Fatalf("production wiring still starts an unsupervised Host worker: %s", legacy)
+		}
+	}
+}
+
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

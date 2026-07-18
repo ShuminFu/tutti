@@ -13,9 +13,9 @@ import type {
   TuttidEventStreamClient
 } from "@tutti-os/client-tuttid-ts";
 import type { DesktopHostFilesApi, DesktopRuntimeApi } from "@preload/types";
+import type { IReporterService } from "../../../analytics/services/reporterService.interface.ts";
 import { agentActivitySessionFromTuttidSession } from "../desktopAgentActivityAdapter.ts";
 import {
-  agentSessionActivationError,
   normalizeComposerSettings,
   resolveComposerPermissionMode,
   resolveDesktopAgentGUIProvider
@@ -36,6 +36,7 @@ import {
   normalizeWorkspaceId
 } from "./workspaceAgentActivityDiagnostics.ts";
 import { reportAgentSubmitTraceDiagnostic } from "../desktopAgentRuntimeSubmitDiagnostics.ts";
+import { WorkspaceAgentActivityAnalytics } from "./workspaceAgentActivityAnalytics.ts";
 import { WorkspaceAgentActivityQueryOperations } from "./workspaceAgentActivityQueryOperations.ts";
 import { WorkspaceAgentActivityImportOperations } from "./workspaceAgentActivityImportOperations.ts";
 import { loadWorkspaceAgentComposerOptions } from "./workspaceAgentComposerOptions.ts";
@@ -75,6 +76,8 @@ export interface WorkspaceAgentActivityServiceDependencies {
     "createUserDocumentsProjectDirectory" | "selectAppArchive"
   >;
   tuttidClient: TuttidClient;
+  reporterNow?: () => number;
+  reporterService?: Pick<IReporterService, "trackEvents">;
   runtimeApi: Pick<DesktopRuntimeApi, "logTerminalDiagnostic">;
   agentProviderStatusService?: Pick<IAgentProviderStatusService, "refresh">;
   workspaceUserProjectService?: IWorkspaceUserProjectService;
@@ -88,6 +91,7 @@ export class WorkspaceAgentActivityService
 {
   readonly _serviceBrand = undefined;
 
+  private readonly analytics: WorkspaceAgentActivityAnalytics;
   private readonly dependencies: WorkspaceAgentActivityServiceDependencies;
   private readonly importOperations: WorkspaceAgentActivityImportOperations;
   private readonly queryOperations: WorkspaceAgentActivityQueryOperations;
@@ -100,6 +104,11 @@ export class WorkspaceAgentActivityService
   constructor(dependencies: WorkspaceAgentActivityServiceDependencies) {
     super(dependencies);
     this.dependencies = dependencies;
+    this.analytics = new WorkspaceAgentActivityAnalytics({
+      reporterNow: dependencies.reporterNow,
+      reporterService: dependencies.reporterService,
+      workspaceUserProjectService: dependencies.workspaceUserProjectService
+    });
     this.queryOperations = new WorkspaceAgentActivityQueryOperations(
       dependencies.tuttidClient
     );
@@ -490,8 +499,6 @@ export class WorkspaceAgentActivityService
         fields: { activeTurnPhase: session.activeTurn?.phase ?? null }
       });
     }
-    const activationError = agentSessionActivationError(session);
-    const activationFailed = activationError !== undefined;
     reportAgentSubmitTraceDiagnostic(this.dependencies.runtimeApi, {
       agentSessionId: session.agentSessionId,
       clientSubmitId: input.mode === "new" ? input.clientSubmitId : null,
@@ -508,13 +515,8 @@ export class WorkspaceAgentActivityService
     return {
       activation: {
         mode: input.mode,
-        status: activationFailed
-          ? "failed"
-          : input.mode === "existing"
-            ? "already_attached"
-            : "attached"
+        status: input.mode === "existing" ? "already_attached" : "attached"
       },
-      ...(activationError ? { error: activationError } : {}),
       session
     };
   }
@@ -748,12 +750,20 @@ export class WorkspaceAgentActivityService
 
   protected createEntry(workspaceId: string): WorkspaceAgentActivityEntry {
     return createWorkspaceAgentSessionEngineHost({
-      activateSession: (input) => this.activateSession(input),
+      activateSession: async (input) => {
+        const activation = await this.activateSession(input);
+        this.analytics.trackEngineActivation(input, activation);
+        return activation;
+      },
       cancelTurn: (input) => this.cancelTurn(input),
       reconcileSession: (command) =>
         this.executeSessionReconcileCommand(command),
       runtimeApi: this.dependencies.runtimeApi,
-      sendInput: (input) => this.sendInput(input),
+      sendInput: async (input) => {
+        const result = await this.sendInput(input);
+        this.analytics.trackEngineSend(input, result);
+        return result;
+      },
       submitInteractive: (input) => this.submitInteractive(input),
       submitPlanDecision: (input) => this.submitPlanDecision(input),
       subscribeSessionEvents: (workspaceId, listener) =>

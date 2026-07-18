@@ -294,36 +294,20 @@ export const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
       ),
     [effectiveHiddenTargetIds, providerTiles]
   );
-  const selectedAgentTargetIsPlaceholder =
-    selectedAgentTarget?.disabled === true &&
-    selectedAgentTarget.targetId === `local:${selectedAgentTarget.provider}`;
-  const allTileSelected =
-    conversationFilter.kind === "all" && !selectedAgentTargetIsPlaceholder;
+  const allTileSelected = conversationFilter.kind === "all";
   const selectAllProviders = useCallback(() => {
     onUpdateConversationFilter({ kind: "all" });
-    if (selectedAgentTargetIsPlaceholder) {
-      const fallbackTarget =
-        railProviderTargets.find((target) => target.disabled !== true) ?? null;
-      if (fallbackTarget) {
-        onSelectConversationFilterTarget({
-          provider: fallbackTarget.provider,
-          agentTargetId: fallbackTarget.targetId
-        });
-      }
-    }
     onRequestComposerFocus();
-  }, [
-    onSelectConversationFilterTarget,
-    onRequestComposerFocus,
-    onUpdateConversationFilter,
-    railProviderTargets,
-    selectedAgentTargetIsPlaceholder
-  ]);
+  }, [onRequestComposerFocus, onUpdateConversationFilter]);
   const selectAgentTargetTile = useCallback(
     (target: AgentGUINodeViewModel["rail"]["agentTargets"][number]) => {
+      const agentTargetId = target.agentTargetId?.trim() ?? "";
+      if (!agentTargetId) {
+        return;
+      }
       onSelectConversationFilterTarget({
         provider: target.provider,
-        agentTargetId: target.targetId
+        agentTargetId
       });
       onRequestComposerFocus();
     },
@@ -422,7 +406,7 @@ export const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
           )
         )
           .map((element) => {
-            const targetId = element.dataset.agentTargetId?.trim() ?? "";
+            const targetId = element.dataset.providerTargetId?.trim() ?? "";
             if (!targetId || targetId === activeDragState.draggedTargetId) {
               return null;
             }
@@ -541,10 +525,14 @@ export const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
         fallbackTargets.find((target) => target.disabled !== true) ??
         fallbackTargets[0];
       if (fallbackTarget && fallbackTarget.targetId !== targetId) {
-        onSelectHomeComposerAgentTarget({
-          provider: fallbackTarget.provider,
-          agentTargetId: fallbackTarget.targetId
-        });
+        const fallbackAgentTargetId =
+          fallbackTarget.agentTargetId?.trim() ?? "";
+        if (fallbackAgentTargetId) {
+          onSelectHomeComposerAgentTarget({
+            provider: fallbackTarget.provider,
+            agentTargetId: fallbackAgentTargetId
+          });
+        }
       }
     }
     if (
@@ -576,7 +564,7 @@ export const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
       );
       const dropTargets = tileElements
         .map((element) => {
-          const targetId = element.dataset.agentTargetId?.trim() ?? "";
+          const targetId = element.dataset.providerTargetId?.trim() ?? "";
           if (!targetId || targetId === activeDragState.draggedTargetId) {
             return null;
           }
@@ -699,14 +687,10 @@ export const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
           : null}
         {visibleProviderTiles.map((target) => {
           const providerSelected =
-            target.disabled === true
-              ? selectedAgentTargetIsPlaceholder &&
-                selectedAgentTarget?.provider === target.provider &&
-                selectedAgentTarget?.targetId === target.targetId
-              : agentGUIProviderTargetMatchesConversationFilter(
-                  target,
-                  conversationFilter
-                );
+            agentGUIProviderTargetMatchesConversationFilter(
+              target,
+              conversationFilter
+            );
           const label = agentGUIProviderRailLabel(
             target.provider,
             target.label
@@ -752,7 +736,8 @@ export const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
                   imageClassName={styles.providerRailAvatarImage}
                   icon={agentGUIProviderRailIconPresentation(
                     target.provider,
-                    target.iconUrl
+                    target.iconUrl,
+                    target.sidebarIconUrl
                   )}
                 />
                 {target.badge?.iconUrl ? (

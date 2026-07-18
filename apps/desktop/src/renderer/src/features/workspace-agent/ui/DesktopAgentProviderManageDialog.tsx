@@ -23,7 +23,6 @@ import {
 import type { DesktopI18nKey } from "@shared/i18n";
 import { useTranslation, type TranslateFn } from "@renderer/i18n";
 import { cn } from "@renderer/lib/format";
-import { useAccountService } from "../../workspace-workbench/ui/useAccountService.ts";
 import type {
   AgentProviderStatusPendingAction,
   AgentProviderStatusSnapshot,
@@ -36,7 +35,6 @@ import {
   type DesktopAgentProviderManageRowAction,
   type DesktopAgentProviderManageRowStatus
 } from "./desktopAgentProviderManageDialogModel.ts";
-import { isDesktopAgentAccountLoginAction } from "./desktopAgentAccountLoginAction.ts";
 
 interface DesktopAgentProviderManageDialogProps {
   agentProviderStatusService: IAgentProviderStatusService;
@@ -92,7 +90,6 @@ export function DesktopAgentProviderManageDialog({
   workspaceId
 }: DesktopAgentProviderManageDialogProps) {
   const { t } = useTranslation();
-  const { service: accountService } = useAccountService();
   const rowElementsRef = useRef(
     new Map<WorkspaceAgentProvider, HTMLDivElement>()
   );
@@ -192,23 +189,17 @@ export function DesktopAgentProviderManageDialog({
       }
 
       try {
-        if (
-          row.primaryActionId === "login" &&
-          isDesktopAgentAccountLoginAction(
-            agentProviderStatusService.getStatus(row.provider)
-          )
-        ) {
-          await accountService.startLogin();
-        } else {
-          await agentProviderStatusService.runAction(
-            row.provider,
-            row.primaryActionId,
-            {
+        await agentProviderStatusService.runAction(
+          row.provider,
+          row.primaryActionId,
+          {
+            context: {
               workbenchHost,
               workspaceId
-            }
-          );
-        }
+            },
+            origin: "user"
+          }
+        );
       } catch {
         // The status service owns user-facing error notifications.
       } finally {
@@ -222,13 +213,7 @@ export function DesktopAgentProviderManageDialog({
         );
       }
     },
-    [
-      accountService,
-      agentProviderStatusService,
-      onOpenChange,
-      workbenchHost,
-      workspaceId
-    ]
+    [agentProviderStatusService, onOpenChange, workbenchHost, workspaceId]
   );
 
   return (

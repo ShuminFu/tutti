@@ -8,13 +8,26 @@ import (
 	storesqlite "github.com/tutti-os/tutti/packages/agent/store-sqlite"
 )
 
-func clientSubmitID(metadata map[string]any) string {
+func legacyClientSubmitID(metadata map[string]any) string {
 	value, _ := metadata["clientSubmitId"].(string)
 	return strings.TrimSpace(value)
 }
 
+func submissionMetadata(metadata map[string]any, typedClientSubmitID string) map[string]any {
+	clientID := strings.TrimSpace(typedClientSubmitID)
+	if clientID == "" {
+		return metadata
+	}
+	result := cloneMap(metadata)
+	if result == nil {
+		result = make(map[string]any, 1)
+	}
+	result["clientSubmitId"] = clientID
+	return result
+}
+
 func (h *Host) prepareSubmitClaim(ctx context.Context, ref SessionRef, metadata map[string]any) (storesqlite.SubmitClaim, bool, error) {
-	clientID := clientSubmitID(metadata)
+	clientID := legacyClientSubmitID(metadata)
 	if h == nil || h.store == nil || clientID == "" {
 		return storesqlite.SubmitClaim{}, false, nil
 	}

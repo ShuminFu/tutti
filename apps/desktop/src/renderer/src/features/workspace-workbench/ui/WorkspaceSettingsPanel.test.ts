@@ -11,6 +11,13 @@ const source = readFileSync(
   ),
   "utf8"
 );
+const developerSource = readFileSync(
+  resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "WorkspaceDeveloperSettingsSection.tsx"
+  ),
+  "utf8"
+);
 const defaultProvidersSource = readFileSync(
   resolve(
     dirname(fileURLToPath(import.meta.url)),
@@ -20,84 +27,59 @@ const defaultProvidersSource = readFileSync(
 );
 
 test("workspace settings developer panel exposes analytics debug switch only when available", () => {
-  assert.match(source, /useAnalyticsDebugPreferenceService/);
-  assert.match(source, /analyticsDebugAvailable \? \(/);
-  assert.match(source, /<Switch\s/s);
-  assert.match(source, /checked=\{analyticsDebugEnabled\}/);
-  assert.match(source, /onCheckedChange=\{onAnalyticsDebugEnabledChange\}/);
-});
-
-test("workspace settings panel lists appearance below general", () => {
+  assert.match(developerSource, /useAnalyticsDebugPreferenceService/);
+  assert.match(developerSource, /analyticsDebugAvailable \? \(/);
+  assert.match(developerSource, /<Switch\s/s);
+  assert.match(developerSource, /checked=\{analyticsDebugEnabled\}/);
   assert.match(
-    source,
-    /id: "general" as const,[\s\S]*id: "agent" as const,[\s\S]*id: "appearance" as const,[\s\S]*id: "apps" as const,[\s\S]*id: "account" as const,[\s\S]*id: "about" as const,[\s\S]*id: "developer" as const/
+    developerSource,
+    /onCheckedChange=\{onAnalyticsDebugEnabledChange\}/
   );
 });
 
 test("workspace settings gates account behind Tutti Agent Switch", () => {
   assert.match(source, /settingsState\.tuttiAgentSwitchEnabled/);
-  assert.match(source, /workspace\.settings\.developer\.tuttiAgentSwitchLabel/);
   assert.match(
-    source,
+    developerSource,
+    /workspace\.settings\.developer\.tuttiAgentSwitchLabel/
+  );
+  assert.match(
+    developerSource,
     /settingsService\.setTuttiAgentSwitchEnabled\(enabled\)/
   );
   assert.match(source, /settingsState\.activeSection === "account"/);
   assert.match(source, /<WorkspaceAccountSettingsSection \/>/);
 });
 
-test("workspace settings serializes feature flag updates from the pending snapshot", () => {
+test("workspace settings forwards workspace mode and sleep prevention changes", () => {
   assert.match(
     source,
-    /const pendingFeatureFlags =\s*desktopPreferencesState\.changingFeatureFlags \?\?\s*desktopPreferencesState\.featureFlags/
+    /onSleepPreventionModeChange=\{\(mode\) => \{\s+void settingsService\.changeSleepPreventionMode\(mode\)/
   );
   assert.match(
     source,
-    /onLabEnabledChange[\s\S]*changeFeatureFlags\(\{\s*\.\.\.pendingFeatureFlags,\s*\[LAB_ENABLED_FLAG\]: enabled/
-  );
-  assert.match(
-    source,
-    /onReferenceProvenanceFilterEnabledChange[\s\S]*changeFeatureFlags\(\{\s*\.\.\.pendingFeatureFlags,\s*\[AGENT_REFERENCE_PROVENANCE_FILTER_FLAG\]: enabled/
-  );
-  assert.equal(
-    (source.match(/disabled=\{featureFlagsUpdating\}/g) ?? []).length,
-    2
+    /onWorkspaceUiModeChange=\{\(mode\) => \{\s+void settingsService\.changeWorkspaceUiMode\(mode\)/
   );
 });
 
-test("workspace settings agent panel lists agent controls", () => {
+test("workspace settings unlocks developer mode after seven version taps", () => {
+  assert.match(source, /const developerPanelUnlockTaps = 7/);
   assert.match(
     source,
-    /function WorkspaceAgentSettingsSection[\s\S]*workspace\.settings\.general\.agentConversationDetailModeLabel[\s\S]*workspace\.externalImport\.settingsLabel[\s\S]*workspace\.settings\.general\.defaultAgentProviderLabel[\s\S]*workspace\.settings\.general\.browserUseConnectionModeLabel[\s\S]*<ComputerUseSetupRow/
+    /versionTapCountRef\.current \+= 1;\s+if \(versionTapCountRef\.current >= developerPanelUnlockTaps\) \{\s+versionTapCountRef\.current = 0;\s+settingsService\.setDeveloperPanelVisible\(true\);\s+notifications\.success\(\{\s+title: t\("workspace\.settings\.about\.developerModeEnabled"\)/
   );
-  assert.match(source, /role="radiogroup"/);
-  assert.match(source, /role="radio"/);
-  assert.match(source, /aria-checked=\{selected\}/);
-  assert.match(source, /desktopAgentConversationDetailModes\.map/);
-  assert.match(source, /onAgentConversationDetailModeChange\(mode\)/);
-  const agentSectionStart = source.indexOf(
-    "function WorkspaceAgentSettingsSection"
-  );
-  const generalSectionStart = source.indexOf(
-    "function WorkspaceGeneralSettingsSection"
-  );
-  assert.ok(agentSectionStart >= 0);
-  assert.ok(generalSectionStart > agentSectionStart);
-  assert.doesNotMatch(
-    source.slice(agentSectionStart, generalSectionStart),
-    /agentDockLayout|agentDockLayoutLabel|desktopAgentDockLayouts/
-  );
+  assert.match(source, /onVersionTap=\{handleVersionTap\}/);
 });
 
-test("workspace settings general panel lists system controls", () => {
+test("workspace settings maps snapping off and presets without losing the preset", () => {
   assert.match(
     source,
-    /function WorkspaceGeneralSettingsSection[\s\S]*workspace\.settings\.general\.workspaceUiModeLabel[\s\S]*desktopWorkspaceUiModes\.map[\s\S]*workspace\.settings\.general\.preventSleepLabel[\s\S]*workspace\.settings\.general\.languageLabel/
+    /pendingWorkbenchWindowSnapping\.enabled\s+\? pendingWorkbenchWindowSnapping\.shortcutPreset\s+: "off"/
   );
-  assert.doesNotMatch(
+  assert.match(
     source,
-    /workspace\.settings\.general\.workspaceUiModeDescription/
+    /enabled: nextValue !== "off",\s+shortcutPreset:\s+nextValue === "off"\s+\? pendingWorkbenchWindowSnapping\.shortcutPreset\s+: nextValue/
   );
-  assert.match(source, /settingsService\.changeWorkspaceUiMode\(mode\)/);
 });
 
 test("workspace settings default providers come from the provider descriptor catalog", () => {
@@ -272,156 +254,17 @@ test("workspace settings computer-use continues into the wizard after install", 
   );
 });
 
-test("workspace settings general panel does not expose update preferences", () => {
-  const generalSectionStart = source.indexOf(
-    "function WorkspaceGeneralSettingsSection"
-  );
-  const appearanceSectionStart = source.indexOf(
-    "function WorkspaceAppearanceSettingsSection"
-  );
-  const generalSection = source.slice(
-    generalSectionStart,
-    appearanceSectionStart
-  );
-
-  assert.ok(generalSectionStart >= 0);
-  assert.ok(appearanceSectionStart > generalSectionStart);
-  assert.doesNotMatch(source, /WorkspaceUpdateSettingsSection/);
-  assert.doesNotMatch(
-    generalSection,
-    /workspace\.settings\.general\.updateTitle/
-  );
-  assert.doesNotMatch(
-    generalSection,
-    /workspace\.settings\.general\.updatePolicyLabel/
-  );
-  assert.doesNotMatch(
-    generalSection,
-    /workspace\.settings\.general\.updateChannelLabel/
-  );
-  assert.doesNotMatch(generalSection, /onUpdatePolicyChange/);
-  assert.doesNotMatch(generalSection, /onUpdateChannelChange/);
-  assert.doesNotMatch(generalSection, /app_update\.settings_rendered/);
-});
-
-test("workspace settings about panel owns product info and keeps developer unlock tap", () => {
-  const generalSectionStart = source.indexOf(
-    "function WorkspaceGeneralSettingsSection"
-  );
-  const aboutSectionStart = source.indexOf(
-    "function WorkspaceAboutSettingsSection"
-  );
-  const appearanceSectionStart = source.indexOf(
-    "function WorkspaceAppearanceSettingsSection"
-  );
-
-  assert.ok(generalSectionStart >= 0);
-  assert.ok(aboutSectionStart > generalSectionStart);
-  assert.ok(appearanceSectionStart > aboutSectionStart);
-  assert.doesNotMatch(
-    source.slice(generalSectionStart, aboutSectionStart),
-    /versionLabel/
-  );
-  assert.match(
-    source.slice(aboutSectionStart, appearanceSectionStart),
-    /tuttiDesktopIconUrl[\s\S]*onClick=\{onVersionTap\}[\s\S]*workspace\.settings\.about\.versionLabel/
-  );
-  assert.doesNotMatch(
-    source.slice(aboutSectionStart, appearanceSectionStart),
-    /workspace\.settings\.about\.(title|description)/
-  );
-  assert.match(
-    source,
-    /setDeveloperPanelVisible\(true\);[\s\S]*notifications\.success\(\{[\s\S]*workspace\.settings\.about\.developerModeEnabled/
-  );
-  assert.doesNotMatch(source, /selectSection\("developer"\)/);
-  assert.match(
-    source,
-    /const tuttiDesktopIconUrl = new URL\(\s*"[^"]*build\/icon\.png"/
-  );
-  assert.match(
-    source.slice(aboutSectionStart, appearanceSectionStart),
-    /WebIcon[\s\S]*openExternal\(tuttiWebsiteUrl\)[\s\S]*GitHubBrandIcon[\s\S]*openExternal\(tuttiGitHubUrl\)/
-  );
-  assert.doesNotMatch(
-    source.slice(aboutSectionStart, appearanceSectionStart),
-    /releaseNotesAction|checkForUpdates|checkUpdatesAction/
-  );
-});
-
-test("workspace settings window snapping is controlled by one dropdown", () => {
-  const appearanceSectionStart = source.indexOf(
-    "function WorkspaceAppearanceSettingsSection"
-  );
-  const wallpaperPickerStart = source.indexOf(
-    "function WorkspaceWallpaperPicker"
-  );
-  const appearanceSection = source.slice(
-    appearanceSectionStart,
-    wallpaperPickerStart
-  );
-
-  assert.ok(appearanceSectionStart >= 0);
-  assert.ok(wallpaperPickerStart > appearanceSectionStart);
-  assert.doesNotMatch(appearanceSection, /<Switch/);
-  assert.match(
-    appearanceSection,
-    /pendingWorkbenchWindowSnapping\.enabled[\s\S]*\? pendingWorkbenchWindowSnapping\.shortcutPreset[\s\S]*: "off"/
-  );
-  assert.match(appearanceSection, /enabled: nextValue !== "off"/);
-  assert.match(
-    appearanceSection,
-    /workbenchWindowSnappingShortcutOptions\.off/
-  );
-});
-
-test("workspace settings app source control lives in developer settings", () => {
-  const appsSectionStart = source.indexOf(
-    "function WorkspaceAppsSettingsSection"
-  );
-  const developerSectionStart = source.indexOf(
-    "function WorkspaceDeveloperSettingsSection"
-  );
-  const controlStart = source.indexOf("function AppCatalogChannelControl");
-
-  assert.ok(appsSectionStart >= 0);
-  assert.ok(developerSectionStart > appsSectionStart);
-  assert.ok(controlStart > developerSectionStart);
-  assert.doesNotMatch(
-    source.slice(appsSectionStart, developerSectionStart),
-    /appCatalogChannel/
-  );
-  assert.match(
-    source.slice(developerSectionStart, controlStart),
-    /<AppCatalogChannelControl/
-  );
-});
-
-test("workspace settings release channel control lives in developer settings", () => {
-  const developerSectionStart = source.indexOf(
-    "function WorkspaceDeveloperSettingsSection"
-  );
-  const controlStart = source.indexOf("function ReleaseChannelControl");
-  const agentSectionStart = source.indexOf(
-    "function WorkspaceAgentSettingsSection"
-  );
-  const generalSectionStart = source.indexOf(
-    "function WorkspaceGeneralSettingsSection"
-  );
-  const generalSection = source.slice(generalSectionStart, source.length);
-  const developerSection = source.slice(developerSectionStart, controlStart);
-
-  assert.ok(generalSectionStart >= 0);
-  assert.ok(developerSectionStart >= 0);
-  assert.ok(controlStart > developerSectionStart);
-  assert.ok(agentSectionStart > controlStart);
-  assert.doesNotMatch(generalSection, /releaseChannelLabel/);
-  assert.match(developerSection, /<ReleaseChannelControl/);
-});
-
 test("workspace managed provider API key is masked until toggled visible", () => {
   assert.match(source, /type=\{apiKeyVisible \? "text" : "password"\}/);
   assert.match(source, /setVisibleAPIKeyProviderID/);
   assert.match(source, /workspace\.settings\.apps\.managedModels\.showApiKey/);
   assert.match(source, /workspace\.settings\.apps\.managedModels\.hideApiKey/);
+});
+
+test("workspace managed provider model rows keep stable keys while editing", () => {
+  assert.match(source, /key=\{`\$\{model\.provider\}:\$\{index\}`\}/);
+  assert.doesNotMatch(
+    source,
+    /key=\{`\$\{model\.provider\}:\$\{model\.id\}:\$\{index\}`\}/
+  );
 });

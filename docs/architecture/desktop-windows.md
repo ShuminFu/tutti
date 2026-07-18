@@ -187,19 +187,20 @@ reduced-motion preferences disable transitions, the inner entrance, and the
 mount delay.
 Its Apps panel renders the App Center contribution body instead of mounting a
 catalog-only copy. App open, close, and open-state checks cross a feature-owned
-workspace App surface host. The OS presenter commits a prepared app by launching
-its app-specific Workbench Node and Dock entry; it does not select the app inside
-the App Center node. The Agent-only presenter instead selects the shared
-`openAppId` compatibility view state before runtime preparation so the Apps
-sidebar can show startup progress inline, and it rolls that selection back when
-preparation fails. The presenter registration is renderer-window scoped and
-is bound to the actual Workbench host and workspace lifecycle, not App Center
-snapshot or revision updates. Replacing or disposing a presenter cancels and
-rolls back its pending attempts before releasing it; disposable identity checks
-also ensure an old Shell cleanup cannot remove a newer presenter. In the
-Agent-only shell, only the latest attempt whose App is still selected may report
-successful presentation; stale completions cannot claim success for a newer or
-cleared inline selection.
+workspace App surface host. Both OS and Agent-only presenters add the prepared
+app to the shared ordered `openAppIds` view state and select it through
+`openAppId` before runtime preparation completes, so startup progress appears in
+the app tab itself. The OS presenter then opens or focuses the singleton App
+Center Workbench Node instead of creating an app-specific Workbench window.
+Dock launches resolve to the same singleton node and carry route activation to
+the selected inline app. A failed preparation restores the previous tab state.
+The presenter registration is renderer-window scoped and is bound to the actual
+Workbench host and workspace lifecycle, not App Center snapshot or revision
+updates. Replacing or disposing a presenter cancels and rolls back its pending
+attempts before releasing it; disposable identity checks also ensure an old
+Shell cleanup cannot remove a newer presenter. In the Agent-only shell, only the
+latest attempt whose App is still selected may report successful presentation;
+stale completions cannot claim success for a newer or cleared inline selection.
 
 Workspace file previews use the same ownership direction without sharing the
 App Center's attempt protocol. File Manager owns file activation, preview-kind
@@ -218,19 +219,20 @@ failure would trigger a duplicate system fallback. When presentation fails, its
 fallback notification policy also comes from the registration that started the
 attempt, rather than a replacement registered while the attempt was in flight.
 
-The Agent-only contribution keeps the catalog and one app-specific Browser Node
-for every opened app mounted for the renderer lifetime. The back action clears
-only the selection, marks every retained Browser Node hidden, and reveals the
-already-mounted catalog; reopening an app reveals the same Browser Node so its
-page, in-memory editor state, and in-page Agent continue from the previous
-state. Every retained app uses a stable app-specific Browser Node id and
-receives `hidden={true}` whenever it is inactive or its containing tool surface
-is minimized. Retained instances are released only when a ready App Center
-snapshot confirms that the app is no longer available or when the containing
-host is torn down. An Agent-only app open request activates the Apps sidebar
-automatically. Both shells must start the shared App Center polling lifecycle,
-so app runtime events update the active app surface from `starting` to `running`
-with its launch URL.
+The App Center contribution keeps the catalog and one app-specific Browser Node
+for every id in `openAppIds` mounted in both shells. The catalog is a permanent
+first tab. Selecting it clears only `openAppId`, marks every open app Browser
+Node hidden, and reveals the already-mounted catalog. Selecting another tab
+reveals the same keyed Browser Node, so its page, in-memory editor state, and
+in-page Agent continue from the previous state. Closing an app tab removes its
+id from `openAppIds`, releases that Browser Node, and selects the adjacent app
+tab or catalog fallback. Every open app uses a stable app-specific Browser Node
+id and receives `hidden={true}` whenever it is inactive or its containing tool
+surface is minimized. A ready App Center snapshot may also close tabs for apps
+that are no longer available. An Agent-only app open request activates the Apps
+sidebar automatically. Both shells must start the shared App Center polling
+lifecycle, so app runtime events update the active app surface from `starting`
+to `running` with its launch URL.
 Both shells also mount the Workspace App external bridge and local
 workspace-scoped launch handlers for the surfaces they expose. This keeps App
 Center Agent actions and in-app Agent/session/issue reference links functional

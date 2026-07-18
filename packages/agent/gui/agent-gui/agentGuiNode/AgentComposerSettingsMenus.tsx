@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
   cn
 } from "@tutti-os/ui-system";
@@ -41,6 +42,7 @@ import {
   permissionModeSelectionPatch
 } from "./model/composerModeSelection";
 import { requiresFullAccessSafetyConfirmation } from "./model/agentPermissionModeSafetyPolicy";
+import { acknowledgeCodexFullAccessWarning } from "./view/agentFullAccessWarningPreference";
 import {
   buildComposerModelMenuModel,
   type AgentComposerSettingsMenuLabels,
@@ -58,6 +60,7 @@ export {
 export function AgentPermissionModeDropdown({
   composerSettings,
   disabled = false,
+  disabledTooltip,
   onLinkAction,
   previewMode = false,
   provider,
@@ -66,6 +69,7 @@ export function AgentPermissionModeDropdown({
 }: {
   composerSettings: AgentGUIComposerSettingsVM;
   disabled?: boolean;
+  disabledTooltip?: string;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
   previewMode?: boolean;
   provider: string;
@@ -115,6 +119,11 @@ export function AgentPermissionModeDropdown({
   const triggerTone = selectDisabled
     ? undefined
     : resolvePermissionModeTriggerTone(selectedValue);
+  const selectDisabledTooltip = disabled
+    ? disabledTooltip
+    : isLoading
+      ? labels.loadingOptions
+      : undefined;
   const commitPermissionModeId = (permissionModeId: string): void => {
     if (selectDisabled) {
       return;
@@ -190,18 +199,22 @@ export function AgentPermissionModeDropdown({
         onOpenChange={setIsSelectOpen}
         onValueChange={applyPermissionModeId}
       >
-        {isLoading ? (
-          // The trigger is disabled while loading, so pointer events never reach
-          // it. Target the tooltip at a focusable wrapper span (Radix's pattern
-          // for disabled triggers) so hover/focus reliably surfaces the hint.
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex" tabIndex={0}>
-                {selectTrigger}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top">{labels.loadingOptions}</TooltipContent>
-          </Tooltip>
+        {selectDisabledTooltip ? (
+          // Disabled controls do not receive pointer events. Target the tooltip
+          // at a focusable wrapper span so hover/focus reliably surfaces the
+          // reason, both during loading and while a turn is active.
+          <TooltipProvider delayDuration={120}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex" tabIndex={0}>
+                  {selectTrigger}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {selectDisabledTooltip}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : (
           selectTrigger
         )}
@@ -244,6 +257,7 @@ export function AgentPermissionModeDropdown({
           }
           const permissionModeId = pendingFullAccessModeId;
           setPendingFullAccessModeId(null);
+          acknowledgeCodexFullAccessWarning();
           commitPermissionModeId(permissionModeId);
         }}
         onLinkAction={onLinkAction}

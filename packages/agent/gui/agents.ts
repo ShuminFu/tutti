@@ -13,6 +13,8 @@ export function normalizeAgentGUIAgents(
     const agentTargetId = agent.agentTargetId.trim();
     const name = agent.name.trim();
     const iconUrl = agent.iconUrl.trim();
+    const maskIconUrl = agent.maskIconUrl?.trim() ?? "";
+    const sidebarIconUrl = agent.sidebarIconUrl?.trim() ?? "";
     const heroImageUrl = agent.heroImageUrl?.trim() ?? "";
     if (
       !agentTargetId ||
@@ -30,6 +32,8 @@ export function normalizeAgentGUIAgents(
       agentTargetId,
       name,
       iconUrl,
+      ...(maskIconUrl ? { maskIconUrl } : {}),
+      ...(sidebarIconUrl ? { sidebarIconUrl } : {}),
       ...(heroImageUrl ? { heroImageUrl } : {}),
       ...(agent.description?.trim()
         ? { description: agent.description.trim() }
@@ -42,6 +46,9 @@ export function normalizeAgentGUIAgents(
             }
           }
         : {}),
+      ...(agent.ownership === "self" || agent.ownership === "shared"
+        ? { ownership: agent.ownership }
+        : {}),
       availability: {
         status: normalizeAgentGUIAgentAvailabilityStatus(
           agent.availability.status
@@ -51,7 +58,10 @@ export function normalizeAgentGUIAgents(
           ? { pendingAction: agent.availability.pendingAction }
           : {})
       },
-      provider: agent.provider
+      provider: agent.provider,
+      ...(agent.setupKind === "target_runtime"
+        ? { setupKind: "target_runtime" as const }
+        : {})
     });
   }
   return normalized;
@@ -93,12 +103,15 @@ export function projectAgentGUIAgentsToInternalTargets(
     ref: {
       kind: "agent-directory",
       provider: agent.provider,
-      agentTargetId: agent.agentTargetId
+      agentTargetId: agent.agentTargetId,
+      ...(agent.setupKind ? { setupKind: agent.setupKind } : {})
     },
     label: agent.name,
     availability: agent.availability,
     ...(agent.description ? { description: agent.description } : {}),
     iconUrl: agent.iconUrl,
+    ...(agent.maskIconUrl ? { maskIconUrl: agent.maskIconUrl } : {}),
+    ...(agent.sidebarIconUrl ? { sidebarIconUrl: agent.sidebarIconUrl } : {}),
     ...(agent.heroImageUrl ? { heroImageUrl: agent.heroImageUrl } : {}),
     ...(agent.owner?.avatarUrl
       ? {
@@ -109,7 +122,10 @@ export function projectAgentGUIAgentsToInternalTargets(
         }
       : {}),
     ...(agent.owner?.name ? { ownerLabel: agent.owner.name } : {}),
-    ...(agent.availability.status !== "ready" ? { disabled: true } : {}),
+    ...(agent.ownership ? { ownership: agent.ownership } : {}),
+    ...(agent.availability.status !== "ready" && !agent.setupKind
+      ? { disabled: true }
+      : {}),
     ...(agent.availability.reason
       ? { unavailableReason: agent.availability.reason }
       : {})

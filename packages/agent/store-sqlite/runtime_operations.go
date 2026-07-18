@@ -65,7 +65,7 @@ func (s *Store) PrepareRuntimeOperation(ctx context.Context, input RuntimeOperat
 		if existing.TurnID != input.TurnID || existing.RequestID != input.RequestID || !jsonMapsEqual(existing.Payload, input.Payload) {
 			return RuntimeOperation{}, false, ErrRuntimeOperationConflict
 		}
-		if err := tx.Commit(); err != nil {
+		if _, err := s.commitTransaction(ctx, tx, input.WorkspaceID, nil); err != nil {
 			return RuntimeOperation{}, false, fmt.Errorf("commit duplicate runtime operation prepare: %w", err)
 		}
 		committed = true
@@ -94,11 +94,157 @@ INSERT INTO workspace_agent_runtime_operations (
 	if err != nil {
 		return RuntimeOperation{}, false, err
 	}
-	if err := tx.Commit(); err != nil {
+	delta, err := s.commitTransaction(ctx, tx, input.WorkspaceID, []TransactionMutation{
+		transactionMutation(input.WorkspaceID, input.AgentSessionID, MutationEntityRuntimeOperation, input.OperationID, "prepare", op.Version),
+	})
+	if err != nil {
 		return RuntimeOperation{}, false, fmt.Errorf("commit runtime operation prepare: %w", err)
 	}
 	committed = true
+	op.CommitTransactionID = delta.TransactionID
+	op.CommitDelta = delta
 	return op, true, nil
+}
+
+// PrepareInteractiveRuntimeOperation atomically establishes the response claim
+// by transitioning the interaction from pending to answered and persists the
+// durable operation that will deliver that answer to the runtime. A terminal
+// interaction returns its stored disposition without creating another
+// operation, allowing competing GUI/CLI responders to normalize the result.
+func (s *Store) PrepareInteractiveRuntimeOperation(
+	ctx context.Context,
+	input RuntimeOperationPrepare,
+) (RuntimeOperation, Interaction, InteractionTransitionResult, error) {
+	if s == nil || s.db == nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, errors.New("workspace database is not initialized")
+	}
+	input.OperationID = strings.TrimSpace(input.OperationID)
+	input.WorkspaceID = strings.TrimSpace(input.WorkspaceID)
+	input.AgentSessionID = strings.TrimSpace(input.AgentSessionID)
+	input.TurnID = strings.TrimSpace(input.TurnID)
+	input.RequestID = strings.TrimSpace(input.RequestID)
+	if input.Kind != RuntimeOperationKindInteractiveResponse {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, errors.New("interactive runtime operation kind is required")
+	}
+	if err := validateRuntimeOperationPrepare(input); err != nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, err
+	}
+	now := input.OccurredAtMS
+	if now <= 0 {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, errors.New("runtime operation occurred time is required")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, fmt.Errorf("begin prepare interactive runtime operation: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	existingInteraction, found, err := getAgentInteractionTx(ctx, tx, input.WorkspaceID, input.AgentSessionID, input.TurnID, input.RequestID)
+	if err != nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, err
+	}
+	if !found {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, ErrRuntimeOperationSubjectState
+	}
+	existingOperation, operationFound, err := getRuntimeOperationBySubjectTx(
+		ctx, tx, input.WorkspaceID, input.AgentSessionID, input.Kind, input.RequestID,
+	)
+	if err != nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, err
+	}
+	claimPayload := input.Payload
+	if operationFound {
+		claimPayload = existingOperation.Payload
+	}
+	response := InteractionUpsert{
+		WorkspaceID: input.WorkspaceID, AgentSessionID: input.AgentSessionID,
+		RequestID: input.RequestID, TurnID: input.TurnID,
+		Kind: existingInteraction.Kind, Status: InteractionStatusAnswered,
+		ToolName: existingInteraction.ToolName, Input: existingInteraction.Input,
+		Metadata: existingInteraction.Metadata, Output: interactiveResponseOutput(claimPayload),
+		OccurredAtUnixMS: now,
+	}
+	interaction, transitionResult, err := s.upsertInteractionTx(ctx, tx, response, now)
+	if err != nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, err
+	}
+	mutations := make([]TransactionMutation, 0, 2)
+	if transitionResult == InteractionTransitionApplied {
+		mutations = append(mutations, transactionMutation(
+			input.WorkspaceID, input.AgentSessionID, MutationEntityInteraction,
+			interactionMutationEntityID(input.TurnID, input.RequestID), "answer", interaction.UpdatedAtUnixMS,
+		))
+	}
+	if operationFound {
+		delta, err := s.commitTransaction(ctx, tx, input.WorkspaceID, mutations)
+		if err != nil {
+			return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, fmt.Errorf("commit duplicate interactive runtime operation prepare: %w", err)
+		}
+		committed = true
+		existingOperation.CommitTransactionID = delta.TransactionID
+		existingOperation.CommitDelta = delta
+		return existingOperation, interaction, transitionResult, nil
+	}
+	if transitionResult != InteractionTransitionApplied {
+		if _, err := s.commitTransaction(ctx, tx, input.WorkspaceID, mutations); err != nil {
+			return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, fmt.Errorf("commit terminal interactive response observation: %w", err)
+		}
+		committed = true
+		return RuntimeOperation{}, interaction, transitionResult, nil
+	}
+	if err := validateRuntimeOperationSubjectTx(ctx, tx, input); err != nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, err
+	}
+	payloadJSON, err := marshalJSONMap(input.Payload)
+	if err != nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, err
+	}
+	if byID, idFound, err := getRuntimeOperationTx(ctx, tx, input.WorkspaceID, input.OperationID); err != nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, err
+	} else if idFound {
+		_ = byID
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, ErrRuntimeOperationConflict
+	}
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO workspace_agent_runtime_operations (
+  operation_id, workspace_id, agent_session_id, kind, status, subject_id, turn_id,
+  request_id, payload_json, next_attempt_at_unix_ms, created_at_unix_ms, updated_at_unix_ms
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`, input.OperationID, input.WorkspaceID, input.AgentSessionID, input.Kind,
+		RuntimeOperationStatusPrepared, input.RequestID, input.TurnID, input.RequestID,
+		payloadJSON, now, now, now); err != nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, fmt.Errorf("insert interactive runtime operation: %w", err)
+	}
+	operation, _, err := getRuntimeOperationTx(ctx, tx, input.WorkspaceID, input.OperationID)
+	if err != nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, err
+	}
+	mutations = append(mutations, transactionMutation(
+		input.WorkspaceID, input.AgentSessionID, MutationEntityRuntimeOperation,
+		input.OperationID, "prepare", operation.Version,
+	))
+	delta, err := s.commitTransaction(ctx, tx, input.WorkspaceID, mutations)
+	if err != nil {
+		return RuntimeOperation{}, Interaction{}, InteractionTransitionConflict, fmt.Errorf("commit interactive runtime operation prepare: %w", err)
+	}
+	committed = true
+	operation.CommitTransactionID = delta.TransactionID
+	operation.CommitDelta = delta
+	return operation, interaction, transitionResult, nil
+}
+
+func interactiveResponseOutput(payload map[string]any) map[string]any {
+	responsePayload, _ := payload["payload"].(map[string]any)
+	return map[string]any{
+		"action":   payloadString(payload, "action"),
+		"optionId": payloadString(payload, "optionId"),
+		"payload":  cloneJSONMap(responsePayload),
+	}
 }
 
 func (s *Store) GetRuntimeOperation(ctx context.Context, workspaceID string, operationID string) (RuntimeOperation, bool, error) {
@@ -190,7 +336,17 @@ func (s *Store) ReleaseOrFailRuntimeOperation(ctx context.Context, input Release
 	} else if input.NextAttemptAtMS <= input.NowUnixMS {
 		return RuntimeOperation{}, false, errors.New("runtime operation retry time must be after release time")
 	}
-	result, err := s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return RuntimeOperation{}, false, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	result, err := tx.ExecContext(ctx, `
 UPDATE workspace_agent_runtime_operations
 SET status = ?, result = ?, lease_owner = NULL, lease_expires_at_unix_ms = NULL,
     next_attempt_at_unix_ms = ?, version = version + 1, last_error = ?, updated_at_unix_ms = ?
@@ -204,10 +360,28 @@ WHERE workspace_id = ? AND operation_id = ? AND status = ? AND lease_owner = ?
 	if err != nil {
 		return RuntimeOperation{}, false, err
 	}
-	op, found, err := s.GetRuntimeOperation(ctx, input.WorkspaceID, input.OperationID)
+	op, found, err := getRuntimeOperationTx(ctx, tx, input.WorkspaceID, input.OperationID)
 	if err != nil || !found {
 		return op, false, err
 	}
+	mutations := []TransactionMutation{}
+	if changed {
+		operation := "release"
+		if input.Fail {
+			operation = "fail"
+		}
+		mutations = append(mutations, transactionMutation(
+			op.WorkspaceID, op.AgentSessionID, MutationEntityRuntimeOperation,
+			op.OperationID, operation, op.Version,
+		))
+	}
+	delta, err := s.commitTransaction(ctx, tx, op.WorkspaceID, mutations)
+	if err != nil {
+		return RuntimeOperation{}, false, err
+	}
+	committed = true
+	op.CommitTransactionID = delta.TransactionID
+	op.CommitDelta = delta
 	return op, changed, nil
 }
 
@@ -261,14 +435,16 @@ WHERE workspace_id = ? AND operation_id = ? AND status = ? AND lease_owner = ?
 	if err != nil {
 		return RuntimeOperation{}, false, err
 	}
+	var pendingEvent RuntimeOperationEvent
 	if payloadString(current.Payload, "step") != "send_dispatched" && payloadString(input.Payload, "step") == "send_dispatched" {
 		if err := insertPlanDecisionUnknownNoticeTx(ctx, tx, current, input.NowUnixMS); err != nil {
 			return RuntimeOperation{}, false, err
 		}
-		if _, err := insertRuntimeOperationEventTx(ctx, tx, current, RuntimeOperationEventPlanDecisionPending, map[string]any{
+		pendingEvent, err = insertRuntimeOperationEventTx(ctx, tx, current, RuntimeOperationEventPlanDecisionPending, map[string]any{
 			"turnId": current.TurnID, "requestId": current.RequestID,
 			"noticeMessageId": planDecisionNoticeMessageID(current.OperationID),
-		}, input.NowUnixMS); err != nil {
+		}, input.NowUnixMS)
+		if err != nil {
 			return RuntimeOperation{}, false, err
 		}
 	}
@@ -276,10 +452,30 @@ WHERE workspace_id = ? AND operation_id = ? AND status = ? AND lease_owner = ?
 	if err != nil || !found {
 		return op, false, err
 	}
-	if err := tx.Commit(); err != nil {
+	mutations := []TransactionMutation{
+		transactionMutation(input.WorkspaceID, op.AgentSessionID, MutationEntityRuntimeOperation, input.OperationID, "checkpoint", op.Version),
+	}
+	if pendingEvent.ID > 0 {
+		messageID := planDecisionNoticeMessageID(op.OperationID)
+		message, found, err := getAgentMessageForUpdate(ctx, tx, input.WorkspaceID, op.AgentSessionID, messageID)
+		if err != nil {
+			return RuntimeOperation{}, false, err
+		}
+		if !found {
+			return RuntimeOperation{}, false, ErrRuntimeOperationSubjectState
+		}
+		mutations = append(mutations,
+			transactionMutation(input.WorkspaceID, op.AgentSessionID, MutationEntityMessage, messageID, "upsert", int64(message.Version)),
+			transactionMutation(input.WorkspaceID, op.AgentSessionID, MutationEntityRuntimeEvent, fmt.Sprint(pendingEvent.ID), "insert", pendingEvent.ID),
+		)
+	}
+	delta, err := s.commitTransaction(ctx, tx, input.WorkspaceID, mutations)
+	if err != nil {
 		return RuntimeOperation{}, false, fmt.Errorf("commit runtime operation checkpoint: %w", err)
 	}
 	committed = true
+	op.CommitTransactionID = delta.TransactionID
+	op.CommitDelta = delta
 	return op, changed, nil
 }
 

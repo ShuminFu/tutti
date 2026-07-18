@@ -3,11 +3,13 @@ import test from "node:test";
 import type { TuttidClient } from "@tutti-os/client-tuttid-ts";
 import { TuttidProtocolError } from "@tutti-os/client-tuttid-ts";
 import {
+  selectEnginePromptQueue,
   selectEngineTurnsForSession,
   selectSessionActivationPresentations,
   selectSessionAttention,
   selectSessionMutations
 } from "@tutti-os/agent-activity-core";
+import type { ReporterEventInput } from "../../../analytics/services/reporterService.interface.ts";
 import { WorkspaceAgentActivityService } from "./workspaceAgentActivityService.ts";
 
 test("WorkspaceAgentActivityService starts one canonical workspace load when the shared engine is created", async () => {
@@ -232,6 +234,231 @@ test("WorkspaceAgentActivityService confirms engine activation from the realtime
   );
 });
 
+test("WorkspaceAgentActivityService reports session and message events from the shared engine command path", async (t) => {
+  const reporterEvents: ReporterEventInput[] = [];
+  const completedSession = workspaceAgentSession({ status: "completed" });
+  const service = new WorkspaceAgentActivityService({
+    tuttidClient: {
+      createWorkspaceAgentSession: async () => completedSession,
+      listWorkspaceAgentSessions: async () => ({
+        hasMore: false,
+        sessions: [],
+        workspaceId: "ws-1"
+      }),
+      sendWorkspaceAgentSessionInput: async () => ({
+        kind: "turn",
+        session: completedSession,
+        turnId: "turn-2",
+        turn: workspaceAgentTurn({ phase: "submitted" })
+      })
+    } as unknown as TuttidClient,
+    reporterNow: () => 1749124800000,
+    reporterService: {
+      async trackEvents(events) {
+        reporterEvents.push(...events);
+      }
+    },
+    runtimeApi: { logTerminalDiagnostic: async () => {} }
+  });
+  t.after(() => service.dispose());
+  const engine = service.getSessionEngine("ws-1");
+  const requestedAtUnixMs = Date.now();
+
+  engine.dispatch({
+    type: "activation/requested",
+    agentSessionId: "session-1",
+    agentTargetId: "local:codex",
+    clientSubmitId: "submit-1",
+    content: [{ type: "text", text: "Create the feature" }],
+    initialDisplayPrompt:
+      "/review [src/App.tsx](mention://file/src%2FApp.tsx?workspaceId=ws-1)",
+    cwd: "/workspace",
+    expiresAtUnixMs: requestedAtUnixMs + 45_000,
+    mode: "new",
+    requestedAtUnixMs,
+    requestId: "activation-analytics-1",
+    settings: {
+      model: "gpt-5",
+      permissionModeId: "auto"
+    },
+    workspaceId: "ws-1"
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  engine.dispatch({
+    type: "submit/requested",
+    agentSessionId: "session-1",
+    clientSubmitId: "submit-2",
+    content: [{ type: "text", text: "/review the result" }],
+    expiresAtUnixMs: requestedAtUnixMs + 60_000,
+    requestedAtUnixMs,
+    submitDiagnostics: {
+      blockCount: 1,
+      promptLength: 18,
+      queued: true,
+      source: "agent-gui",
+      submittedAtUnixMs: requestedAtUnixMs
+    },
+    workspaceId: "ws-1"
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(
+    reporterEvents
+      .filter((event) =>
+        ["agent.session_started", "agent.message_sent"].includes(event.name)
+      )
+      .map((event) => ({ name: event.name, params: event.params })),
+    [
+      {
+        name: "agent.session_started",
+        params: {
+          agent_session_id: "session-1",
+          error_code: "agent_error_none",
+          error_message: "",
+          has_custom_model: false,
+          has_project: true,
+          permission_mode: "auto",
+          provider: "codex",
+          source: "launchpad"
+        }
+      },
+      {
+        name: "agent.message_sent",
+        params: {
+          agent_session_id: "session-1",
+          conversation_index: 1,
+          error_code: "agent_error_none",
+          error_message: "",
+          has_file_mention: true,
+          has_slash_command: true,
+          is_queued: false,
+          provider: "codex"
+        }
+      },
+      {
+        name: "agent.message_sent",
+        params: {
+          agent_session_id: "session-1",
+          conversation_index: 2,
+          error_code: "agent_error_none",
+          error_message: "",
+          has_file_mention: false,
+          has_slash_command: true,
+          is_queued: false,
+          provider: "codex"
+        }
+      }
+    ]
+  );
+});
+
+test("WorkspaceAgentActivityService does not wait for pending activation analytics", async (t) => {
+  let analyticsCalls = 0;
+  const service = new WorkspaceAgentActivityService({
+    tuttidClient: {
+      createWorkspaceAgentSession: async () => ({
+        ...workspaceAgentSession({ status: "completed" }),
+        createdAtUnixMs: Date.now()
+      }),
+      listWorkspaceAgentSessions: async () => ({
+        hasMore: false,
+        sessions: [],
+        workspaceId: "ws-1"
+      })
+    } as unknown as TuttidClient,
+    reporterService: {
+      trackEvents: () => {
+        analyticsCalls += 1;
+        return new Promise<void>(() => {});
+      }
+    },
+    runtimeApi: { logTerminalDiagnostic: async () => {} }
+  });
+  t.after(() => service.dispose());
+  const engine = service.getSessionEngine("ws-1");
+  const requestedAtUnixMs = Date.now();
+
+  engine.dispatch({
+    type: "activation/requested",
+    agentSessionId: "session-1",
+    agentTargetId: "local:codex",
+    clientSubmitId: "submit-pending-analytics",
+    content: [{ type: "text", text: "Create the feature" }],
+    expiresAtUnixMs: requestedAtUnixMs + 1_000,
+    mode: "new",
+    requestedAtUnixMs,
+    requestId: "activation-pending-analytics",
+    workspaceId: "ws-1"
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(
+    selectSessionActivationPresentations(engine.getSnapshot())["session-1"]
+      ?.status,
+    "active"
+  );
+  assert.equal(analyticsCalls, 2);
+});
+
+test("WorkspaceAgentActivityService isolates rejected send analytics from the prompt command", async (t) => {
+  let sendCalls = 0;
+  const readySession = workspaceAgentSession({ status: "ready" });
+  const service = new WorkspaceAgentActivityService({
+    tuttidClient: {
+      listWorkspaceAgentSessions: async () => ({
+        hasMore: false,
+        sessions: [readySession],
+        workspaceId: "ws-1"
+      }),
+      sendWorkspaceAgentSessionInput: async () => {
+        sendCalls += 1;
+        return {
+          kind: "turn",
+          session: readySession,
+          turnId: "turn-analytics-rejected",
+          turn: workspaceAgentTurn({ phase: "submitted" })
+        };
+      }
+    } as unknown as TuttidClient,
+    reporterService: {
+      async trackEvents() {
+        throw new Error("analytics unavailable");
+      }
+    },
+    runtimeApi: { logTerminalDiagnostic: async () => {} }
+  });
+  t.after(() => service.dispose());
+  const engine = service.getSessionEngine("ws-1");
+  await new Promise((resolve) => setImmediate(resolve));
+  const requestedAtUnixMs = Date.now();
+
+  engine.dispatch({
+    type: "submit/requested",
+    agentSessionId: "session-1",
+    clientSubmitId: "submit-rejected-analytics",
+    content: [{ type: "text", text: "Continue" }],
+    expiresAtUnixMs: requestedAtUnixMs + 45_000,
+    requestedAtUnixMs,
+    workspaceId: "ws-1"
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(sendCalls, 1);
+  assert.equal(
+    selectEnginePromptQueue(engine.getSnapshot(), "session-1")?.failureMessage,
+    null
+  );
+  assert.equal(
+    selectEnginePromptQueue(engine.getSnapshot(), "session-1")?.inFlight,
+    null
+  );
+});
+
 test("WorkspaceAgentActivityService reads existing session settings from the daemon", async () => {
   const createdSession = workspaceAgentSession({
     provider: "claude-code",
@@ -275,6 +502,51 @@ test("WorkspaceAgentActivityService reads existing session settings from the dae
 
   assert.equal(activation.session.provider, "claude-code");
   assert.equal(canonicalSession.settings?.model, "default");
+});
+
+test("WorkspaceAgentActivityService does not reinterpret a failed Turn as activation failure", async () => {
+  const failedSession = workspaceAgentSession({
+    latestTurn: {
+      ...workspaceAgentTurn({ outcome: "failed", phase: "settled" }),
+      error: { message: "Selected model is at capacity" }
+    },
+    status: "failed"
+  });
+  const service = new WorkspaceAgentActivityService({
+    tuttidClient: {
+      createWorkspaceAgentSession: async () => failedSession,
+      getWorkspaceAgentSession: async () => ({
+        childSessions: [],
+        session: failedSession,
+        turns: []
+      })
+    } as unknown as TuttidClient,
+    runtimeApi: { logTerminalDiagnostic: async () => {} }
+  });
+
+  const created = await service.activateSession({
+    agentSessionId: "session-1",
+    agentTargetId: "local:codex",
+    clientSubmitId: "submit-create-failed-turn",
+    initialContent: [{ type: "text", text: "Run it" }],
+    mode: "new",
+    visible: true,
+    workspaceId: "ws-1"
+  });
+  const reopened = await service.activateSession({
+    agentSessionId: "session-1",
+    mode: "existing",
+    visible: true,
+    workspaceId: "ws-1"
+  });
+
+  assert.deepEqual(created.activation, { mode: "new", status: "attached" });
+  assert.equal(created.error, undefined);
+  assert.deepEqual(reopened.activation, {
+    mode: "existing",
+    status: "already_attached"
+  });
+  assert.equal(reopened.error, undefined);
 });
 
 test("WorkspaceAgentActivityService returns the authoritative canonical session after settings update", async () => {
@@ -471,6 +743,26 @@ test("WorkspaceAgentActivityService model catalog invalidation drops composer ca
     workspaceId: "ws-1"
   });
   assert.equal(composerOptionCalls, 2);
+
+  const defaultsInvalidationHandler = topicHandlers.get(
+    "preferences.agent.composer.defaults.changed"
+  );
+  assert.ok(
+    defaultsInvalidationHandler,
+    "service must subscribe to target defaults invalidation"
+  );
+  const targetInvalidations: unknown[] = [];
+  service.onComposerDefaultsInvalidated((event) => {
+    targetInvalidations.push(event);
+  });
+  defaultsInvalidationHandler({ payload: { agentTargetId: "local:codex" } });
+  assert.deepEqual(targetInvalidations, [{ agentTargetId: "local:codex" }]);
+  await service.getComposerOptions({
+    agentTargetId: "local:codex",
+    provider: "codex",
+    workspaceId: "ws-1"
+  });
+  assert.equal(composerOptionCalls, 3);
 });
 
 test("WorkspaceAgentActivityService starts session-event streams and preserves uncached outcome patches", async () => {
@@ -536,6 +828,10 @@ test("WorkspaceAgentActivityService starts session-event streams and preserves u
     {
       scope: null,
       topic: "agent.model.catalog.invalidated"
+    },
+    {
+      scope: null,
+      topic: "preferences.agent.composer.defaults.changed"
     }
   ]);
   assert.equal(connectCalls, 1);
@@ -595,6 +891,300 @@ test("WorkspaceAgentActivityService starts session-event streams and preserves u
   assert.deepEqual(await receivedTurnEvent, turnEvent);
 });
 
+test("WorkspaceAgentActivityService reconciles a realtime message version gap before advancing the cursor", async () => {
+  const listenersByTopic = new Map<string, (event: unknown) => void>();
+  const messageRequests: Array<Record<string, unknown>> = [];
+  const diagnostics: Array<{
+    details?: Record<string, unknown>;
+    event?: string;
+  }> = [];
+  const session = workspaceAgentSession({ status: "completed" });
+  const userMessage = {
+    agentSessionId: "session-1",
+    kind: "text",
+    messageId: "user-1",
+    occurredAtUnixMs: 1,
+    payload: { text: "Please investigate" },
+    role: "user",
+    status: "completed",
+    turnId: "turn-1",
+    version: 1
+  };
+  const runningCompaction = {
+    agentSessionId: "session-1",
+    kind: "text",
+    messageId: "compaction:turn-1",
+    occurredAtUnixMs: 2,
+    payload: {
+      noticeCommand: "compact",
+      noticeCommandStatus: "running",
+      text: "Compacting context.",
+      title: "Compacting context."
+    },
+    role: "assistant",
+    semantics: {
+      noticeCommand: "compact",
+      noticeCommandStatus: "running"
+    },
+    status: "completed",
+    turnId: "turn-1",
+    version: 2
+  };
+  const completedCompaction = {
+    ...runningCompaction,
+    occurredAtUnixMs: 3,
+    payload: {
+      noticeCommand: "compact",
+      noticeCommandStatus: "completed",
+      text: "Context compacted.",
+      title: "Context compacted."
+    },
+    semantics: {
+      noticeCommand: "compact",
+      noticeCommandStatus: "completed"
+    },
+    version: 3
+  };
+  const laterAssistantMessage = {
+    agentSessionId: "session-1",
+    kind: "text",
+    messageId: "assistant-later",
+    occurredAtUnixMs: 4,
+    payload: { text: "Later output" },
+    role: "assistant",
+    status: "completed",
+    turnId: "turn-1",
+    version: 4
+  };
+  const service = new WorkspaceAgentActivityService({
+    eventStreamClient: {
+      connect: async () => {},
+      dispose: () => {},
+      publishIntent: async () => {},
+      subscribe: (topic: string, listener: (event: unknown) => void) => {
+        listenersByTopic.set(topic, listener);
+        return () => {};
+      },
+      subscribeConnectionState: () => () => {}
+    } as never,
+    tuttidClient: {
+      getWorkspaceAgentSession: async () => ({
+        session,
+        childSessions: [],
+        turns: []
+      }),
+      listWorkspaceAgentSessionMessages: async (
+        _workspaceId: string,
+        _agentSessionId: string,
+        request: Record<string, unknown>
+      ) => {
+        messageRequests.push(request);
+        return messageRequests.length === 1
+          ? {
+              hasMore: false,
+              latestVersion: 2,
+              messages: [userMessage, runningCompaction]
+            }
+          : {
+              hasMore: false,
+              latestVersion: 4,
+              messages: [completedCompaction, laterAssistantMessage]
+            };
+      },
+      listWorkspaceAgentSessions: async () => ({
+        hasMore: false,
+        sessions: [session],
+        workspaceId: "ws-1"
+      })
+    } as unknown as TuttidClient,
+    runtimeApi: {
+      logTerminalDiagnostic: async (payload) => {
+        diagnostics.push(payload);
+      }
+    }
+  });
+
+  await service.load("ws-1");
+  await service.listSessionMessages({
+    agentSessionId: "session-1",
+    workspaceId: "ws-1"
+  });
+  assert.equal(
+    service
+      .getSnapshot("ws-1")
+      .sessionMessagesById["session-1"]?.find(
+        (message) => message.messageId === "compaction:turn-1"
+      )?.semantics?.noticeCommandStatus,
+    "running"
+  );
+
+  const activityUpdated = listenersByTopic.get("agent.activity.updated");
+  assert.ok(activityUpdated);
+  activityUpdated({
+    payload: {
+      agentSessionId: "session-1",
+      data: {
+        acceptedCount: 1,
+        agentSessionId: "session-1",
+        eventType: "message_update",
+        latestVersion: 4,
+        messages: [laterAssistantMessage],
+        workspaceId: "ws-1"
+      },
+      eventType: "message_update",
+      workspaceId: "ws-1"
+    }
+  });
+
+  for (let attempt = 0; attempt < 10 && messageRequests.length < 2; attempt++) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(messageRequests.length, 2);
+  assert.equal(messageRequests[1]?.afterVersion, 2);
+  assert.equal(
+    service
+      .getSnapshot("ws-1")
+      .sessionMessagesById["session-1"]?.find(
+        (message) => message.messageId === "compaction:turn-1"
+      )?.semantics?.noticeCommandStatus,
+    "completed"
+  );
+  assert.ok(
+    diagnostics.some(
+      (entry) =>
+        entry.event === "agent.activity.reconcile.trace" &&
+        entry.details?.traceEvent === "realtime.message_version_gap_detected" &&
+        entry.details.cachedVersion === 2 &&
+        entry.details.firstUnseenVersion === 4
+    )
+  );
+});
+
+test("WorkspaceAgentActivityService reconciles cached messages after reconnect without waiting for another event", async () => {
+  let connectionListener:
+    | ((state: "connected" | "disconnected") => void)
+    | undefined;
+  const messageRequests: Array<Record<string, unknown>> = [];
+  const session = workspaceAgentSession({ status: "completed" });
+  const userMessage = {
+    agentSessionId: "session-1",
+    kind: "text",
+    messageId: "user-1",
+    occurredAtUnixMs: 1,
+    payload: { text: "Please investigate" },
+    role: "user",
+    status: "completed",
+    turnId: "turn-1",
+    version: 1
+  };
+  const runningCompaction = {
+    agentSessionId: "session-1",
+    kind: "text",
+    messageId: "compaction:turn-1",
+    occurredAtUnixMs: 2,
+    payload: {
+      noticeCommand: "compact",
+      noticeCommandStatus: "running"
+    },
+    role: "assistant",
+    semantics: {
+      noticeCommand: "compact",
+      noticeCommandStatus: "running"
+    },
+    status: "completed",
+    turnId: "turn-1",
+    version: 2
+  };
+  const completedCompaction = {
+    ...runningCompaction,
+    occurredAtUnixMs: 3,
+    payload: {
+      noticeCommand: "compact",
+      noticeCommandStatus: "completed"
+    },
+    semantics: {
+      noticeCommand: "compact",
+      noticeCommandStatus: "completed"
+    },
+    version: 3
+  };
+  const service = new WorkspaceAgentActivityService({
+    eventStreamClient: {
+      connect: async () => {},
+      dispose: () => {},
+      publishIntent: async () => {},
+      subscribe: () => () => {},
+      subscribeConnectionState: (
+        listener: (state: "connected" | "disconnected") => void
+      ) => {
+        connectionListener = listener;
+        return () => {};
+      }
+    } as never,
+    tuttidClient: {
+      getWorkspaceAgentSession: async () => ({
+        session,
+        childSessions: [],
+        turns: []
+      }),
+      listWorkspaceAgentSessionMessages: async (
+        _workspaceId: string,
+        _agentSessionId: string,
+        request: Record<string, unknown>
+      ) => {
+        messageRequests.push(request);
+        return messageRequests.length === 1
+          ? {
+              hasMore: false,
+              latestVersion: 2,
+              messages: [userMessage, runningCompaction]
+            }
+          : {
+              hasMore: false,
+              latestVersion: 3,
+              messages: [completedCompaction]
+            };
+      },
+      listWorkspaceAgentSessions: async () => ({
+        hasMore: false,
+        sessions: [session],
+        workspaceId: "ws-1"
+      })
+    } as unknown as TuttidClient,
+    runtimeApi: { logTerminalDiagnostic: async () => {} }
+  });
+
+  await service.load("ws-1");
+  await service.listSessionMessages({
+    agentSessionId: "session-1",
+    workspaceId: "ws-1"
+  });
+  assert.ok(connectionListener);
+  connectionListener("connected");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(messageRequests.length, 1);
+
+  connectionListener("disconnected");
+  connectionListener("connected");
+  for (let attempt = 0; attempt < 10 && messageRequests.length < 2; attempt++) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(messageRequests.length, 2);
+  assert.equal(messageRequests[1]?.afterVersion, 2);
+  assert.equal(
+    service
+      .getSnapshot("ws-1")
+      .sessionMessagesById["session-1"]?.find(
+        (message) => message.messageId === "compaction:turn-1"
+      )?.semantics?.noticeCommandStatus,
+    "completed"
+  );
+});
+
 test("WorkspaceAgentActivityService dispose releases every event stream subscription", () => {
   const activeSubscriptions = new Set<symbol>();
   const subscribe = () => {
@@ -623,7 +1213,7 @@ test("WorkspaceAgentActivityService dispose releases every event stream subscrip
   });
 
   service.onSessionEvent("ws-1", () => {});
-  assert.equal(activeSubscriptions.size, 3);
+  assert.equal(activeSubscriptions.size, 4);
 
   service.dispose();
   service.dispose();
@@ -1006,15 +1596,21 @@ test("WorkspaceAgentActivityService fetches detail before combined message recon
   ]);
   assert.equal(session?.activeTurn, null);
   assert.equal(session?.latestTurn?.phase, "settled");
+  const reconcileDiagnostics = diagnostics.filter(
+    (
+      entry
+    ): entry is {
+      details: { traceEvent?: string };
+      event: string;
+      level?: string;
+    } =>
+      typeof entry === "object" &&
+      entry !== null &&
+      (entry as { event?: unknown }).event === "agent.activity.reconcile.trace"
+  );
+  assert.ok(reconcileDiagnostics.every((entry) => entry.level === "debug"));
   assert.deepEqual(
-    diagnostics
-      .filter(
-        (entry): entry is { details: { traceEvent?: string }; event: string } =>
-          typeof entry === "object" &&
-          entry !== null &&
-          (entry as { event?: unknown }).event ===
-            "agent.activity.reconcile.trace"
-      )
+    reconcileDiagnostics
       .map((entry) => entry.details.traceEvent)
       .filter(
         (traceEvent) =>

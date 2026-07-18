@@ -29,7 +29,7 @@ import type {
 } from "../model/agentGuiNodeTypes";
 import { updateAgentComposerDraft } from "../model/agentComposerDraft";
 import { resolveAgentComposerDraftScopeKey } from "../model/agentComposerDraftScope";
-import { projectAgentGUIManagedHomeTargets } from "../model/agentGuiProviderRailOrder";
+import type { AgentGUIManagedHomeTargetProjection } from "../model/agentGuiProviderRailOrder";
 import type {
   AgentGUINodeViewProps,
   AgentGUIProviderUnavailableStateRenderer,
@@ -58,7 +58,6 @@ import {
 import styles from "../AgentGUINode.styles";
 import { useAgentGUIDetailScroll } from "./useAgentGUIDetailScroll";
 import { useAgentGUIDetailModel } from "./useAgentGUIDetailModel";
-import { useAgentGUIProviderRailPreferences } from "./useAgentGUIProviderRailPreferences";
 import type { AgentGUIComposerEngagement } from "../engagement/agentGUIEngagement.types";
 
 const AGENT_GUI_TIMELINE_SCROLL_AREA_CONTENT_STYLE: CSSProperties = {
@@ -72,6 +71,7 @@ export const EMPTY_WORKSPACE_APP_ICONS: readonly AgentMessageMarkdownWorkspaceAp
   [];
 export interface AgentGUIDetailPaneProps {
   viewModel: AgentGUINodeViewModel;
+  homeTargetProjection: AgentGUIManagedHomeTargetProjection;
   referenceProvenanceFilter?: AgentComposerProps["referenceProvenanceFilter"];
   composerEngagement?: AgentGUIComposerEngagement;
   actions: AgentGUINodeViewProps["actions"];
@@ -97,7 +97,8 @@ export interface AgentGUIDetailPaneProps {
         entity?: AgentContextMentionItem | null
       ) => Promise<WorkspaceReferencePickResult>)
     | null;
-  resolveDroppedFileReferences?: AgentComposerProps["resolveDroppedFileReferences"];
+  prepareExternalPromptFiles?: AgentComposerProps["prepareExternalPromptFiles"];
+  promptAssetLimit?: number | null;
   selectProjectDirectory?: () => Promise<{ path: string } | null>;
   onRequestGitBranches?: AgentComposerGitBranchLoader | null;
   onRequestComposerFocus: () => void;
@@ -154,6 +155,7 @@ export function mergeWorkspaceAppIconsFromCommands(input: {
 
 export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   viewModel,
+  homeTargetProjection,
   referenceProvenanceFilter = null,
   composerEngagement,
   actions,
@@ -175,7 +177,8 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   onCapabilitySettingsRequest,
   onAgentProviderLogin,
   onRequestWorkspaceReferences,
-  resolveDroppedFileReferences = null,
+  prepareExternalPromptFiles = null,
+  promptAssetLimit = null,
   selectProjectDirectory,
   onRequestGitBranches,
   onRequestComposerFocus,
@@ -359,13 +362,6 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     [submitInteractivePrompt]
   );
   const canSwitchComposerProvider = true;
-  const { preferences: providerRailPreferences } =
-    useAgentGUIProviderRailPreferences();
-  const homeTargetProjection = projectAgentGUIManagedHomeTargets({
-    agentTargets: viewModel.rail.agentTargets,
-    preferences: providerRailPreferences,
-    selectedAgentTarget: viewModel.rail.selectedAgentTarget
-  });
   const homeComposerProviderTargets = homeTargetProjection.agentTargets;
   const selectedHomeComposerTarget = homeTargetProjection.selectedAgentTarget;
   const composerProviderTargets =
@@ -489,7 +485,8 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       onLinkAction: stableLinkAction,
       onHandoffConversation: stableHandoffConversation,
       onRequestWorkspaceReferences: stableRequestWorkspaceReferences,
-      resolveDroppedFileReferences,
+      prepareExternalPromptFiles,
+      promptAssetLimit,
       selectProjectDirectory: stableSelectProjectDirectory,
       onRequestGitBranches: stableRequestGitBranches,
       contextMentionProviders
@@ -527,7 +524,8 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       onCapabilitySettingsRequest,
       contextMentionProviders,
       removeQueuedPrompt,
-      resolveDroppedFileReferences,
+      prepareExternalPromptFiles,
+      promptAssetLimit,
       sendQueuedPromptNext,
       showPromptImagesUnsupported,
       showStopButton,

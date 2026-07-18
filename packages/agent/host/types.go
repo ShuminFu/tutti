@@ -235,12 +235,15 @@ type PromptAttachment struct {
 // import paths, workspace resolution, identity, and transport state are not
 // part of this type.
 type CreateSessionInput struct {
-	AgentSessionID         string
-	AgentTargetID          string
-	Provider               string
-	InitialContent         []PromptContentBlock
-	InitialDisplayPrompt   string
-	Metadata               map[string]any
+	AgentSessionID       string
+	AgentTargetID        string
+	Provider             string
+	InitialContent       []PromptContentBlock
+	InitialDisplayPrompt string
+	Metadata             map[string]any
+	// ClientSubmitID is the caller-owned idempotency identity for the optional
+	// initial turn and overrides legacy Metadata["clientSubmitId"].
+	ClientSubmitID         string
 	Title                  *string
 	Cwd                    *string
 	PermissionModeID       *string
@@ -260,7 +263,10 @@ type SendInput struct {
 	Content       []PromptContentBlock
 	DisplayPrompt string
 	Metadata      map[string]any
-	Guidance      bool
+	// ClientSubmitID is the caller-owned idempotency identity. When present it
+	// overrides any legacy clientSubmitId value carried in Metadata.
+	ClientSubmitID string
+	Guidance       bool
 }
 
 type SubmitInteractiveInput struct {
@@ -283,16 +289,59 @@ type CancelTurnInput struct {
 	Reason         string
 }
 
+type CancelState string
+
+const (
+	CancelStateNotFound       CancelState = "not_found"
+	CancelStateAlreadySettled CancelState = "already_settled"
+	CancelStateRequested      CancelState = "cancel_requested"
+	CancelStateSettled        CancelState = "settled"
+)
+
+// CancelTurnResult keeps durable intent acceptance, provider confirmation,
+// and canonical settlement separate. Adapters must not infer a terminal
+// canceled turn merely from IntentAccepted.
+type CancelTurnResult struct {
+	Canonical         storesqlite.Session
+	Turn              *storesqlite.Turn
+	Operation         storesqlite.RuntimeOperation
+	State             CancelState
+	IntentAccepted    bool
+	ProviderConfirmed bool
+	Settled           bool
+	Outcome           string
+}
+
+type SubmitInteractiveResult struct {
+	Canonical   storesqlite.Session
+	Operation   storesqlite.RuntimeOperation
+	Disposition RuntimeInteractiveDisposition
+}
+
 type UpdateTitleInput struct {
 	WorkspaceID    string
 	AgentSessionID string
 	Title          string
 }
 
+type UpdateSettingsInput struct {
+	WorkspaceID    string
+	AgentSessionID string
+	Settings       ComposerSettingsPatch
+}
+
+type UpdatePinInput struct {
+	WorkspaceID    string
+	AgentSessionID string
+	Pinned         bool
+}
+
 type CreateSessionResult struct {
-	Session   ProviderRuntimeSession
-	Canonical storesqlite.Session
-	TurnID    string
+	Session     ProviderRuntimeSession
+	Canonical   storesqlite.Session
+	TurnID      string
+	Kind        string
+	GoalControl *GoalControlResult
 }
 
 type SendInputResult struct {
@@ -302,9 +351,101 @@ type SendInputResult struct {
 	TurnID             string
 	TurnLifecycle      TurnLifecycle
 	SubmitAvailability SubmitAvailability
+	Kind               string
+	GoalControl        *GoalControlResult
 }
 
 type UpdateTitleResult struct {
 	Session   ProviderRuntimeSession
 	Canonical storesqlite.Session
+}
+
+// GetSessionResult carries canonical truth together with an optional live
+// runtime observation. Adapters remain responsible for transport DTOs and
+// presentation-only derived fields.
+type GetSessionResult struct {
+	Session   ProviderRuntimeSession
+	Canonical storesqlite.Session
+	Live      bool
+}
+
+type UpdateSettingsResult struct {
+	Session   ProviderRuntimeSession
+	Canonical storesqlite.Session
+	Live      bool
+}
+
+type UpdatePinResult struct {
+	Session   ProviderRuntimeSession
+	Canonical storesqlite.Session
+	Live      bool
+}
+
+type DeleteSessionResult struct {
+	Deleted          bool
+	RuntimeClosed    bool
+	CanonicalRemoved bool
+}
+
+type RuntimeGoalControlInput struct {
+	WorkspaceID        string
+	AgentSessionID     string
+	Action             string
+	Objective          string
+	OperationID        string
+	GoalRevision       int64
+	RepairEpoch        int64
+	SubmissionMetadata map[string]any
+}
+
+type RuntimeGoalControlResult struct {
+	AgentSessionID string
+	Goal           map[string]any
+	Evidence       map[string]any
+	ProviderPhase  string
+}
+
+type RuntimeGoalReconcileResult struct {
+	AgentSessionID string
+	Goal           map[string]any
+	Evidence       map[string]any
+}
+
+type RuntimeGoalRecoveryPolicy struct {
+	QuerySupported        bool
+	ReplaySetAfterRestart bool
+}
+
+type GoalControlInput struct {
+	WorkspaceID        string
+	AgentSessionID     string
+	Action             string
+	Objective          string
+	SubmissionMetadata map[string]any
+}
+
+type GoalControlResult struct {
+	Canonical   storesqlite.Session
+	Goal        map[string]any
+	OperationID string
+	GoalState   *storesqlite.SessionGoalState
+}
+
+type GoalStateResult struct {
+	Canonical storesqlite.Session
+	State     storesqlite.SessionGoalState
+}
+
+type GoalReconcileRequiredInput struct {
+	WorkspaceID         string
+	AgentSessionID      string
+	RequestID           string
+	ProviderTurnID      string
+	Reason              string
+	FenceMode           string
+	ExpectedOperationID string
+	ExpectedRevision    int64
+	ExpectedRepairEpoch int64
+	QuiesceSucceeded    bool
+	QuiesceError        string
 }

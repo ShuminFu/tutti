@@ -16,7 +16,7 @@ import (
 // All methods are scoped by a host-defined workspace ID.
 type Repository interface {
 	ClearSessions(context.Context, string) (ClearSessionsResult, error)
-	DeleteSession(context.Context, string, string) (bool, error)
+	DeleteSessionWithCommit(context.Context, string, string) (DeleteSessionResult, error)
 	DeleteSessionsBatch(context.Context, DeleteSessionsBatchInput) (DeleteSessionsBatchResult, error)
 	GetSession(context.Context, string, string) (Session, bool, error)
 	ListChildSessions(context.Context, string, string) ([]Session, error)
@@ -39,6 +39,7 @@ type Repository interface {
 	ReportSessionMessages(context.Context, SessionMessageReport) (MessageReportResult, error)
 	ReportSessionState(context.Context, SessionStateReport) (StateReportResult, error)
 	PrepareRuntimeOperation(context.Context, RuntimeOperationPrepare) (RuntimeOperation, bool, error)
+	PrepareInteractiveRuntimeOperation(context.Context, RuntimeOperationPrepare) (RuntimeOperation, Interaction, InteractionTransitionResult, error)
 	GetRuntimeOperation(context.Context, string, string) (RuntimeOperation, bool, error)
 	ListClaimableRuntimeOperations(context.Context, ListClaimableRuntimeOperationsInput) ([]RuntimeOperation, error)
 	ClaimRuntimeOperationLease(context.Context, ClaimRuntimeOperationLeaseInput) (RuntimeOperation, bool, error)
@@ -63,6 +64,16 @@ type GoalProvenanceLedger interface {
 }
 
 type ClearSessionsResult struct {
+	TransactionID     string           `json:"-"`
+	CommitDelta       TransactionDelta `json:"-"`
+	RemovedMessages   int
+	RemovedSessions   int
+	RemovedSessionIDs []string
+}
+
+type DeleteSessionResult struct {
+	TransactionID     string           `json:"-"`
+	CommitDelta       TransactionDelta `json:"-"`
 	RemovedMessages   int
 	RemovedSessions   int
 	RemovedSessionIDs []string
@@ -78,6 +89,7 @@ const (
 type ListSessionMessagesInput struct {
 	WorkspaceID    string
 	AgentSessionID string
+	MessageID      string
 	TurnID         string
 	// AfterVersion and BeforeVersion are per-session change cursors. Current
 	// message snapshots may skip cursor values when the same message is updated.
@@ -153,6 +165,8 @@ type DeleteSessionsBatchInput struct {
 }
 
 type DeleteSessionsBatchResult struct {
+	TransactionID     string           `json:"-"`
+	CommitDelta       TransactionDelta `json:"-"`
 	RemovedMessages   int
 	RemovedSessions   int
 	RemovedSessionIDs []string
@@ -175,6 +189,10 @@ type SessionSectionsPage struct {
 }
 
 type Session struct {
+	// CommitTransactionID is populated only by a successful mutating call and
+	// is not persisted as canonical session state.
+	CommitTransactionID    string           `json:"-"`
+	CommitDelta            TransactionDelta `json:"-"`
 	ID                     string
 	WorkspaceID            string
 	Kind                   string
@@ -225,6 +243,8 @@ type ActivityStateReport struct {
 }
 
 type ActivityStateReportResult struct {
+	TransactionID     string           `json:"-"`
+	CommitDelta       TransactionDelta `json:"-"`
 	State             StateReportResult
 	Turn              Turn
 	TurnAccepted      bool
@@ -275,6 +295,8 @@ type Turn struct {
 	FileChanges                            map[string]any
 	CompletedCommandKind                   string
 	CompletedCommandStatus                 string
+	FinalAssistantMessageID                string
+	FinalAssistantMessageResolved          bool
 	Backfilled                             bool
 	StartedAtUnixMS                        int64
 	SettledAtUnixMS                        int64
@@ -318,23 +340,24 @@ type RootProviderTurnTransition struct {
 // and rejects further transitions, which makes replays and cancel races
 // idempotent.
 type TurnTransition struct {
-	WorkspaceID            string
-	AgentSessionID         string
-	TurnID                 string
-	Phase                  string
-	Outcome                string
-	ErrorMessage           string
-	ErrorCode              string
-	FileChanges            map[string]any
-	CompletedCommandKind   string
-	CompletedCommandStatus string
-	Origin                 string
-	SourceGoalOperationID  string
-	SourceGoalRevision     int64
-	SourceGoalRepairEpoch  int64
-	StartedAtUnixMS        int64
-	SettledAtUnixMS        int64
-	OccurredAtUnixMS       int64
+	WorkspaceID             string
+	AgentSessionID          string
+	TurnID                  string
+	Phase                   string
+	Outcome                 string
+	ErrorMessage            string
+	ErrorCode               string
+	FileChanges             map[string]any
+	CompletedCommandKind    string
+	CompletedCommandStatus  string
+	FinalAssistantMessageID string
+	Origin                  string
+	SourceGoalOperationID   string
+	SourceGoalRevision      int64
+	SourceGoalRepairEpoch   int64
+	StartedAtUnixMS         int64
+	SettledAtUnixMS         int64
+	OccurredAtUnixMS        int64
 }
 
 // Closed protocol v2 interaction vocabulary; mirrors the openapi
@@ -399,6 +422,8 @@ type ListSessionInteractionsInput struct {
 // StaleTurnSettlement identifies one turn that startup reconciliation
 // force-settled with outcome interrupted.
 type StaleTurnSettlement struct {
+	TransactionID  string           `json:"-"`
+	CommitDelta    TransactionDelta `json:"-"`
 	WorkspaceID    string
 	AgentSessionID string
 	TurnID         string
@@ -436,6 +461,8 @@ type SessionStateReport struct {
 }
 
 type StateReportResult struct {
+	TransactionID    string           `json:"-"`
+	CommitDelta      TransactionDelta `json:"-"`
 	Accepted         bool
 	StateApplied     bool
 	LastEventUnixMS  int64
@@ -470,6 +497,8 @@ type MessageUpdate struct {
 }
 
 type MessageReportResult struct {
+	TransactionID    string           `json:"-"`
+	CommitDelta      TransactionDelta `json:"-"`
 	AcceptedCount    int
 	LatestVersion    uint64
 	Messages         []Message

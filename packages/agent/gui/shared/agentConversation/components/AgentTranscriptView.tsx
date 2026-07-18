@@ -18,6 +18,7 @@ import { useAgentTurnDisclosureStore } from "./AgentTurnDisclosureContext";
 import { AgentTurnWorkSection } from "./AgentTurnWorkSection";
 import { buildAgentTurnWorkSectionModel } from "./agentTurnWorkSectionModel";
 import { assessAgentTranscriptComplexity } from "./agentTranscriptComplexity";
+import { useTurnDisclosureMotion } from "./useTurnDisclosureMotion";
 import {
   AgentMessageLocatorRail,
   findMessageLocatorScrollParent,
@@ -39,6 +40,7 @@ const AGENT_TRANSCRIPT_ESTIMATED_TURN_HEIGHT_PX = 280;
 const AGENT_TRANSCRIPT_DISCLOSURE_TURN_GAP_PX = 24;
 const AGENT_TRANSCRIPT_LEGACY_TURN_GAP_PX = 12;
 const AGENT_TRANSCRIPT_FALLBACK_TURN_COUNT = 3;
+const preventVirtualScrollAdjustment = () => false;
 interface AgentTranscriptViewProps {
   conversation: AgentConversationVM;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
@@ -116,6 +118,8 @@ function transcriptConversationRenderInputEquals(
         next.sourceDetail.session.agentSessionId &&
       previous.sourceDetail.session.activeTurnId ===
         next.sourceDetail.session.activeTurnId &&
+      previous.sourceDetail.session.imported ===
+        next.sourceDetail.session.imported &&
       previous.sourceDetail.cwd === next.sourceDetail.cwd &&
       transcriptTurnIdentityEquals(
         previous.sourceDetail.turns,
@@ -161,6 +165,8 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
   const [expandedToolRows, setExpandedToolRows] = useState<
     Record<string, boolean>
   >({});
+  const [hasMovingTurnDisclosure, handleDisclosureMotionChange] =
+    useTurnDisclosureMotion();
   const turnDisclosureStore = useAgentTurnDisclosureStore();
   const virtualizerHostRef = useRef<HTMLDivElement | null>(null);
   const [virtualScrollElement, setVirtualScrollElement] =
@@ -228,7 +234,11 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
         buildAgentTurnWorkSectionModel(
           group,
           group.turnId ? (canonicalTurnById.get(group.turnId) ?? null) : null,
-          isActiveTurn
+          isActiveTurn,
+          {
+            collapseIntermediateAssistantReplies:
+              !conversation.sourceDetail.session.imported
+          }
         )
       ] as const;
     })
@@ -241,7 +251,7 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
     [turnGroups]
   );
   const rowVirtualizer = useVirtualizer({
-    anchorTo: "end",
+    anchorTo: shouldVirtualize && hasMovingTurnDisclosure ? "start" : "end",
     count: turnGroups.length,
     estimateSize: () => AGENT_TRANSCRIPT_ESTIMATED_TURN_HEIGHT_PX,
     getItemKey: (index) => turnGroups[index]?.key ?? index,
@@ -249,6 +259,10 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
     overscan: AGENT_TRANSCRIPT_VIRTUALIZATION_OVERSCAN,
     scrollEndThreshold: 24
   });
+  rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange =
+    shouldVirtualize && hasMovingTurnDisclosure
+      ? preventVirtualScrollAdjustment
+      : undefined;
   const handleLocateUserMessage = useCallback(
     (item: AgentMessageLocatorItem) => {
       const scrollParent = virtualizerHostRef.current
@@ -380,6 +394,7 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
           dividerRowIndexes.has(rowIndex)
         )}
         disclosureStore={turnDisclosureStore}
+        onDisclosureMotionChange={handleDisclosureMotionChange}
         renderRow={renderRow}
       />
     );

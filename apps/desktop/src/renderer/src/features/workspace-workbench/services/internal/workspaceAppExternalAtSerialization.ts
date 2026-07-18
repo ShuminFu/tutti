@@ -8,6 +8,8 @@ import type {
   RichTextTriggerInsertResult,
   RichTextTriggerQueryMatch
 } from "@tutti-os/ui-rich-text/types";
+import { resolveAgentGUIProviderCatalogIdentity } from "@tutti-os/agent-gui/provider-catalog";
+import { tuttiAgentAssetUrlsByIconKey } from "../../../../../../shared/tuttiAssetProtocol.ts";
 
 export function serializeWorkspaceAppExternalAtMatch(
   match: RichTextTriggerQueryMatch
@@ -54,12 +56,16 @@ export function serializeWorkspaceAppExternalAtMatch(
     return null;
   }
   const itemId = resolveWorkspaceAppExternalAtItemId(match, insert);
+  const thumbnailUrl = serializeWorkspaceAppExternalAtIconUrl(
+    match.iconUrl,
+    match.insertResult
+  );
   return {
     providerId: match.providerId,
     itemId,
     label: match.label,
     ...(match.subtitle ? { subtitle: match.subtitle } : {}),
-    ...(match.iconUrl ? { thumbnailUrl: match.iconUrl } : {}),
+    ...(thumbnailUrl ? { thumbnailUrl } : {}),
     insert
   };
 }
@@ -82,10 +88,44 @@ function serializeWorkspaceAppExternalAtPresentation(
     >["mention"]["presentation"]
   >
 ): TuttiExternalAtMentionPresentation {
-  const iconUrl = presentation.iconUrl?.trim() ?? "";
-  const thumbnailUrl = presentation.thumbnailUrl?.trim() || iconUrl;
+  const iconUrl = serializeWorkspaceAppExternalAtPresentationIconUrl(
+    presentation.iconUrl,
+    presentation.agentProviderId
+  );
+  const thumbnailUrl = serializeWorkspaceAppExternalAtPresentationIconUrl(
+    presentation.thumbnailUrl?.trim() || iconUrl,
+    presentation.agentProviderId
+  );
   return {
     ...presentation,
+    ...(iconUrl ? { iconUrl } : {}),
     ...(thumbnailUrl ? { thumbnailUrl } : {})
   };
+}
+
+function serializeWorkspaceAppExternalAtIconUrl(
+  iconUrl: string | null | undefined,
+  insertResult: RichTextTriggerInsertResult
+): string {
+  const agentProviderId =
+    insertResult.kind === "mention"
+      ? insertResult.mention.presentation?.agentProviderId
+      : undefined;
+  return serializeWorkspaceAppExternalAtPresentationIconUrl(
+    iconUrl,
+    agentProviderId
+  );
+}
+
+function serializeWorkspaceAppExternalAtPresentationIconUrl(
+  iconUrl: string | null | undefined,
+  agentProviderId: string | null | undefined
+): string {
+  const normalizedIconUrl = iconUrl?.trim() ?? "";
+  if (!normalizedIconUrl.startsWith("file:")) {
+    return normalizedIconUrl;
+  }
+  const iconKey =
+    resolveAgentGUIProviderCatalogIdentity(agentProviderId)?.iconKey ?? "";
+  return tuttiAgentAssetUrlsByIconKey[iconKey] ?? normalizedIconUrl;
 }

@@ -16,6 +16,26 @@ import {
   MANAGED_AGENT_ICON_ROUNDED_URLS,
   managedAgentRoundedIconUrl
 } from "./managedAgentIcons";
+import { RichTextMentionReadonly } from "@tutti-os/ui-rich-text/editor";
+
+describe("RichTextMentionReadonly compatibility", () => {
+  it("uses the resolved label without adding the persisted trigger", () => {
+    render(
+      <RichTextMentionReadonly
+        mention={{
+          trigger: "@",
+          providerId: "workspace-app",
+          entityId: "canvas",
+          label: "Canvas"
+        }}
+      />
+    );
+
+    expect(screen.getByText("Canvas")).toBeInTheDocument();
+    expect(screen.queryByText("@Canvas")).not.toBeInTheDocument();
+    expect(document.querySelector('[data-slot="mention-pill"]')).not.toBeNull();
+  });
+});
 
 describe("AgentMessageMarkdown", () => {
   afterEach(() => {
@@ -312,6 +332,25 @@ describe("AgentMessageMarkdown", () => {
     );
     expect(screen.getByRole("link", { name: url })).not.toHaveTextContent(
       "，然后继续"
+    );
+  });
+
+  it("keeps JSON fields after a bare URL outside the link", () => {
+    const url = "https://github.com/tutti-os/tutti/pull/1355";
+    const content = JSON.stringify({
+      result: "mr_created",
+      prUrl: url,
+      branch: "feat/agent-worktree-isolation",
+      commit: "5f640250dc9565834ff4cec925104c05a02cd230",
+      checks: "focused Go tests/build"
+    });
+    render(<AgentMessageMarkdown content={content} />);
+
+    const link = screen.getByRole("link", { name: url });
+    expect(link).toHaveAttribute("data-agent-link-href", url);
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(link.parentElement).toHaveTextContent(
+      `"prUrl":"${url}","branch":"feat/agent-worktree-isolation"`
     );
   });
 
@@ -1311,9 +1350,32 @@ describe("AgentMessageMarkdown", () => {
     expect(
       mention?.querySelector('[data-agent-mention-app-icon="true"]')
     ).toHaveClass("h-4", "w-4");
+    const image = mention?.querySelector(
+      '[data-agent-mention-app-icon="true"] img'
+    );
+    expect(image).toHaveAttribute("src", iconUrl);
+    expect(
+      mention?.querySelector('[data-agent-mention-fallback-icon="true"]')
+    ).not.toBeInTheDocument();
+    expect(
+      mention?.querySelectorAll(
+        '[data-agent-mention-app-icon="true"] img, [data-agent-mention-app-icon="true"] svg'
+      )
+    ).toHaveLength(1);
+
+    fireEvent.error(image!);
+
     expect(
       mention?.querySelector('[data-agent-mention-app-icon="true"] img')
-    ).toHaveAttribute("src", iconUrl);
+    ).not.toBeInTheDocument();
+    expect(
+      mention?.querySelector('[data-agent-mention-fallback-icon="true"]')
+    ).toBeInTheDocument();
+    expect(
+      mention?.querySelectorAll(
+        '[data-agent-mention-app-icon="true"] img, [data-agent-mention-app-icon="true"] svg'
+      )
+    ).toHaveLength(1);
     expect(mention).toHaveTextContent("Weather");
   });
 

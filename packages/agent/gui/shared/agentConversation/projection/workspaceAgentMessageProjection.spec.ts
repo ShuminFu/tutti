@@ -417,6 +417,45 @@ describe("projectWorkspaceAgentMessagesToConversationVM", () => {
     ]);
   });
 
+  it("keeps goal control audits out of the user conversation", () => {
+    const conversation = projectWorkspaceAgentMessagesToConversationVM({
+      activity: activity(),
+      session: session({
+        effectiveStatus: "completed",
+        turnPhase: "completed"
+      }),
+      messages: [
+        message({
+          messageId: "user-message",
+          version: 1,
+          role: "user",
+          kind: "text",
+          payload: { text: "Pause the goal" },
+          occurredAtUnixMs: 100
+        }),
+        message({
+          messageId: "goal-control:pause",
+          version: 2,
+          turnId: undefined,
+          role: "user",
+          kind: "session_audit",
+          payload: {
+            action: "pause",
+            goalControl: true,
+            text: "/goal pause"
+          },
+          occurredAtUnixMs: 200
+        })
+      ]
+    });
+
+    expect(
+      conversation.rows
+        .filter((row) => row.kind === "message")
+        .flatMap((row) => row.messages.map((item) => item.body))
+    ).toEqual(["Pause the goal"]);
+  });
+
   it("projects only the latest text snapshot for a stable message id", () => {
     const conversation = projectWorkspaceAgentMessagesToConversationVM({
       activity: activity(),

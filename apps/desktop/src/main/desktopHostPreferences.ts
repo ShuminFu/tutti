@@ -61,6 +61,8 @@ import { resolveDesktopDefaultsFromEnv } from "./defaults.ts";
 
 const updateChannelDefaultMigrationID =
   "desktop-update-channel-default-stable-v1";
+const updateChannelInstalledVersionStateID =
+  "desktop-update-channel-installed-version-v1";
 
 export interface DesktopHostPreferencesState {
   getAgentComposerDefaultsByProvider(): DesktopAgentComposerDefaultsByProvider;
@@ -107,6 +109,7 @@ export interface DesktopHostPreferencesState {
 export interface CreateDesktopHostPreferencesOptions {
   appVersion?: string;
   fallbackLocale: DesktopLocale;
+  isPackaged?: boolean;
   logger: DesktopLogger;
   migrationStateRootDir?: string;
   tuttidClient: Pick<
@@ -419,14 +422,21 @@ async function resolveInitialDesktopPreferences(
   try {
     const response = await options.tuttidClient.getDesktopPreferences();
     if (response.initialized) {
-      return migrateInitializedDesktopPreferences(
+      const shouldMigrateDefaultUpdateChannel =
+        await shouldMigrateDefaultDesktopUpdateChannel(options);
+      const migratedPreferences = await migrateInitializedDesktopPreferences(
         options,
         response.preferences,
-        defaultUpdateChannel
+        defaultUpdateChannel,
+        shouldMigrateDefaultUpdateChannel
+      );
+      return alignUpdateChannelWithInstalledVersion(
+        options,
+        migratedPreferences
       );
     }
 
-    return (
+    const initializedPreferences = (
       await options.tuttidClient.putDesktopPreferences({
         preferences: {
           agentComposerDefaultsByProvider: {},
@@ -455,6 +465,10 @@ async function resolveInitialDesktopPreferences(
         }
       })
     ).preferences;
+    return alignUpdateChannelWithInstalledVersion(
+      options,
+      initializedPreferences
+    );
   } catch (error) {
     options.logger.warn("failed to resolve desktop preferences from tuttid", {
       error: error instanceof Error ? error.message : String(error)
@@ -484,10 +498,69 @@ async function resolveInitialDesktopPreferences(
   }
 }
 
+async function alignUpdateChannelWithInstalledVersion(
+  options: CreateDesktopHostPreferencesOptions,
+  preferences: PutDesktopPreferencesRequest["preferences"]
+): Promise<PutDesktopPreferencesRequest["preferences"]> {
+  const installedVersion = resolveInstalledDesktopVersion(options);
+  if (!options.isPackaged || !installedVersion) {
+    return preferences;
+  }
+
+  const statePath = resolveUpdateChannelInstalledVersionStatePath(options);
+  if ((await readInstalledDesktopVersion(statePath)) === installedVersion) {
+    return preferences;
+  }
+
+  const installedChannel = resolveDefaultDesktopUpdateChannel(options);
+  let alignedPreferences = preferences;
+  if (preferences.updateChannel !== installedChannel) {
+    try {
+      alignedPreferences = (
+        await options.tuttidClient.putDesktopPreferences({
+          preferences: {
+            ...preferences,
+            updateChannel: installedChannel
+          }
+        })
+      ).preferences;
+      options.logger.info(
+        "desktop update channel aligned with installed version",
+        {
+          app_version: installedVersion,
+          previous_channel: preferences.updateChannel,
+          update_channel: installedChannel
+        }
+      );
+    } catch (error) {
+      options.logger.warn(
+        "failed to align desktop update channel with installed version",
+        {
+          app_version: installedVersion,
+          error: error instanceof Error ? error.message : String(error),
+          update_channel: installedChannel
+        }
+      );
+      return preferences;
+    }
+  }
+
+  try {
+    await writeInstalledDesktopVersion(statePath, installedVersion);
+  } catch (error) {
+    options.logger.warn("failed to record installed desktop version", {
+      app_version: installedVersion,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+  return alignedPreferences;
+}
+
 async function migrateInitializedDesktopPreferences(
   options: CreateDesktopHostPreferencesOptions,
   preferences: PutDesktopPreferencesRequest["preferences"],
-  defaultUpdateChannel: DesktopUpdateChannel
+  defaultUpdateChannel: DesktopUpdateChannel,
+  shouldMigrateDefaultUpdateChannel: boolean
 ): Promise<PutDesktopPreferencesRequest["preferences"]> {
   const normalizedMinimizeAnimation = isDesktopMinimizeAnimation(
     preferences.minimizeAnimation
@@ -507,7 +580,11 @@ async function migrateInitializedDesktopPreferences(
   const normalizedWorkbenchShortcuts = normalizeDesktopWorkbenchShortcuts(
     preferences.workbenchShortcuts
   );
-  if (preferences.updateChannel !== "rc" || defaultUpdateChannel !== "stable") {
+  if (
+    !shouldMigrateDefaultUpdateChannel ||
+    preferences.updateChannel !== "rc" ||
+    defaultUpdateChannel !== "stable"
+  ) {
     if (
       preferences.minimizeAnimation === normalizedMinimizeAnimation &&
       preferences.agentConversationDetailMode ===
@@ -583,10 +660,22 @@ async function migrateInitializedDesktopPreferences(
   }
 }
 
+async function shouldMigrateDefaultDesktopUpdateChannel(
+  options: CreateDesktopHostPreferencesOptions
+): Promise<boolean> {
+  const installedVersion = resolveInstalledDesktopVersion(options);
+  if (!options.isPackaged || !installedVersion) {
+    return true;
+  }
+
+  const statePath = resolveUpdateChannelInstalledVersionStatePath(options);
+  return (await readInstalledDesktopVersion(statePath)) !== installedVersion;
+}
+
 function resolveDefaultDesktopUpdateChannel(
   options: CreateDesktopHostPreferencesOptions
 ): DesktopUpdateChannel {
-  const version = options.appVersion?.trim().replace(/^v/iu, "") ?? "";
+  const version = resolveInstalledDesktopVersion(options) ?? "";
   if (/^\d+\.\d+\.\d+-rc\.\d+$/u.test(version)) {
     return "rc";
   }
@@ -594,13 +683,53 @@ function resolveDefaultDesktopUpdateChannel(
   return defaultDesktopUpdateChannel;
 }
 
+function resolveInstalledDesktopVersion(
+  options: CreateDesktopHostPreferencesOptions
+): string | null {
+  const version = options.appVersion?.trim().replace(/^v/iu, "") ?? "";
+  return version.length > 0 ? version : null;
+}
+
 function resolveUpdateChannelDefaultMigrationMarkerPath(
   options: CreateDesktopHostPreferencesOptions
 ): string {
-  const stateRootDir =
-    options.migrationStateRootDir ??
-    resolveDesktopDefaultsFromEnv().state.rootDir;
+  const stateRootDir = resolveDesktopPreferencesStateRootDir(options);
   return join(stateRootDir, "migrations", updateChannelDefaultMigrationID);
+}
+
+function resolveUpdateChannelInstalledVersionStatePath(
+  options: CreateDesktopHostPreferencesOptions
+): string {
+  const stateRootDir = resolveDesktopPreferencesStateRootDir(options);
+  return join(stateRootDir, "migrations", updateChannelInstalledVersionStateID);
+}
+
+function resolveDesktopPreferencesStateRootDir(
+  options: CreateDesktopHostPreferencesOptions
+): string {
+  return (
+    options.migrationStateRootDir ??
+    resolveDesktopDefaultsFromEnv().state.rootDir
+  );
+}
+
+async function readInstalledDesktopVersion(
+  path: string
+): Promise<string | null> {
+  try {
+    const version = (await readFile(path, "utf8")).trim();
+    return version.length > 0 ? version : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeInstalledDesktopVersion(
+  path: string,
+  version: string
+): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, version, "utf8");
 }
 
 async function hasMigrationMarker(markerPath: string): Promise<boolean> {

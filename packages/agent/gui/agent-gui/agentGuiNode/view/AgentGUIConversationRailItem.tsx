@@ -4,8 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
-  type ReactNode
+  type CSSProperties
 } from "react";
 import { ExternalLink } from "lucide-react";
 import {
@@ -13,7 +12,6 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  FileIcon,
   IssueIcon,
   NewWorkspaceLinedIcon,
   cn
@@ -33,17 +31,13 @@ import {
   resolveAgentTargetPresentation,
   useAgentTargetPresentations
 } from "../../../shared/AgentTargetPresentationContext";
-import { ConversationMeta } from "../agentGuiNodeViewConversation";
 import { createAgentSessionMarkdownLink } from "../agentRichText/agentFileMentionExtension";
 import type { AgentGUINodeViewModel } from "../model/agentGuiNodeTypes";
 import type { UiLanguage } from "../../../contexts/settings/domain/agentSettings";
-import type { AgentGUIViewLabels } from "../AgentGUINodeView";
+import type { AgentGUIConversationRailLabels } from "./agentGUIConversationRailLabels";
 import styles from "../AgentGUINode.styles";
 import { conversationPlainTitle } from "./agentGUIViewUtils";
-import {
-  isAgentGUIConversationTitleIconMentionKind,
-  type AgentGUIConversationTitleIconMentionKind
-} from "../../../shared/agentConversationTitleProjection";
+import { AgentGUIConversationRailRelativeTime } from "./AgentGUIConversationRailClock";
 
 function agentGUIConversationIconUrl(
   provider: string | undefined,
@@ -58,6 +52,7 @@ function agentGUIConversationIconUrl(
   });
   return (
     resolveAgentGuiSessionProviderFlatIconUrl(provider) ||
+    targetPresentation?.maskIconUrl?.trim() ||
     targetPresentation?.iconUrl?.trim() ||
     null
   );
@@ -65,13 +60,13 @@ function agentGUIConversationIconUrl(
 
 function agentGUIConversationRailTitle(
   item: AgentGUINodeViewModel["rail"]["conversations"][number],
-  labels: AgentGUIViewLabels,
+  labels: AgentGUIConversationRailLabels,
   uiLanguage: UiLanguage
 ): string {
   const title = conversationPlainTitle(item, labels, uiLanguage);
-  return isAgentGUIConversationTitleIconMentionKind(
-    item.titleLeadingMentionKind
-  )
+  // Only the task kind renders a leading mention icon, so only its "@" prefix
+  // is dropped; every other kind (file included) keeps its plain "@" text.
+  return item.titleLeadingMentionKind === "task"
     ? title.replace(/^@\s*/, "")
     : title;
 }
@@ -82,8 +77,7 @@ interface AgentGUIConversationRailItemProps {
   isPendingDeleteConversation: boolean;
   isDeletingConversation: boolean;
   isRailInteractionLocked: () => boolean;
-  currentTimeMs: number;
-  labels: AgentGUIViewLabels;
+  labels: AgentGUIConversationRailLabels;
   previewMode: boolean;
   uiLanguage: UiLanguage;
   workspaceId: string;
@@ -107,7 +101,6 @@ export const AgentGUIConversationRailItem = memo(
     isPendingDeleteConversation,
     isDeletingConversation,
     isRailInteractionLocked,
-    currentTimeMs,
     labels,
     previewMode,
     uiLanguage,
@@ -138,6 +131,7 @@ export const AgentGUIConversationRailItem = memo(
       [item.id, registerItemElement]
     );
     const [contextMenuResetKey, setContextMenuResetKey] = useState(0);
+    const [contextMenuOpen, setContextMenuOpen] = useState(false);
     const contextMenuRenameRequestedRef = useRef(false);
     const contextMenuOpenConversationWindowRequestedRef = useRef(false);
     const contextMenuCopySessionLinkRequestedRef = useRef(false);
@@ -195,6 +189,7 @@ export const AgentGUIConversationRailItem = memo(
         return;
       }
       contextMenuRenameRequestedRef.current = true;
+      setContextMenuOpen(false);
       setContextMenuResetKey((key) => key + 1);
       // timing: defer past the context menu's own close/dismiss handling
       window.setTimeout(() => {
@@ -214,6 +209,7 @@ export const AgentGUIConversationRailItem = memo(
         return;
       }
       contextMenuOpenConversationWindowRequestedRef.current = true;
+      setContextMenuOpen(false);
       setContextMenuResetKey((key) => key + 1);
       // timing: defer past the context menu's own close/dismiss handling
       window.setTimeout(() => {
@@ -233,6 +229,7 @@ export const AgentGUIConversationRailItem = memo(
         return;
       }
       contextMenuCopySessionLinkRequestedRef.current = true;
+      setContextMenuOpen(false);
       setContextMenuResetKey((key) => key + 1);
       // timing: defer past the context menu's own close/dismiss handling
       window.setTimeout(() => {
@@ -304,9 +301,7 @@ export const AgentGUIConversationRailItem = memo(
                 }
               />
             ) : null}
-            {isAgentGUIConversationTitleIconMentionKind(
-              item.titleLeadingMentionKind
-            ) ? (
+            {item.titleLeadingMentionKind === "task" ? (
               <span
                 aria-hidden="true"
                 className={styles.conversationTitleMentionIcon}
@@ -314,16 +309,14 @@ export const AgentGUIConversationRailItem = memo(
                   item.titleLeadingMentionKind
                 }
               >
-                <ConversationTitleMentionIcon
-                  kind={item.titleLeadingMentionKind}
-                />
+                <IssueIcon />
               </span>
             ) : null}
             <span className={styles.conversationTitle}>
               {agentGUIConversationRailTitle(item, labels, uiLanguage)}
             </span>
           </span>
-          <ConversationMeta item={item} nowMs={currentTimeMs} labels={labels} />
+          <AgentGUIConversationRailRelativeTime item={item} labels={labels} />
         </button>
         {previewMode ? null : (
           <div className={styles.conversationActions}>
@@ -417,70 +410,63 @@ export const AgentGUIConversationRailItem = memo(
       return row;
     }
     return (
-      <ContextMenu key={contextMenuResetKey}>
+      <ContextMenu key={contextMenuResetKey} onOpenChange={setContextMenuOpen}>
         <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
-        <ContextMenuContent
-          className={`${styles.composerMenuContent} nodrag [-webkit-app-region:no-drag]`}
-        >
-          <ContextMenuItem
-            className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
-            onClick={handleContextMenuRename}
-            onPointerUp={(event) => {
-              if (event.button === 0) {
-                handleContextMenuRename();
-              }
-            }}
-            onSelect={handleContextMenuRename}
+        {contextMenuOpen ? (
+          <ContextMenuContent
+            className={`${styles.composerMenuContent} nodrag [-webkit-app-region:no-drag]`}
           >
-            <span>{labels.renameSession}</span>
-          </ContextMenuItem>
-          {onOpenConversationWindow ? (
             <ContextMenuItem
               className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
-              onClick={handleContextMenuOpenConversationWindow}
+              onClick={handleContextMenuRename}
               onPointerUp={(event) => {
                 if (event.button === 0) {
-                  handleContextMenuOpenConversationWindow();
+                  handleContextMenuRename();
                 }
               }}
-              onSelect={handleContextMenuOpenConversationWindow}
+              onSelect={handleContextMenuRename}
             >
-              <span>{labels.openConversationWindow}</span>
+              <span>{labels.renameSession}</span>
             </ContextMenuItem>
-          ) : null}
-          <ContextMenuItem
-            className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
-            onClick={handleContextMenuCopySessionLink}
-            onPointerUp={(event) => {
-              if (event.button === 0) {
-                handleContextMenuCopySessionLink();
-              }
-            }}
-            onSelect={handleContextMenuCopySessionLink}
-          >
-            <span>{labels.copySessionLink}</span>
-          </ContextMenuItem>
-          <ContextMenuItem
-            className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
-            disabled={!canMarkUnread}
-            onSelect={handleMarkUnread}
-          >
-            <span>{labels.markSessionUnread}</span>
-          </ContextMenuItem>
-        </ContextMenuContent>
+            {onOpenConversationWindow ? (
+              <ContextMenuItem
+                className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
+                onClick={handleContextMenuOpenConversationWindow}
+                onPointerUp={(event) => {
+                  if (event.button === 0) {
+                    handleContextMenuOpenConversationWindow();
+                  }
+                }}
+                onSelect={handleContextMenuOpenConversationWindow}
+              >
+                <span>{labels.openConversationWindow}</span>
+              </ContextMenuItem>
+            ) : null}
+            <ContextMenuItem
+              className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
+              onClick={handleContextMenuCopySessionLink}
+              onPointerUp={(event) => {
+                if (event.button === 0) {
+                  handleContextMenuCopySessionLink();
+                }
+              }}
+              onSelect={handleContextMenuCopySessionLink}
+            >
+              <span>{labels.copySessionLink}</span>
+            </ContextMenuItem>
+            <ContextMenuItem
+              className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
+              disabled={!canMarkUnread}
+              onSelect={handleMarkUnread}
+            >
+              <span>{labels.markSessionUnread}</span>
+            </ContextMenuItem>
+          </ContextMenuContent>
+        ) : null}
       </ContextMenu>
     );
   }
 );
-
-function ConversationTitleMentionIcon({
-  kind
-}: {
-  kind: AgentGUIConversationTitleIconMentionKind;
-}): ReactNode {
-  if (kind === "task") return <IssueIcon />;
-  return <FileIcon />;
-}
 
 export function AgentGUIProjectRailHeader({
   disabled,
@@ -490,7 +476,7 @@ export function AgentGUIProjectRailHeader({
 }: {
   disabled?: boolean;
   labels: Pick<
-    AgentGUIViewLabels,
+    AgentGUIConversationRailLabels,
     "projectRailCreateProject" | "projectRailLinkExistingProject"
   >;
   selectProjectDirectory?: () => Promise<{ path: string } | null>;

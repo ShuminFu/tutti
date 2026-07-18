@@ -21,7 +21,7 @@ Stable change rules live in [Conventions](../conventions/README.md).
 - [Agent Extensions](./agent-extensions.md)
 - [Agent Reference Sources](./agent-reference-sources.md)
 - [Agent Runtime Preparation](./agent-runtime-preparation.md)
-- [AgentGuiNode Architecture and Troubleshooting](./agent-gui-node.md)
+- [Agent GUI Node](./agent-gui-node.md)
 - [Agent Reference Mention Resolution](./agent-reference-mention-resolution.md)
 - [Tutti Agent Readiness Bootstrap](./tutti-agent-readiness-bootstrap.md)
 
