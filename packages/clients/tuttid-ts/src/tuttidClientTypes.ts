@@ -395,6 +395,10 @@ export interface TuttidClient
     workspaceID: string,
     sourceSessionID: string
   ): Promise<WorkspaceWorkflowSnapshot[]>;
+  listWorkspaceWorkflows(
+    workspaceID: string,
+    sourceSessionID: string
+  ): Promise<WorkspaceWorkflowSnapshot[]>;
   decideWorkspaceWorkflowCheckpoint(
     workspaceID: string,
     workflowID: string,

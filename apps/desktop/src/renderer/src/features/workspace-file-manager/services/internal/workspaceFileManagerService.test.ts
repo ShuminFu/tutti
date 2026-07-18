@@ -1073,6 +1073,7 @@ function createDependenciesStub(): {
       uploadWorkspaceFiles: fail,
       useUserProject: fail,
       listPendingWorkspaceWorkflows: fail,
+      listWorkspaceWorkflows: fail,
       decideWorkspaceWorkflowCheckpoint: fail
     },
     platformApi: {
