@@ -42,8 +42,7 @@ import {
 import {
   hasDesktopAgentGUIConversationRailCollapsedState,
   resolveDesktopAgentGUIProviderForAgentTarget,
-  withDesktopAgentGUIModelConfiguration,
-  withDesktopAgentGUIProviderComposerDefaults
+  withDesktopAgentGUIModelConfiguration
 } from "./desktopAgentGUIWorkbenchStateHelpers.ts";
 import { useDesktopAgentProbes } from "./useDesktopAgentProbes.ts";
 import {
@@ -117,6 +116,7 @@ function DesktopAgentGUISurfaceImpl({
   const { i18n, locale } = useTranslation();
   const { service: desktopPreferencesService, state: desktopPreferencesState } =
     useDesktopPreferencesService();
+  const agentEnvService = useService(IAgentEnvService);
   const rawWorkbenchState = normalizeDesktopAgentGUIWorkbenchState(
     surface.state
   );
@@ -200,12 +200,7 @@ function DesktopAgentGUISurfaceImpl({
       preferredConversationRailCollapsed
         ? { ...baseState, conversationRailCollapsed: true }
         : baseState;
-    const rememberedDefaultsState = withDesktopAgentGUIProviderComposerDefaults(
-      railState,
-      nodeProvider,
-      providerComposerDefaults
-    );
-    return withDesktopAgentGUIModelConfiguration(rememberedDefaultsState);
+    return withDesktopAgentGUIModelConfiguration(railState);
   }, [
     hasExplicitConversationRailCollapsedState,
     preferredConversationRailCollapsed,
@@ -639,6 +634,9 @@ function DesktopAgentGUISurfaceImpl({
     },
     [agentActivityRuntime, i18n, workspaceId]
   );
+  const handleAgentEnvPanelOpen = useCallback<
+    NonNullable<AgentGUIProps["hostActions"]["onAgentEnvPanelOpen"]>
+  >((input) => agentEnvService.open(input), [agentEnvService]);
   const agentGUIHostProps = useStableDesktopAgentGUIHostProps({
     identity: {
       nodeId: surface.nodeId,
