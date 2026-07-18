@@ -163,6 +163,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     largeTexts: draftLargeTexts
   } = agentComposerDraftAttachmentProjection(draftContent);
   const agentActivityRuntime = useOptionalAgentActivityRuntime();
+  const agentHostApi = useOptionalAgentHostApi();
   const promptFilesSupported = Boolean(
     canUploadAttachment && prepareExternalPromptFiles
   );

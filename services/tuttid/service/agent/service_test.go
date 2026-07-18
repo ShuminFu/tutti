@@ -642,7 +642,7 @@ func TestServiceCreateDoesNotExecuteDuplicateInitialSubmit(t *testing.T) {
 	service.SubmitClaimStore = openAgentServiceSQLiteStore(t)
 	input := CreateSessionInput{
 		AgentSessionID: "session-create-idempotent", AgentTargetID: agenttargetbiz.IDLocalCodex,
-		InitialContent: TextPromptContent("hello"), Metadata: map[string]any{"clientSubmitId": "submit-create-1"},
+		InitialContent: TextPromptContent("hello"), ClientSubmitID: "submit-create-1",
 	}
 	if _, err := service.Create(context.Background(), "ws-1", input); err != nil {
 		t.Fatalf("first Create() error = %v", err)
@@ -2457,20 +2457,25 @@ func TestServiceUpdateVisibleUpdatesRuntimeSession(t *testing.T) {
 func TestServiceSendInputPassesDisplayPromptToRuntime(t *testing.T) {
 	runtime := newFakeRuntime()
 	service := newIsolatedAgentService(runtime)
+	activeTurnID := "turn-1"
 	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
 		ID:          "session-1",
 		WorkspaceID: "ws-1",
 		Provider:    "codex",
 		Status:      "ready",
 		Visible:     true,
+		TurnLifecycle: &TurnLifecycle{
+			ActiveTurnID: &activeTurnID,
+			Phase:        "running",
+		},
 	}
 
 	_, err := service.SendInput(context.Background(), "ws-1", "session-1", SendInput{
-		Content:       TextPromptContent("real repair prompt"),
-		DisplayPrompt: "Fix the app",
-		Guidance:      true,
+		Content:        TextPromptContent("real repair prompt"),
+		DisplayPrompt:  "Fix the app",
+		Guidance:       true,
+		ClientSubmitID: "submit-1",
 		Metadata: map[string]any{
-			"clientSubmitId":             "submit-1",
 			"clientSubmittedAtUnixMs":    int64(1234),
 			" ignoredBlankKeyIsRemoved ": true,
 			"":                           "drop",
@@ -2512,7 +2517,7 @@ func TestServiceSendInputDoesNotExecuteDuplicateClientSubmitID(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	input := SendInput{Content: TextPromptContent("hello"), Metadata: map[string]any{"clientSubmitId": "submit-1"}}
+	input := SendInput{Content: TextPromptContent("hello"), ClientSubmitID: "submit-1"}
 	if _, err := service.SendInput(context.Background(), "ws-1", "session-idempotent", input); err != nil {
 		t.Fatalf("first SendInput() error = %v", err)
 	}
@@ -5493,7 +5498,9 @@ func TestServiceResumesPersistedSessionBeforeInput(t *testing.T) {
 		},
 	}
 
-	result, err := service.SendInput(context.Background(), "ws-1", "session-1", SendInput{Content: TextPromptContent("hello")})
+	result, err := service.SendInput(context.Background(), "ws-1", "session-1", SendInput{
+		TurnID: "turn-1", Content: TextPromptContent("hello"),
+	})
 	if err != nil {
 		t.Fatalf("SendInput returned error: %v", err)
 	}
@@ -5664,8 +5671,7 @@ func TestServiceTypedGoalUsesDurableSagaBeforeTurnSubmit(t *testing.T) {
 	service.CommitObserver = publisher
 
 	result, err := service.SendInput(context.Background(), "ws-typed", "session-typed", SendInput{
-		Content:  TextPromptContent("/goal ship it"),
-		Metadata: map[string]any{"clientSubmitId": "submit-goal-1"},
+		Content: TextPromptContent("/goal ship it"), ClientSubmitID: "submit-goal-1",
 	})
 	if err != nil {
 		t.Fatalf("typed goal: %v", err)
@@ -6412,7 +6418,7 @@ func TestServiceCreateWithTypedGoalCreatesNoInitialTurn(t *testing.T) {
 		AgentSessionID: "session-new-goal",
 		AgentTargetID:  agenttargetbiz.IDLocalClaudeCode,
 		InitialContent: TextPromptContent("/goal ship it"),
-		Metadata:       map[string]any{"clientSubmitId": "submit-new-goal"},
+		ClientSubmitID: "submit-new-goal",
 	})
 	if err != nil {
 		t.Fatalf("Create typed goal: %v", err)
@@ -6518,7 +6524,9 @@ func TestServiceSendInputReturnsRuntimeExecStatusOverStalePersistedStatus(t *tes
 		},
 	}
 
-	result, err := service.SendInput(context.Background(), "ws-1", "session-1", SendInput{Content: TextPromptContent("hello")})
+	result, err := service.SendInput(context.Background(), "ws-1", "session-1", SendInput{
+		TurnID: "turn-1", Content: TextPromptContent("hello"),
+	})
 	if err != nil {
 		t.Fatalf("SendInput returned error: %v", err)
 	}

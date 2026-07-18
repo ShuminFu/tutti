@@ -84,6 +84,10 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	}
 	input.AgentSessionID = agentSessionIDOrNew(input.AgentSessionID)
 	input.ClientSubmitID = strings.TrimSpace(input.ClientSubmitID)
+	if input.ClientSubmitID == "" {
+		legacyClientSubmitID, _ := input.Metadata["clientSubmitId"].(string)
+		input.ClientSubmitID = strings.TrimSpace(legacyClientSubmitID)
+	}
 	logAgentSubmitTrace("service.create.entered", workspaceID, input.AgentSessionID, input.ClientSubmitID, input.Metadata, map[string]any{"provider": provider})
 	var normalizedContent []PromptContentBlock
 	if len(input.InitialContent) > 0 {
@@ -211,8 +215,13 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	var preparedTuttiModeTurnID string
 	_, typedGoal := agenthost.ParseTypedGoalControl(normalizedContent, false)
 	if len(normalizedContent) > 0 && !typedGoal {
-		turnID, snapshot, snapshotErr := s.prepareTuttiModeExec(ctx, workspaceID, input.AgentSessionID, false, ProviderRuntimeSession{}, "")
+		canonicalTurnID, claimErr := s.existingSubmitCanonicalTurnID(ctx, workspaceID, input.AgentSessionID, input.ClientSubmitID, input.Metadata)
+		if claimErr != nil {
+			return Session{}, claimErr
+		}
+		turnID, snapshot, snapshotErr := s.prepareTuttiModeExec(ctx, workspaceID, input.AgentSessionID, false, ProviderRuntimeSession{}, canonicalTurnID)
 		if snapshotErr != nil {
+			_ = s.deleteTuttiModeActivationSessionState(context.WithoutCancel(ctx), workspaceID, input.AgentSessionID)
 			return Session{}, snapshotErr
 		}
 		preparedTuttiModeTurnID = turnID
@@ -222,7 +231,9 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	logAgentSubmitTrace("service.create.runtime_start_requested", workspaceID, input.AgentSessionID, input.ClientSubmitID, input.Metadata, nil)
 	hostResult, err := s.ApplicationHost().CreateSession(ctx, workspaceID, hostInput)
 	if err != nil {
-		_ = s.deleteTuttiModeActivationSessionState(context.WithoutCancel(ctx), workspaceID, input.AgentSessionID)
+		if !errors.Is(err, ErrSubmitDeliveryUnknown) {
+			_ = s.deleteTuttiModeActivationSessionState(context.WithoutCancel(ctx), workspaceID, input.AgentSessionID)
+		}
 		return Session{}, err
 	}
 	keepWorktree = true
@@ -241,13 +252,7 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 		if strings.TrimSpace(hostResult.TurnID) != preparedTuttiModeTurnID {
 			return Session{}, ErrSubmitDeliveryUnknown
 		}
-		if s.TuttiModeActivations != nil {
-			if _, err := s.TuttiModeActivations.AcceptTurnSnapshot(ctx, workspaceID, session.ID, preparedTuttiModeTurnID); err != nil {
-				return Session{}, deliveryUnknownError(err)
-			}
-		}
 	}
-	s.reportAgentServiceNodeSuccess(ctx, session.ID, "session_create", "runtime_started", session.Provider, nodeStartedAt)
 	s.registerPendingPlanFirstUse(
 		workspaceID,
 		session.ID,
@@ -606,22 +611,7 @@ func (s *Service) UpdatePin(ctx context.Context, workspaceID string, agentSessio
 	if err != nil {
 		return Session{}, err
 	}
-	persisted := persistedSessionFromHost(result.Canonical)
-	if result.Live {
-		service := serviceSession(
-			result.Session,
-			s.controller().CanResume(runtimeResumeInputFromRuntimeSession(result.Session)),
-		)
-		return s.withProtocolV2TurnState(
-			ctx,
-			workspaceID,
-			mergePersistedSessionState(service, persisted),
-		)
-	}
-	return sessionFromPersisted(
-		persisted,
-		s.persistedSessionCanResume(ctx, persisted),
-	), nil
+	return s.projectHostSessionResult(ctx, result.Canonical, result.Session, result.Live, false)
 }
 
 func (s *Service) cleanupRuntime(ctx context.Context, workspaceID string, agentSessionID string) error {

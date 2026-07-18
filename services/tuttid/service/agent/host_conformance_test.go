@@ -220,6 +220,10 @@ func (d *legacyHostConformanceDriver) Reset(_ context.Context, fixture hostconfo
 	d.recoverySteps = &steps
 	d.operationPort = &conformanceRuntimeOperationStore{runtimeOperationMemoryStore: d.operations, steps: &steps}
 	d.service = newTestService(d.runtime)
+	d.runtime.provenanceHook = func(input RuntimeSubmitProvenanceInput) error {
+		d.recordSubmittedTurn(input.WorkspaceID, input.AgentSessionID, input.TurnID)
+		return nil
+	}
 	d.commitObserver = &conformanceCommitObserver{fail: fixture.FailCommitObserver}
 	d.service.CommitObserver = d.commitObserver
 	d.service.SessionReader = d.sessions
@@ -315,7 +319,7 @@ func (d *legacyHostConformanceDriver) Reset(_ context.Context, fixture hostconfo
 	if fixture.PreparedSubmitID != "" {
 		if _, _, err := d.service.SubmitClaimStore.PrepareSubmitClaim(context.Background(), agentactivitybiz.SubmitClaimPrepare{
 			WorkspaceID: seed.WorkspaceID, AgentSessionID: seed.AgentSessionID,
-			ClientSubmitID: fixture.PreparedSubmitID, NowUnixMS: 1,
+			ClientSubmitID: fixture.PreparedSubmitID, CanonicalTurnID: "prepared-turn", NowUnixMS: 1,
 		}); err != nil {
 			return err
 		}
@@ -407,7 +411,7 @@ func (d *legacyHostConformanceDriver) Create(
 	}
 	turnID := ""
 	if len(d.runtime.execCalls) > beforeExec {
-		turnID = "turn-1"
+		turnID = d.runtime.execCalls[len(d.runtime.execCalls)-1].TurnID
 		d.recordSubmittedTurn(workspaceID, session.ID, turnID)
 		if clientSubmitID := strings.TrimSpace(input.ClientSubmitID); clientSubmitID != "" {
 			d.createdTurns[clientSubmitID] = turnID
