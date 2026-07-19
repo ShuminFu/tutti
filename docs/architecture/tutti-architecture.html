@@ -686,6 +686,7 @@
           <p class="part">IV · Engineering system</p>
           <a href="#codegen"><span class="n">14</span>Generated contracts</a>
           <a href="#guardrails"><span class="n">15</span>Guardrails</a>
+          <a href="#platforms"><span class="n">16</span>Cross-platform status</a>
         </div>
       </div>
     </nav>
@@ -1659,6 +1660,69 @@
             <code>pnpm test:go</code> includes <code>packages/agent/daemon</code> as a blocking lane —
             timing-sensitive lifecycle tests were stabilized with event-driven synchronization, and adding
             retries to keep it green is explicitly forbidden.
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 16 CROSS-PLATFORM ================= -->
+      <section id="platforms">
+        <p class="kicker"><span class="knum">16</span>Platform reality check</p>
+        <h2 class="display">One platform ships; two wait — for different reasons</h2>
+        <p class="sub">
+          Only macOS is built and released today, but the codebase was written with cross-platform
+          intent: real <code>*_windows.go</code>/<code>*_unix.go</code> seams, platform-keyed
+          provisioning catalogs, and packaging config for all three OSes. What separates "coming soon"
+          from shipping is one genuine engineering gap (Windows) plus release engineering (both).
+        </p>
+
+        <div class="protocols">
+          <div class="protocol">
+            <span class="kind">macOS</span>
+            <span class="who">Shipped <span class="status-chip on">released</span></span>
+            <span class="how">CI builds x64 + arm64 + universal, signed and notarized, dmg + zip — and
+            it's the only platform with an auto-update feed (<code>latest-mac.yml</code>). Some
+            features are mac-only by design: computer-use control, Spotlight recent files, system-proxy
+            autodetection (<code>scutil</code>), the inset title bar.</span>
+            <span class="note">The only build job in <span class="mono">desktop-release.yml</span> is <span class="mono">build-macos</span>.</span>
+          </div>
+          <div class="protocol">
+            <span class="kind">Windows</span>
+            <span class="who">Blocked <span class="status-chip off">not shipped</span></span>
+            <span class="how">Much is genuinely ready — NSIS packaging config, <code>tuttid.exe</code>
+            build scripts, Windows-real PID locking (<code>LockFileEx</code>), <code>win32-*</code>
+            Claude/Codex/Node provisioning, a real <code>.cmd</code> CLI shim. But the
+            <strong>terminal cannot work</strong>: PTYs come from POSIX-only <code>creack/pty</code>
+            and no ConPTY implementation exists — all terminal tests are skipped on Windows. No CI
+            job, no update feed, no Windows signing, and process-tree kill degrades to single-PID.</span>
+            <span class="note"><span class="mono">workspace-terminal.md</span>: ConPTY support is explicitly <em>deferred</em>. The <span class="mono">conpty</span>/<span class="mono">wsl</span> DTO types in agent-gui are an unwired contract.</span>
+          </div>
+          <div class="protocol">
+            <span class="kind">Linux</span>
+            <span class="who">Code-ready <span class="status-chip off">not offered</span></span>
+            <span class="how">The surprise: <strong>more code-ready than Windows</strong>. The unix
+            build tags cover Linux, so the terminal fully works — POSIX PTY, the
+            <code>TIOCGPGRP</code> close guard, process-group kill. AppImage packaging and
+            <code>linux-x64</code>/<code>arm64</code> binary provisioning exist. Missing only the
+            operational tail: no CI build, no <code>latest-linux.yml</code> update feed — and no
+            mention in the README at all.</span>
+            <span class="note">A locally-built AppImage would run most of the product today.</span>
+          </div>
+        </div>
+
+        <div class="guards" style="margin-top: 0.75rem;">
+          <div class="guard">
+            <b>The one true engineering gap</b>
+            Everything else blocking Windows is release engineering; the terminal is real code. The
+            daemon's PTY service would need a ConPTY backend, and the integrated terminal is
+            load-bearing — agent login flows (<code>claude auth login</code>, <code>codex login</code>)
+            run inside it, so a Windows build without it loses more than a shell.
+          </div>
+          <div class="guard">
+            <b>Cross-platform by design, already</b>
+            The CLI installer (with its Windows shim), Claude/Codex binary provisioning, the managed
+            Node runtime, PID/process/listener daemon primitives, and the whole IPC/transport layer are
+            platform-complete today — the CDN publisher even stages all six
+            <span class="mono">os-arch</span> binary variants.
           </div>
         </div>
       </section>
