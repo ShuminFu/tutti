@@ -13,7 +13,8 @@ coverage/
 .cache/
 .tmp/
 .superpowers/
-.claude/
+.claude/*
+!.claude/skills/
 .agents/
 docs/superpowers/
 __pycache__/
