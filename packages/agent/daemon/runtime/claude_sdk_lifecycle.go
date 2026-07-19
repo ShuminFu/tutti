@@ -34,7 +34,7 @@ func (a *ClaudeCodeSDKAdapter) Start(ctx context.Context, session Session) ([]ac
 	if err != nil {
 		return nil, err
 	}
-	conn, err := a.transport.Start(ctx, spec)
+	conn, err := a.startSidecarConnection(ctx, spec)
 	if err != nil {
 		cleanupPreparedLaunch(cleanup)
 		return nil, err

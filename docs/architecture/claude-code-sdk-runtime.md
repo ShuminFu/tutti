@@ -1,8 +1,14 @@
 # Claude Code SDK Runtime
 
-Claude Code has one supported runtime path: the daemon starts the
-`@tutti-os/claude-sdk-sidecar` package, and the sidecar talks to the Claude Agent
-SDK.
+Claude Code has one supported runtime path: the daemon starts the Claude SDK
+sidecar, and the sidecar talks to Claude Code. The default sidecar is the Go
+port in `packages/agent/daemon/claudesidecar`, which the daemon runs
+in-process over the same versioned NDJSON protocol and which speaks the
+claude CLI's stream-json control protocol directly (no Node runtime
+required). The TypeScript `@tutti-os/claude-sdk-sidecar` package remains the
+packaged-desktop override selected through
+`TUTTI_CLAUDE_SDK_SIDECAR_ENTRY_PATH`; both sidecars implement the same
+protocol version.
 
 The product-fidelity and acceptance contract is maintained in
 [Claude Code SDK Refactor Fidelity Requirements](./claude-code-sdk-requirements.md).
@@ -12,8 +18,8 @@ The product-fidelity and acceptance contract is maintained in
 ```mermaid
 flowchart LR
     Service["tuttid agent services"] --> Adapter["Go Claude SDK adapter"]
-    Adapter <-->|"versioned NDJSON over stdio"| Sidecar["TypeScript SDK sidecar"]
-    Sidecar --> SDK["Claude Agent SDK"]
+    Adapter <-->|"versioned NDJSON"| Sidecar["Claude SDK sidecar (Go in-process, or TS over stdio)"]
+    Sidecar -->|"stream-json control protocol"| CLI["claude CLI"]
     Adapter --> Activity["normalized agent activity"]
     Activity --> Consumers["Agent GUI and other consumers"]
 ```
@@ -34,6 +40,7 @@ The Go runtime under `packages/agent/daemon/runtime` is split by responsibility:
 | `claude_sdk_execution.go`      | Prompt validation, execution, guidance, and cancellation |
 | `claude_sdk_settings.go`       | Live settings and permission-mode application            |
 | `claude_sdk_transport.go`      | Sidecar process and NDJSON transport                     |
+| `claude_sdk_inprocess.go`      | In-process connection to the built-in Go sidecar         |
 | `claude_sdk_protocol.go`       | Protocol version and envelope validation                 |
 | `claude_sdk_session.go`        | Session storage, command/env helpers, and state payloads |
 | `claude_sdk_events.go`         | Sidecar event dispatch and lifecycle routing             |
@@ -83,9 +90,24 @@ runtime endpoint discovery, status/custom-config inspection, and auth watching.
 
 ## Sidecar ownership
 
-`packages/agent/claude-sdk-sidecar/src/main.ts` is only the stdio server and
-request router. `sessionRuntime.ts` coordinates a session through focused
-collaborators:
+The Go sidecar mirrors the TypeScript module layout one-to-one so the two
+stay reviewable against each other. In
+`packages/agent/daemon/claudesidecar`, `server.go` is only the request
+router (the `cmd/claude-sdk-sidecar` binary serves it over real stdio;
+`claude_sdk_inprocess.go` serves it in-process), `runtime.go` and
+`runtime_exec.go` coordinate a session, and the `claudecli` subpackage
+replaces the Node `@anthropic-ai/claude-agent-sdk`: it spawns the claude CLI
+with `--input-format stream-json --output-format stream-json`, streams user
+messages, and speaks the bidirectional control protocol (initialize with
+hook registration, canUseTool callbacks, interrupt, set_permission_mode,
+set_model, apply_flag_settings, stop_task, get_context_usage). The
+TypeScript sidecar relies on the single-threaded event loop for ordering;
+the Go port serializes all session state under one runtime lock and
+releases it around blocking control-protocol round trips.
+
+In the TypeScript package, `packages/agent/claude-sdk-sidecar/src/main.ts`
+is only the stdio server and request router. `sessionRuntime.ts` coordinates
+a session through focused collaborators (the Go files mirror these names):
 
 - `protocol.ts` and `eventSink.ts`: versioned wire envelopes and event emission.
 - `sessionConfiguration.ts`, `sessionSettings.ts`, and `options.ts`: SDK query
@@ -131,11 +153,14 @@ current generation without creating a resumable successor.
 
 ## Protocol and compatibility
 
-The daemon and sidecar exchange newline-delimited JSON over standard input and
-output. Every request and event carries the current protocol version. Missing
-or unsupported versions fail explicitly. Change both
-`claude_sdk_protocol.go` and `src/protocol.ts` together and cover the change on
-both sides.
+The daemon and sidecar exchange newline-delimited JSON envelopes. Every
+request and event carries the current protocol version. Missing or
+unsupported versions fail explicitly. The built-in Go sidecar exchanges the
+same envelopes over an in-process pipe; an external sidecar (the
+`TUTTI_CLAUDE_SDK_SIDECAR_COMMAND` override, the packaged TypeScript entry,
+or the `cmd/claude-sdk-sidecar` binary) uses standard input and output.
+Change `claude_sdk_protocol.go`, `claudesidecar/protocol.go`, and
+`src/protocol.ts` together and cover the change on all sides.
 
 Capability and composer contracts are intentionally stable across this runtime
 split. Imported historical metadata may still be read for display compatibility
@@ -173,14 +198,18 @@ and lifecycle behavior rather than collected in one fixture file.
 Run these focused checks after changing the runtime:
 
 ```sh
+cd packages/agent/daemon
+go test ./claudesidecar/... ./runtime
+golangci-lint run ./claudesidecar/... ./runtime/...
+```
+
+When the TypeScript sidecar changes too:
+
+```sh
 cd packages/agent/claude-sdk-sidecar
 pnpm typecheck
 pnpm test
 pnpm exec oxlint src
-
-cd ../daemon
-go test ./runtime
-golangci-lint run ./runtime/...
 ```
 
 Also run `pnpm check:changed` from the repository root for cross-package

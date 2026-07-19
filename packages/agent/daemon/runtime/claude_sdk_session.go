@@ -108,11 +108,7 @@ func claudeSDKSidecarCommand(env []string) []string {
 	if entry := claudeSDKEnvValue(env, claudeSDKSidecarEntryPathEnv); entry != "" {
 		return []string{claudeSDKNodeCommand(env), claudeSDKSidecarDefaultNodeArg, entry}
 	}
-	root := findRepoRoot()
-	if root == "" {
-		return []string{"node", claudeSDKSidecarDefaultNodeArg, "packages/agent/claude-sdk-sidecar/src/main.ts"}
-	}
-	return []string{"node", claudeSDKSidecarDefaultNodeArg, filepath.Join(root, "packages/agent/claude-sdk-sidecar/src/main.ts")}
+	return []string{claudeSDKBuiltinSidecarCommand}
 }
 
 func claudeSDKNodeCommand(env []string) string {
@@ -509,28 +505,6 @@ func claudeSDKModelOptionExists(model string) bool {
 	default:
 		return false
 	}
-}
-
-func findRepoRoot() string {
-	dir, err := os.Getwd()
-	if err != nil {
-		return ""
-	}
-	for {
-		if fileExists(filepath.Join(dir, "pnpm-workspace.yaml")) && fileExists(filepath.Join(dir, "packages/agent/claude-sdk-sidecar/src/main.ts")) {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
-	}
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 func envListToMap(env []string) map[string]any {
