@@ -107,19 +107,16 @@
   }
 
   .page {
-    max-width: 60rem;
+    max-width: 76rem;
     margin: 0 auto;
     padding: 0 1.5rem 6rem;
   }
-  .prose { max-width: 44rem; }
-  .prose p { margin: 0 0 1rem; }
-  .prose p:last-child { margin-bottom: 0; }
 
   /* ---------- Header ---------- */
   header {
     padding: 4rem 0 2.5rem;
     border-bottom: 1px solid var(--line);
-    margin-bottom: 3rem;
+    margin-bottom: 2.5rem;
   }
   .eyebrow {
     font-size: 0.72rem;
@@ -136,6 +133,7 @@
     font-weight: 500;
     text-wrap: balance;
     letter-spacing: -0.01em;
+    max-width: 46rem;
   }
   .lede {
     font-size: 1.08rem;
@@ -153,8 +151,72 @@
   }
   .facts span b { color: var(--ink); font-weight: 600; }
 
+  /* ---------- Layout with TOC ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: 13.5rem minmax(0, 1fr);
+    gap: 3rem;
+    align-items: start;
+  }
+  nav.toc {
+    position: sticky;
+    top: 1.25rem;
+    max-height: calc(100vh - 2.5rem);
+    overflow-y: auto;
+    padding: 0.25rem 0.5rem 1rem 0;
+    font-size: 0.8rem;
+  }
+  .toc .part {
+    margin: 1.2rem 0 0.3rem;
+    font-size: 0.64rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--faint);
+    font-weight: 700;
+  }
+  .toc .part:first-child { margin-top: 0; }
+  .toc a {
+    display: flex;
+    gap: 0.55rem;
+    align-items: baseline;
+    padding: 0.26rem 0.6rem;
+    color: var(--muted);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    border-radius: 0 4px 4px 0;
+    line-height: 1.35;
+  }
+  .toc a .n {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.68rem;
+    color: var(--faint);
+    min-width: 1.15rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .toc a:hover { color: var(--ink); background: var(--surface); }
+  .toc a.active {
+    color: var(--brass);
+    border-left-color: var(--brass);
+    background: var(--brass-soft);
+  }
+  .toc a.active .n { color: var(--brass); }
+
+  main { min-width: 0; }
+
   /* ---------- Sections ---------- */
-  section { margin-bottom: 4rem; }
+  section { margin-bottom: 4rem; scroll-margin-top: 1.5rem; }
+  .partline {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 0 0 2.5rem;
+    color: var(--faint);
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .partline::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
   h2 {
     font-size: 1.45rem;
     font-weight: 500;
@@ -169,6 +231,11 @@
     color: var(--faint);
     font-weight: 600;
     margin: 0 0 0.6rem;
+  }
+  .kicker .knum {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--brass);
+    margin-right: 0.6rem;
   }
   .sub {
     color: var(--muted);
@@ -275,7 +342,6 @@
     padding: 0.1rem 0;
   }
 
-  /* Big-picture layout */
   .duo { display: grid; grid-template-columns: 1fr 16rem; gap: 1rem; }
   .col3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; }
   .col2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
@@ -330,7 +396,7 @@
   .neutral-tag { color: var(--slate); background: var(--slate-soft); }
   .specific-tag { color: var(--brass); background: var(--brass-soft); }
 
-  /* ---------- Handshake / sequences ---------- */
+  /* ---------- Sequences ---------- */
   .seq { display: grid; gap: 0; counter-reset: step; max-width: 46rem; }
   .step {
     display: grid;
@@ -527,7 +593,6 @@
   .protocol .how { color: var(--muted); font-size: 0.84rem; line-height: 1.5; }
   .protocol .note { color: var(--faint); font-size: 0.76rem; border-top: 1px solid var(--line); padding-top: 0.5rem; margin-top: auto; }
 
-  /* ---------- Frame protocol chips ---------- */
   .frames { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
   .frames .dir { font-size: 0.75rem; color: var(--faint); margin-right: 0.25rem; }
 
@@ -551,11 +616,24 @@
     max-width: 46rem;
   }
 
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; gap: 1.5rem; }
+    nav.toc {
+      position: static;
+      max-height: none;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+    }
+    .toc .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.5rem; }
+  }
   @media (max-width: 720px) {
     .cores, .guards, .consumers, .col3, .col2, .protocols { grid-template-columns: 1fr; }
     .duo { grid-template-columns: 1fr; }
     .lane { grid-template-columns: 1fr; gap: 0.25rem; }
     header { padding-top: 2.5rem; }
+    .toc .cols { grid-template-columns: 1fr; }
   }
   @media (prefers-reduced-motion: no-preference) {
     html { scroll-behavior: smooth; }
@@ -583,820 +661,1050 @@
     </div>
   </header>
 
-  <!-- ================= BIG PICTURE ================= -->
-  <section>
-    <p class="kicker">The big picture</p>
-    <h2 class="display">Process topology</h2>
-    <p class="sub">
-      Three kinds of processes run on the user's machine: the Electron app, the tuttid daemon it
-      supervises, and the agent provider processes (Claude Code, Codex, Cursor, …) that tuttid's agent
-      stack launches. The CLI is a fourth, occasional visitor that speaks to the same daemon API.
-    </p>
+  <div class="layout">
+    <nav class="toc" aria-label="Table of contents">
+      <div class="cols">
+        <div>
+          <p class="part">I · Foundations</p>
+          <a href="#topology"><span class="n">01</span>Process topology</a>
+          <a href="#startup"><span class="n">02</span>Startup handshake</a>
+          <a href="#cores"><span class="n">03</span>The two cores</a>
+          <a href="#transport"><span class="n">04</span>Transport lanes</a>
+          <p class="part">II · The agent platform</p>
+          <a href="#host"><span class="n">05</span>Agent Host boundary</a>
+          <a href="#providers"><span class="n">06</span>Provider adapters</a>
+          <a href="#driving"><span class="n">07</span>Driving a turn</a>
+          <a href="#versioning"><span class="n">08</span>Versions &amp; provisioning</a>
+          <a href="#managing"><span class="n">09</span>Managing agents</a>
+          <a href="#agent-packages"><span class="n">10</span>Agent stack packages</a>
+        </div>
+        <div>
+          <p class="part">III · Workspace &amp; entrypoints</p>
+          <a href="#terminal"><span class="n">11</span>Integrated terminal</a>
+          <a href="#cli"><span class="n">12</span>The CLI</a>
+          <a href="#packages"><span class="n">13</span>Package map</a>
+          <p class="part">IV · Engineering system</p>
+          <a href="#codegen"><span class="n">14</span>Generated contracts</a>
+          <a href="#guardrails"><span class="n">15</span>Guardrails</a>
+        </div>
+      </div>
+    </nav>
 
-    <div class="board-wrap">
-      <div class="board">
-        <div class="duo">
-          <!-- Desktop -->
-          <div class="shell">
-            <div class="cap">
-              <span class="name">Desktop app</span>
-              <span class="p mono">apps/desktop</span>
-              <span class="lang ts">Electron · TS</span>
+    <main>
+      <p class="partline">Part I · Foundations</p>
+
+      <!-- ================= 01 BIG PICTURE ================= -->
+      <section id="topology">
+        <p class="kicker"><span class="knum">01</span>The big picture</p>
+        <h2 class="display">Process topology</h2>
+        <p class="sub">
+          Three kinds of processes run on the user's machine: the Electron app, the tuttid daemon it
+          supervises, and the agent provider processes (Claude Code, Codex, Cursor, …) that tuttid's agent
+          stack launches. The CLI is a fourth, occasional visitor that speaks to the same daemon API.
+        </p>
+
+        <div class="board-wrap">
+          <div class="board">
+            <div class="duo">
+              <div class="shell">
+                <div class="cap">
+                  <span class="name">Desktop app</span>
+                  <span class="p mono">apps/desktop</span>
+                  <span class="lang ts">Electron · TS</span>
+                </div>
+                <div class="col3">
+                  <div class="node">
+                    <div class="t">main</div>
+                    <div class="d">Spawns &amp; supervises tuttid, owns IPC, transport bootstrap, windows, updates</div>
+                  </div>
+                  <div class="node">
+                    <div class="t">preload</div>
+                    <div class="d">Narrow typed bridge for host capabilities only</div>
+                  </div>
+                  <div class="node">
+                    <div class="t">renderer</div>
+                    <div class="d">Window shells (<span class="mono">dashboard</span>, <span class="mono">workspace</span>) + feature modules</div>
+                  </div>
+                </div>
+                <div class="innerlanes">
+                  <span>renderer <span class="arrow">→</span> preload <span class="arrow">→</span> main&nbsp; <em>host capabilities (IPC)</em></span>
+                  <span>renderer <span class="arrow">→</span> tuttid&nbsp; <em>business traffic, directly</em></span>
+                </div>
+              </div>
+              <div class="shell">
+                <div class="cap">
+                  <span class="name">CLI</span>
+                  <span class="p mono">apps/cli</span>
+                  <span class="lang go">Go</span>
+                </div>
+                <div class="node">
+                  <div class="t">tutti</div>
+                  <div class="d">Discovers the daemon endpoint + bearer token, invokes the daemon-owned CLI capability protocol. Command logic stays in tuttid.</div>
+                </div>
+              </div>
             </div>
+
+            <div class="wires">
+              <div class="wire"><span class="lbl"><b>HTTP</b> business APIs · bearer token</span></div>
+              <div class="wire"><span class="lbl"><b>WebSocket</b> typed business events</span></div>
+              <div class="wire"><span class="lbl"><b>WebSocket</b> per-session terminal streams</span></div>
+              <div class="down">▼</div>
+            </div>
+
+            <div class="shell">
+              <div class="cap">
+                <span class="name">tuttid — the business core</span>
+                <span class="p mono">services/tuttid</span>
+                <span class="lang go">Go daemon</span>
+              </div>
+              <div class="col3">
+                <div class="node">
+                  <div class="t">API surface</div>
+                  <div class="d">HTTP handlers generated from <span class="mono">api/openapi/tuttid.v1.yaml</span>; event, terminal &amp; PTY WebSocket routes</div>
+                </div>
+                <div class="node">
+                  <div class="t">Domain layers</div>
+                  <div class="d"><span class="mono">service → biz → data</span>: workflows, product rules, persistence. If a feature needs a domain decision, it lands here</div>
+                </div>
+                <div class="node">
+                  <div class="t">Agent adapter</div>
+                  <div class="d"><span class="mono">service/agent</span> translates HTTP/query concerns and delegates lifecycle through <span class="mono">ApplicationHost()</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="wires">
+              <div class="down">▼</div>
+            </div>
+
             <div class="col3">
               <div class="node">
-                <div class="t">main</div>
-                <div class="d">Spawns &amp; supervises tuttid, owns IPC, transport bootstrap, windows, updates</div>
+                <div class="t">SQLite <span class="p">~/.tutti/tuttid.db</span></div>
+                <div class="d">Durable local state — one file, owned exclusively by the daemon. No cloud dependency in the core loop.</div>
               </div>
               <div class="node">
-                <div class="t">preload</div>
-                <div class="d">Narrow typed bridge for host capabilities only</div>
+                <div class="t">Agent provider processes</div>
+                <div class="d">Three child-process families: Codex app-server, the Claude SDK sidecar, and ACP subprocesses (Cursor, OpenCode, …). Detail in Part II.</div>
               </div>
               <div class="node">
-                <div class="t">renderer</div>
-                <div class="d">Window shells (<span class="mono">dashboard</span>, <span class="mono">workspace</span>) + feature modules</div>
+                <div class="t">PTY shells</div>
+                <div class="d">Real login shells spawned by the daemon's terminal service (<span class="mono">creack/pty</span>), streamed to xterm.js in the renderer. Detail in Part III.</div>
               </div>
             </div>
-            <div class="innerlanes">
-              <span>renderer <span class="arrow">→</span> preload <span class="arrow">→</span> main&nbsp; <em>host capabilities (IPC)</em></span>
-              <span>renderer <span class="arrow">→</span> tuttid&nbsp; <em>business traffic, directly</em></span>
-            </div>
-          </div>
-          <!-- CLI -->
-          <div class="shell">
-            <div class="cap">
-              <span class="name">CLI</span>
-              <span class="p mono">apps/cli</span>
-              <span class="lang go">Go</span>
-            </div>
-            <div class="node">
-              <div class="t">tutti</div>
-              <div class="d">Discovers the daemon endpoint + bearer token, invokes the daemon-owned CLI capability protocol. Command logic stays in tuttid.</div>
-            </div>
           </div>
         </div>
+      </section>
 
-        <div class="wires">
-          <div class="wire"><span class="lbl"><b>HTTP</b> business APIs · bearer token</span></div>
-          <div class="wire"><span class="lbl"><b>WebSocket</b> typed business events</span></div>
-          <div class="wire"><span class="lbl"><b>WebSocket</b> per-session terminal streams</span></div>
-          <div class="down">▼</div>
-        </div>
-
-        <!-- Daemon -->
-        <div class="shell">
-          <div class="cap">
-            <span class="name">tuttid — the business core</span>
-            <span class="p mono">services/tuttid</span>
-            <span class="lang go">Go daemon</span>
-          </div>
-          <div class="col3">
-            <div class="node">
-              <div class="t">API surface</div>
-              <div class="d">HTTP handlers generated from <span class="mono">api/openapi/tuttid.v1.yaml</span>; event, terminal &amp; PTY WebSocket routes</div>
-            </div>
-            <div class="node">
-              <div class="t">Domain layers</div>
-              <div class="d"><span class="mono">service → biz → data</span>: workflows, product rules, persistence. If a feature needs a domain decision, it lands here</div>
-            </div>
-            <div class="node">
-              <div class="t">Agent adapter</div>
-              <div class="d"><span class="mono">service/agent</span> translates HTTP/query concerns and delegates lifecycle through <span class="mono">ApplicationHost()</span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="wires">
-          <div class="down">▼</div>
-        </div>
-
-        <div class="col3">
-          <div class="node">
-            <div class="t">SQLite <span class="p">~/.tutti/tuttid.db</span></div>
-            <div class="d">Durable local state — one file, owned exclusively by the daemon. No cloud dependency in the core loop.</div>
-          </div>
-          <div class="node">
-            <div class="t">Agent provider processes</div>
-            <div class="d">Three child-process families: Codex app-server, the Claude SDK sidecar, and ACP subprocesses (Cursor, OpenCode, …). Detail below.</div>
-          </div>
-          <div class="node">
-            <div class="t">PTY shells</div>
-            <div class="d">Real login shells spawned by the daemon's terminal service (<span class="mono">creack/pty</span>), streamed to xterm.js in the renderer. Detail below.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= HANDSHAKE ================= -->
-  <section>
-    <p class="kicker">Startup</p>
-    <h2 class="display">How the shell finds its daemon</h2>
-    <p class="sub">
-      The renderer never hardcodes an endpoint and never discovers one itself — supervision is
-      exclusively a <code>main</code>-process job. The handshake is a real sequence:
-    </p>
-    <div class="seq">
-      <div class="step">
-        <div>
-          <div class="what">main spawns tuttid, asking it to bind <code>127.0.0.1:0</code></div>
-          <div class="how">The OS picks a free port; nothing is assumed in advance.</div>
-        </div>
-      </div>
-      <div class="step">
-        <div>
-          <div class="what">tuttid publishes its listener info</div>
-          <div class="how">Actual bound address + a per-run bearer token are written to <code>&lt;state-dir&gt;/run/tuttid.listener.json</code>.</div>
-        </div>
-      </div>
-      <div class="step">
-        <div>
-          <div class="what">main reads it and hands resolved backend config to renderer windows</div>
-          <div class="how">Renderer gets an origin and a token — never lifecycle knowledge.</div>
-        </div>
-      </div>
-      <div class="step">
-        <div>
-          <div class="what">renderer builds one canonical <code>@tutti-os/client-tuttid-ts</code> client</div>
-          <div class="how">Its restart-aware fetch re-resolves the backend config before <em>every</em> request, swapping only the origin and the <code>Authorization</code> header — so a daemon restart is invisible to feature code.</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= TWO CORES ================= -->
-  <section>
-    <p class="kicker">The central discipline</p>
-    <h2 class="display">One business core, kept that way on purpose</h2>
-    <p class="sub">
-      The repo's most repeated rule: the desktop app must never become a second business core.
-      Every layer of tooling below exists to keep this division honest.
-    </p>
-    <div class="cores">
-      <div class="core">
-        <h3><code>services/tuttid</code> <span class="p">owns the product</span></h3>
-        <p>Business rules, domain workflows, durable state, the HTTP/query API, and adapter surfaces. Long-running; survives across windows.</p>
-        <ul>
-          <li>State transitions and domain decisions land here first</li>
-          <li>Contract changes start in the OpenAPI spec, not in code</li>
-          <li>Embeds built-in apps (e.g. onboarding) as generated assets</li>
-        </ul>
-      </div>
-      <div class="core">
-        <h3><code>apps/desktop</code> <span class="p">owns the glass</span></h3>
-        <p>Electron lifecycle, daemon supervision, the preload bridge, window composition, and renderer feature modules.</p>
-        <ul>
-          <li>Feature logic lives in feature-local services; <code>services/internal/**</code> is private to its feature</li>
-          <li>Calls tuttid or IPC adapters instead of re-implementing workflows</li>
-          <li>UI is built from <code>@tutti-os/ui-system</code>; all copy goes through i18n</li>
-        </ul>
-      </div>
-    </div>
-    <div class="rule">
-      <strong>Litmus test used throughout the repo:</strong> if a change needs a domain decision or a
-      state transition, it belongs in tuttid — the desktop may only present it.
-    </div>
-  </section>
-
-  <!-- ================= TRANSPORT ================= -->
-  <section>
-    <p class="kicker">Transport</p>
-    <h2 class="display">Four lanes, each with one job</h2>
-    <p class="sub">
-      Business traffic and host capabilities travel on deliberately separate paths.
-      The event stream is schema-first: contracts in <code>packages/events/protocol</code> generate
-      typed code for both the Go and TypeScript sides.
-    </p>
-    <div class="lanes">
-      <div class="lane">
-        <div class="proto">HTTP <small>renderer / CLI → tuttid</small></div>
-        <div class="use">Ordinary request–response business APIs, defined by the OpenAPI contract, authenticated with the per-run bearer token.</div>
-      </div>
-      <div class="lane">
-        <div class="proto">Business-event WebSocket <small>renderer ⇄ tuttid</small></div>
-        <div class="use">One bidirectional, typed event stream for product coordination — replacing scattered route-local pub-sub. Validated against JSON Schema on both ends.</div>
-      </div>
-      <div class="lane">
-        <div class="proto">Terminal WebSocket <small>renderer ⇄ tuttid · one per session</small></div>
-        <div class="use">A raw byte stream with PTY control frames (<code>input</code>/<code>resize</code>/<code>gap</code>/<code>exit</code>) — deliberately <em>not</em> multiplexed onto the typed event bus, whose protocol must stay narrow.</div>
-      </div>
-      <div class="lane">
-        <div class="proto">Electron IPC <small>renderer → preload → main</small></div>
-        <div class="use">Host capabilities only — OS integration, window control, daemon supervision. <code>main</code> never becomes a general event relay for business data.</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= AGENT HOST ================= -->
-  <section>
-    <p class="kicker">The most important invariant</p>
-    <h2 class="display">The Agent Host boundary</h2>
-    <p class="sub">
-      Agent lifecycle semantics — when a session, turn, goal, or runtime-operation is created, when it
-      may be sent, when it's terminal, how it recovers — have exactly one owner. Everyone else is an
-      adapter.
-    </p>
-
-    <div class="board-wrap">
-      <div class="hostboard">
-        <div class="consumers">
-          <div class="node">
-            <div class="t">tuttid agent adapter <span class="p mono">services/tuttid/service/agent</span></div>
-            <div class="d">Translates HTTP, query, composer, and transport concerns. No lifecycle logic of its own.</div>
-          </div>
-          <div class="node">
-            <div class="t">Other hosts <span class="p">e.g. tsh</span></div>
-            <div class="d">Sibling consumers outside this repo delegate through the same contract.</div>
-          </div>
-        </div>
-        <div class="wires">
-          <div class="wire"><span class="lbl">delegate via <b><span class="mono">ApplicationHost()</span></b></span></div>
-          <div class="down">▼</div>
-        </div>
-        <div class="hostcore">
-          <div class="t"><code>packages/agent/host</code> <span class="lang go">Go</span> <span class="p">— the single lifecycle owner</span></div>
-          <div class="d">
-            New lifecycle semantics must first gain a scenario in
-            <span class="mono">packages/agent/host/conformance</span>, programmed only against the Host
-            contract. A missing capability gets <em>added to Host</em> — never reimplemented in an adapter.
-            The Host depends on the canonical store but never on the daemon, sidecars, or tuttid.
-          </div>
-          <div class="owns">
-            <span>session</span><span>turn</span><span>goal</span><span>runtime-operation</span>
-            <span>send eligibility</span><span>terminal states</span><span>recovery</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <blockquote class="decision">
-      <span class="q">"Does this change define or change the lifecycle semantics of a
-      session/turn/goal/runtime-operation?"</span>
-      <ul>
-        <li><strong>Yes</strong> → it lives in <code>packages/agent/host</code>; consumers write only delegate code.</li>
-        <li><strong>No</strong> (transport, DTO, query, presentation, policy) → adapter.</li>
-        <li><strong>Unsure</strong> → ask "would another Host consumer also need this?" If yes, it's Host.</li>
-      </ul>
-      Enforced mechanically: <code>pnpm check:agent-host-boundary</code> ratchets against new
-      <code>*Coordinator</code>/<code>*Worker</code>/<code>*Actor</code> orchestration appearing in adapters.
-    </blockquote>
-  </section>
-
-  <!-- ================= PROVIDER ADAPTATION ================= -->
-  <section>
-    <p class="kicker">Adapting the coding agents</p>
-    <h2 class="display">One registry, three wire protocols — never a provider <code>switch</code></h2>
-    <p class="sub">
-      There is no per-provider plugin API. Every provider is a <strong>declarative descriptor</strong>
-      in <code>packages/agent/daemon/providerregistry</code> — identity, runtime kind, auth strategy,
-      capabilities, permission modes, model catalog — and runtime behavior is chosen by the
-      descriptor's <em>strategy enums</em>, never by its name. The registry's own source states the
-      rule: <em>"provider identity must not be used as the constructor switch."</em>
-    </p>
-
-    <h3 class="h3sub">The three adapter families (dispatched on <code>Runtime.Kind</code>)</h3>
-    <div class="protocols">
-      <div class="protocol">
-        <span class="kind">codex_app_server</span>
-        <span class="who">Codex · Tutti Agent</span>
-        <span class="how">Speaks Codex's first-party <strong>app-server JSON-RPC</strong> over stdio
-        (<code>thread/start</code>, <code>turn/start</code>, approval requests…). Typed Go bindings
-        (<code>codexproto</code>) are code-generated from OpenAI's own JSON Schema, vendored and pinned
-        to an upstream commit.</span>
-        <span class="note">Replaced the older codex-acp bridge; explicitly not a template for new providers.</span>
-      </div>
-      <div class="protocol">
-        <span class="kind">standard_acp</span>
-        <span class="who">Cursor · OpenCode · Nexight · Hermes · OpenClaw</span>
-        <span class="how">One shared, data-driven <strong>ACP JSON-RPC 2.0</strong> adapter. Each provider
-        is a small declarative config file; quirks are expressed as hooks (stderr mapping,
-        permission-option filtering, mode params) — not subclasses.</span>
-        <span class="note">Third-party Agent Extensions reuse this exact adapter as signed data packages — no code is ever loaded from an extension.</span>
-      </div>
-      <div class="protocol">
-        <span class="kind">claude_sdk</span>
-        <span class="who">Claude Code</span>
-        <span class="how">The Go daemon drives a TypeScript <strong>sidecar</strong>
-        (<code>packages/agent/claude-sdk-sidecar</code>) over versioned <strong>NDJSON</strong> on
-        stdio (verbs: <code>start</code>, <code>exec</code>, <code>guide</code>, <code>cancel</code>,
-        <code>submit_interactive</code>, <code>apply_settings</code>, <code>close</code>). The sidecar
-        wraps <code>@anthropic-ai/claude-agent-sdk</code> and normalizes SDK messages into Tutti
-        activity events.</span>
-        <span class="note">The only Claude runtime path by contract — no parallel implementation allowed.</span>
-      </div>
-    </div>
-
-    <h3 class="h3sub">What every adapter must (and may) implement</h3>
-    <p class="sub" style="margin-bottom: 1rem;">
-      All three families produce a Go <code>Adapter</code> with six required methods —
-      <code>Provider · Start · Resume · Exec · Cancel · Close</code>
-      (<code>packages/agent/daemon/runtime/adapter.go</code>). Everything else is
-      <strong>capability negotiation</strong>: optional interfaces the controller type-asserts for, so a
-      provider gains a feature by implementing an interface, not by adding a branch.
-    </p>
-    <div class="frames">
-      <span class="dir">Optional capability interfaces (a sample):</span>
-      <span class="chip">TargetedCancel</span><span class="chip">AsyncExec</span>
-      <span class="chip">Interactive</span><span class="chip">Goal</span>
-      <span class="chip">PermissionMode</span><span class="chip">LiveSettings</span>
-      <span class="chip">ResumeProbe</span><span class="chip">ActiveTurnGuidance</span>
-      <span class="chip">CommandSnapshot</span>
-    </div>
-
-    <h3 class="h3sub">Where provider-specific code stops</h3>
-    <div class="board-wrap">
-      <div class="board chain">
-        <div class="link">
-          <div class="who">
-            <div class="t">tuttid agent service <span class="p mono">services/tuttid/service/agent</span></div>
-            <div class="d">HTTP/query/composer translation; delegates every lifecycle command</div>
-          </div>
-          <div class="verdict"><span class="neutral-tag">provider-neutral</span></div>
-        </div>
-        <div class="joint">↓ <span class="via">via <span class="mono">ApplicationHost()</span></span></div>
-        <div class="link">
-          <div class="who">
-            <div class="t">Agent Host <span class="p mono">packages/agent/host</span></div>
-            <div class="d">Lifecycle owner; talks downward only through the narrow <span class="mono">RuntimeController</span> port</div>
-          </div>
-          <div class="verdict"><span class="neutral-tag">provider-neutral</span></div>
-        </div>
-        <div class="joint">↓ <span class="via">port implemented by <span class="mono">agent_runtime_adapter.go</span></span></div>
-        <div class="link">
-          <div class="who">
-            <div class="t">Runtime controller <span class="p mono">packages/agent/daemon</span></div>
-            <div class="d">Owns live sessions, process transport, reaping; dispatches to one Adapter per registry descriptor</div>
-          </div>
-          <div class="verdict"><span class="neutral-tag">provider-neutral</span></div>
-        </div>
-        <div class="joint">↓ <span class="via">constructor switch on <span class="mono">Runtime.Kind</span> — never on provider name</span></div>
-        <div class="link">
-          <div class="who">
-            <div class="t">Per-provider adapters <span class="p mono">codex_appserver · claude_sdk_* · acp_provider_*</span></div>
-            <div class="d">The fixed, allowlisted set of files where provider identity may appear</div>
-          </div>
-          <div class="verdict"><span class="specific-tag">provider-specific</span></div>
-        </div>
-        <div class="joint">↓ <span class="via">stdio child processes</span></div>
-        <div class="link">
-          <div class="who">
-            <div class="t">Provider processes <span class="p">codex app-server · claude-sdk-sidecar → claude · cursor-agent acp · …</span></div>
-            <div class="d">Prepared by <span class="mono">packages/agent/runtimeprep</span>: system prompts, skills, env overlays, binary provisioning</div>
-          </div>
-          <div class="verdict"><span class="specific-tag">provider-specific</span></div>
-        </div>
-      </div>
-    </div>
-
-    <h3 class="h3sub">The current provider roster</h3>
-    <div class="gen-wrap">
-      <table class="gen">
-        <thead>
-          <tr><th>Provider</th><th>Runtime kind</th><th>Notes</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Claude Code</td><td><code>claude_sdk</code></td><td>NDJSON sidecar → Claude Agent SDK; <code>claude</code> binary provisioned from CDN, manifest-verified</td><td><span class="status-chip on">enabled</span></td></tr>
-          <tr><td>Codex</td><td><code>codex_app_server</code></td><td>First-party app-server protocol, generated <code>codexproto</code> bindings</td><td><span class="status-chip on">enabled</span></td></tr>
-          <tr><td>Tutti Agent</td><td><code>codex_app_server</code></td><td>Codex-compatible fork</td><td><span class="status-chip on">enabled</span></td></tr>
-          <tr><td>Cursor</td><td><code>standard_acp</code></td><td>Launched as <code>cursor-agent acp</code>; session-scoped skill plugin via <code>--plugin-dir</code></td><td><span class="status-chip on">enabled</span></td></tr>
-          <tr><td>OpenCode</td><td><code>standard_acp</code></td><td>Declarative config on the generic ACP adapter</td><td><span class="status-chip on">enabled</span></td></tr>
-          <tr><td>Nexight · Hermes · OpenClaw</td><td><code>standard_acp</code></td><td>Registered descriptors on the same generic adapter</td><td><span class="status-chip off">unsupported yet</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <blockquote class="decision">
-      <span class="q">"Adding a new agent" in practice:</span>
-      write a descriptor — and if it speaks ACP, usually nothing more than a small config file. Only a
-      genuinely new wire protocol requires a new adapter family. The abstraction is kept honest by
-      <code>pnpm check:agent-provider-strategy-boundaries</code>: it scans tuttid, the daemon, and the
-      desktop for provider-name literals (<code>case "codex"</code>, <code>== "claude-code"</code>, …)
-      and fails CI unless they sit in the registry, generated types, or the explicit allowlist of
-      adapter files. Per-provider <em>differences</em> — capabilities, permission modes, model catalogs,
-      auth flows — reach the GUI only as generated catalogs emitted from the Go registry and
-      cross-validated against the OpenAPI spec, so the UI branches on capabilities, never on names.
-    </blockquote>
-  </section>
-
-  <!-- ================= DRIVING THE RUNTIMES ================= -->
-  <section>
-    <p class="kicker">Inside the two flagship runtimes</p>
-    <h2 class="display">How a turn is actually driven</h2>
-    <p class="sub">
-      The two protocols feel similar from the GUI but work very differently underneath: Codex is a
-      long-lived JSON-RPC server that streams notifications; Claude Code is a per-session sidecar
-      feeding a prompt queue into the Claude Agent SDK. In both, approvals are parked server-side and
-      <strong>answered by the human</strong> — never auto-decided by the adapter.
-    </p>
-    <div class="cores">
-      <div class="core">
-        <h3>Codex <span class="p mono">codex app-server · JSON-RPC</span></h3>
+      <!-- ================= 02 HANDSHAKE ================= -->
+      <section id="startup">
+        <p class="kicker"><span class="knum">02</span>Startup</p>
+        <h2 class="display">How the shell finds its daemon</h2>
+        <p class="sub">
+          The renderer never hardcodes an endpoint and never discovers one itself — supervision is
+          exclusively a <code>main</code>-process job. The handshake is a real sequence:
+        </p>
         <div class="seq">
           <div class="step">
             <div>
-              <div class="what">Spawn &amp; handshake</div>
-              <div class="how"><code>codex</code> is resolved from your PATH and launched as <code>codex app-server</code>; the adapter sends JSON-RPC <code>initialize</code> (client name <code>codex_cli_rs</code>) then the <code>initialized</code> notification.</div>
+              <div class="what">main spawns tuttid, asking it to bind <code>127.0.0.1:0</code></div>
+              <div class="how">The OS picks a free port; nothing is assumed in advance.</div>
             </div>
           </div>
           <div class="step">
             <div>
-              <div class="what">Open or reattach a thread</div>
-              <div class="how"><code>thread/start</code> returns a <code>threadId</code> stored as the provider session ID; later runs reattach with <code>thread/resume</code>, replaying token-usage state.</div>
+              <div class="what">tuttid publishes its listener info</div>
+              <div class="how">Actual bound address + a per-run bearer token are written to <code>&lt;state-dir&gt;/run/tuttid.listener.json</code>.</div>
             </div>
           </div>
           <div class="step">
             <div>
-              <div class="what">Stream the turn</div>
-              <div class="how"><code>turn/start</code> responds immediately with "in progress" — the real output arrives as notifications (<code>item/agentMessage/delta</code>, <code>item/reasoning/textDelta</code>, <code>item/started</code>/<code>completed</code>, <code>turn/plan/updated</code>, <code>thread/tokenUsage/updated</code>) that a normalizer turns into Tutti activity events. The turn settles on <code>turn/completed</code>.</div>
+              <div class="what">main reads it and hands resolved backend config to renderer windows</div>
+              <div class="how">Renderer gets an origin and a token — never lifecycle knowledge.</div>
             </div>
           </div>
           <div class="step">
             <div>
-              <div class="what">Approvals go to the human</div>
-              <div class="how">Server→client requests (<code>item/commandExecution/requestApproval</code>, <code>item/fileChange/requestApproval</code>, …) park a goroutine, surface a waiting-approval event to the GUI, and map your choice back to <code>accept</code> / <code>acceptForSession</code> / <code>decline</code> / <code>cancel</code>.</div>
-            </div>
-          </div>
-          <div class="step">
-            <div>
-              <div class="what">Interrupt with teeth</div>
-              <div class="how">Cancel pauses any active goal, rejects pending approvals, fires <code>turn/interrupt</code>, waits a 3-second grace window — and force-closes the process if Codex doesn't stop.</div>
+              <div class="what">renderer builds one canonical <code>@tutti-os/client-tuttid-ts</code> client</div>
+              <div class="how">Its restart-aware fetch re-resolves the backend config before <em>every</em> request, swapping only the origin and the <code>Authorization</code> header — so a daemon restart is invisible to feature code.</div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="core">
-        <h3>Claude Code <span class="p mono">NDJSON sidecar · Claude Agent SDK</span></h3>
+      </section>
+
+      <!-- ================= 03 TWO CORES ================= -->
+      <section id="cores">
+        <p class="kicker"><span class="knum">03</span>The central discipline</p>
+        <h2 class="display">One business core, kept that way on purpose</h2>
+        <p class="sub">
+          The repo's most repeated rule: the desktop app must never become a second business core.
+          Every layer of tooling below exists to keep this division honest.
+        </p>
+        <div class="cores">
+          <div class="core">
+            <h3><code>services/tuttid</code> <span class="p">owns the product</span></h3>
+            <p>Business rules, domain workflows, durable state, the HTTP/query API, and adapter surfaces. Long-running; survives across windows.</p>
+            <ul>
+              <li>State transitions and domain decisions land here first</li>
+              <li>Contract changes start in the OpenAPI spec, not in code</li>
+              <li>Embeds built-in apps (e.g. onboarding) as generated assets</li>
+            </ul>
+          </div>
+          <div class="core">
+            <h3><code>apps/desktop</code> <span class="p">owns the glass</span></h3>
+            <p>Electron lifecycle, daemon supervision, the preload bridge, window composition, and renderer feature modules.</p>
+            <ul>
+              <li>Feature logic lives in feature-local services; <code>services/internal/**</code> is private to its feature</li>
+              <li>Calls tuttid or IPC adapters instead of re-implementing workflows</li>
+              <li>UI is built from <code>@tutti-os/ui-system</code>; all copy goes through i18n</li>
+            </ul>
+          </div>
+        </div>
+        <div class="rule">
+          <strong>Litmus test used throughout the repo:</strong> if a change needs a domain decision or a
+          state transition, it belongs in tuttid — the desktop may only present it.
+        </div>
+      </section>
+
+      <!-- ================= 04 TRANSPORT ================= -->
+      <section id="transport">
+        <p class="kicker"><span class="knum">04</span>Transport</p>
+        <h2 class="display">Four lanes, each with one job</h2>
+        <p class="sub">
+          Business traffic and host capabilities travel on deliberately separate paths.
+          The event stream is schema-first: contracts in <code>packages/events/protocol</code> generate
+          typed code for both the Go and TypeScript sides.
+        </p>
+        <div class="lanes">
+          <div class="lane">
+            <div class="proto">HTTP <small>renderer / CLI → tuttid</small></div>
+            <div class="use">Ordinary request–response business APIs, defined by the OpenAPI contract, authenticated with the per-run bearer token.</div>
+          </div>
+          <div class="lane">
+            <div class="proto">Business-event WebSocket <small>renderer ⇄ tuttid</small></div>
+            <div class="use">One bidirectional, typed event stream for product coordination — replacing scattered route-local pub-sub. Validated against JSON Schema on both ends.</div>
+          </div>
+          <div class="lane">
+            <div class="proto">Terminal WebSocket <small>renderer ⇄ tuttid · one per session</small></div>
+            <div class="use">A raw byte stream with PTY control frames (<code>input</code>/<code>resize</code>/<code>gap</code>/<code>exit</code>) — deliberately <em>not</em> multiplexed onto the typed event bus, whose protocol must stay narrow.</div>
+          </div>
+          <div class="lane">
+            <div class="proto">Electron IPC <small>renderer → preload → main</small></div>
+            <div class="use">Host capabilities only — OS integration, window control, daemon supervision. <code>main</code> never becomes a general event relay for business data.</div>
+          </div>
+        </div>
+      </section>
+
+      <p class="partline">Part II · The agent platform</p>
+
+      <!-- ================= 05 AGENT HOST ================= -->
+      <section id="host">
+        <p class="kicker"><span class="knum">05</span>The most important invariant</p>
+        <h2 class="display">The Agent Host boundary</h2>
+        <p class="sub">
+          Agent lifecycle semantics — when a session, turn, goal, or runtime-operation is created, when it
+          may be sent, when it's terminal, how it recovers — have exactly one owner. Everyone else is an
+          adapter.
+        </p>
+
+        <div class="board-wrap">
+          <div class="hostboard">
+            <div class="consumers">
+              <div class="node">
+                <div class="t">tuttid agent adapter <span class="p mono">services/tuttid/service/agent</span></div>
+                <div class="d">Translates HTTP, query, composer, and transport concerns. No lifecycle logic of its own.</div>
+              </div>
+              <div class="node">
+                <div class="t">Other hosts <span class="p">e.g. tsh</span></div>
+                <div class="d">Sibling consumers outside this repo delegate through the same contract.</div>
+              </div>
+            </div>
+            <div class="wires">
+              <div class="wire"><span class="lbl">delegate via <b><span class="mono">ApplicationHost()</span></b></span></div>
+              <div class="down">▼</div>
+            </div>
+            <div class="hostcore">
+              <div class="t"><code>packages/agent/host</code> <span class="lang go">Go</span> <span class="p">— the single lifecycle owner</span></div>
+              <div class="d">
+                New lifecycle semantics must first gain a scenario in
+                <span class="mono">packages/agent/host/conformance</span>, programmed only against the Host
+                contract. A missing capability gets <em>added to Host</em> — never reimplemented in an adapter.
+                The Host depends on the canonical store but never on the daemon, sidecars, or tuttid.
+              </div>
+              <div class="owns">
+                <span>session</span><span>turn</span><span>goal</span><span>runtime-operation</span>
+                <span>send eligibility</span><span>terminal states</span><span>recovery</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <blockquote class="decision">
+          <span class="q">"Does this change define or change the lifecycle semantics of a
+          session/turn/goal/runtime-operation?"</span>
+          <ul>
+            <li><strong>Yes</strong> → it lives in <code>packages/agent/host</code>; consumers write only delegate code.</li>
+            <li><strong>No</strong> (transport, DTO, query, presentation, policy) → adapter.</li>
+            <li><strong>Unsure</strong> → ask "would another Host consumer also need this?" If yes, it's Host.</li>
+          </ul>
+          Enforced mechanically: <code>pnpm check:agent-host-boundary</code> ratchets against new
+          <code>*Coordinator</code>/<code>*Worker</code>/<code>*Actor</code> orchestration appearing in adapters.
+        </blockquote>
+      </section>
+
+      <!-- ================= 06 PROVIDER ADAPTATION ================= -->
+      <section id="providers">
+        <p class="kicker"><span class="knum">06</span>Adapting the coding agents</p>
+        <h2 class="display">One registry, three wire protocols — never a provider <code>switch</code></h2>
+        <p class="sub">
+          There is no per-provider plugin API. Every provider is a <strong>declarative descriptor</strong>
+          in <code>packages/agent/daemon/providerregistry</code> — identity, runtime kind, auth strategy,
+          capabilities, permission modes, model catalog — and runtime behavior is chosen by the
+          descriptor's <em>strategy enums</em>, never by its name. The registry's own source states the
+          rule: <em>"provider identity must not be used as the constructor switch."</em>
+        </p>
+
+        <h3 class="h3sub">The three adapter families (dispatched on <code>Runtime.Kind</code>)</h3>
+        <div class="protocols">
+          <div class="protocol">
+            <span class="kind">codex_app_server</span>
+            <span class="who">Codex · Tutti Agent</span>
+            <span class="how">Speaks Codex's first-party <strong>app-server JSON-RPC</strong> over stdio
+            (<code>thread/start</code>, <code>turn/start</code>, approval requests…). Typed Go bindings
+            (<code>codexproto</code>) are code-generated from OpenAI's own JSON Schema, vendored and pinned
+            to an upstream commit.</span>
+            <span class="note">Replaced the older codex-acp bridge; explicitly not a template for new providers.</span>
+          </div>
+          <div class="protocol">
+            <span class="kind">standard_acp</span>
+            <span class="who">Cursor · OpenCode · Nexight · Hermes · OpenClaw</span>
+            <span class="how">One shared, data-driven <strong>ACP JSON-RPC 2.0</strong> adapter. Each provider
+            is a small declarative config file; quirks are expressed as hooks (stderr mapping,
+            permission-option filtering, mode params) — not subclasses.</span>
+            <span class="note">Third-party Agent Extensions reuse this exact adapter as signed data packages — no code is ever loaded from an extension.</span>
+          </div>
+          <div class="protocol">
+            <span class="kind">claude_sdk</span>
+            <span class="who">Claude Code</span>
+            <span class="how">The Go daemon drives a TypeScript <strong>sidecar</strong>
+            (<code>packages/agent/claude-sdk-sidecar</code>) over versioned <strong>NDJSON</strong> on
+            stdio (verbs: <code>start</code>, <code>exec</code>, <code>guide</code>, <code>cancel</code>,
+            <code>submit_interactive</code>, <code>apply_settings</code>, <code>close</code>). The sidecar
+            wraps <code>@anthropic-ai/claude-agent-sdk</code> and normalizes SDK messages into Tutti
+            activity events.</span>
+            <span class="note">The only Claude runtime path by contract — no parallel implementation allowed.</span>
+          </div>
+        </div>
+
+        <h3 class="h3sub">What every adapter must (and may) implement</h3>
+        <p class="sub" style="margin-bottom: 1rem;">
+          All three families produce a Go <code>Adapter</code> with six required methods —
+          <code>Provider · Start · Resume · Exec · Cancel · Close</code>
+          (<code>packages/agent/daemon/runtime/adapter.go</code>). Everything else is
+          <strong>capability negotiation</strong>: optional interfaces the controller type-asserts for, so a
+          provider gains a feature by implementing an interface, not by adding a branch.
+        </p>
+        <div class="frames">
+          <span class="dir">Optional capability interfaces (a sample):</span>
+          <span class="chip">TargetedCancel</span><span class="chip">AsyncExec</span>
+          <span class="chip">Interactive</span><span class="chip">Goal</span>
+          <span class="chip">PermissionMode</span><span class="chip">LiveSettings</span>
+          <span class="chip">ResumeProbe</span><span class="chip">ActiveTurnGuidance</span>
+          <span class="chip">CommandSnapshot</span>
+        </div>
+
+        <h3 class="h3sub">Where provider-specific code stops</h3>
+        <div class="board-wrap">
+          <div class="board chain">
+            <div class="link">
+              <div class="who">
+                <div class="t">tuttid agent service <span class="p mono">services/tuttid/service/agent</span></div>
+                <div class="d">HTTP/query/composer translation; delegates every lifecycle command</div>
+              </div>
+              <div class="verdict"><span class="neutral-tag">provider-neutral</span></div>
+            </div>
+            <div class="joint">↓ <span class="via">via <span class="mono">ApplicationHost()</span></span></div>
+            <div class="link">
+              <div class="who">
+                <div class="t">Agent Host <span class="p mono">packages/agent/host</span></div>
+                <div class="d">Lifecycle owner; talks downward only through the narrow <span class="mono">RuntimeController</span> port</div>
+              </div>
+              <div class="verdict"><span class="neutral-tag">provider-neutral</span></div>
+            </div>
+            <div class="joint">↓ <span class="via">port implemented by <span class="mono">agent_runtime_adapter.go</span></span></div>
+            <div class="link">
+              <div class="who">
+                <div class="t">Runtime controller <span class="p mono">packages/agent/daemon</span></div>
+                <div class="d">Owns live sessions, process transport, reaping; dispatches to one Adapter per registry descriptor</div>
+              </div>
+              <div class="verdict"><span class="neutral-tag">provider-neutral</span></div>
+            </div>
+            <div class="joint">↓ <span class="via">constructor switch on <span class="mono">Runtime.Kind</span> — never on provider name</span></div>
+            <div class="link">
+              <div class="who">
+                <div class="t">Per-provider adapters <span class="p mono">codex_appserver · claude_sdk_* · acp_provider_*</span></div>
+                <div class="d">The fixed, allowlisted set of files where provider identity may appear</div>
+              </div>
+              <div class="verdict"><span class="specific-tag">provider-specific</span></div>
+            </div>
+            <div class="joint">↓ <span class="via">stdio child processes</span></div>
+            <div class="link">
+              <div class="who">
+                <div class="t">Provider processes <span class="p">codex app-server · claude-sdk-sidecar → claude · cursor-agent acp · …</span></div>
+                <div class="d">Prepared by <span class="mono">packages/agent/runtimeprep</span>: system prompts, skills, env overlays, binary provisioning</div>
+              </div>
+              <div class="verdict"><span class="specific-tag">provider-specific</span></div>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="h3sub">The current provider roster</h3>
+        <div class="gen-wrap">
+          <table class="gen">
+            <thead>
+              <tr><th>Provider</th><th>Runtime kind</th><th>Notes</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Claude Code</td><td><code>claude_sdk</code></td><td>NDJSON sidecar → Claude Agent SDK; <code>claude</code> binary provisioned from CDN, manifest-verified</td><td><span class="status-chip on">enabled</span></td></tr>
+              <tr><td>Codex</td><td><code>codex_app_server</code></td><td>First-party app-server protocol, generated <code>codexproto</code> bindings</td><td><span class="status-chip on">enabled</span></td></tr>
+              <tr><td>Tutti Agent</td><td><code>codex_app_server</code></td><td>Codex-compatible fork</td><td><span class="status-chip on">enabled</span></td></tr>
+              <tr><td>Cursor</td><td><code>standard_acp</code></td><td>Launched as <code>cursor-agent acp</code>; session-scoped skill plugin via <code>--plugin-dir</code></td><td><span class="status-chip on">enabled</span></td></tr>
+              <tr><td>OpenCode</td><td><code>standard_acp</code></td><td>Declarative config on the generic ACP adapter</td><td><span class="status-chip on">enabled</span></td></tr>
+              <tr><td>Nexight · Hermes · OpenClaw</td><td><code>standard_acp</code></td><td>Registered descriptors on the same generic adapter</td><td><span class="status-chip off">unsupported yet</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <blockquote class="decision">
+          <span class="q">"Adding a new agent" in practice:</span>
+          write a descriptor — and if it speaks ACP, usually nothing more than a small config file. Only a
+          genuinely new wire protocol requires a new adapter family. The abstraction is kept honest by
+          <code>pnpm check:agent-provider-strategy-boundaries</code>: it scans tuttid, the daemon, and the
+          desktop for provider-name literals (<code>case "codex"</code>, <code>== "claude-code"</code>, …)
+          and fails CI unless they sit in the registry, generated types, or the explicit allowlist of
+          adapter files. Per-provider <em>differences</em> — capabilities, permission modes, model catalogs,
+          auth flows — reach the GUI only as generated catalogs emitted from the Go registry and
+          cross-validated against the OpenAPI spec, so the UI branches on capabilities, never on names.
+        </blockquote>
+      </section>
+
+      <!-- ================= 07 DRIVING THE RUNTIMES ================= -->
+      <section id="driving">
+        <p class="kicker"><span class="knum">07</span>Inside the two flagship runtimes</p>
+        <h2 class="display">How a turn is actually driven</h2>
+        <p class="sub">
+          The two protocols feel similar from the GUI but work very differently underneath: Codex is a
+          long-lived JSON-RPC server that streams notifications; Claude Code is a per-session sidecar
+          feeding a prompt queue into the Claude Agent SDK. In both, approvals are parked server-side and
+          <strong>answered by the human</strong> — never auto-decided by the adapter.
+        </p>
+        <div class="cores">
+          <div class="core">
+            <h3>Codex <span class="p mono">codex app-server · JSON-RPC</span></h3>
+            <div class="seq">
+              <div class="step">
+                <div>
+                  <div class="what">Spawn &amp; handshake</div>
+                  <div class="how"><code>codex</code> is resolved from your PATH and launched as <code>codex app-server</code>; the adapter sends JSON-RPC <code>initialize</code> (client name <code>codex_cli_rs</code>) then the <code>initialized</code> notification.</div>
+                </div>
+              </div>
+              <div class="step">
+                <div>
+                  <div class="what">Open or reattach a thread</div>
+                  <div class="how"><code>thread/start</code> returns a <code>threadId</code> stored as the provider session ID; later runs reattach with <code>thread/resume</code>, replaying token-usage state.</div>
+                </div>
+              </div>
+              <div class="step">
+                <div>
+                  <div class="what">Stream the turn</div>
+                  <div class="how"><code>turn/start</code> responds immediately with "in progress" — the real output arrives as notifications (<code>item/agentMessage/delta</code>, <code>item/reasoning/textDelta</code>, <code>item/started</code>/<code>completed</code>, <code>turn/plan/updated</code>, <code>thread/tokenUsage/updated</code>) that a normalizer turns into Tutti activity events. The turn settles on <code>turn/completed</code>.</div>
+                </div>
+              </div>
+              <div class="step">
+                <div>
+                  <div class="what">Approvals go to the human</div>
+                  <div class="how">Server→client requests (<code>item/commandExecution/requestApproval</code>, <code>item/fileChange/requestApproval</code>, …) park a goroutine, surface a waiting-approval event to the GUI, and map your choice back to <code>accept</code> / <code>acceptForSession</code> / <code>decline</code> / <code>cancel</code>.</div>
+                </div>
+              </div>
+              <div class="step">
+                <div>
+                  <div class="what">Interrupt with teeth</div>
+                  <div class="how">Cancel pauses any active goal, rejects pending approvals, fires <code>turn/interrupt</code>, waits a 3-second grace window — and force-closes the process if Codex doesn't stop.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="core">
+            <h3>Claude Code <span class="p mono">NDJSON sidecar · Claude Agent SDK</span></h3>
+            <div class="seq">
+              <div class="step">
+                <div>
+                  <div class="what">One sidecar per session</div>
+                  <div class="how">Go spawns <code>node --experimental-strip-types …/claude-sdk-sidecar/src/main.ts</code> and speaks version-2 NDJSON envelopes over stdio: <code>start</code>, <code>exec</code>, <code>guide</code>, <code>cancel</code>, <code>submit_interactive</code>, <code>apply_settings</code>, <code>close</code>.</div>
+                </div>
+              </div>
+              <div class="step">
+                <div>
+                  <div class="what">Exec feeds the SDK</div>
+                  <div class="how">The <code>exec</code> envelope pushes the prompt into a queue feeding the SDK's <code>query()</code> stream, created lazily inside the sidecar.</div>
+                </div>
+              </div>
+              <div class="step">
+                <div>
+                  <div class="what">Messages normalize on the way up</div>
+                  <div class="how">SDK messages are routed, normalized into sidecar events, and written back line-by-line; the Go adapter forwards them as Tutti activity events and blocks until the turn waiter resolves.</div>
+                </div>
+              </div>
+              <div class="step">
+                <div>
+                  <div class="what">Permissions ride the SDK's control protocol</div>
+                  <div class="how">The sidecar's <code>canUseTool</code> callback emits <code>approval_requested</code> / <code>user_input_requested</code> and blocks on a promise; your answer arrives as <code>submit_interactive</code> and resolves into an SDK allow/deny (optionally with updated input or permissions). <code>bypassPermissions</code> mode short-circuits to allow.</div>
+                </div>
+              </div>
+              <div class="step">
+                <div>
+                  <div class="what">Cancel &amp; close are polite</div>
+                  <div class="how">Cancel rejects all pending interactions; <code>close</code> is a request/ack boundary that waits for SDK shutdown before the process exits.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 08 VERSIONING ================= -->
+      <section id="versioning">
+        <p class="kicker"><span class="knum">08</span>Provisioning</p>
+        <h2 class="display">Who controls which agent version runs</h2>
+        <p class="sub">
+          Two opposite philosophies coexist. Claude Code is <strong>Tutti-managed</strong>: the release pins
+          an exact SDK and provisions a matching CLI binary itself. Codex is <strong>user-owned</strong>:
+          Tutti runs whatever is on your PATH, enforcing only a minimum version. Both leave the user an
+          escape hatch.
+        </p>
+        <div class="gen-wrap">
+          <table class="gen">
+            <thead>
+              <tr><th>Provider</th><th>Version model</th><th>Pin / floor</th><th>Bring your own?</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Claude Code</td>
+                <td><span class="status-chip on">Tutti-managed</span> The sidecar pins <code>@anthropic-ai/claude-agent-sdk</code> to an exact version (<code>0.3.201</code> in the current tree). The ~230&nbsp;MB <code>claude</code> binary isn't bundled — tuttid downloads it (CDN, npm fallback), sha256-verifies it against the SDK's manifest, and installs it under the state dir behind a <code>current.json</code> pointer.</td>
+                <td>Exact SDK pin per release; <em>no</em> minimum-version gate — brief version skew right after an app update is tolerated by design.</td>
+                <td>Yes: <code>CLAUDE_CODE_EXECUTABLE</code> always wins; a PATH-installed <code>claude</code> is the last-resort fallback. Updating your system <code>claude</code> doesn't change the managed default — that moves with Tutti releases.</td>
+              </tr>
+              <tr>
+                <td>Codex</td>
+                <td><span class="status-chip off">User-owned</span> Launched straight from your PATH; Tutti detects the version with <code>codex --version</code> and re-checks whenever you update it yourself (brew, npm, …).</td>
+                <td>Hard floor <code>0.126.0</code> (capability-derived: the goal-API app-server methods). Below it: <code>CODEX_VERSION_TOO_OLD</code> plus an upgrade wizard showing "current&nbsp;X · requires&nbsp;≥&nbsp;Y".</td>
+                <td>Entirely — it's your install. The wizard can also run <code>npm install -g @openai/codex</code> into <code>~/.local/bin</code> for you, but only on your action.</td>
+              </tr>
+              <tr>
+                <td>Cursor · OpenCode</td>
+                <td><span class="status-chip off">User-owned</span> PATH detection (Cursor's binary path is resolved and swapped in at launch).</td>
+                <td>No version floor.</td>
+                <td>Entirely; one-click official install scripts are offered.</td>
+              </tr>
+              <tr>
+                <td>Tutti Agent</td>
+                <td>Managed npm package (<code>@tutti-os/tutti-agent</code>), Codex-compatible.</td>
+                <td>—</td>
+                <td>Disabled by default.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="guards" style="margin-top: 0.75rem;">
+          <div class="guard">
+            <b>How detection works</b>
+            The <code>agentstatus</code> service in tuttid runs the provider checks — CLI present, platform
+            binary, version floor, Node runtime, auth — and the desktop's environment wizard renders staged
+            remediation: the failing check, an inline fix button, the copyable manual command, and an
+            install log. Install budgets are stretched for proxied networks (150&nbsp;s per registry,
+            8&nbsp;min overall; Claude binary downloads get 10&nbsp;min per source).
+          </div>
+          <div class="guard">
+            <b>Why the asymmetry</b>
+            Claude Code's runtime is an SDK protocol Tutti embeds, so correctness demands the CLI match the
+            vendored SDK — hence managed provisioning with integrity checks. Codex, Cursor, and OpenCode
+            are external CLIs speaking versioned public protocols, so Tutti treats them as user
+            environment: detect, gate on capability where needed, and offer — never force — installation.
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 09 MANAGING AGENTS ================= -->
+      <section id="managing">
+        <p class="kicker"><span class="knum">09</span>The management plane</p>
+        <h2 class="display">Managing a workspace full of agents</h2>
+        <p class="sub">
+          Above the runtime sits the product surface that makes agents <em>manageable</em>: durable
+          agent identities, a session rail, long-running goals, and the coordination fabric that lets
+          agents reference and delegate to each other. All of it is daemon-owned HTTP API
+          (<code>/v1/agent-targets*</code>, <code>/v1/workspaces/{id}/agent-sessions*</code>) delegating
+          lifecycle decisions through the Agent Host.
+        </p>
+
+        <div class="guards">
+          <div class="guard">
+            <b>Agent Targets — the durable identity</b>
+            A target (e.g. <code>local:codex</code>) is a configured agent instance: launch reference
+            (builtin provider or installed extension), name, icons, availability, enabled flag,
+            system/user source. <code>agentTargetId</code> — never the provider name — is the UI
+            identity used for selection, rail filtering, mentions, and handoffs; the daemon resolves
+            target → provider and rejects mismatches from clients.
+          </div>
+          <div class="guard">
+            <b>Sessions &amp; the rail</b>
+            Full session management over HTTP: list/create/clear/batch-delete, plus per-session
+            settings, title, visibility, and pin. The rail is a persisted projection — project
+            sections, a Chats bucket, and a pinned view — with dedicated section-page and
+            deletion-candidate queries. External sessions can be scanned and imported.
+          </div>
+          <div class="guard">
+            <b>Goals — objectives that outlive turns</b>
+            A goal is a session-level durable objective (<code>set / pause / resume / clear</code> +
+            reconcile) that bypasses the prompt pipeline entirely — no transcript message — and may
+            cause the provider to open multiple turns over time. State is modeled as
+            <em>desired vs observed</em> with monotonic revisions, tombstones (a cleared goal can't be
+            resurrected by a stale observation), and a <code>syncStatus</code> that admits
+            <code>diverged</code> honestly. Durable operations replay across daemon restarts.
+          </div>
+          <div class="guard">
+            <b>Observability — hints reconcile against truth</b>
+            Activity flows canonical store → tuttid projection → business events → the GUI's
+            <code>AgentSessionEngine</code> reducer → memoized snapshots. The rule: <em>events are
+            hints; canonical reads reconcile</em>. A Message Center surfaces needs-attention items
+            (pending permissions, questions), and a run-outcome reporter flips a provider's
+            auth-failed/success flag from real turn outcomes — so stale credentials can't hide a broken
+            login.
+          </div>
+        </div>
+
+        <h3 class="h3sub">How one agent hands work to another</h3>
+        <p class="sub" style="margin-bottom: 0.5rem;">
+          The README's promise — "@ Claude Code from inside Codex" — is not context copy-paste. It's
+          composed from mentions, the CLI facade, and live references against the shared daemon:
+        </p>
         <div class="seq">
           <div class="step">
             <div>
-              <div class="what">One sidecar per session</div>
-              <div class="how">Go spawns <code>node --experimental-strip-types …/claude-sdk-sidecar/src/main.ts</code> and speaks version-2 NDJSON envelopes over stdio: <code>start</code>, <code>exec</code>, <code>guide</code>, <code>cancel</code>, <code>submit_interactive</code>, <code>apply_settings</code>, <code>close</code>.</div>
+              <div class="what">Mentions are typed, not textual</div>
+              <div class="how">The composer resolves <code>@</code> into typed kinds — <code>agent-session</code>, <code>agent-target</code>, <code>workspace-app</code>, files, issues, tasks, references — each with its own routing behavior. Mention pickers group results into <em>provenance groups</em> by owning agent/member, and the aggregator fails closed on dimensions a source can't enforce.</div>
             </div>
           </div>
           <div class="step">
             <div>
-              <div class="what">Exec feeds the SDK</div>
-              <div class="how">The <code>exec</code> envelope pushes the prompt into a queue feeding the SDK's <code>query()</code> stream, created lazily inside the sidecar.</div>
+              <div class="what">Delegation = a new session on the other target</div>
+              <div class="how">A handoff runs <code>agent start --agent-id &lt;target&gt;</code> through the CLI facade, creating a new <em>visible</em> session on the other agent. The handoff directory labels targets with host-authoritative ownership — <em>self</em> vs <em>shared</em> (with the owner's name) — so your local agents stay distinguishable from collaborators'.</div>
             </div>
           </div>
           <div class="step">
             <div>
-              <div class="what">Messages normalize on the way up</div>
-              <div class="how">SDK messages are routed, normalized into sidecar events, and written back line-by-line; the Go adapter forwards them as Tutti activity events and blocks until the turn waiter resolves.</div>
+              <div class="what">Context travels as live references</div>
+              <div class="how">The prompt carries <code>@</code>-references, not pasted text. The receiving agent resolves them against the same daemon: <code>agent session-summary</code> pulls another session's recent messages (images included), <code>agent turn-resources</code> its artifacts, the reference skill resolves app outputs and tasks.</div>
             </div>
           </div>
           <div class="step">
             <div>
-              <div class="what">Permissions ride the SDK's control protocol</div>
-              <div class="how">The sidecar's <code>canUseTool</code> callback emits <code>approval_requested</code> / <code>user_input_requested</code> and blocks on a promise; your answer arrives as <code>submit_interactive</code> and resolves into an SDK allow/deny (optionally with updated input or permissions). <code>bypassPermissions</code> mode short-circuits to allow.</div>
-            </div>
-          </div>
-          <div class="step">
-            <div>
-              <div class="what">Cancel &amp; close are polite</div>
-              <div class="how">Cancel rejects all pending interactions; <code>close</code> is a request/ack boundary that waits for SDK shutdown before the process exits.</div>
+              <div class="what">The delegator waits on a real stop point</div>
+              <div class="how"><code>agent wait</code> blocks until the target session completes, fails, or stops for an approval or question — returning the final message or the pending interactions, which the delegating agent can answer via <code>agent respond</code>.</div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- ================= VERSIONING ================= -->
-  <section>
-    <p class="kicker">Provisioning</p>
-    <h2 class="display">Who controls which agent version runs</h2>
-    <p class="sub">
-      Two opposite philosophies coexist. Claude Code is <strong>Tutti-managed</strong>: the release pins
-      an exact SDK and provisions a matching CLI binary itself. Codex is <strong>user-owned</strong>:
-      Tutti runs whatever is on your PATH, enforcing only a minimum version. Both leave the user an
-      escape hatch.
-    </p>
-    <div class="gen-wrap">
-      <table class="gen">
-        <thead>
-          <tr><th>Provider</th><th>Version model</th><th>Pin / floor</th><th>Bring your own?</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Claude Code</td>
-            <td><span class="status-chip on">Tutti-managed</span> The sidecar pins <code>@anthropic-ai/claude-agent-sdk</code> to an exact version (<code>0.3.201</code> in the current tree). The ~230&nbsp;MB <code>claude</code> binary isn't bundled — tuttid downloads it (CDN, npm fallback), sha256-verifies it against the SDK's manifest, and installs it under the state dir behind a <code>current.json</code> pointer.</td>
-            <td>Exact SDK pin per release; <em>no</em> minimum-version gate — brief version skew right after an app update is tolerated by design.</td>
-            <td>Yes: <code>CLAUDE_CODE_EXECUTABLE</code> always wins; a PATH-installed <code>claude</code> is the last-resort fallback. Updating your system <code>claude</code> doesn't change the managed default — that moves with Tutti releases.</td>
-          </tr>
-          <tr>
-            <td>Codex</td>
-            <td><span class="status-chip off">User-owned</span> Launched straight from your PATH; Tutti detects the version with <code>codex --version</code> and re-checks whenever you update it yourself (brew, npm, …).</td>
-            <td>Hard floor <code>0.126.0</code> (capability-derived: the goal-API app-server methods). Below it: <code>CODEX_VERSION_TOO_OLD</code> plus an upgrade wizard showing "current&nbsp;X · requires&nbsp;≥&nbsp;Y".</td>
-            <td>Entirely — it's your install. The wizard can also run <code>npm install -g @openai/codex</code> into <code>~/.local/bin</code> for you, but only on your action.</td>
-          </tr>
-          <tr>
-            <td>Cursor · OpenCode</td>
-            <td><span class="status-chip off">User-owned</span> PATH detection (Cursor's binary path is resolved and swapped in at launch).</td>
-            <td>No version floor.</td>
-            <td>Entirely; one-click official install scripts are offered.</td>
-          </tr>
-          <tr>
-            <td>Tutti Agent</td>
-            <td>Managed npm package (<code>@tutti-os/tutti-agent</code>), Codex-compatible.</td>
-            <td>—</td>
-            <td>Disabled by default.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="guards" style="margin-top: 0.75rem;">
-      <div class="guard">
-        <b>How detection works</b>
-        The <code>agentstatus</code> service in tuttid runs the provider checks — CLI present, platform
-        binary, version floor, Node runtime, auth — and the desktop's environment wizard renders staged
-        remediation: the failing check, an inline fix button, the copyable manual command, and an
-        install log. Install budgets are stretched for proxied networks (150&nbsp;s per registry,
-        8&nbsp;min overall; Claude binary downloads get 10&nbsp;min per source).
-      </div>
-      <div class="guard">
-        <b>Why the asymmetry</b>
-        Claude Code's runtime is an SDK protocol Tutti embeds, so correctness demands the CLI match the
-        vendored SDK — hence managed provisioning with integrity checks. Codex, Cursor, and OpenCode
-        are external CLIs speaking versioned public protocols, so Tutti treats them as user
-        environment: detect, gate on capability where needed, and offer — never force — installation.
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= AGENT STACK PACKAGES ================= -->
-  <section>
-    <p class="kicker">Agent stack</p>
-    <h2 class="display">The packages behind the flow</h2>
-    <p class="sub">
-      The agent subsystem spans both languages: the GUI composes a message → tuttid's adapter delegates
-      it to the Host → the Go runtime drives the provider process → activity replicates back into the
-      canonical store and streams up to the GUI's activity engine.
-    </p>
-    <div class="pkgs">
-      <div class="pkg">
-        <div class="g"><code>agent/gui</code> <span class="lang ts">TS</span></div>
-        <div class="role">The AgentGUI workbench node: conversation timeline, composer, approvals, interactive prompts. Branches on generated capability catalogs, never provider names.</div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>agent/host</code> <span class="lang go">Go</span></div>
-        <div class="role">The lifecycle application core described above, with its conformance suite.</div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>agent/daemon</code> <span class="lang go">Go</span></div>
-        <div class="role">Provider runtime: registry, controller, and the three adapter families. Part of the blocking Go test gate.</div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>agent/runtimeprep</code> <span class="lang go">Go</span></div>
-        <div class="role">Materializes what a provider needs before launch: canonical system prompts, skills, env overlays, manifests, binary resolution, cleanup.</div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>agent/store-sqlite</code> <span class="lang go">Go</span></div>
-        <div class="role">Canonical agent store (with <code>/canonical</code>) — the durable record of sessions and activity.</div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>agent/activity-replication</code> <span class="lang go">Go</span></div>
-        <div class="role">Replication contract moving activity from runtimes into the canonical store.</div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>agent/activity-core</code> <span class="lang ts">TS</span></div>
-        <div class="role">Frontend activity engine that turns the activity stream into what the timeline renders.</div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>agent/claude-sdk-sidecar</code> <span class="lang ts">TS</span></div>
-        <div class="role">The NDJSON bridge process to the Claude Agent SDK — ships raw TypeScript, run via <code>node --experimental-strip-types</code>.</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= TERMINAL ================= -->
-  <section>
-    <p class="kicker">Integrated terminal</p>
-    <h2 class="display">A real shell, owned by the daemon</h2>
-    <p class="sub">
-      The workspace terminal is not an emulated console: tuttid spawns a genuine PTY running your login
-      shell, keeps the session alive independently of any window, and streams it to xterm.js over a
-      dedicated per-session WebSocket. The shared experience lives in
-      <code>@tutti-os/workspace-terminal</code>; the execution substrate stays host-specific.
-    </p>
-
-    <div class="board-wrap">
-      <div class="board">
-        <div class="col3">
+        <h3 class="h3sub">Apps and agents drive each other — through one runtime</h3>
+        <div class="col2">
           <div class="node">
-            <div class="t">tuttid terminal service <span class="lang go">Go</span></div>
-            <div class="d">Spawns the PTY with <span class="mono">creack/pty</span> — your <span class="mono">$SHELL</span>, interactive, <span class="mono">TERM=xterm-256color</span>, system-proxy env injected. Owns session state and the output ring buffer.</div>
+            <div class="t">Apps → agents <span class="p mono">agentActivity@1</span></div>
+            <div class="d">Trusted workspace apps get <span class="mono">window.tuttiExternal.agentActivity.*</span>: list targets, create visible sessions, send/cancel turns, and read the <em>same</em> host-owned activity snapshot the Agent GUI uses. Spinning up a second activity engine is explicitly forbidden — automation goes through the canonical runtime.</div>
           </div>
           <div class="node">
-            <div class="t">The wire</div>
-            <div class="d">One WebSocket per session at <span class="mono">…/terminals/{id}/ws</span>. In: <span class="mono">input · resize · detach · ping</span>. Out: <span class="mono">output · state · gap · exit · metadata</span>. Close is deliberately an HTTP call, not a stream frame.</div>
-          </div>
-          <div class="node">
-            <div class="t">Renderer surface <span class="lang ts">TS</span></div>
-            <div class="d"><span class="mono">@xterm/xterm</span> v6 (+ fit, search, serialize, web-links), packaged in <span class="mono">packages/workspace/terminal</span>, registered by the desktop as workbench node type <span class="mono">"workspace-terminal"</span>.</div>
+            <div class="t">Agents → apps <span class="p mono">tutti.app.cli.v1</span></div>
+            <div class="d">An <span class="mono">@app</span> mention routes the agent to that app's CLI command surface (declared in the app's <span class="mono">tutti.cli.json</span> manifest) — so Codex invoking the prototype-design app runs a real command and gets artifacts back. Opening the app's window (<span class="mono">app open</span>) exists but agents are steered to the command surface instead.</div>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <h3 class="h3sub">Session semantics worth knowing</h3>
-    <div class="guards">
-      <div class="guard">
-        <b>Sessions outlive the window, not the daemon</b>
-        Lifecycle: <code>created → starting → running → detached → exited</code>. Closing the window
-        detaches; the process keeps running in the daemon. Reattaching replays buffered output from your
-        last sequence number (~800k-char replay budget, with an explicit <code>gap</code> frame if
-        evicted). Sessions are in-memory only — a daemon restart ends them.
-      </div>
-      <div class="guard">
-        <b>One node = one session, forever</b>
-        The daemon <code>sessionId</code> is part of the workbench node's identity — you can't swap a
-        node onto a different process. New process means new node. Minimize hides; close terminates.
-      </div>
-      <div class="guard">
-        <b>A close guard that actually looks</b>
-        Before terminating, the daemon inspects the PTY's foreground process group
-        (<code>TIOCGPGRP</code> ioctl) and names the running command, so closing a busy terminal asks
-        for confirmation with real information.
-      </div>
-      <div class="guard">
-        <b>Agents use it — but don't run in it</b>
-        Provider login flows (<code>claude auth login</code>, <code>codex login</code>) open a terminal
-        node pre-typed with the command, auto-closed once the provider turns ready (kept open on
-        failure). But agent tool execution is a separate path — the terminal blocks in a conversation
-        timeline are read-only renderings, not live PTYs.
-      </div>
-    </div>
-  </section>
+      <!-- ================= 10 AGENT STACK PACKAGES ================= -->
+      <section id="agent-packages">
+        <p class="kicker"><span class="knum">10</span>Agent stack</p>
+        <h2 class="display">The packages behind the flow</h2>
+        <p class="sub">
+          The agent subsystem spans both languages: the GUI composes a message → tuttid's adapter delegates
+          it to the Host → the Go runtime drives the provider process → activity replicates back into the
+          canonical store and streams up to the GUI's activity engine.
+        </p>
+        <div class="pkgs">
+          <div class="pkg">
+            <div class="g"><code>agent/gui</code> <span class="lang ts">TS</span></div>
+            <div class="role">The AgentGUI workbench node: conversation timeline, composer, approvals, interactive prompts. Branches on generated capability catalogs, never provider names.</div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>agent/host</code> <span class="lang go">Go</span></div>
+            <div class="role">The lifecycle application core described above, with its conformance suite.</div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>agent/daemon</code> <span class="lang go">Go</span></div>
+            <div class="role">Provider runtime: registry, controller, and the three adapter families. Part of the blocking Go test gate.</div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>agent/runtimeprep</code> <span class="lang go">Go</span></div>
+            <div class="role">Materializes what a provider needs before launch: canonical system prompts, skills, env overlays, manifests, binary resolution, cleanup.</div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>agent/store-sqlite</code> <span class="lang go">Go</span></div>
+            <div class="role">Canonical agent store (with <code>/canonical</code>) — the durable record of sessions and activity.</div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>agent/activity-replication</code> <span class="lang go">Go</span></div>
+            <div class="role">Replication contract moving activity from runtimes into the canonical store.</div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>agent/activity-core</code> <span class="lang ts">TS</span></div>
+            <div class="role">Frontend activity engine that turns the activity stream into what the timeline renders.</div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>agent/claude-sdk-sidecar</code> <span class="lang ts">TS</span></div>
+            <div class="role">The NDJSON bridge process to the Claude Agent SDK — ships raw TypeScript, run via <code>node --experimental-strip-types</code>.</div>
+          </div>
+        </div>
+      </section>
 
-  <!-- ================= PACKAGES ================= -->
-  <section>
-    <p class="kicker">Shared boundaries</p>
-    <h2 class="display">The package map</h2>
-    <p class="sub">
-      <code>packages/*</code> is not a junk drawer: code stays local (desktop TS in
-      <code>apps/desktop</code>, daemon Go in <code>services/tuttid</code>) until a real
-      multi-consumer boundary exists. Groups are named by responsibility — the repo explicitly bans
-      <code>shared</code>/<code>common</code>/<code>utils</code>. Published packages use the
-      <code>@tutti-os/*</code> scope.
-    </p>
-    <div class="legend">
-      <span><span class="dot" style="background: var(--slate-soft); border: 1px solid var(--slate);"></span>Go module (in <code>go.work</code>)</span>
-      <span><span class="dot" style="background: var(--brass-soft); border: 1px solid var(--brass);"></span>TypeScript (pnpm workspace)</span>
-    </div>
-    <div class="pkgs">
-      <div class="pkg">
-        <div class="g"><code>ui/*</code></div>
-        <div class="role">Frontend foundations: the design system (tokens, primitives), host-agnostic i18n runtime, React hooks, rich text, notifications.</div>
-        <div class="chips"><span class="chip ts">system</span><span class="chip ts">i18n-runtime</span><span class="chip ts">react-hooks</span><span class="chip ts">rich-text</span><span class="chip ts">notifications</span></div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>events/*</code></div>
-        <div class="role">Schema-first business event protocol: JSON Schema sources generate typed contracts for both sides of the WebSocket.</div>
-        <div class="chips"><span class="chip ts">protocol</span><span class="chip ts">stream-core</span><span class="chip go">stream-go</span></div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>workbench/*</code></div>
-        <div class="role">The shared workbench: snapshot contract (TS is source of truth), Go persistence service, and reusable interaction surface — shared with sibling hosts.</div>
-        <div class="chips"><span class="chip ts">snapshot</span><span class="chip go">service</span><span class="chip ts">surface</span><span class="chip ts">host</span><span class="chip ts">launchpad</span></div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>workspace/*</code></div>
-        <div class="role">Workspace-domain surfaces: file semantics kernel (Go), file manager/preview/reference, the terminal contract + xterm surface, issues, app center.</div>
-        <div class="chips"><span class="chip go">files</span><span class="chip go">issues</span><span class="chip ts">terminal</span><span class="chip ts">file-manager</span><span class="chip ts">issue-manager</span><span class="chip ts">app-center</span><span class="chip ts">+4 more</span></div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>clients/*</code> &amp; <code>browser/*</code></div>
-        <div class="role">The generated daemon client every TS consumer shares, and the reusable Browser Node (webview mechanics without product globals).</div>
-        <div class="chips"><span class="chip ts">tuttid-ts</span><span class="chip ts">workbench-node</span></div>
-      </div>
-      <div class="pkg">
-        <div class="g"><code>auth/*</code>, <code>appcli/*</code>, <code>configs/*</code></div>
-        <div class="role">Auth bridge in both languages, the CLI capability core, and shared engineering config (tsconfig, prettier).</div>
-        <div class="chips"><span class="chip ts">bridge</span><span class="chip go">bridge-go</span><span class="chip go">appcli/core</span><span class="chip ts">tsconfig</span><span class="chip ts">prettier</span></div>
-      </div>
-    </div>
-  </section>
+      <p class="partline">Part III · Workspace &amp; entrypoints</p>
 
-  <!-- ================= CODEGEN ================= -->
-  <section>
-    <p class="kicker">Contract-first</p>
-    <h2 class="display">Generated code keeps the two languages in tune</h2>
-    <p class="sub">
-      Wherever Go and TypeScript must agree — or Tutti must agree with an upstream vendor — a single
-      source-of-truth generates the code, and a matching <code>check:*</code> guard fails CI if the
-      committed output drifts. Generated code is never hand-edited.
-    </p>
-    <div class="gen-wrap">
-      <table class="gen">
-        <thead>
-          <tr><th>Source of truth</th><th>Command</th><th>Generates</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><code>services/tuttid/api/openapi/tuttid.v1.yaml</code></td>
-            <td><code>pnpm generate:api</code></td>
-            <td>Daemon HTTP server code + the <code>@tutti-os/client-tuttid-ts</code> client. <em>All API changes start here.</em></td>
-          </tr>
-          <tr>
-            <td><code>packages/events/protocol</code> schemas</td>
-            <td><code>pnpm generate:event-protocol</code></td>
-            <td>Typed TS event contracts + Go transport registry for the business event stream.</td>
-          </tr>
-          <tr>
-            <td>OpenAI's Codex app-server JSON Schema <span class="mono">(vendored, commit-pinned)</span></td>
-            <td><code>go run ./…/codexproto/internal/codegen</code></td>
-            <td>Typed Go bindings for the Codex protocol; <code>check:codexproto-generated</code> re-fetches upstream and hash-compares.</td>
-          </tr>
-          <tr>
-            <td>Go provider registry <span class="mono">(providerregistry)</span></td>
-            <td><code>pnpm generate:agent-gui-provider-catalog</code></td>
-            <td>TS identity + capability catalogs for the GUI, cross-validated against the OpenAPI enums.</td>
-          </tr>
-          <tr>
-            <td><code>config/tutti.defaults.json</code></td>
-            <td><code>pnpm generate:defaults</code></td>
-            <td>Runtime defaults (state-dir names, transport, logging budgets) for both runtimes.</td>
-          </tr>
-          <tr>
-            <td><code>packages/workbench/snapshot</code> (TS)</td>
-            <td><code>pnpm sync:workbench-go-contract</code></td>
-            <td>The daemon's <code>WorkbenchSnapshot*</code> Go contract, synced from the TS types.</td>
-          </tr>
-          <tr>
-            <td>Builtin apps (e.g. onboarding)</td>
-            <td><code>pnpm generate:builtin-apps</code></td>
-            <td>Assets embedded into the tuttid binary — required before building or testing the daemon directly.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
+      <!-- ================= 11 TERMINAL ================= -->
+      <section id="terminal">
+        <p class="kicker"><span class="knum">11</span>Integrated terminal</p>
+        <h2 class="display">A real shell, owned by the daemon</h2>
+        <p class="sub">
+          The workspace terminal is not an emulated console: tuttid spawns a genuine PTY running your login
+          shell, keeps the session alive independently of any window, and streams it to xterm.js over a
+          dedicated per-session WebSocket. The shared experience lives in
+          <code>@tutti-os/workspace-terminal</code>; the execution substrate stays host-specific.
+        </p>
 
-  <!-- ================= GUARDRAILS ================= -->
-  <section>
-    <p class="kicker">Enforcement</p>
-    <h2 class="display">Boundaries that check themselves</h2>
-    <p class="sub">
-      The architecture above isn't aspirational — most of it is mechanically enforced by ratchet
-      scripts in <code>tools/scripts/</code>, selected automatically by the changed-aware gate.
-    </p>
-    <div class="guards">
-      <div class="guard">
-        <b><code>pnpm check:changed</code></b>
-        The single final gate: inspects your diff and selects the relevant tests, typecheck, lint, and
-        boundary checks. Runs as the pre-push hook with <code>--push-ready</code>.
-      </div>
-      <div class="guard">
-        <b><code>check:agent-host-boundary</code></b>
-        Keeps lifecycle orchestration out of adapters — the ratchet behind the Agent Host invariant.
-      </div>
-      <div class="guard">
-        <b><code>check:agent-provider-strategy-boundaries</code></b>
-        Scans tuttid, the daemon, and the desktop for provider-name branching; provider identity may
-        only appear in the registry, generated types, and the allowlisted adapter files.
-      </div>
-      <div class="guard">
-        <b><code>check:electron-runtime-boundaries</code></b> +
-        <b><code>check:renderer-boundaries</code></b>
-        Police main/preload runtime imports and renderer feature privacy (<code>services/internal/**</code>).
-      </div>
-      <div class="guard">
-        <b><code>check:ui-boundaries</code></b> + <b><code>check:i18n</code></b>
-        Ensure UI is built from <code>@tutti-os/ui-system</code> and that no user-visible copy bypasses i18n.
-      </div>
-      <div class="guard">
-        <b>Generated-code guards</b>
-        <code>check:api-generated</code>, <code>check:event-protocol-generated</code>,
-        <code>check:codexproto-generated</code>, <code>check:defaults-generated</code>,
-        <code>check:agent-gui-provider-catalog-generated</code>, <code>check:workbench-go-contract</code> — drift fails CI.
-      </div>
-      <div class="guard">
-        <b>Structural rules</b>
-        Business files ≤ 800 lines; conventional commits with DCO sign-off; docs in
-        <code>docs/architecture</code> &amp; <code>docs/conventions</code> updated in the same change.
-      </div>
-      <div class="guard">
-        <b>Blocking test gates</b>
-        <code>pnpm test:go</code> includes <code>packages/agent/daemon</code> as a blocking lane —
-        timing-sensitive lifecycle tests were stabilized with event-driven synchronization, and adding
-        retries to keep it green is explicitly forbidden.
-      </div>
-    </div>
-  </section>
+        <div class="board-wrap">
+          <div class="board">
+            <div class="col3">
+              <div class="node">
+                <div class="t">tuttid terminal service <span class="lang go">Go</span></div>
+                <div class="d">Spawns the PTY with <span class="mono">creack/pty</span> — your <span class="mono">$SHELL</span>, interactive, <span class="mono">TERM=xterm-256color</span>, system-proxy env injected. Owns session state and the output ring buffer.</div>
+              </div>
+              <div class="node">
+                <div class="t">The wire</div>
+                <div class="d">One WebSocket per session at <span class="mono">…/terminals/{id}/ws</span>. In: <span class="mono">input · resize · detach · ping</span>. Out: <span class="mono">output · state · gap · exit · metadata</span>. Close is deliberately an HTTP call, not a stream frame.</div>
+              </div>
+              <div class="node">
+                <div class="t">Renderer surface <span class="lang ts">TS</span></div>
+                <div class="d"><span class="mono">@xterm/xterm</span> v6 (+ fit, search, serialize, web-links), packaged in <span class="mono">packages/workspace/terminal</span>, registered by the desktop as workbench node type <span class="mono">"workspace-terminal"</span>.</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-  <footer>
-    <p>
-      Deeper reading, in the repo itself: the root <code>AGENTS.md</code> (and the closest area
-      <code>AGENTS.md</code> to whatever you're editing); <code>docs/architecture/README.md</code> —
-      notably <code>desktop-transport.md</code>, <code>business-event-stream.md</code>,
-      <code>agent-gui-node.md</code>, <code>claude-code-sdk-runtime.md</code>,
-      <code>agent-runtime-preparation.md</code>, <code>agent-extensions.md</code>, and
-      <code>workspace-terminal.md</code>; and <code>docs/conventions/README.md</code> for the rules
-      the checks enforce.
-    </p>
-  </footer>
+        <h3 class="h3sub">Session semantics worth knowing</h3>
+        <div class="guards">
+          <div class="guard">
+            <b>Sessions outlive the window, not the daemon</b>
+            Lifecycle: <code>created → starting → running → detached → exited</code>. Closing the window
+            detaches; the process keeps running in the daemon. Reattaching replays buffered output from your
+            last sequence number (~800k-char replay budget, with an explicit <code>gap</code> frame if
+            evicted). Sessions are in-memory only — a daemon restart ends them.
+          </div>
+          <div class="guard">
+            <b>One node = one session, forever</b>
+            The daemon <code>sessionId</code> is part of the workbench node's identity — you can't swap a
+            node onto a different process. New process means new node. Minimize hides; close terminates.
+          </div>
+          <div class="guard">
+            <b>A close guard that actually looks</b>
+            Before terminating, the daemon inspects the PTY's foreground process group
+            (<code>TIOCGPGRP</code> ioctl) and names the running command, so closing a busy terminal asks
+            for confirmation with real information.
+          </div>
+          <div class="guard">
+            <b>Agents use it — but don't run in it</b>
+            Provider login flows (<code>claude auth login</code>, <code>codex login</code>) open a terminal
+            node pre-typed with the command, auto-closed once the provider turns ready (kept open on
+            failure). But agent tool execution is a separate path — the terminal blocks in a conversation
+            timeline are read-only renderings, not live PTYs.
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 12 CLI ================= -->
+      <section id="cli">
+        <p class="kicker"><span class="knum">12</span>The terminal entrypoint</p>
+        <h2 class="display">A CLI that ships no commands</h2>
+        <p class="sub">
+          <code>tutti</code> (<code>apps/cli</code>, Go) is deliberately hollow: it compiles in
+          <em>zero</em> command definitions. Commands, their flags, their validation, and their
+          execution all live in the daemon — the "CLI capability protocol." The binary only discovers
+          the daemon, fetches a catalog, matches your input against it, and renders the result. New
+          commands appear without shipping a new CLI.
+        </p>
+
+        <div class="seq">
+          <div class="step">
+            <div>
+              <div class="what">Discover the daemon — never start it</div>
+              <div class="how">Reads the same <code>&lt;state-dir&gt;/run/tuttid.listener.json</code> the desktop handshake writes (address + bearer token; <code>~/.tutti</code> for <code>tutti</code>, <code>~/.tutti-dev</code> for <code>tutti-dev</code>). If it's missing, the CLI says "start the Tutti desktop app" — the desktop is the only daemon supervisor.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <div class="what">Fetch the command catalog</div>
+              <div class="how"><code>GET /v1/cli/capabilities</code> returns every command as data: id, path (<span class="mono">["agent","start"]</span>), summary, a JSON Schema for its input, output modes, and its source. Help text is rendered client-side from this catalog — the flags you see in <code>--help</code> are the schema.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <div class="what">Match, parse, validate — against data</div>
+              <div class="how">Longest path-prefix match picks the command; flags, required-ness, enums, and defaults all derive from the daemon-provided schema. The CLI has no opinion about what <code>--isolation worktree</code> means.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <div class="what">One POST, one response</div>
+              <div class="how"><code>POST /v1/cli/commands/{id}/invoke</code> — no streaming anywhere. The response is presentation-neutral output rendered as plain text, markdown, table, or JSON (<code>--json</code>). Long-running commands like <code>agent wait</code> simply block inside the single request (360-second client timeout).</div>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="h3sub">Two command surfaces, one wire</h3>
+        <div class="col2">
+          <div class="node">
+            <div class="t">Builtin providers <span class="p mono">services/tuttid/service/cli/providers/*</span></div>
+            <div class="d">Declared as typed <span class="mono">CommandSpec</span>s — the input schema is derived from Go structs. Today: <span class="mono">agent</span> (start/send/wait/respond/cancel/list/session-summary…), <span class="mono">issue</span> (+topics/tasks/runs), <span class="mono">app open</span>, <span class="mono">reference list</span>, <span class="mono">doctor ping</span>, and flag-gated <span class="mono">browser</span> and <span class="mono">computer</span> control.</div>
+          </div>
+          <div class="node">
+            <div class="t">Workspace-app commands <span class="p mono">tutti.app.cli.v1</span></div>
+            <div class="d">Any workspace app can declare commands in a <span class="mono">tutti.cli.json</span> manifest. The daemon activates them per workspace, ensures the app is running, guards reserved scopes (<span class="mono">agent · help · issue · status</span>), and forwards the invoke to the app's HTTP handler — via the shared, host-agnostic protocol library <span class="mono">packages/appcli/core</span>.</div>
+          </div>
+        </div>
+
+        <div class="guards" style="margin-top: 0.75rem;">
+          <div class="guard">
+            <b>The CLI's biggest user is agents</b>
+            The same binary is the substrate for agent-to-agent delegation (section 09): agents run
+            <code>agent start --agent-id</code>, <code>agent wait</code>, <code>agent session-summary</code>
+            inside their own shells, with context carried by env (<code>TUTTI_AGENT_SESSION_ID</code>,
+            <code>TUTTI_WORKSPACE_ID</code>). Compatibility commands with
+            <code>visibility: "integration"</code> stay hidden from human help output entirely.
+          </div>
+          <div class="guard">
+            <b>Distribution — a shim, not an installer</b>
+            The binary ships inside the desktop bundle. On boot, the main process writes a wrapper shim
+            to <code>&lt;state-dir&gt;/bin/tutti</code> (exporting <code>TUTTI_STATE_DIR</code>) and links
+            it into the first writable PATH dir (<code>~/.local/bin</code>) — refusing to overwrite any
+            command it doesn't own. Dev builds install a parallel <code>tutti-dev</code> that targets
+            <code>~/.tutti-dev</code>.
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 13 PACKAGES ================= -->
+      <section id="packages">
+        <p class="kicker"><span class="knum">13</span>Shared boundaries</p>
+        <h2 class="display">The package map</h2>
+        <p class="sub">
+          <code>packages/*</code> is not a junk drawer: code stays local (desktop TS in
+          <code>apps/desktop</code>, daemon Go in <code>services/tuttid</code>) until a real
+          multi-consumer boundary exists. Groups are named by responsibility — the repo explicitly bans
+          <code>shared</code>/<code>common</code>/<code>utils</code>. Published packages use the
+          <code>@tutti-os/*</code> scope.
+        </p>
+        <div class="legend">
+          <span><span class="dot" style="background: var(--slate-soft); border: 1px solid var(--slate);"></span>Go module (in <code>go.work</code>)</span>
+          <span><span class="dot" style="background: var(--brass-soft); border: 1px solid var(--brass);"></span>TypeScript (pnpm workspace)</span>
+        </div>
+        <div class="pkgs">
+          <div class="pkg">
+            <div class="g"><code>ui/*</code></div>
+            <div class="role">Frontend foundations: the design system (tokens, primitives), host-agnostic i18n runtime, React hooks, rich text, notifications.</div>
+            <div class="chips"><span class="chip ts">system</span><span class="chip ts">i18n-runtime</span><span class="chip ts">react-hooks</span><span class="chip ts">rich-text</span><span class="chip ts">notifications</span></div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>events/*</code></div>
+            <div class="role">Schema-first business event protocol: JSON Schema sources generate typed contracts for both sides of the WebSocket.</div>
+            <div class="chips"><span class="chip ts">protocol</span><span class="chip ts">stream-core</span><span class="chip go">stream-go</span></div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>workbench/*</code></div>
+            <div class="role">The shared workbench: snapshot contract (TS is source of truth), Go persistence service, and reusable interaction surface — shared with sibling hosts.</div>
+            <div class="chips"><span class="chip ts">snapshot</span><span class="chip go">service</span><span class="chip ts">surface</span><span class="chip ts">host</span><span class="chip ts">launchpad</span></div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>workspace/*</code></div>
+            <div class="role">Workspace-domain surfaces: file semantics kernel (Go), file manager/preview/reference, the terminal contract + xterm surface, issues, app center.</div>
+            <div class="chips"><span class="chip go">files</span><span class="chip go">issues</span><span class="chip ts">terminal</span><span class="chip ts">file-manager</span><span class="chip ts">issue-manager</span><span class="chip ts">app-center</span><span class="chip ts">+4 more</span></div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>clients/*</code> &amp; <code>browser/*</code></div>
+            <div class="role">The generated daemon client every TS consumer shares, and the reusable Browser Node (webview mechanics without product globals).</div>
+            <div class="chips"><span class="chip ts">tuttid-ts</span><span class="chip ts">workbench-node</span></div>
+          </div>
+          <div class="pkg">
+            <div class="g"><code>auth/*</code>, <code>appcli/*</code>, <code>configs/*</code></div>
+            <div class="role">Auth bridge in both languages, the CLI capability core, and shared engineering config (tsconfig, prettier).</div>
+            <div class="chips"><span class="chip ts">bridge</span><span class="chip go">bridge-go</span><span class="chip go">appcli/core</span><span class="chip ts">tsconfig</span><span class="chip ts">prettier</span></div>
+          </div>
+        </div>
+      </section>
+
+      <p class="partline">Part IV · Engineering system</p>
+
+      <!-- ================= 14 CODEGEN ================= -->
+      <section id="codegen">
+        <p class="kicker"><span class="knum">14</span>Contract-first</p>
+        <h2 class="display">Generated code keeps the two languages in tune</h2>
+        <p class="sub">
+          Wherever Go and TypeScript must agree — or Tutti must agree with an upstream vendor — a single
+          source-of-truth generates the code, and a matching <code>check:*</code> guard fails CI if the
+          committed output drifts. Generated code is never hand-edited.
+        </p>
+        <div class="gen-wrap">
+          <table class="gen">
+            <thead>
+              <tr><th>Source of truth</th><th>Command</th><th>Generates</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>services/tuttid/api/openapi/tuttid.v1.yaml</code></td>
+                <td><code>pnpm generate:api</code></td>
+                <td>Daemon HTTP server code + the <code>@tutti-os/client-tuttid-ts</code> client. <em>All API changes start here.</em></td>
+              </tr>
+              <tr>
+                <td><code>packages/events/protocol</code> schemas</td>
+                <td><code>pnpm generate:event-protocol</code></td>
+                <td>Typed TS event contracts + Go transport registry for the business event stream.</td>
+              </tr>
+              <tr>
+                <td>OpenAI's Codex app-server JSON Schema <span class="mono">(vendored, commit-pinned)</span></td>
+                <td><code>go run ./…/codexproto/internal/codegen</code></td>
+                <td>Typed Go bindings for the Codex protocol; <code>check:codexproto-generated</code> re-fetches upstream and hash-compares.</td>
+              </tr>
+              <tr>
+                <td>Go provider registry <span class="mono">(providerregistry)</span></td>
+                <td><code>pnpm generate:agent-gui-provider-catalog</code></td>
+                <td>TS identity + capability catalogs for the GUI, cross-validated against the OpenAPI enums.</td>
+              </tr>
+              <tr>
+                <td><code>config/tutti.defaults.json</code></td>
+                <td><code>pnpm generate:defaults</code></td>
+                <td>Runtime defaults (state-dir names, transport, logging budgets) for both runtimes.</td>
+              </tr>
+              <tr>
+                <td><code>packages/workbench/snapshot</code> (TS)</td>
+                <td><code>pnpm sync:workbench-go-contract</code></td>
+                <td>The daemon's <code>WorkbenchSnapshot*</code> Go contract, synced from the TS types.</td>
+              </tr>
+              <tr>
+                <td>Builtin apps (e.g. onboarding)</td>
+                <td><code>pnpm generate:builtin-apps</code></td>
+                <td>Assets embedded into the tuttid binary — required before building or testing the daemon directly.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ================= 15 GUARDRAILS ================= -->
+      <section id="guardrails">
+        <p class="kicker"><span class="knum">15</span>Enforcement</p>
+        <h2 class="display">Boundaries that check themselves</h2>
+        <p class="sub">
+          The architecture above isn't aspirational — most of it is mechanically enforced by ratchet
+          scripts in <code>tools/scripts/</code>, selected automatically by the changed-aware gate.
+        </p>
+        <div class="guards">
+          <div class="guard">
+            <b><code>pnpm check:changed</code></b>
+            The single final gate: inspects your diff and selects the relevant tests, typecheck, lint, and
+            boundary checks. Runs as the pre-push hook with <code>--push-ready</code>.
+          </div>
+          <div class="guard">
+            <b><code>check:agent-host-boundary</code></b>
+            Keeps lifecycle orchestration out of adapters — the ratchet behind the Agent Host invariant.
+          </div>
+          <div class="guard">
+            <b><code>check:agent-provider-strategy-boundaries</code></b>
+            Scans tuttid, the daemon, and the desktop for provider-name branching; provider identity may
+            only appear in the registry, generated types, and the allowlisted adapter files.
+          </div>
+          <div class="guard">
+            <b><code>check:electron-runtime-boundaries</code></b> +
+            <b><code>check:renderer-boundaries</code></b>
+            Police main/preload runtime imports and renderer feature privacy (<code>services/internal/**</code>).
+          </div>
+          <div class="guard">
+            <b><code>check:ui-boundaries</code></b> + <b><code>check:i18n</code></b>
+            Ensure UI is built from <code>@tutti-os/ui-system</code> and that no user-visible copy bypasses i18n.
+          </div>
+          <div class="guard">
+            <b>Generated-code guards</b>
+            <code>check:api-generated</code>, <code>check:event-protocol-generated</code>,
+            <code>check:codexproto-generated</code>, <code>check:defaults-generated</code>,
+            <code>check:agent-gui-provider-catalog-generated</code>, <code>check:workbench-go-contract</code> — drift fails CI.
+          </div>
+          <div class="guard">
+            <b>Structural rules</b>
+            Business files ≤ 800 lines; conventional commits with DCO sign-off; docs in
+            <code>docs/architecture</code> &amp; <code>docs/conventions</code> updated in the same change.
+          </div>
+          <div class="guard">
+            <b>Blocking test gates</b>
+            <code>pnpm test:go</code> includes <code>packages/agent/daemon</code> as a blocking lane —
+            timing-sensitive lifecycle tests were stabilized with event-driven synchronization, and adding
+            retries to keep it green is explicitly forbidden.
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          Deeper reading, in the repo itself: the root <code>AGENTS.md</code> (and the closest area
+          <code>AGENTS.md</code> to whatever you're editing); <code>docs/architecture/README.md</code> —
+          notably <code>desktop-transport.md</code>, <code>business-event-stream.md</code>,
+          <code>agent-gui-node.md</code>, <code>claude-code-sdk-runtime.md</code>,
+          <code>agent-runtime-preparation.md</code>, <code>agent-extensions.md</code>, and
+          <code>workspace-terminal.md</code>; and <code>docs/conventions/README.md</code> for the rules
+          the checks enforce.
+        </p>
+      </footer>
+    </main>
+  </div>
 </div>
+
+<script>
+  (() => {
+    const links = Array.from(document.querySelectorAll(".toc a[href^='#']"));
+    if (!links.length) return;
+    const entries = links
+      .map((link) => ({ link, el: document.getElementById(link.getAttribute("href").slice(1)) }))
+      .filter((x) => x.el);
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      const y = window.scrollY + 140;
+      let current = entries[0];
+      for (const e of entries) {
+        if (e.el.offsetTop <= y) current = e;
+      }
+      entries.forEach((e) => e.link.classList.toggle("active", e === current));
+    };
+    const request = () => {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+    };
+    addEventListener("scroll", request, { passive: true });
+    addEventListener("resize", request, { passive: true });
+    update();
+  })();
+</script>
 </body>
 </html>
