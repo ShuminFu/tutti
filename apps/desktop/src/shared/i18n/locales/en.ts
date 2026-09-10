@@ -439,12 +439,6 @@ export const en = {
       runningCount: "{{count}} running",
       waitingCount: "{{count}} waiting"
     },
-    feedbackGroup: {
-      instruction: "Scan with WeChat",
-      qrAlt: "Feedback group QR code",
-      trigger: "Join Feedback Group",
-      triggerAria: "Join feedback group"
-    },
     externalImport: {
       archiveEmpty:
         "No supported conversations were found in this Claude export",
@@ -984,9 +978,7 @@ export const en = {
       about: {
         appName: "Tutti",
         developerModeEnabled: "Developer mode is now on",
-        githubAction: "GitHub",
-        versionLabel: "Version",
-        websiteAction: "Website"
+        versionLabel: "Version"
       },
       account: {
         description: "Sign in to use your Tutti account on this device.",

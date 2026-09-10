@@ -14,7 +14,6 @@ import { cn } from "@renderer/lib/format";
 import { ExternalAgentSessionImportPrompt } from "./ExternalAgentSessionImportPrompt";
 import { ExternalAgentSessionImportWizard } from "./ExternalAgentSessionImportWizard";
 import { WorkspaceAccountMenu } from "./WorkspaceAccountMenu";
-import { WorkspaceFeedbackGroupPopover } from "./WorkspaceFeedbackGroupPopover";
 import { WorkspaceAgentMessageCenterAction } from "./WorkspaceAgentMessageCenterAction";
 import {
   WorkspaceHelpMenu,
@@ -169,7 +168,6 @@ export function WorkspaceChrome({
           }
         >
           {headerSlot ? <div className="min-w-0">{headerSlot}</div> : null}
-          <WorkspaceFeedbackGroupPopover />
           <WorkspaceAgentMessageCenterAction
             launchNode={launchNode}
             open={messageCenterOpen}

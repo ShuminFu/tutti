@@ -428,12 +428,6 @@ export const zhCN = {
       runningCount: "{{count}} 个运行中",
       waitingCount: "{{count}} 个等待"
     },
-    feedbackGroup: {
-      instruction: "请使用微信扫码",
-      qrAlt: "反馈群二维码",
-      trigger: "加入反馈群",
-      triggerAria: "加入反馈群"
-    },
     externalImport: {
       archiveEmpty: "这个 Claude 导出中没有找到受支持的对话",
       archiveGroupLabel: "Claude 对话",
@@ -924,9 +918,7 @@ export const zhCN = {
       about: {
         appName: "Tutti",
         developerModeEnabled: "开发者模式已打开",
-        githubAction: "GitHub",
-        versionLabel: "版本",
-        websiteAction: "官方网站"
+        versionLabel: "版本"
       },
       account: {
         description: "登录后可在此设备使用你的 Tutti 账号",

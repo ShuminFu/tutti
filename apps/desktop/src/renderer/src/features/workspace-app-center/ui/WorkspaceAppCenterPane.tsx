@@ -73,8 +73,7 @@ const communityAppDeveloperOverrides: Record<
   NonNullable<WorkspaceAppManifest["authors"]>[number]
 > = {
   "group-chat": {
-    name: "svenzeng",
-    url: "https://github.com/tutti-os/tutti"
+    name: "svenzeng"
   }
 };
 

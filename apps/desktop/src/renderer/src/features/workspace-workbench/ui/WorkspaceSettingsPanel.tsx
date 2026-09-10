@@ -33,7 +33,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  GitHubBrandIcon,
   ImportLinedIcon,
   Input,
   LoadingIcon,
@@ -49,8 +48,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  UploadIcon,
-  WebIcon
+  UploadIcon
 } from "@tutti-os/ui-system";
 import { useDesktopPreferencesService } from "@renderer/features/desktop-preferences/ui/useDesktopPreferencesService";
 import { useTranslation } from "@renderer/i18n";
@@ -147,8 +145,6 @@ const computerUseOperationSettleMs = 280;
 const computerUseAutoCheckIntervalMs = 1_500;
 const computerUseAutoCheckMaxMs = 120_000;
 const computerUseFocusRefreshMinIntervalMs = 5_000;
-const tuttiWebsiteUrl = "https://tutti.sh/";
-const tuttiGitHubUrl = "https://github.com/tutti-os/tutti";
 const tuttiDesktopIconUrl = new URL(
   "../../../../../../build/icon.png",
   import.meta.url
@@ -2752,19 +2748,11 @@ function WorkspaceAboutSettingsSection({
   onVersionTap: () => void;
 }) {
   const { t } = useTranslation();
-  const hostService = useWorkspaceWorkbenchHostService();
   const logs = developerLogs.logs;
   const desktopVersion =
     developerLogs.loading && logs === null
       ? t("common.loading")
       : (logs?.desktopVersion ?? "0.0.0");
-
-  const openExternal = useCallback(
-    (url: string) => {
-      void hostService.openExternal(url);
-    },
-    [hostService]
-  );
 
   return (
     <div className="flex w-full flex-col gap-4 px-5 pb-5 pt-7">
@@ -2793,41 +2781,7 @@ function WorkspaceAboutSettingsSection({
           </span>
         </button>
       </div>
-
-      <div className="flex flex-wrap gap-2 border-t border-[var(--border-1)] pt-4">
-        <AboutActionButton
-          icon={<WebIcon className="size-3.5" />}
-          label={t("workspace.settings.about.websiteAction")}
-          onClick={() => openExternal(tuttiWebsiteUrl)}
-        />
-        <AboutActionButton
-          icon={<GitHubBrandIcon className="size-3.5" />}
-          label={t("workspace.settings.about.githubAction")}
-          onClick={() => openExternal(tuttiGitHubUrl)}
-        />
-      </div>
     </div>
-  );
-}
-
-function AboutActionButton({
-  icon,
-  label,
-  onClick
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-[var(--border-1)] bg-[var(--background-fronted)] px-3 text-[13px] font-semibold text-[var(--text-secondary)] outline-none transition-colors duration-150 hover:bg-[var(--transparency-hover)] hover:text-[var(--text-primary)] focus-visible:border-[var(--border-focus)]"
-      type="button"
-      onClick={onClick}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
   );
 }
 
