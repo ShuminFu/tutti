@@ -194,7 +194,10 @@ func (gateway *Gateway) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 		http.Error(writer, "connector MCP backend binding is invalid", http.StatusServiceUnavailable)
 		return
 	}
-	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxyTarget := *target
+	proxyTarget.Path = ""
+	proxyTarget.RawPath = ""
+	proxy := httputil.NewSingleHostReverseProxy(&proxyTarget)
 	originalDirector := proxy.Director
 	proxy.Director = func(outbound *http.Request) {
 		originalDirector(outbound)

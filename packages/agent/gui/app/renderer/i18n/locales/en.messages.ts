@@ -19,6 +19,8 @@ export const enMessages = {
   agentSessionTitleTooLongWithoutLimit: "Session title is too long.",
   agentPermissionModeAppliesNextTurn:
     "Permission mode will apply starting with your next message.",
+  agentFastModeFallbackToStandard:
+    "Fast mode is not supported by the current model. Standard mode is now in use.",
   agentThisSessionMentionLabel: "this session",
   terminalLaunchFailed: "Terminal launch failed: {{message}}",
   fallbackTerminalFailed: "Fallback terminal launch also failed: {{message}}",

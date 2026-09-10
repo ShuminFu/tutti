@@ -251,6 +251,7 @@ func (c *standardACPConnection) Send(data []byte) error {
 				c.setConfigOptionSnapshots = append(c.setConfigOptionSnapshots, maps.Clone(request.Params))
 			}
 			rejectModelValue := c.rejectModelValue
+			rejectConfigOptionID := c.rejectConfigOptionID
 			c.mu.Unlock()
 			if rejectModelValue != "" && request.Params != nil {
 				configID, _ := request.Params["configId"].(string)
@@ -267,6 +268,18 @@ func (c *standardACPConnection) Send(data []byte) error {
 					})
 					return nil
 				}
+			}
+			if rejectConfigOptionID != "" && request.Params != nil && request.Params["configId"] == rejectConfigOptionID {
+				c.sendJSON(map[string]any{
+					"jsonrpc": "2.0",
+					"id":      message.ID,
+					"error": &acpError{
+						Code:    -32603,
+						Message: "Internal error",
+						Data:    json.RawMessage(`{"details":"Unknown config option: ` + rejectConfigOptionID + `"}`),
+					},
+				})
+				return nil
 			}
 			c.sendJSON(map[string]any{
 				"jsonrpc": "2.0",

@@ -383,6 +383,108 @@ describe("useAgentGUIComposerSettingsActions", () => {
     expect(onDataChange).not.toHaveBeenCalled();
   });
 
+  it("notifies after an active Fast selection falls back to Standard", async () => {
+    const settlers = new Map<
+      string,
+      (value: {
+        agentSessionId: string;
+        session: ReturnType<typeof normalizeAgentActivitySession>;
+      }) => void
+    >();
+    const session = (speed: "fast" | "standard") =>
+      normalizeAgentActivitySession({
+        activeTurnId: null,
+        agentSessionId: "session-1",
+        agentTargetId: "local:claude-code",
+        cwd: "/workspace",
+        latestTurnInteractions: [],
+        pendingInteractions: [],
+        provider: "claude-code",
+        settings: { speed },
+        title: "Session 1",
+        workspaceId: "workspace-1"
+      });
+    const sessionEngine = createAgentSessionEngine({
+      clock: { nowUnixMs: () => 1 },
+      commandPort: createTestEngineCommandPort({
+        execute: vi.fn((command) =>
+          command.type === "session/updateSettings"
+            ? new Promise((resolve) => settlers.set(command.commandId, resolve))
+            : Promise.resolve(undefined)
+        )
+      }),
+      identity: { origin: "test", workspaceId: "workspace-1" },
+      scheduler: { schedule: () => ({ cancel() {} }) }
+    });
+    sessionEngine.dispatch({
+      type: "session/snapshotReceived",
+      sessions: [session("standard")]
+    });
+    const data: AgentGUINodeData = {
+      agentTargetId: "local:claude-code",
+      lastActiveAgentSessionId: "session-1",
+      provider: "claude-code"
+    };
+    const onShowMessage = vi.fn();
+    const rendered = renderHook(() =>
+      useAgentGUIComposerSettingsActions({
+        activation: {
+          stateFor: vi.fn(() => "active" as const)
+        } as unknown as ReturnType<typeof useAgentGUIActivation>,
+        activeCanonicalComposerSettings: { speed: "standard" },
+        activeConversationIdRef: { current: "session-1" },
+        activeEngineActiveTurn: null,
+        agentActivityRuntime: {
+          getSnapshot: () => ({})
+        } as unknown as AgentGUIRuntime,
+        composerSupportPermissionModeChangeDeferred: false,
+        dataRef: { current: data },
+        defaultReasoningEffort: null,
+        draftSettingsBySessionIdRef: { current: {} },
+        isMountedRef: { current: true },
+        loadDraftComposerOptions: vi.fn(),
+        onComposerDefaultsAuthorityReloadedRef:
+          createComposerDefaultsAuthorityReconcilerRef(),
+        onDataChangeRef: { current: vi.fn() },
+        onRememberComposerDefaultsRef: { current: undefined },
+        onShowMessageRef: { current: onShowMessage },
+        reloadComposerOptionsForTarget: vi.fn(async () => {}),
+        selectedComposerTargetDataRef: {
+          current: {
+            agentTargetId: "local:claude-code",
+            data,
+            provider: "claude-code",
+            targetId: "local:claude-code"
+          }
+        },
+        sessionEngine,
+        setDraftSettingsBySessionId: vi.fn(),
+        updateComposerSettingsRef: { current: vi.fn() },
+        workspaceId: "workspace-1"
+      })
+    );
+
+    act(() =>
+      rendered.result.current.updateComposerSettings({ speed: "fast" })
+    );
+    const commandId = selectEngineSessionSettingsUpdate(
+      sessionEngine.getSnapshot(),
+      "session-1"
+    )?.commandId;
+    expect(commandId).toBeTruthy();
+    await act(async () => {
+      settlers.get(commandId!)?.({
+        agentSessionId: "session-1",
+        session: session("standard")
+      });
+      await Promise.resolve();
+    });
+    expect(onShowMessage).toHaveBeenCalledWith(
+		"Fast mode is not supported by the current model. Standard mode is now in use.",
+      "warning"
+    );
+  });
+
   it("reconciles A to B to A by exact field generation", async () => {
     const sessionEngine = createAgentSessionEngine({
       clock: { nowUnixMs: () => 1 },

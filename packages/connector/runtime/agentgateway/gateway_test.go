@@ -24,6 +24,10 @@ func newBackendStub(t *testing.T, token, response string) *backendStub {
 	t.Helper()
 	backend := &backendStub{token: token}
 	backend.server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != connectorMCPPath {
+			http.NotFound(writer, request)
+			return
+		}
 		if request.Header.Get("Authorization") != "Bearer "+token {
 			http.Error(writer, "invalid backend authorization", http.StatusUnauthorized)
 			return

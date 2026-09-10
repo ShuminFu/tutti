@@ -74,6 +74,58 @@ func TestControllerUpdateSettingsAppliesOpenProviderPermissionMode(t *testing.T)
 	}
 }
 
+func TestControllerUpdateSettingsPersistsStandardAfterRuntimeFastFallback(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Claude Agent", "claude-session-controller-speed")
+	transport.conn.configOptions = []map[string]any{{
+		"id":           "fast",
+		"currentValue": "off",
+		"options": []any{
+			map[string]any{"name": "On", "value": "on"},
+			map[string]any{"name": "Off", "value": "off"},
+		},
+	}}
+	adapter, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:    "acp:claude",
+		Name:        "claude-acp",
+		DisplayName: "Claude Agent",
+		Command:     []string{"claude-agent-acp"},
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	controller := NewController([]Adapter{adapter}, nil)
+	started, err := controller.Start(context.Background(), StartInput{
+		RoomID:         "room-1",
+		AgentSessionID: "agent-session-speed",
+		Provider:       "acp:claude",
+		CWD:            "/workspace",
+		Title:          "Claude Agent",
+		Settings:       &SessionSettings{Speed: sessionSpeedStandard},
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	transport.conn.rejectConfigOptionID = "fast"
+
+	updated, err := controller.UpdateSettings(context.Background(), UpdateSettingsInput{
+		RoomID:         "room-1",
+		AgentSessionID: started.Session.AgentSessionID,
+		Settings:       SessionSettingsPatch{Speed: stringPtr(sessionSpeedFast)},
+	})
+	if err != nil {
+		t.Fatalf("UpdateSettings must downgrade, got %v", err)
+	}
+	if updated.Settings.Speed != sessionSpeedStandard {
+		t.Fatalf("updated speed = %q, want standard fallback", updated.Settings.Speed)
+	}
+	session, ok := controller.Session("room-1", started.Session.AgentSessionID)
+	if !ok || session.Settings == nil || session.Settings.Speed != sessionSpeedStandard {
+		t.Fatalf("stored session = %#v, want standard fallback", session)
+	}
+}
+
 //nolint:unused // Retain the migrated config-option fixture for focused controller tests.
 func configOptionDescriptorValues(descriptors []map[string]any, configID string) []string {
 	for _, descriptor := range descriptors {

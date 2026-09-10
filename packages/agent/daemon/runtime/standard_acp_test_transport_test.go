@@ -97,6 +97,7 @@ type standardACPConnection struct {
 	loadSessionError              *acpError
 	closeSessionError             *acpError
 	rejectModelValue              string
+	rejectConfigOptionID          string
 	supportsLoadSession           bool
 	supportsHTTPMCP               bool
 	supportsCloseSession          bool

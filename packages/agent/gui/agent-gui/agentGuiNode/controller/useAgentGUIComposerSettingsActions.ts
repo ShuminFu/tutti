@@ -1,11 +1,12 @@
 import {
   selectEngineSession,
+  selectEngineSessionSettingsUpdate,
   type AgentActivityComposerOptions,
   type AgentActivityTurn,
   type AgentSessionEngine
 } from "@tutti-os/agent-activity-core";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { AgentGUIRuntime } from "../../../agentActivityRuntime";
 import { translate } from "../../../i18n/index";
 import type {
@@ -133,6 +134,38 @@ export function useAgentGUIComposerSettingsActions(
   const composerDefaultsLedgerRef = useRef(
     createAgentGUIComposerDefaultsLedger()
   );
+  const pendingFastFallbackCommandRef = useRef<string | null>(null);
+  useEffect(() => {
+    return sessionEngine.subscribe((state) => {
+      const commandId = pendingFastFallbackCommandRef.current;
+      if (!commandId) return;
+      const agentSessionId = activeConversationIdRef.current;
+      const update = agentSessionId
+        ? selectEngineSessionSettingsUpdate(state, agentSessionId)
+        : null;
+      if (update?.commandId === commandId) {
+		if (
+			update.status === "inFlight" ||
+			update.status === "waitingForPromptSend" ||
+			update.status === "waitingForRuntime"
+		) {
+			return;
+		}
+		pendingFastFallbackCommandRef.current = null;
+		return;
+	  }
+      pendingFastFallbackCommandRef.current = null;
+      const speed = agentSessionId
+        ? selectEngineSession(state, agentSessionId)?.settings?.speed
+        : null;
+      if (speed === "standard") {
+        onShowMessageRef.current?.(
+          translate("messages.agentFastModeFallbackToStandard"),
+          "warning"
+        );
+      }
+    });
+  }, [activeConversationIdRef, onShowMessageRef, sessionEngine]);
   const retireAcknowledgedDefaultsForRead = useCallback(
     (
       receipt: AgentGUIComposerDefaultsAuthorityReadReceipt | null,
@@ -475,6 +508,13 @@ export function useAgentGUIComposerSettingsActions(
             agentSessionId,
             settings: { ...sessionSettingsPatch }
           });
+          if (sessionSettingsPatch.speed === "fast") {
+            pendingFastFallbackCommandRef.current =
+              selectEngineSessionSettingsUpdate(
+                sessionEngine.getSnapshot(),
+                agentSessionId
+              )?.commandId ?? null;
+          }
         }
         return;
       }

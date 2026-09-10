@@ -79,6 +79,110 @@ func TestStandardACPAdapterMapsCanonicalSpeedToAdvertisedFastModeValues(t *testi
 	}
 }
 
+func TestStandardACPAdapterContinuesWhenAdvertisedSpeedIsRejected(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Claude Agent", "claude-session-speed-rejected")
+	transport.conn.configOptions = []map[string]any{{
+		"id":           "fast",
+		"currentValue": "off",
+		"options": []any{
+			map[string]any{"name": "On", "value": "on"},
+			map[string]any{"name": "Off", "value": "off"},
+		},
+	}}
+	transport.conn.rejectConfigOptionID = "fast"
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:    "acp:claude",
+		Name:        "claude-acp",
+		DisplayName: "Claude Agent",
+		Command:     []string{"claude-agent-acp"},
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	adapter := adapterRaw.(*standardACPAdapter)
+	session := standardTestSession("acp:claude")
+	session.Settings = &SessionSettings{Speed: sessionSpeedFast}
+
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start must continue with standard speed: %v", err)
+	}
+	if calls := transport.conn.setConfigOptionCalls(); len(calls) != 1 || calls[0]["configId"] != "fast" {
+		t.Fatalf("config option calls = %#v, want one best-effort fast update", calls)
+	}
+	if got := adapter.SessionState(session).Settings.Speed; got != sessionSpeedStandard {
+		t.Fatalf("speed = %q, want standard fallback", got)
+	}
+}
+
+func TestStandardACPAdapterRuntimeFastRejectionFallsBackToStandard(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Claude Agent", "claude-session-speed-runtime-rejected")
+	transport.conn.configOptions = []map[string]any{{
+		"id":           "fast",
+		"currentValue": "off",
+		"options": []any{
+			map[string]any{"name": "On", "value": "on"},
+			map[string]any{"name": "Off", "value": "off"},
+		},
+	}}
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:    "acp:claude",
+		Name:        "claude-acp",
+		DisplayName: "Claude Agent",
+		Command:     []string{"claude-agent-acp"},
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	adapter := adapterRaw.(*standardACPAdapter)
+	session := standardTestSession("acp:claude")
+	session.Settings = &SessionSettings{Speed: sessionSpeedStandard}
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	transport.conn.rejectConfigOptionID = "fast"
+
+	if err := adapter.ApplySessionSettings(context.Background(), session, SessionSettingsPatch{Speed: stringPtr(sessionSpeedFast)}); err != nil {
+		t.Fatalf("ApplySessionSettings must downgrade, got %v", err)
+	}
+	if got := adapter.SessionState(session).Settings.Speed; got != sessionSpeedStandard {
+		t.Fatalf("speed = %q, want standard fallback", got)
+	}
+}
+
+func TestStandardACPAdapterRuntimeSpeedMissingDoesNotSendConfigOption(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Claude Agent", "claude-session-speed-missing")
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:    "acp:claude",
+		Name:        "claude-acp",
+		DisplayName: "Claude Agent",
+		Command:     []string{"claude-agent-acp"},
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	adapter := adapterRaw.(*standardACPAdapter)
+	session := standardTestSession("acp:claude")
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	if err := adapter.ApplySessionSettings(context.Background(), session, SessionSettingsPatch{Speed: stringPtr(sessionSpeedFast)}); err != nil {
+		t.Fatalf("ApplySessionSettings: %v", err)
+	}
+	if calls := transport.conn.setConfigOptionCalls(); len(calls) != 0 {
+		t.Fatalf("config option calls = %#v, want none when fast is not advertised", calls)
+	}
+	if got := adapter.SessionState(session).Settings.Speed; got != sessionSpeedStandard {
+		t.Fatalf("speed = %q, want standard fallback", got)
+	}
+}
+
 func TestStandardACPAdapterStartAppliesThoughtLevelConfigOption(t *testing.T) {
 	t.Parallel()
 

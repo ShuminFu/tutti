@@ -67,6 +67,12 @@ func (c *Controller) UpdateSettings(ctx context.Context, input UpdateSettingsInp
 			return UpdateSettingsResult{}, err
 		}
 	}
+	if stateAdapter, ok := adapter.(StateAdapter); ok {
+		if state := stateAdapter.SessionState(nextSession); state.Settings != nil {
+			nextSession.Settings = cloneSessionSettings(*state.Settings)
+			settings = *nextSession.Settings
+		}
+	}
 	c.store(nextSession)
 	return UpdateSettingsResult{
 		AgentSessionID: nextSession.AgentSessionID,

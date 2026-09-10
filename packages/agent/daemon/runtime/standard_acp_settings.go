@@ -108,6 +108,9 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 	settings := session.SettingsValue()
 	supported := acpConfigOptionIDs(startResult)
 	modelsAPI := acpModelsResultPresent(startResult)
+	if settings.Speed == sessionSpeedFast && !supported["fast"] {
+		a.updateSessionConfigOption(session.AgentSessionID, "fast", sessionSpeedStandard)
+	}
 	if len(supported) == 0 && !modelsAPI {
 		a.logStandardACPStartupDiagnostics("config_options.skipped", map[string]any{
 			"room_id":             session.RoomID,
@@ -175,9 +178,11 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 	}
 	if speed := acpSpeedConfigOptionValue(startResult, settings.Speed); speed != "" && supported["fast"] {
 		if err := a.setSessionConfigOption(ctx, client, session, "fast", speed); err != nil {
-			return fmt.Errorf("agent session ACP fast configuration failed: %w", err)
+			a.logSpeedConfigFallback(session, "startup", speed, err)
+			a.updateSessionConfigOption(session.AgentSessionID, "fast", acpSpeedConfigOptionValue(startResult, sessionSpeedStandard))
+		} else {
+			a.updateSessionConfigOption(session.AgentSessionID, "fast", speed)
 		}
-		a.updateSessionConfigOption(session.AgentSessionID, "fast", speed)
 	}
 	a.logStandardACPStartupDiagnostics("config_options.succeeded", map[string]any{
 		"room_id":             session.RoomID,
@@ -185,6 +190,27 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 		"provider_session_id": session.ProviderSessionID,
 	})
 	return nil
+}
+
+func (a *standardACPAdapter) logSpeedConfigFallback(
+	session Session,
+	phase string,
+	value string,
+	err error,
+) {
+	slog.Warn("agent session ACP fast configuration rejected; using standard mode",
+		"event", "agent_session.acp.speed.fallback",
+		"provider", a.config.provider,
+		"adapter", a.config.adapterName,
+		"room_id", session.RoomID,
+		"agent_session_id", session.AgentSessionID,
+		"provider_session_id", session.ProviderSessionID,
+		"phase", phase,
+		"config_id", "fast",
+		"value", value,
+		"fallback", sessionSpeedStandard,
+		"error", err.Error(),
+	)
 }
 
 func (a *standardACPAdapter) logStartupConfigOptionRejected(
@@ -545,11 +571,22 @@ func (a *standardACPAdapter) ApplySessionSettings(
 	}
 
 	if patch.Speed != nil {
-		speed := a.speedConfigOptionValue(session.AgentSessionID, *patch.Speed)
+		speed, supported := a.speedConfigOptionValue(session.AgentSessionID, *patch.Speed)
+		if !supported {
+			if strings.TrimSpace(*patch.Speed) == sessionSpeedFast {
+				a.updateSessionConfigOption(session.AgentSessionID, "fast", sessionSpeedStandard)
+			}
+			return nil
+		}
 		if speed != "" {
 			if !a.sessionConfigOptionMatches(session.AgentSessionID, "fast", speed) {
 				if err := a.setSessionConfigOption(ctx, acpSession.client, session, "fast", speed); err != nil {
-					return fmt.Errorf("agent session ACP fast configuration failed: %w", err)
+					if strings.TrimSpace(*patch.Speed) != sessionSpeedFast {
+						return fmt.Errorf("agent session ACP fast configuration failed: %w", err)
+					}
+					a.logSpeedConfigFallback(session, "runtime", speed, err)
+					a.updateSessionConfigOption(session.AgentSessionID, "fast", a.standardSpeedConfigOptionValue(session.AgentSessionID))
+					return nil
 				}
 				a.updateSessionConfigOption(session.AgentSessionID, "fast", speed)
 			}
@@ -569,21 +606,29 @@ func (a *standardACPAdapter) sessionUsesACPModelsAPI(agentSessionID string) bool
 	return session != nil && session.modelsAPI
 }
 
-func (a *standardACPAdapter) speedConfigOptionValue(agentSessionID string, speed string) string {
+func (a *standardACPAdapter) speedConfigOptionValue(agentSessionID string, speed string) (string, bool) {
 	speed = strings.TrimSpace(speed)
 	if speed == "" || a == nil {
-		return speed
+		return speed, false
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	session := a.sessions[strings.TrimSpace(agentSessionID)]
 	if session == nil {
-		return speed
+		return speed, false
 	}
 	for _, option := range session.configOptionDescriptors {
 		if strings.TrimSpace(asString(option["id"])) == "fast" {
-			return acpSpeedConfigOptionValueFromDescriptor(option, speed)
+			return acpSpeedConfigOptionValueFromDescriptor(option, speed), true
 		}
+	}
+	return speed, false
+}
+
+func (a *standardACPAdapter) standardSpeedConfigOptionValue(agentSessionID string) string {
+	speed, supported := a.speedConfigOptionValue(agentSessionID, sessionSpeedStandard)
+	if !supported {
+		return ""
 	}
 	return speed
 }
