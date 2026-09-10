@@ -36,7 +36,23 @@ type acpTurnNormalizer struct {
 	compactionTerminalStatus  string
 	suppressAssistantOutput   bool
 	systemNoticeOutputSeen    bool
+	// assistantStreamKind records how this provider delivers assistant text.
+	// ACP's agent_message_chunk is a delta by spec, but several providers ship
+	// cumulative snapshots instead, so the shape is only known once a second
+	// chunk arrives. The decision is sticky per assistant segment: a delta
+	// stream must never be re-tested against the snapshot heuristics, because
+	// its short chunks (" ", "\n\n", "**") look exactly like duplicate or
+	// backtracking snapshots.
+	assistantStreamKind acpAssistantStreamKind
 }
+
+type acpAssistantStreamKind int
+
+const (
+	acpAssistantStreamUnknown acpAssistantStreamKind = iota
+	acpAssistantStreamSnapshot
+	acpAssistantStreamDelta
+)
 
 // StartCompactionNotice atomically claims the compaction lifecycle's stable
 // message id. The bool reports whether the caller should publish the running
@@ -145,6 +161,7 @@ func (n *acpTurnNormalizer) AppendAssistantChunk(session Session, turnID string,
 		n.assistantMessageID = newID()
 		n.assistantContent.Reset()
 		n.assistantSegmentCompleted = false
+		n.assistantStreamKind = acpAssistantStreamUnknown
 	}
 	liveOperation := n.mergeAssistantText(chunk)
 	if liveOperation == nil {
@@ -349,13 +366,26 @@ func (n *acpTurnNormalizer) mergeAssistantText(next string) *liveprotocol.Messag
 		value, _ := json.Marshal(next)
 		return &liveprotocol.MessageContentOperation{Operation: "set", Value: value}
 	case next == current || trimmedNext == trimmedCurrent:
+		// A provider that streams deltas and then replays the finished message
+		// still lands here, so this stays ahead of the delta shortcut below.
 		return nil
+	case n.assistantStreamKind == acpAssistantStreamDelta || trimmedNext == "":
+		// Once the provider is known to stream deltas its chunks are token
+		// sized, so re-running the snapshot heuristics below would drop every
+		// one that happens to be a prefix of the text so far (Grok emits "**"
+		// as its own chunk). Whitespace-only chunks (" ", "\n\n") take the same
+		// path even before the shape is known: they can never be a meaningful
+		// snapshot, and the backtracking branch below would swallow them all
+		// because strings.HasPrefix(current, "") is always true.
+		return n.appendAssistantText(next)
 	case strings.HasPrefix(next, current):
 		suffix := strings.TrimPrefix(next, current)
+		n.assistantStreamKind = acpAssistantStreamSnapshot
 		n.assistantContent.Reset()
 		_, _ = n.assistantContent.WriteString(next)
 		return &liveprotocol.MessageContentOperation{Operation: "append_text", Text: suffix}
 	case strings.HasPrefix(trimmedNext, trimmedCurrent):
+		n.assistantStreamKind = acpAssistantStreamSnapshot
 		n.assistantContent.Reset()
 		_, _ = n.assistantContent.WriteString(next)
 		value, _ := json.Marshal(next)
@@ -363,9 +393,16 @@ func (n *acpTurnNormalizer) mergeAssistantText(next string) *liveprotocol.Messag
 	case strings.HasPrefix(current, next) || strings.HasPrefix(trimmedCurrent, trimmedNext):
 		return nil
 	default:
-		_, _ = n.assistantContent.WriteString(next)
-		return &liveprotocol.MessageContentOperation{Operation: "append_text", Text: next}
+		// Text that neither extends nor is contained in the content so far is a
+		// delta. Remember that for the rest of this assistant segment.
+		n.assistantStreamKind = acpAssistantStreamDelta
+		return n.appendAssistantText(next)
 	}
+}
+
+func (n *acpTurnNormalizer) appendAssistantText(next string) *liveprotocol.MessageContentOperation {
+	_, _ = n.assistantContent.WriteString(next)
+	return &liveprotocol.MessageContentOperation{Operation: "append_text", Text: next}
 }
 
 func (n *acpTurnNormalizer) Finish(session Session, turnID string, streamState string) []activityshared.Event {

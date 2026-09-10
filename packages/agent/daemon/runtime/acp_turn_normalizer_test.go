@@ -66,6 +66,33 @@ func TestAppendAssistantChunkIgnoresDuplicateSnapshotChunk(t *testing.T) {
 	}
 }
 
+func TestAppendAssistantChunkKeepsWhitespaceFromTokenDeltaStream(t *testing.T) {
+	t.Parallel()
+
+	session := testSession()
+	normalizer := newACPTurnNormalizer()
+	// Grok streams ACP agent_message_chunk as token-sized deltas, so spaces,
+	// newlines and emphasis markers arrive as chunks of their own. Each of them
+	// is a prefix of the text accumulated so far, which the snapshot
+	// backtracking heuristic used to read as "provider replayed a shorter
+	// snapshot" and drop -- collapsing every table, list and paragraph in the
+	// message into one run-on line.
+	chunks := []string{
+		"**", "好", "的", "。", "**", " ", "现在", " `", "dev", "`", " ", "和",
+		" `", "origin", "/", "dev", "`", " ", "对齐", "。", "\n\n",
+		"| 文件 |", " 是什么 |", "\n", "|---|---|", "\n", "| a | b |",
+	}
+	want := "**好的。** 现在 `dev` 和 `origin/dev` 对齐。\n\n| 文件 | 是什么 |\n|---|---|\n| a | b |"
+
+	for _, chunk := range chunks {
+		normalizer.AppendAssistantChunk(session, "turn-1", chunk)
+	}
+
+	if got := normalizer.assistantContent.String(); got != want {
+		t.Fatalf("assistant content = %q, want %q", got, want)
+	}
+}
+
 func TestApplyAssistantFinalTextIgnoresIdenticalReplayAfterCompletedSegment(t *testing.T) {
 	t.Parallel()
 
