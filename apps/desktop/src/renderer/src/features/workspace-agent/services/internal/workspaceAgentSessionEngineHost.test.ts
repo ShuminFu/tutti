@@ -19,6 +19,7 @@ import { createDesktopAgentActivityAdapter } from "../desktopAgentActivityAdapte
 import {
   createWorkspaceAgentSessionEngineHost,
   executeWorkspaceAgentForkObservedAckCommand,
+  reconcileHostMintedActivation,
   executeWorkspaceAgentTuttiModeUpdateCommand
 } from "./workspaceAgentSessionEngineHost.ts";
 
@@ -315,6 +316,110 @@ test("workspace engine host still executes commands when the command observer fa
     "succeeded"
   );
   host.dispose();
+});
+
+// 回归（坑142）：嵌入态宿主代建会话铸了新 id，请求 id 的 pending 记录必须被撤掉，
+// 否则它以 uncertain 留在引擎里，会话栏对同一次对话画两条。
+test("host-minted session id dismisses the stale pending activation and upserts the real session", async () => {
+  const hostMinted = normalizeAgentActivitySession({
+    activeTurn: null,
+    activeTurnId: null,
+    agentSessionId: "host-minted-1",
+    agentTargetId: "target-1",
+    cwd: "/workspace",
+    latestTurnInteractions: [],
+    pendingInteractions: [],
+    provider: "grok",
+    settings: {},
+    title: "你现在在哪个目录?",
+    updatedAtUnixMs: 5,
+    workspaceId: "workspace-1"
+  });
+  const host = createWorkspaceAgentSessionEngineHost({
+    executeEngineActivateSession: async () => ({
+      activation: { mode: "new", status: "attached" },
+      session: hostMinted
+    }),
+    executeEngineCancelTurn: async () => ({}),
+    executeEngineGoalControl: async () => ({}) as never,
+    reconcileSession: async () => ({}),
+    restorePendingSessionRecording() {},
+    runtimeApi: { logTerminalDiagnostic: async () => {} },
+    executeEngineSendInput: async () => ({}) as never,
+    executeEngineSubmitInteractive: async () => ({}) as never,
+    executeEngineSubmitPlanDecision: async () => ({}) as never,
+    subscribeSessionEvents: () => () => {},
+    takePendingSessionRecording: () => null,
+    tuttidClient: {} as TuttidClient,
+    unactivateSession: async () => ({}) as never,
+    executeEngineUpdateSessionSettings: async () => ({}) as never,
+    updateTuttiModeActivation: async () => ({}) as never,
+    workspaceId: "workspace-1"
+  });
+  host.engine.dispatch({
+    agentSessionId: "client-requested-1",
+    agentTargetId: "target-1",
+    clientSubmitId: "submit-1",
+    content: [{ text: "你现在在哪个目录?", type: "text" }],
+    cwd: "/workspace",
+    expiresAtUnixMs: 120_000,
+    mode: "new",
+    requestId: "activation:workspace-1:client-requested-1:1:1",
+    requestedAtUnixMs: 1,
+    type: "activation/requested",
+    workspaceId: "workspace-1"
+  });
+  for (let i = 0; i < 4; i += 1) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  const snapshot = host.engine.getSnapshot();
+  const staleRecords = Object.values(
+    snapshot.pendingIntents.activationsByRequestId
+  ).filter((record) => record.agentSessionId === "client-requested-1");
+  assert.deepEqual(staleRecords, []);
+  assert.equal(
+    snapshot.sessionLifecycle.sessionsById["host-minted-1"]?.title,
+    "你现在在哪个目录?"
+  );
+  host.dispose();
+});
+
+test("reconcileHostMintedActivation leaves same-id and existing-mode activations alone", () => {
+  const dispatched: EngineIntent[] = [];
+  const engine = {
+    dispatch: (intent: EngineIntent) => {
+      dispatched.push(intent);
+    },
+    getSnapshot: () =>
+      ({
+        pendingIntents: {
+          activationsByRequestId: {
+            "req-1": {
+              agentSessionId: "same-1",
+              mode: "new",
+              requestId: "req-1"
+            }
+          }
+        }
+      }) as never
+  };
+  const same = session({});
+  assert.equal(
+    reconcileHostMintedActivation(engine, "session-1", {
+      activation: { mode: "new", status: "attached" },
+      session: same
+    }),
+    false
+  );
+  assert.equal(
+    reconcileHostMintedActivation(engine, "other-1", {
+      activation: { mode: "existing", status: "already_attached" },
+      detail: {} as never,
+      session: same
+    }),
+    false
+  );
+  assert.deepEqual(dispatched, []);
 });
 
 function session(

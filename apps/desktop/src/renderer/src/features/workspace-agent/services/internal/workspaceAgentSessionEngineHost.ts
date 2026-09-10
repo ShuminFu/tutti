@@ -32,6 +32,41 @@ import {
 import { editRetryResultFromTuttid } from "./workspaceAgentEditRetry.ts";
 import type { IWorkspaceAgentActivityService } from "../workspaceAgentActivityService.interface.ts";
 
+// 回退看红：保留符号，设为 false 后宿主铸新 id 时旧 pending 记录留下，会话栏出现
+// 同题两条（一条是永远 uncertain 的 pending_activation 幽灵行）。
+export const dismissStaleActivationOnHostMintedSessionId = true;
+
+/**
+ * 宿主代建会话返回的 id 与本次激活请求的 id 不同时（补丁 0099 的嵌入态路径），
+ * 引擎会把命令结果判成 invalid、记录留成 uncertain：它「可能还会产出会话」，
+ * 于是会话栏一直画着它；而真正的会话是另一个 id，两条并排。这里在结果回到引擎
+ * 之前把请求 id 的 pending 记录撤掉，并直接把宿主铸的会话喂进引擎。
+ * 返回是否做了撤销，便于测试钉住。
+ */
+export function reconcileHostMintedActivation(
+  engine: Pick<AgentSessionEngine, "dispatch" | "getSnapshot">,
+  requestedAgentSessionId: string,
+  result: AgentSessionActivateEffectResult
+): boolean {
+  if (!dismissStaleActivationOnHostMintedSessionId) return false;
+  if (!result || result.activation?.mode !== "new") return false;
+  const requested = requestedAgentSessionId.trim();
+  const minted = result.session?.agentSessionId?.trim() ?? "";
+  if (!requested || !minted || minted === requested) return false;
+  const activations =
+    engine.getSnapshot().pendingIntents.activationsByRequestId;
+  let dismissed = false;
+  for (const record of Object.values(activations)) {
+    if (record.mode !== "new" || record.agentSessionId !== requested) continue;
+    engine.dispatch({ requestId: record.requestId, type: "activation/dismissed" });
+    dismissed = true;
+  }
+  if (dismissed) {
+    engine.dispatch({ session: result.session, type: "session/upserted" });
+  }
+  return dismissed;
+}
+
 export interface WorkspaceAgentSessionEngineHost {
   adapter: AgentActivityAdapter;
   commandAdapter: DesktopAgentActivityCommandAdapter;
@@ -170,8 +205,8 @@ export function createWorkspaceAgentSessionEngineHost(
     commandPort: {
       kind: "typed",
       effects: {
-        activateSession: (effectInput, options) =>
-          input.executeEngineActivateSession(
+        activateSession: async (effectInput, options) => {
+          const result = await input.executeEngineActivateSession(
             {
               ...effectInput,
               ...(effectInput.settings
@@ -183,7 +218,12 @@ export function createWorkspaceAgentSessionEngineHost(
               signal: options.signal
             },
             options
-          ),
+          );
+          // 嵌入态宿主代建会话（补丁 0099）会铸另一个 agentSessionId；引擎里按
+          // 请求 id 记的 pending 记录永远等不到同名会话，会话栏就多出一条幽灵行。
+          reconcileHostMintedActivation(engine, effectInput.agentSessionId, result);
+          return result;
+        },
         cancelTurn: (effectInput, options) =>
           input.executeEngineCancelTurn(
             { ...effectInput, signal: options.signal },
