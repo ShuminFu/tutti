@@ -73,12 +73,16 @@ describe("WorkspaceUserProjectSelect render budget", () => {
       pinnedAtUnixMs: 0
     };
     const onProjectPathChange = vi.fn();
+    const useProject = vi.fn(async ({ path }: { path: string }) =>
+      path === betaProject.path ? betaProject : alphaProject
+    );
 
     render(
       <WorkspaceUserProjectSelect
         api={{
           create: async () => alphaProject,
-          list: async () => ({ projects: [alphaProject, betaProject] })
+          list: async () => ({ projects: [alphaProject, betaProject] }),
+          use: useProject
         }}
         renderAddProjectIcon={renderAddProjectIcon}
         selectedProjectPath={alphaProject.path}
@@ -101,8 +105,12 @@ describe("WorkspaceUserProjectSelect render budget", () => {
     fireEvent.pointerDown(betaOption, { button: 0, ctrlKey: false });
     fireEvent.click(betaOption);
 
+    await waitFor(() =>
+      expect(useProject).toHaveBeenCalledWith({ path: betaProject.path })
+    );
     expect(onProjectPathChange).toHaveBeenCalledWith(betaProject.path, {
-      action: "select_existing"
+      action: "select_existing",
+      project: betaProject
     });
     await waitFor(() =>
       expect(screen.queryByRole("option", { name: "Beta" })).toBeNull()
@@ -128,9 +136,11 @@ describe("WorkspaceUserProjectSelect render budget", () => {
       selection: { kind: "none" as const }
     }));
     const useProject = vi.fn(async () => linkedProject);
+    const rememberDefaultSelection = vi.fn(async () => undefined);
     const api = {
       list: async () => ({ projects: [project] }),
       prepareSelection,
+      rememberDefaultSelection,
       selectDirectory: vi.fn(async () => ({ path: linkedProject.path })),
       use: useProject
     };
@@ -163,6 +173,11 @@ describe("WorkspaceUserProjectSelect render budget", () => {
     fireEvent.click(option);
 
     await waitFor(() => expect(useProject).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(rememberDefaultSelection).toHaveBeenCalledWith({
+        path: linkedProject.path
+      })
+    );
     await waitFor(() => expect(prepareSelection).toHaveBeenCalledTimes(2));
   });
 });

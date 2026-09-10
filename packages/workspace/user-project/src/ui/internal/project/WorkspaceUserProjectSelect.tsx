@@ -434,6 +434,7 @@ export function WorkspaceUserProjectSelect({
             path,
             pinnedAtUnixMs: 0
           } satisfies WorkspaceUserProject);
+        await effectiveApi.rememberDefaultSelection?.({ path: project.path });
         setApiProjects((current) =>
           upsertWorkspaceUserProject(current, project)
         );
@@ -532,9 +533,7 @@ export function WorkspaceUserProjectSelect({
       areWorkspaceUserProjectPathsEqual(project.path, nextValue)
     );
     if (knownProject) {
-      void effectiveApi.rememberDefaultSelection?.({ path: knownProject.path });
-      setHasPinnedNoProjectSelection(false);
-      onProjectPathChange(knownProject.path, { action: "select_existing" });
+      void useProjectPath(knownProject.path, "select_existing");
       return;
     }
     void useProjectPath(nextValue, "select_existing");
