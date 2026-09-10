@@ -587,7 +587,15 @@ func TestManagerResolveRuntimeUsesSignedUserSearchPath(t *testing.T) {
 		t,
 		&manager,
 		Release{AgentKey: manifest.AgentKey, Version: manifest.Version},
-		testPackageZIPFor(t, manifest, discovery),
+		testPackageZIPForComposer(t, manifest, discovery, `{
+			"schemaVersion":"tutti.agent.composer.v1",
+			"model":{"source":"acp-session-models"},
+			"runtimePrep":{
+				"sessionInstructionsFile":"dintal-role.md",
+				"home":{"envVar":"TEST_RUNTIME_HOME","dirName":"test-runtime","configFile":"runtime.json","configFormat":"json"},
+				"modelEndpoint":{"protocol":"openai","wireAPI":"chat","apiKeyEnv":"TEST_GATEWAY_TOKEN","providerValue":"gateway","configKeys":{"provider":["model","provider"],"model":["model","default"],"baseURL":["providers","gateway","api"]}}
+			}
+		}`),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -599,6 +607,9 @@ func TestManagerResolveRuntimeUsesSignedUserSearchPath(t *testing.T) {
 	}
 	if binding.Source != "local" || binding.Version != "0.28.0" || len(binding.Command) != 2 || binding.Command[0] != executable || binding.Command[1] != "acp" {
 		t.Fatalf("ResolveRuntimeForCWD() = %#v", binding)
+	}
+	if binding.RuntimePrep == nil || binding.RuntimePrep.Home == nil || binding.RuntimePrep.Home.EnvVar != "TEST_RUNTIME_HOME" {
+		t.Fatalf("ResolveRuntimeForCWD() runtime prep = %#v", binding.RuntimePrep)
 	}
 	if _, err := manager.ResolveRuntimeForCWD(context.Background(), installation.ID, t.TempDir()); err != nil {
 		t.Fatal(err)
@@ -1541,6 +1552,10 @@ func testPackageZIP(t *testing.T) []byte {
 }
 
 func testPackageZIPFor(t *testing.T, manifest Manifest, discovery string) []byte {
+	return testPackageZIPForComposer(t, manifest, discovery, `{"schemaVersion":"tutti.agent.composer.v1","model":{"source":"acp-session-config"},"permission":{"source":"acp-session-config"},"permissionModes":[{"runtimeId":"default","semantic":"ask-before-write"},{"runtimeId":"auto_edit","semantic":"accept-edits"},{"runtimeId":"yolo","semantic":"full-access"},{"runtimeId":"plan","semantic":"read-only"}]}`)
+}
+
+func testPackageZIPForComposer(t *testing.T, manifest Manifest, discovery string, composer string) []byte {
 	t.Helper()
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
@@ -1558,7 +1573,7 @@ func testPackageZIPFor(t *testing.T, manifest Manifest, discovery string) []byte
 		"assets/hero-image.jpg":   []byte("hero-image"),
 		"profiles/discovery.json": []byte(discovery),
 		"profiles/tools.json":     []byte(`{"schemaVersion":"tutti.agent.tools.v1","tools":[{"match":{"ids":["replace"]},"canonicalId":"Edit","category":"file-change","presentation":{"renderer":"diff","titleKey":"tools.edit.title"},"fileEffect":{"source":"acp-content-diff"}}]}`),
-		"profiles/composer.json":  []byte(`{"schemaVersion":"tutti.agent.composer.v1","model":{"source":"acp-session-config"},"permission":{"source":"acp-session-config"},"permissionModes":[{"runtimeId":"default","semantic":"ask-before-write"},{"runtimeId":"auto_edit","semantic":"accept-edits"},{"runtimeId":"yolo","semantic":"full-access"},{"runtimeId":"plan","semantic":"read-only"}]}`),
+		"profiles/composer.json":  []byte(composer),
 		"locales/en.json":         []byte(`{"agent.name":"Gemini CLI"}`),
 	}
 	if manifest.Profiles.Authentication != "" {

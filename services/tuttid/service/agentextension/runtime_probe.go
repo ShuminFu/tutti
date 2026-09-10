@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"os"
 	"runtime"
 	"strings"
 	"time"
 
 	agentruntime "github.com/tutti-os/tutti/packages/agent/daemon/runtime"
+	"github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	agentextensionbiz "github.com/tutti-os/tutti/services/tuttid/biz/agentextension"
 )
 
@@ -90,8 +94,15 @@ func runRuntimeSetup(
 		RoomID: "agent-target-setup", AgentSessionID: "setup-probe-" + fmt.Sprint(time.Now().UnixNano()),
 		AgentTargetID: agentTargetID, Provider: binding.Installation.Provider, CWD: cwd,
 	}
+	preparedBinding, temporaryRoot, err := prepareRuntimeProbe(probeCtx, binding, session)
+	if temporaryRoot != "" {
+		defer func() { _ = os.RemoveAll(temporaryRoot) }()
+	}
+	if err != nil {
+		return RuntimeProbeResult{}, err
+	}
 	result, err := agentruntime.RunStandardACPSetup(
-		probeCtx, runtimeAdapterConfig(binding, agentTargetID), transport, host, session, methodID,
+		probeCtx, runtimeAdapterConfig(preparedBinding, agentTargetID), transport, host, session, methodID,
 	)
 	if err != nil {
 		return RuntimeProbeResult{}, err
@@ -129,6 +140,92 @@ func runRuntimeSetup(
 		}
 	}
 	return RuntimeProbeResult{Status: RuntimeProbeStatus(result.Status), AuthMethods: methods, Account: account}, nil
+}
+
+type runtimeProbeCommandCatalog struct{}
+
+func (runtimeProbeCommandCatalog) Capabilities(context.Context, runtimeprep.CommandContext) []runtimeprep.CommandCapability {
+	return nil
+}
+
+func prepareRuntimeProbe(ctx context.Context, binding RuntimeBinding, session agentruntime.Session) (RuntimeBinding, string, error) {
+	prep := binding.RuntimePrep
+	if prep == nil || prep.Home == nil || prep.ModelEndpoint == nil {
+		return binding, "", nil
+	}
+	homeEnv := strings.TrimSpace(prep.Home.EnvVar)
+	tokenEnv := strings.TrimSpace(prep.ModelEndpoint.APIKeyEnv)
+	binding.Env = runtimeProbeEnvWithout(binding.Env, homeEnv, tokenEnv)
+	binding.Env = append(binding.Env, homeEnv+"=", tokenEnv+"=")
+
+	endpoint := runtimeprep.HostModelEndpoint(binding.Installation.Provider)
+	if !runtimeprep.ExtensionModelEndpointApplies(endpoint, prep.ModelEndpoint) || !runtimeProbeEndpointIsLoopback(endpoint.BaseURL) {
+		return binding, "", nil
+	}
+	temporaryRoot, err := os.MkdirTemp("", "tutti-extension-runtime-probe-")
+	if err != nil {
+		return binding, "", fmt.Errorf("create extension runtime probe home: %w", err)
+	}
+	if err := os.Chmod(temporaryRoot, 0o700); err != nil {
+		_ = os.RemoveAll(temporaryRoot)
+		return binding, "", fmt.Errorf("secure extension runtime probe home: %w", err)
+	}
+	probePrep := *prep
+	probePrep.InstructionsFile = ""
+	if strings.TrimSpace(probePrep.SessionInstructionsFile) == "" {
+		probePrep.SessionInstructionsFile = ".tutti-probe-instructions.md"
+	}
+	preparer := runtimeprep.NewDefaultPreparer(temporaryRoot)
+	preparer.CommandCatalog = runtimeProbeCommandCatalog{}
+	prepared, err := preparer.Prepare(ctx, runtimeprep.PrepareInput{
+		WorkspaceID: "agent-target-setup", AgentSessionID: session.AgentSessionID,
+		AgentTargetID: session.AgentTargetID, Provider: session.Provider, Cwd: session.CWD,
+		ExtensionRuntimePrep: &probePrep, ModelEndpoint: endpoint,
+	})
+	if err != nil {
+		_ = os.RemoveAll(temporaryRoot)
+		return binding, "", fmt.Errorf("prepare extension runtime probe: %w", err)
+	}
+	homeValue := environmentValue(prepared.Env, homeEnv)
+	tokenValue := environmentValue(prepared.Env, tokenEnv)
+	if homeValue == "" || tokenValue == "" {
+		_ = os.RemoveAll(temporaryRoot)
+		return binding, "", errors.New("extension runtime probe preparation omitted required environment")
+	}
+	binding.Env = runtimeProbeEnvWithout(binding.Env, homeEnv, tokenEnv)
+	binding.Env = append(binding.Env, homeEnv+"="+homeValue, tokenEnv+"="+tokenValue)
+	return binding, temporaryRoot, nil
+}
+
+func runtimeProbeEnvWithout(environment []string, keys ...string) []string {
+	result := make([]string, 0, len(environment))
+	for _, entry := range environment {
+		key, _, ok := strings.Cut(entry, "=")
+		remove := false
+		for _, blocked := range keys {
+			if ok && strings.EqualFold(strings.TrimSpace(key), strings.TrimSpace(blocked)) {
+				remove = true
+				break
+			}
+		}
+		if !remove {
+			result = append(result, entry)
+		}
+	}
+	return result
+}
+
+func runtimeProbeEndpointIsLoopback(baseURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil {
+		return false
+	}
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(strings.Split(host, "%")[0])
+	return ip != nil && ip.IsLoopback()
 }
 
 type terminalAuthLaunch struct {

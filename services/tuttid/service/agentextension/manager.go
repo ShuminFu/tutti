@@ -373,6 +373,7 @@ func (m *Manager) runtimeBinding(installation Installation, command []string, ve
 		ExecutableIdentity: executableIdentity,
 		Env:                resolveRuntimeLaunchEnv(installation.Manifest.Runtime.Launch.Env),
 		DeclaredHTTPMCP:    composerProfile.DeclaresHTTPMCP(),
+		RuntimePrep:        composerProfile.RuntimePrep,
 	}, nil
 }
 

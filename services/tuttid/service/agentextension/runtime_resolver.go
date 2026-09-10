@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	agentruntime "github.com/tutti-os/tutti/packages/agent/daemon/runtime"
+	"github.com/tutti-os/tutti/packages/agent/runtimeprep"
 )
 
 type RuntimeResolver struct {
@@ -38,6 +39,7 @@ type RuntimeBinding struct {
 	ExecutableIdentity           *agentruntime.ExecutableIdentity
 	Env                          []string
 	DeclaredHTTPMCP              bool
+	RuntimePrep                  *runtimeprep.ExtensionRuntimePrep
 }
 
 func (r RuntimeResolver) ResolveAdapter(ctx context.Context, input agentruntime.AdapterResolveInput) (agentruntime.Adapter, error) {
