@@ -21,6 +21,13 @@ export type ConversationRailMembershipRefreshPlan =
 export function planRuntimeRailMembershipRefresh(input: {
   activeConversationId?: string | null;
   agentTargetId?: string | null;
+  /**
+   * Reports sessions this client just created. A creation whose pending
+   * activation carried a different session id (hosts that mint their own id)
+   * is invisible to `previousPendingIds`, and would otherwise be mistaken for
+   * selected-detail hydration and never paged in.
+   */
+  isLocallyCreatedSession?: (agentSessionId: string) => boolean;
   loadedSections: readonly ConversationRailSectionMembership[] | null;
   next: readonly ConversationRailMembershipRecord[];
   previous: readonly ConversationRailMembershipRecord[];
@@ -82,7 +89,7 @@ export function planRuntimeRailMembershipRefresh(input: {
 
   for (const [id, next] of nextById) {
     if (previousById.has(id)) continue;
-    if (previousPendingIds.has(id)) {
+    if (previousPendingIds.has(id) || input.isLocallyCreatedSession?.(id)) {
       if (!loadedIds.has(id)) {
         addPage(next);
         reconcilingSessionIds.push(id);

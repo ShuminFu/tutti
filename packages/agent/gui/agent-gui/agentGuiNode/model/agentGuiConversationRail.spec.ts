@@ -291,6 +291,46 @@ describe("planRuntimeRailMembershipRefresh", () => {
     ).toEqual({ kind: "none" });
   });
 
+  it("pages in a locally created session even while it is the selected one", () => {
+    const recent = conversation("recent");
+    // 宿主代建会话时铸了自己的 id，本客户端的待激活记录用的是另一个 id，所以
+    // 「待激活转正」那条认不出它；而它建完就被设为当前会话，正好撞上「选中后
+    // 拉详情」的跳过。只有创建方能区分这两者。
+    const pending = {
+      ...conversation("client-requested"),
+      projectionSource: "pending_activation" as const
+    };
+
+    expect(
+      planRuntimeRailMembershipRefresh({
+        activeConversationId: "host-created",
+        isLocallyCreatedSession: (id) => id === "host-created",
+        loadedSections: membership([recent]),
+        next: [conversation("host-created"), recent],
+        previous: [pending, recent]
+      })
+    ).toEqual({
+      kind: "refresh_pages",
+      pageIds: ["project:/workspace"],
+      reconcilingSessionIds: ["host-created"],
+      refreshSearch: false
+    });
+  });
+
+  it("still treats an unreported selected session as detail hydration", () => {
+    const recent = conversation("recent");
+
+    expect(
+      planRuntimeRailMembershipRefresh({
+        activeConversationId: "selected-historical",
+        isLocallyCreatedSession: () => false,
+        loadedSections: membership([recent]),
+        next: [conversation("selected-historical"), recent],
+        previous: [recent]
+      })
+    ).toEqual({ kind: "none" });
+  });
+
   it("refreshes and preserves display membership when pending activation becomes canonical", () => {
     const recent = conversation("recent");
     const pending = {

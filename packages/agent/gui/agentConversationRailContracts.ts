@@ -97,6 +97,13 @@ export interface AgentConversationRailDeleteSessionsBatchResult {
 }
 
 export interface AgentConversationRailRuntimePort {
+  /**
+   * True while `agentSessionId` names a session this client created moments
+   * ago. Hosts that create sessions through a channel which assigns its own
+   * session id must report it, so the rail can tell a brand-new member from
+   * the detail hydration of a session the user merely selected.
+   */
+  isLocallyCreatedSession?(agentSessionId: string): boolean;
   deleteSessionsBatch?(
     input: AgentConversationRailDeleteSessionsBatchInput
   ): Promise<AgentConversationRailDeleteSessionsBatchResult>;

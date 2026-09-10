@@ -362,6 +362,10 @@ export interface AgentGUIRuntime {
   listSessionsPage?(
     input: AgentActivityRuntimeListSessionsPageInput
   ): Promise<AgentActivityRuntimeSessionPageResult>;
+  /**
+   * See AgentConversationRailRuntimePort.isLocallyCreatedSession.
+   */
+  isLocallyCreatedSession?(agentSessionId: string): boolean;
   listSessionSections?(
     input: AgentActivityRuntimeListSessionSectionsInput
   ): Promise<AgentActivityRuntimeSessionSectionsResult>;

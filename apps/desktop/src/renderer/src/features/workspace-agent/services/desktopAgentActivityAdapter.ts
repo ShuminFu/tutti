@@ -49,6 +49,7 @@ import {
   shouldAskHostCreateAgentSession
 } from "./internal/embeddedHostCreateAgentSession.ts";
 import { openEmbeddedHostCreatedAgentSession } from "./internal/embeddedHostCreatedSessionOpener.ts";
+import { noteEmbeddedHostCreatedSession } from "./internal/embeddedHostCreatedSessionRegistry.ts";
 
 export interface CreateDesktopAgentActivityAdapterInput {
   composerOptionsRequestTimeoutMs?: number;
@@ -270,6 +271,10 @@ export function createDesktopAgentActivityAdapter({
         if (shouldAskHostCreateAgentSession()) {
           const hosted = await requestEmbeddedHostCreateAgentSession(input);
           if (hosted) {
+            // 宿主铸了自己的 id，本次激活的 pending 记录（input.agentSessionId）
+            // 作废。先登记再打开：打开会立刻把它设为当前会话，而「当前会话」正是
+            // 会话栏用来判定「这是选中后拉详情、不是新成员」的那条依据。
+            noteEmbeddedHostCreatedSession(hosted.agentSessionId);
             openEmbeddedHostCreatedAgentSession(hosted.agentSessionId);
             const detail = await tuttidClient.getWorkspaceAgentSession(
               input.workspaceId,

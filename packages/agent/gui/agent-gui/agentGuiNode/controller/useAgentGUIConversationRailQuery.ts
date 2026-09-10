@@ -369,6 +369,11 @@ function createAgentGUIConversationRailRuntimeAdapter(
   nodeId: string | null | undefined
 ): ConversationRailQueryRuntime {
   const adapter: ConversationRailQueryRuntime = {};
+  const isLocallyCreatedSession =
+    runtime.isLocallyCreatedSession?.bind(runtime);
+  if (isLocallyCreatedSession) {
+    adapter.isLocallyCreatedSession = isLocallyCreatedSession;
+  }
   const listPinnedSessionsPage = runtime.listPinnedSessionsPage?.bind(runtime);
   if (listPinnedSessionsPage) {
     adapter.listPinnedSessionsPage = listPinnedSessionsPage;

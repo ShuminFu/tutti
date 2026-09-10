@@ -380,9 +380,16 @@ export class AgentGUIConversationRailQueryController {
       this.publishIfReady(state);
       return;
     }
+    const isLocallyCreatedSession = this.runtime.isLocallyCreatedSession;
     const plan = planRuntimeRailMembershipRefresh({
       activeConversationId: this.getActiveConversationId(),
       agentTargetId: this.sectionAgentTargetId || null,
+      ...(isLocallyCreatedSession
+        ? {
+            isLocallyCreatedSession: (agentSessionId: string) =>
+              isLocallyCreatedSession(agentSessionId)
+          }
+        : {}),
       loadedSections: this.queryState.sections,
       next,
       previous: this.previousMembershipRecords,

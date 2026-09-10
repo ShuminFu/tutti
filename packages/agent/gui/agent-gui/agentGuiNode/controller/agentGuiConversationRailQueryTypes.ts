@@ -15,6 +15,7 @@ export interface ConversationRailQueryScope {
 
 export type ConversationRailQueryRuntime = Pick<
   AgentConversationRailRuntimePort,
+  | "isLocallyCreatedSession"
   | "listPinnedSessionsPage"
   | "listSessionSectionPage"
   | "listSessionSections"

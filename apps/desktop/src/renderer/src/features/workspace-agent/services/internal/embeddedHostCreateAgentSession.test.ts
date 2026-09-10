@@ -3,6 +3,10 @@ import test from "node:test";
 import type { TuttidClient, WorkspaceAgentSession } from "@tutti-os/client-tuttid-ts";
 import { createDesktopAgentActivityAdapter } from "../desktopAgentActivityAdapter.ts";
 import { registerEmbeddedHostCreatedSessionOpener } from "./embeddedHostCreatedSessionOpener.ts";
+import {
+  isEmbeddedHostCreatedSession,
+  resetEmbeddedHostCreatedSessionsForTest
+} from "./embeddedHostCreatedSessionRegistry.ts";
 
 const workspaceId = "workspace-1";
 const hostOrigin = "http://wails.localhost";
@@ -10,6 +14,8 @@ const embeddedSearch =
   "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost";
 
 const createInput = {
+  // 本客户端发起激活时用的 id；宿主代建会返回另一个 id。
+  agentSessionId: "client-requested-1",
   agentTargetId: "local:codex",
   clientSubmitId: "submit-host-create",
   cwd: "/workspace/project",
@@ -28,11 +34,16 @@ test("embedded host success opens the returned session and does not POST tuttid 
       result: { taskId: "task-1", agentSessionId: "host-session-1" }
     })
   }, async ({ createCalls, getCalls, opened, posted }) => {
+    resetEmbeddedHostCreatedSessionsForTest();
     const adapter = createHostCreateAdapter({ createCalls, getCalls });
     const session = await adapter.createSession(createInput);
 
     assert.equal(createCalls.length, 0);
     assert.deepEqual(opened, ["host-session-1"]);
+    // 会话栏靠这条判据认出「宿主铸了新 id 的新会话」，否则它会被当成选中后
+    // 拉详情，所在分组页永远不重取（Chats 恒空）。
+    assert.equal(isEmbeddedHostCreatedSession("host-session-1"), true);
+    assert.equal(isEmbeddedHostCreatedSession("client-requested-1"), false);
     assert.equal(session.agentSessionId, "host-session-1");
     assert.equal(getCalls[0]?.agentSessionId, "host-session-1");
     const request = posted.find(

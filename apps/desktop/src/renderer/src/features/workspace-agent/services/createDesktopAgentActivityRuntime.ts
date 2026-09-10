@@ -12,6 +12,7 @@ import { AgentConversationUnpinnedReporter } from "../../analytics/reporters/age
 import { AgentSettingsProjectChangedReporter } from "../../analytics/reporters/agent-settings-project-changed/agentSettingsProjectChangedReporter.ts";
 import { createOptionalReporterService } from "./internal/agentMessageSentAnalytics.ts";
 import { resolveDesktopAgentGUIProvider } from "./internal/desktopAgentHostProjection.ts";
+import { isEmbeddedHostCreatedSession } from "./internal/embeddedHostCreatedSessionRegistry.ts";
 import { reportAgentSessionSettingsChanges } from "./internal/agentSessionSettingsAnalytics.ts";
 import type { IWorkspaceAgentActivityService } from "./workspaceAgentActivityService.interface";
 import {
@@ -128,6 +129,7 @@ export function createDesktopAgentActivityRuntime(
   return {
     ...conversationRailRuntime,
     conversationActivityViewEnabled: true,
+    isLocallyCreatedSession: isEmbeddedHostCreatedSession,
     origin: AGENT_SESSION_ENGINE_LOCAL_ORIGIN,
     promptContentUploadSupport: {
       file: Boolean(archiveAgentPromptFile),
