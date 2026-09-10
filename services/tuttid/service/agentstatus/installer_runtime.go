@@ -54,8 +54,10 @@ func (s Service) resolveProviderRuntime(ctx context.Context, spec ProviderSpec) 
 		return result
 	}
 	cliPath := resolveBinaryWithResolver(resolver, spec.BinaryNames, nil)
-	if isClaudeStatusSpec(spec) && strings.TrimSpace(cliPath) == "" {
-		cliPath = s.managedClaudeCodeExecutable()
+	if isClaudeStatusSpec(spec) {
+		if preferred := s.preferredClaudeCodeExecutable(env); preferred != "" {
+			cliPath = preferred
+		}
 	}
 	adapterPath := resolveBinaryWithResolver(resolver, adapterBinaryNames(spec), spec.AdapterEnv)
 	if isStandardACPStatusSpec(spec) && len(spec.AdapterCommand) > 0 && s.executableFile(spec.AdapterCommand[0]) {
@@ -94,7 +96,7 @@ func (s Service) resolveExternalProviderRuntime(
 		Env:            env,
 	}
 	if isClaudeStatusSpec(spec) {
-		if preferred := strings.TrimSpace(os.Getenv("CLAUDE_CODE_EXECUTABLE")); preferred != "" && s.executableFile(preferred) {
+		if preferred := s.preferredClaudeCodeExecutable(env); preferred != "" {
 			result.CLIPath = preferred
 		}
 	}
@@ -115,6 +117,14 @@ func (s Service) resolveExternalProviderRuntime(
 		}
 	}
 	return result
+}
+
+func (s Service) preferredClaudeCodeExecutable(env []string) string {
+	preferred := strings.TrimSpace(envValueForKey(env, claudeCodeExecutableEnv))
+	if preferred == "" || !s.executableFile(preferred) {
+		return ""
+	}
+	return preferred
 }
 
 func resolveAdapterPackageVersion(adapterPath string, requirement AdapterPackageRequirement) string {

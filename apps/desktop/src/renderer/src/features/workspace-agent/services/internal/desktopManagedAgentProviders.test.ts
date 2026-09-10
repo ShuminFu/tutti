@@ -11,7 +11,7 @@ import {
   isDesktopManagedAgentProvider
 } from "./desktopManagedAgentProviders.ts";
 
-test("ensureDesktopManagedAgentProviderStatuses stops waiting after the first ready provider", async () => {
+test("ensureDesktopManagedAgentProviderStatuses probes startup providers concurrently", async () => {
   const calls: WorkspaceAgentProvider[][] = [];
   let snapshot = createProviderStatusSnapshot([]);
   const service = {
@@ -37,10 +37,14 @@ test("ensureDesktopManagedAgentProviderStatuses stops waiting after the first re
   await ensureDesktopManagedAgentProviderStatuses(service);
   await Promise.resolve();
 
-  assert.deepEqual(calls, [["codex"], [...desktopManagedAgentProviders]]);
+  assert.deepEqual(
+    new Set(calls.map((providers) => providers[0])),
+    new Set(desktopManagedAgentProviders)
+  );
+  assert.equal(calls.every((providers) => providers.length === 1), true);
 });
 
-test("ensureDesktopManagedAgentProviderStatuses keeps probing priority providers until one is ready", async () => {
+test("ensureDesktopManagedAgentProviderStatuses keeps concurrent provider results isolated", async () => {
   const calls: WorkspaceAgentProvider[][] = [];
   let snapshot = createProviderStatusSnapshot([]);
   const service = {
@@ -76,11 +80,11 @@ test("ensureDesktopManagedAgentProviderStatuses keeps probing priority providers
   await ensureDesktopManagedAgentProviderStatuses(service);
   await Promise.resolve();
 
-  assert.deepEqual(calls, [
-    ["codex"],
-    ["claude-code"],
-    [...desktopManagedAgentProviders]
-  ]);
+  assert.deepEqual(
+    new Set(calls.map((providers) => providers[0])),
+    new Set(desktopManagedAgentProviders)
+  );
+  assert.equal(calls.every((providers) => providers.length === 1), true);
 });
 
 test("ensureDesktopManagedAgentProviderStatuses returns immediately when a ready provider is already known", async () => {

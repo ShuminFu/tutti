@@ -256,6 +256,9 @@ func installNodeForTarget(target string) string {
 }
 
 func (s Service) providerCLIRequiresInstall(spec ProviderSpec, runtime providerRuntimeResolution) bool {
+	if isClaudeStatusSpec(spec) {
+		return strings.TrimSpace(s.providerCLIVersion(context.Background(), spec, runtime.CLIPath, runtime.Env)) == ""
+	}
 	if strings.TrimSpace(spec.MinVersion) == "" {
 		return false
 	}

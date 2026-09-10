@@ -29,6 +29,7 @@ import type {
   TuttidClient,
   TuttidEventStreamClient
 } from "@tutti-os/client-tuttid-ts";
+import { desktopManagedAgentProviders } from "../../../workspace-agent/services/internal/desktopManagedAgentProviders.ts";
 import type { DesktopWorkspaceWorkbenchRepository } from "./adapters/desktopWorkspaceWorkbenchRepository";
 import { IDesktopRichTextAtService } from "../../../rich-text-at/services/richTextAtService.interface.ts";
 import {
@@ -703,7 +704,9 @@ export class WorkspaceWorkbenchHostService implements IWorkspaceWorkbenchHostSer
   }
 
   async ensureAgentProviderStatusesLoaded(): Promise<void> {
-    await this.dependencies.agentProviderStatusService.ensureLoaded();
+    await this.dependencies.agentProviderStatusService.ensureLoaded({
+      providers: [...desktopManagedAgentProviders]
+    });
   }
 
   subscribeWallpaperChanges(listener: () => void): () => void {

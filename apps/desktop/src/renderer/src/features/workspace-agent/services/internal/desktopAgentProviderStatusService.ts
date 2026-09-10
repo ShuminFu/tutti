@@ -260,6 +260,28 @@ export class DesktopAgentProviderStatusService implements IAgentProviderStatusSe
       refreshUpdates?: boolean;
     } = {}
   ): Promise<AgentProviderStatusListResponse | null> {
+    const providers = [...new Set(input.providers ?? [])];
+    if (providers.length > 1) {
+      const responses = await Promise.all(
+        providers.map((provider) =>
+          this.requestStatuses({ ...input, providers: [provider] })
+        )
+      );
+      if (
+        responses.some((response) => response === null) &&
+        !this.snapshot.error
+      ) {
+        this.setSnapshot({
+          ...this.snapshot,
+          error: "One or more agent provider status requests failed."
+        });
+      }
+      if (!responses.some(Boolean) || !this.snapshot.defaultProvider) {
+        return null;
+      }
+      return this.snapshotResponse();
+    }
+
     const requestKey = providerStatusRequestKey(input);
     const inflightRequest = this.inflightRequests.get(requestKey);
     if (inflightRequest) {

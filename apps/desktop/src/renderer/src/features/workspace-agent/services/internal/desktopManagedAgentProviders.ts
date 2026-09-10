@@ -92,20 +92,22 @@ async function ensureRequiredDesktopManagedAgentProviderStatuses(
 async function ensureFirstReadyDesktopManagedAgentProviderStatus(
   service: IAgentProviderStatusService
 ): Promise<AgentProviderStatusListResponse | null> {
-  let lastResponse: AgentProviderStatusListResponse | null = null;
-  for (const provider of desktopManagedAgentStartupProviderPriority) {
-    lastResponse = await service.ensureLoaded({ providers: [provider] });
-    if (
-      firstReadyDesktopManagedAgentProvider(
-        service.getSnapshot().statuses,
-        provider
-      )
-    ) {
-      void ensureAllDesktopManagedAgentProviderStatuses(service);
-      return lastResponse;
+  const requests = desktopManagedAgentStartupProviderPriority.map(
+    async (provider) => {
+      const response = await service.ensureLoaded({ providers: [provider] });
+      if (
+        !firstReadyDesktopManagedAgentProvider(
+          service.getSnapshot().statuses,
+          provider
+        )
+      ) {
+        return null;
+      }
+      return response;
     }
-  }
-  return ensureAllDesktopManagedAgentProviderStatuses(service);
+  );
+  const responses = await Promise.all(requests);
+  return responses.find((response) => response !== null) ?? null;
 }
 
 export function ensureAllDesktopManagedAgentProviderStatuses(

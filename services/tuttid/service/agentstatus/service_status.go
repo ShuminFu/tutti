@@ -87,7 +87,7 @@ func (s Service) statusForSpec(
 			},
 		}
 	}
-	installed := strings.TrimSpace(runtimeResolution.CLIPath) != ""
+	cliFound := strings.TrimSpace(runtimeResolution.CLIPath) != ""
 	adapterInstalled := strings.TrimSpace(runtimeResolution.AdapterPath) != ""
 	adapterReady := adapterInstalled && adapterPackageRequirementSatisfied(spec.AdapterPackage, runtimeResolution.AdapterVersion)
 	adapterLaunchFailed := false
@@ -99,12 +99,12 @@ func (s Service) statusForSpec(
 	var auth AuthInfo
 	authCLIVersion := ""
 	cliVersion := ""
-	reuseCursorAboutVersion := installed && isCursorAuthCommandSpec(spec) && s.RunAuthStatusCommand == nil
+	reuseCursorAboutVersion := cliFound && isCursorAuthCommandSpec(spec) && s.RunAuthStatusCommand == nil
 	var checks errgroup.Group
 	// adapterProbe captures the full probe result so availability can surface a
 	// probe-classified failure reason, rather than only a boolean result.
 	var adapterProbe ProbeResult
-	if installed && adapterReady && !options.skipAdapterProbe &&
+	if cliFound && adapterReady && !options.skipAdapterProbe &&
 		s.shouldProbeAdapterCommandForStatus(spec, runtimeResolution) {
 		probeCacheKey := s.adapterProbeCacheKey(detectionCtx, spec, runtimeResolution)
 		if !options.forceRefresh &&
@@ -127,11 +127,11 @@ func (s Service) statusForSpec(
 	}
 	checks.Go(func() error {
 		authStartedAt := time.Now()
-		auth, authCLIVersion = s.resolveAuthAndCLIVersion(detectionCtx, spec, installed, runtimeResolution.CLIPath)
+		auth, authCLIVersion = s.resolveAuthAndCLIVersion(detectionCtx, spec, cliFound, runtimeResolution.CLIPath)
 		authDuration = time.Since(authStartedAt)
 		return nil
 	})
-	if installed && !reuseCursorAboutVersion {
+	if cliFound && !reuseCursorAboutVersion {
 		cliVersionRan = true
 		checks.Go(func() error {
 			cliVersionStartedAt := time.Now()
@@ -157,11 +157,16 @@ func (s Service) statusForSpec(
 		Status:    AvailabilityReady,
 	}
 	actions := []Action{}
+	installed := cliFound && (!isClaudeStatusSpec(spec) || strings.TrimSpace(cliVersion) != "")
 	cliBelowFloor := installed && !providerCLIVersionMeetsMinimum(spec, cliVersion)
 
 	if !installed {
 		availability.Status = AvailabilityNotInstalled
-		availability.ReasonCode = firstNonBlank(runtimeResolution.ReasonCode, "cli_not_found")
+		if cliFound && isClaudeStatusSpec(spec) {
+			availability.ReasonCode = "repair_required"
+		} else {
+			availability.ReasonCode = firstNonBlank(runtimeResolution.ReasonCode, "cli_not_found")
+		}
 		actions = append(actions, daemonAction(ActionInstall))
 	} else if !isCodexStatusSpec(spec) && cliBelowFloor {
 		// Descriptor-owned version floors are a CLI capability gate. Surface

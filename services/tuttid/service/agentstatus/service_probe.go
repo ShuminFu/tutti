@@ -29,8 +29,12 @@ func (s Service) Probe(ctx context.Context, input ProbeInput) (ProbeResult, erro
 	}
 	if !status.CLI.Installed {
 		result.Status = ProbeFailed
-		result.ReasonCode = "cli_not_found"
-		result.Message = "CLI binary not found"
+		result.ReasonCode = firstNonBlank(status.Availability.ReasonCode, "cli_not_found")
+		if result.ReasonCode == "repair_required" {
+			result.Message = "CLI --version check failed"
+		} else {
+			result.Message = "CLI binary not found"
+		}
 		return result, nil
 	}
 	if !status.Adapter.Installed {

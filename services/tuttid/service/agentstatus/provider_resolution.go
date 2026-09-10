@@ -25,6 +25,7 @@ const ReasonClaudeSDKSidecarUnavailable = "claude_sdk_sidecar_unavailable"
 
 const claudeCodeRuntimeEnv = "TUTTI_CLAUDE_CODE_RUNTIME"
 const claudeCodeRuntimeACP = "acp"
+const claudeCodeExecutableEnv = "CLAUDE_CODE_EXECUTABLE"
 const claudeSDKSidecarCommandEnv = "TUTTI_CLAUDE_SDK_SIDECAR_COMMAND"
 const claudeSDKSidecarEntryPathEnv = "TUTTI_CLAUDE_SDK_SIDECAR_ENTRY_PATH"
 const claudeSDKSidecarDefaultNodeArg = "--experimental-strip-types"
@@ -118,21 +119,55 @@ func (s Service) resolveProviderSpec(ctx context.Context, spec ProviderSpec, req
 		spec = s.resolveClaudeCodeProviderSpec(ctx, spec, requireManagedRuntime)
 	}
 	if strings.TrimSpace(spec.ExternalRegistryID) == "" {
-		return s.resolveStaticProviderSpec(ctx, spec, requireManagedRuntime), nil
+		return s.withPreferredClaudeCodeRuntime(ctx, s.resolveStaticProviderSpec(ctx, spec, requireManagedRuntime)), nil
 	}
 	agent, err := s.externalAgentRegistry().Agent(ctx, spec.ExternalRegistryID)
 	if err != nil {
 		spec.AdapterUnavailableReasonCode = ReasonExternalAgentRegistryUnavailable
-		return spec, nil
+		return s.withPreferredClaudeCodeRuntime(ctx, spec), nil
 	}
 	if agent.Distribution.NPM != nil {
-		return s.resolveExternalRegistryNPMSpec(ctx, spec, agent, *agent.Distribution.NPM, requireManagedRuntime), nil
+		return s.withPreferredClaudeCodeRuntime(ctx, s.resolveExternalRegistryNPMSpec(ctx, spec, agent, *agent.Distribution.NPM, requireManagedRuntime)), nil
 	}
 	if len(agent.Distribution.Binary) > 0 {
-		return s.resolveExternalRegistryBinarySpec(spec, agent), nil
+		return s.withPreferredClaudeCodeRuntime(ctx, s.resolveExternalRegistryBinarySpec(spec, agent)), nil
 	}
 	spec.AdapterUnavailableReasonCode = "external_agent_registry_distribution_unavailable"
-	return spec, nil
+	return s.withPreferredClaudeCodeRuntime(ctx, spec), nil
+}
+
+// withPreferredClaudeCodeRuntime makes a verified DinTalDock-managed Claude
+// binary win over a stale PATH shim. An explicit, valid operator override still
+// wins. Both the status probe and the ACP bridge receive the same selection.
+func (s Service) withPreferredClaudeCodeRuntime(ctx context.Context, spec ProviderSpec) ProviderSpec {
+	if !isClaudeStatusSpec(spec) {
+		return spec
+	}
+	env := s.commandResolver().Env(spec.AdapterEnv)
+	if s.validClaudeCodeExecutable(ctx, spec, envValueForKey(env, claudeCodeExecutableEnv), env) != "" {
+		return spec
+	}
+	managed := s.managedClaudeCodeExecutable()
+	if managed == "" {
+		return spec
+	}
+	pathValue := filepath.Dir(managed)
+	if inherited := managedruntime.EnvValue(env, "PATH"); inherited != "" {
+		pathValue += string(os.PathListSeparator) + inherited
+	}
+	spec.AdapterEnv = append(spec.AdapterEnv,
+		claudeCodeExecutableEnv+"="+managed,
+		"PATH="+pathValue,
+	)
+	return spec
+}
+
+func (s Service) validClaudeCodeExecutable(ctx context.Context, spec ProviderSpec, path string, env []string) string {
+	path = strings.TrimSpace(path)
+	if path == "" || !s.executableFile(path) || s.providerCLIVersion(ctx, spec, path, env) == "" {
+		return ""
+	}
+	return path
 }
 
 func (s Service) resolveClaudeCodeProviderSpec(ctx context.Context, spec ProviderSpec, requireManagedRuntime bool) ProviderSpec {

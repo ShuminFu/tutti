@@ -2013,17 +2013,25 @@ test("ensureLoaded starts missing providers without waiting for unrelated in-fli
   assert.equal(service.getStatus("claude-code")?.availability.status, "ready");
 });
 
-test("a targeted ensure resolves before an older full scan and keeps its newer status", async () => {
+test("multi-provider loads publish each provider without waiting for the slowest one", async () => {
   const calls: Array<readonly WorkspaceAgentProvider[] | undefined> = [];
-  const fullStatusRequest = createDeferred<AgentProviderStatusListResponse>();
   const codexStatusRequest = createDeferred<AgentProviderStatusListResponse>();
+  const claudeStatusRequest = createDeferred<AgentProviderStatusListResponse>();
+  const openCodeStatusRequest = createDeferred<AgentProviderStatusListResponse>();
   const service = new DesktopAgentProviderStatusService({
     tuttidClient: {
       async getAgentProviderStatuses(request) {
         calls.push(request?.providers);
-        return calls.length === 1
-          ? fullStatusRequest.promise
-          : codexStatusRequest.promise;
+        switch (request?.providers?.[0]) {
+          case "codex":
+            return codexStatusRequest.promise;
+          case "claude-code":
+            return claudeStatusRequest.promise;
+          case "opencode":
+            return openCodeStatusRequest.promise;
+          default:
+            throw new Error("unexpected provider");
+        }
       }
     } as Partial<TuttidClient> as TuttidClient,
     terminalCommandRunner: {
@@ -2031,10 +2039,13 @@ test("a targeted ensure resolves before an older full scan and keeps its newer s
     }
   });
 
-  const fullLoad = service.ensureLoaded({ providers: ["codex", "cursor"] });
+  const fullLoad = service.ensureLoaded({
+    providers: ["claude-code", "codex", "opencode"]
+  });
   const codexLoad = service.ensureLoaded({ providers: ["codex"] });
+  const openCodeLoad = service.ensureLoaded({ providers: ["opencode"] });
 
-  assert.deepEqual(calls, [["codex", "cursor"], ["codex"]]);
+  assert.deepEqual(calls, [["claude-code"], ["codex"], ["opencode"]]);
 
   codexStatusRequest.resolve(
     createStatusResponse([
@@ -2045,28 +2056,40 @@ test("a targeted ensure resolves before an older full scan and keeps its newer s
       })
     ])
   );
-  await codexLoad;
+  openCodeStatusRequest.resolve(
+    createStatusResponse([
+      createProviderStatus({
+        actions: [{ id: "install", kind: "daemon_action" }],
+        availability: "not_installed",
+        provider: "opencode"
+      })
+    ])
+  );
+  await Promise.all([codexLoad, openCodeLoad]);
 
   assert.equal(service.getStatus("codex")?.availability.status, "ready");
+  assert.equal(
+    service.getStatus("opencode")?.availability.status,
+    "not_installed"
+  );
+  assert.equal(service.getStatus("claude-code"), null);
 
-  fullStatusRequest.resolve(
+  claudeStatusRequest.resolve(
     createStatusResponse([
       createProviderStatus({
         actions: [{ id: "login", kind: "terminal_command" }],
         availability: "auth_required",
-        provider: "codex"
-      }),
-      createProviderStatus({
-        actions: [],
-        availability: "ready",
-        provider: "cursor"
+        provider: "claude-code"
       })
     ])
   );
   await fullLoad;
 
   assert.equal(service.getStatus("codex")?.availability.status, "ready");
-  assert.equal(service.getStatus("cursor")?.availability.status, "ready");
+  assert.equal(
+    service.getStatus("claude-code")?.availability.status,
+    "auth_required"
+  );
 });
 
 test("reconcileStatuses reuses an in-flight read without forcing daemon detection", async () => {

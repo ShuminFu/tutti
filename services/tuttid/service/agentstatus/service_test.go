@@ -65,6 +65,74 @@ func TestServiceListReportsInstallActionWhenCLIMissing(t *testing.T) {
 	}
 }
 
+func TestServiceListTreatsClaudeWithBrokenVersionShimAsRepairRequired(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, "bin")
+	claudePath := filepath.Join(binDir, "claude")
+	writeExecutable(t, claudePath, "#!/bin/sh\nexit 1\n")
+	service := probeTestService(home)
+	service.Environ = func() []string { return []string{"PATH=" + binDir} }
+	service.Registry = Registry{Specs: []ProviderSpec{{
+		Provider:    "claude-code",
+		BinaryNames: []string{"claude"},
+		Install: InstallerSpec{
+			Kind:         InstallerKindShellCommand,
+			ShellCommand: "install claude",
+		},
+	}}}
+
+	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"claude-code"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := onlyStatus(t, snapshot)
+	if status.CLI.Installed || status.Availability.Status != AvailabilityNotInstalled || status.Availability.ReasonCode != "repair_required" {
+		t.Fatalf("status = %#v, want broken Claude shim repair", status)
+	}
+	if action := firstAction(t, status.Actions); action.ID != ActionInstall || action.Kind != ActionKindDaemonAction {
+		t.Fatalf("install action = %#v, want daemon repair", action)
+	}
+	resolved := service.resolveProviderRuntime(context.Background(), service.Registry.Specs[0])
+	if !service.providerCLIRequiresInstall(service.Registry.Specs[0], resolved) {
+		t.Fatal("providerCLIRequiresInstall() = false for broken Claude shim")
+	}
+}
+
+func TestClaudeManagedBinaryOverridesBrokenPATHShim(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, "bin")
+	badShim := filepath.Join(binDir, "claude")
+	managed := filepath.Join(home, "managed", "claude")
+	writeExecutable(t, badShim, "#!/bin/sh\nexit 1\n")
+	writeExecutable(t, managed, "#!/bin/sh\necho '2.1.201 (Claude Code)'\n")
+	stateDir := filepath.Join(home, "state")
+	pointerDir := filepath.Join(stateDir, filepath.FromSlash(claudeCodeStateRelDir))
+	if err := os.MkdirAll(pointerDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pointer, _ := json.Marshal(claudeCodeBinaryPointer{Version: "2.1.201", Executable: managed})
+	if err := os.WriteFile(filepath.Join(pointerDir, claudeCodePointerFileName), pointer, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	service := probeTestService(home)
+	service.ClaudeCodeStateDir = stateDir
+	service.Environ = func() []string { return []string{"PATH=" + binDir} }
+	spec := service.withPreferredClaudeCodeRuntime(context.Background(), ProviderSpec{
+		Provider:    "claude-code",
+		BinaryNames: []string{"claude"},
+	})
+	resolved := service.resolveProviderRuntime(context.Background(), spec)
+	if resolved.CLIPath != managed {
+		t.Fatalf("CLIPath = %q, want managed %q instead of %q", resolved.CLIPath, managed, badShim)
+	}
+	if got := envValueForKey(resolved.Env, claudeCodeExecutableEnv); got != managed {
+		t.Fatalf("%s = %q, want %q", claudeCodeExecutableEnv, got, managed)
+	}
+	if first := filepath.SplitList(envValueForKey(resolved.Env, "PATH"))[0]; first != filepath.Dir(managed) {
+		t.Fatalf("PATH first dir = %q, want managed runtime dir", first)
+	}
+}
+
 func TestServiceListReturnsLatestActiveActionAfterNetworkProbe(t *testing.T) {
 	service := testService(func(_ string) (string, error) {
 		return "", errors.New("not found")
@@ -1791,7 +1859,7 @@ func TestServiceRunActionReportsActiveActionForClaudeInstall(t *testing.T) {
 		case <-ctx.Done():
 			return InstallCommandResult{ExitCode: 1, Stderr: ctx.Err().Error()}, ctx.Err()
 		}
-		writeExecutable(t, filepath.Join(binDir, "claude-test"), "#!/bin/sh\nexit 0\n")
+		writeExecutable(t, filepath.Join(binDir, "claude-test"), "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo '2.1.201 (Claude Code)'; fi\nexit 0\n")
 		return InstallCommandResult{ExitCode: 0, Stdout: "installed"}, nil
 	}
 	go func() {
@@ -2221,7 +2289,7 @@ func TestServiceListClaudeCodeSDKAvailability(t *testing.T) {
 	home := t.TempDir()
 	binDir := filepath.Join(home, "bin")
 	claudePath := filepath.Join(binDir, "claude")
-	writeExecutable(t, claudePath, "#!/bin/sh\nexit 0\n")
+	writeExecutable(t, claudePath, "#!/bin/sh\necho '2.1.201 (Claude Code)'\n")
 	entry := filepath.Join(home, "claude-sdk-sidecar", "src", "main.ts")
 	if err := os.MkdirAll(filepath.Dir(entry), 0o755); err != nil {
 		t.Fatalf("mkdir sidecar entry dir: %v", err)
@@ -2267,7 +2335,7 @@ func TestServiceListClaudeCodeSDKReportsMissingSidecarEntry(t *testing.T) {
 	home := t.TempDir()
 	binDir := filepath.Join(home, "bin")
 	claudePath := filepath.Join(binDir, "claude")
-	writeExecutable(t, claudePath, "#!/bin/sh\nexit 0\n")
+	writeExecutable(t, claudePath, "#!/bin/sh\necho '2.1.201 (Claude Code)'\n")
 	service := probeTestService(home)
 	service.Environ = func() []string {
 		return []string{"PATH=" + binDir, claudeSDKSidecarEntryPathEnv + "=" + filepath.Join(home, "missing-main.ts")}
@@ -2758,7 +2826,7 @@ func newClaudeAuthListHarness(
 		t.Fatalf("mkdir bin dir: %v", err)
 	}
 	claudePath := filepath.Join(binDir, "claude")
-	writeExecutable(t, claudePath, "#!/bin/sh\nexit 0\n")
+	writeExecutable(t, claudePath, "#!/bin/sh\necho '2.1.201 (Claude Code)'\n")
 	writeExecutable(t, filepath.Join(binDir, "sample-agent-acp"), "#!/bin/sh\nexit 0\n")
 	writePackageManifest(t, binDir, "@agentclientprotocol/sample-agent-acp", "0.46.0")
 	registryStore, prefixDir := fakeExternalAgentRegistry(t)
