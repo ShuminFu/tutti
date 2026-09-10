@@ -14475,6 +14475,14 @@ components:
         reasoningEffort:
           type: string
           nullable: true
+        runtimeContractFile:
+          type: string
+          minLength: 1
+          description: Optional local runtime contract file prepared by the RnDMaster headless dispatcher.
+        resumeProviderSessionId:
+          type: string
+          minLength: 1
+          description: Optional Cursor ACP session id imported into the new Tutti session via session/load.
         noProject:
           type: boolean
           nullable: true

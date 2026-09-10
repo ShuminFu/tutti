@@ -6506,11 +6506,17 @@ type CreateWorkspaceAgentSessionRequest struct {
 	ReasoningEffort  *string                      `json:"reasoningEffort,omitempty"`
 
 	// RecordingId Developer create-session scenario waiting for this root Session.
-	RecordingId       *openapi_types.UUID     `json:"recordingId,omitempty"`
-	Speed             *string                 `json:"speed,omitempty"`
-	SubmitDiagnostics *AgentSubmitDiagnostics `json:"submitDiagnostics,omitempty"`
-	Title             *string                 `json:"title,omitempty"`
-	Visible           *bool                   `json:"visible,omitempty"`
+	RecordingId *openapi_types.UUID `json:"recordingId,omitempty"`
+
+	// RuntimeContractFile Optional local runtime contract file prepared by the RnDMaster headless dispatcher.
+	RuntimeContractFile *string `json:"runtimeContractFile,omitempty"`
+
+	// ResumeProviderSessionId Optional Cursor ACP session id imported into the new Tutti session via session/load.
+	ResumeProviderSessionId *string                 `json:"resumeProviderSessionId,omitempty"`
+	Speed               *string                 `json:"speed,omitempty"`
+	SubmitDiagnostics   *AgentSubmitDiagnostics `json:"submitDiagnostics,omitempty"`
+	Title               *string                 `json:"title,omitempty"`
+	Visible             *bool                   `json:"visible,omitempty"`
 }
 
 // CreateWorkspaceAppFactoryJobRequest defines model for CreateWorkspaceAppFactoryJobRequest.

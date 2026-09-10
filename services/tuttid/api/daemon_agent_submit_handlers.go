@@ -100,7 +100,7 @@ func (api DaemonAPI) CreateWorkspaceAgentSession(ctx context.Context, request tu
 		CodexSaverMode:             request.Body.CodexSaverMode,
 		CodexSaverModeAllowed:      api.codexSaverModeEnabled(ctx),
 		ReasoningEffort:            request.Body.ReasoningEffort,
-		RuntimeContext:             createSessionRuntimeContext(request.Body.NoProject),
+		RuntimeContext:             createSessionRuntimeContext(request.Body.NoProject, request.Body.RuntimeContractFile, request.Body.ResumeProviderSessionId),
 		RailPlacement:              railPlacementFromGenerated(request.Body.RailPlacement),
 		Speed:                      request.Body.Speed,
 		Title:                      request.Body.Title,
@@ -218,11 +218,29 @@ func railPlacementFromGenerated(placement *tuttigenerated.WorkspaceAgentRailPlac
 	}
 }
 
-func createSessionRuntimeContext(noProject *bool) map[string]any {
-	if noProject == nil || !*noProject {
+func createSessionRuntimeContext(noProject *bool, runtimeContractFile *string, resumeProviderSessionID *string) map[string]any {
+	runtimeContext := map[string]any{}
+	if noProject != nil && *noProject {
+		runtimeContext["noProject"] = true
+	}
+	rndmaster := map[string]any{}
+	if runtimeContractFile != nil {
+		if path := strings.TrimSpace(*runtimeContractFile); path != "" {
+			rndmaster["contractFile"] = path
+		}
+	}
+	if resumeProviderSessionID != nil {
+		if providerSessionID := strings.TrimSpace(*resumeProviderSessionID); providerSessionID != "" {
+			rndmaster["resumeProviderSessionId"] = providerSessionID
+		}
+	}
+	if len(rndmaster) > 0 {
+		runtimeContext["rndmaster"] = rndmaster
+	}
+	if len(runtimeContext) == 0 {
 		return nil
 	}
-	return map[string]any{"noProject": true}
+	return runtimeContext
 }
 
 func (api DaemonAPI) SendWorkspaceAgentSessionInput(ctx context.Context, request tuttigenerated.SendWorkspaceAgentSessionInputRequestObject) (tuttigenerated.SendWorkspaceAgentSessionInputResponseObject, error) {

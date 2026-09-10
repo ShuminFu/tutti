@@ -367,6 +367,14 @@ func TestDaemonAPIGeneratedRoutesCreateAgentSessionAllowsTargetOnlyRequest(t *te
 				if input.Isolation != agentservice.WorktreeIsolationMode {
 					t.Fatalf("isolation = %q, want worktree", input.Isolation)
 				}
+				if input.ClientSubmitID != "submit-1" {
+					t.Fatalf("client submit id = %q, want submit-1", input.ClientSubmitID)
+				}
+				rndmaster, _ := input.RuntimeContext["rndmaster"].(map[string]any)
+				if rndmaster["contractFile"] != "/tmp/runtime-contract.json" ||
+					rndmaster["resumeProviderSessionId"] != "cursor-history-1" {
+					t.Fatalf("runtime context = %#v", input.RuntimeContext)
+				}
 				return agentservice.Session{
 					ID:            input.AgentSessionID,
 					AgentTargetID: input.AgentTargetID,
@@ -384,10 +392,13 @@ func TestDaemonAPIGeneratedRoutesCreateAgentSessionAllowsTargetOnlyRequest(t *te
 	}))
 
 	recorder := performGeneratedRouteRequest(t, mux, http.MethodPost, "/v1/workspaces/ws-1/agent-sessions", map[string]any{
-		"agentSessionId": "11111111-1111-4111-8111-111111111111",
-		"agentTargetId":  agenttargetbiz.IDLocalCodex,
-		"isolation":      "worktree",
-		"initialContent": []map[string]any{{"type": "text", "text": "hello"}},
+		"agentSessionId":      "11111111-1111-4111-8111-111111111111",
+		"agentTargetId":       agenttargetbiz.IDLocalCursor,
+		"clientSubmitId":      "submit-1",
+		"isolation":           "worktree",
+		"resumeProviderSessionId": "cursor-history-1",
+		"runtimeContractFile": "/tmp/runtime-contract.json",
+		"initialContent":      []map[string]any{{"type": "text", "text": "hello"}},
 	})
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusCreated, recorder.Body.String())

@@ -3259,6 +3259,14 @@ export type CreateWorkspaceAgentSessionRequest = {
   model?: string | null;
   reasoningEffort?: string | null;
   /**
+   * Optional local runtime contract file prepared by the RnDMaster headless dispatcher.
+   */
+  runtimeContractFile?: string;
+  /**
+   * Optional Cursor ACP session id imported into the new Tutti session via session/load.
+   */
+  resumeProviderSessionId?: string;
+  /**
    * Classifies a session that is intentionally not attached to a workspace project.
    */
   noProject?: boolean | null;
