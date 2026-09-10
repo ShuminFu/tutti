@@ -29,6 +29,11 @@
 //                   result  = { requests: [{ id, status, reason, createdAt, from: Endpoint, to: Endpoint }] }
 // decidePeerRequest args[0] = { requestId, decision: "approve" | "reject" }
 //                   result  = { request: {...} }
+//
+// 会话栏圆点按宿主任务行终态隐藏（补丁 0122）：
+// sessionLiveness args[0] = { agentSessionIds: string[] }（≤200）
+//                 result  = { sessions: { [agentSessionId]: { state, taskId, status } } }
+//                 state ∈ "live" | "closed" | "unknown"；每个问到的 id 都在结果里。
 // 别名由宿主算，iframe 传空串；后端拒绝时回 { error: <中文文案>, code }。
 
 import { writeWorkspaceFileDropData } from "@tutti-os/agent-gui/workspace-file-drop";
@@ -662,4 +667,31 @@ export function requestHostDecidePeerRequest(args: {
     }
     return { request: result.request };
   });
+}
+
+export type HostSessionLivenessState = "live" | "closed" | "unknown";
+
+export interface HostSessionLivenessEntry {
+  state: HostSessionLivenessState;
+  status: string;
+  taskId: string;
+}
+
+/**
+ * 批量问宿主：这些会话在 `cli_agent_tasks` 里还活着吗。宿主保证每个问到的 id
+ * 都在结果里；这里只做形状兜底（宿主回了不认识的东西时当没这条，而不是崩）。
+ */
+export function requestHostSessionLiveness(args: {
+  agentSessionIds: string[];
+}): Promise<{ sessions: Record<string, HostSessionLivenessEntry> }> {
+  return requestHostCapability<{
+    sessions?: Record<string, HostSessionLivenessEntry>;
+  }>("sessionLiveness", [{ agentSessionIds: args.agentSessionIds }]).then(
+    (result) => ({
+      sessions:
+        result?.sessions && typeof result.sessions === "object"
+          ? result.sessions
+          : {}
+    })
+  );
 }

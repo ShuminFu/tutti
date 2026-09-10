@@ -51,4 +51,49 @@ describe("agentGUIConversationPresence", () => {
       })
     ).toBeNull();
   });
+
+  // —— 补丁 0122：宿主说了算的「已关闭」 ——
+  it("不画点：宿主判这条已关闭，压过 working 状态", () => {
+    expect(
+      agentGUIConversationPresence({ status: "working" }, "closed")
+    ).toBeNull();
+  });
+
+  it("不画点：宿主判已关闭，连活跃轮次也压得住", () => {
+    expect(
+      agentGUIConversationPresence(
+        { status: "working", activeTurn: { turnId: "turn-1" } as never },
+        "closed"
+      )
+    ).toBeNull();
+  });
+
+  it("宿主判 live：照旧按 Tutti 自己的判据画", () => {
+    expect(agentGUIConversationPresence({ status: "working" }, "live")).toBe(
+      "working"
+    );
+    expect(agentGUIConversationPresence({ status: "ready" }, "live")).toBe(
+      "idle"
+    );
+  });
+
+  it("宿主判 unknown / 没数据：都当没这回事", () => {
+    expect(agentGUIConversationPresence({ status: "ready" }, "unknown")).toBe(
+      "idle"
+    );
+    expect(agentGUIConversationPresence({ status: "ready" }, null)).toBe("idle");
+    expect(
+      agentGUIConversationPresence({ status: "ready" }, undefined)
+    ).toBe("idle");
+    expect(agentGUIConversationPresence({ status: "ready" })).toBe("idle");
+  });
+
+  it("宿主判 live 也救不回已结束的会话：endedAtUnixMs 仍然一票否决", () => {
+    expect(
+      agentGUIConversationPresence(
+        { status: "ready", endedAtUnixMs: 1_700_000_000_000 },
+        "live"
+      )
+    ).toBeNull();
+  });
 });

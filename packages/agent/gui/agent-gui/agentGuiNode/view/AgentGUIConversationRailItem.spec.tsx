@@ -498,6 +498,42 @@ describe("AgentGUIConversationRailItem 在线圆点", () => {
     ).not.toBeNull();
   });
 
+  // —— 补丁 0122：宿主说这条已关闭就不画点 ——
+  it("宿主判已关闭：不画点，哪怕 Tutti 侧还停在 working", () => {
+    const { container } = renderRailItem({
+      hostLiveness: "closed",
+      isRailInteractionLocked: () => false,
+      item: { status: "working" }
+    });
+
+    expect(container.querySelector("[data-presence]")).toBeNull();
+    expect(presenceDot(container)).toBeNull();
+    // 图标本身照旧渲染，只是没有角标。
+    expect(
+      container.querySelector(".agent-gui-node__conversation-provider-icon")
+    ).not.toBeNull();
+  });
+
+  it("宿主判 live / unknown：照旧按 Tutti 判据画", () => {
+    const live = renderRailItem({
+      hostLiveness: "live",
+      isRailInteractionLocked: () => false,
+      item: { status: "working" }
+    });
+    expect(presenceDot(live.container)?.getAttribute("data-presence")).toBe(
+      "working"
+    );
+
+    const unknown = renderRailItem({
+      hostLiveness: "unknown",
+      isRailInteractionLocked: () => false,
+      item: { status: "ready" }
+    });
+    expect(presenceDot(unknown.container)?.getAttribute("data-presence")).toBe(
+      "idle"
+    );
+  });
+
   it("圆点挂在 provider 图标的定位盒里，且对读屏隐藏", () => {
     const { container } = renderRailItem({
       isRailInteractionLocked: () => false,
@@ -519,6 +555,9 @@ describe("AgentGUIConversationRailItem 在线圆点", () => {
 
 function renderRailItem(overrides: {
   agentTargets?: readonly AgentMessageMarkdownAgentTarget[];
+  hostLiveness?: React.ComponentProps<
+    typeof AgentGUIConversationRailItem
+  >["hostLiveness"];
   isRailInteractionLocked: () => boolean;
   item?: Partial<AgentGUIConversationSummary>;
   onRequestRenameConversation?: (
@@ -537,6 +576,7 @@ function renderRailItem(overrides: {
       isDeletingConversation={false}
       isPendingDeleteConversation={false}
       isRailInteractionLocked={overrides.isRailInteractionLocked}
+      hostLiveness={overrides.hostLiveness}
       item={{
         cwd: "/workspace",
         id: "session-1",

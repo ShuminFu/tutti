@@ -5,6 +5,7 @@ import type { ConversationSection } from "../agentGuiNodeViewConversation";
 import type { AgentGUIConversationRailLabels } from "./agentGUIConversationRailLabels";
 import type { AgentGUIProjectActionDialog } from "./agentGUIConversationRailTypes";
 import { AgentGUIConversationRailItem } from "./AgentGUIConversationRailItem";
+import type { HostSessionLivenessMap } from "../../../shared/agentConversation/useHostSessionLiveness";
 import { AgentGUIConversationRailSectionHeader } from "./AgentGUIConversationRailSectionHeader";
 import { insertConversationRailSectionOverlay } from "../model/agentGuiConversationRail";
 import { applyConversationRailPeerPairAdjacency } from "../model/conversationRailPeerPairing";
@@ -30,6 +31,11 @@ interface AgentGUIConversationRailSectionProps {
   isLoadingMoreConversations: boolean;
   isRailInteractionLocked: () => boolean;
   isProjectActionLocked: () => boolean;
+  /**
+   * 宿主对会话死活的判断（补丁 0122），由会话栏面板统一轮询后整张传下来；
+   * 这里只按行取出一个字符串交给行组件，行的 memo 因此照旧有效。
+   */
+  hostLiveness?: HostSessionLivenessMap;
   projectDragging: boolean;
   projectDropIndicator: "before" | "after" | null;
   sectionHasMore: boolean;
@@ -103,6 +109,7 @@ export const AgentGUIConversationRailSection = memo(
     isLoadingMoreConversations,
     isRailInteractionLocked,
     isProjectActionLocked,
+    hostLiveness,
     projectDragging,
     projectDropIndicator,
     sectionHasMore,
@@ -373,6 +380,7 @@ export const AgentGUIConversationRailSection = memo(
                   pendingDeleteConversationId === item.id
                 }
                 isRailInteractionLocked={isRailInteractionLocked}
+                hostLiveness={hostLiveness?.get(item.id) ?? null}
                 item={item}
                 labels={labels}
                 peerPairGrouped={peerPairGroupKind(

@@ -27,6 +27,7 @@ import type { AgentGUIConversationRailLabels } from "./agentGUIConversationRailL
 import styles from "../AgentGUINode.styles";
 import { conversationPlainTitle } from "./agentGUIViewUtils";
 import { agentGUIConversationPresence } from "./agentGUIConversationPresence";
+import type { HostSessionLivenessState } from "../../../shared/agentConversation/sessionLivenessHost";
 import { AgentGUIConversationRailRelativeTime } from "./AgentGUIConversationRailClock";
 import {
   AgentGUIConversationActionsContextMenu,
@@ -89,6 +90,12 @@ interface AgentGUIConversationRailItemProps {
    * 否则整组看上去是几段断线，而不是一条括号，T5）。
    */
   peerPairGrouped?: false | "member" | "end";
+  /**
+   * 宿主（rndmaster）对这条会话的死活判断（补丁 0122）。`"closed"` = 宿主
+   * 任务行已终态 → 不画在线圆点；其余值 / 缺省都退回 0119 的纯 Tutti 判据。
+   * 有意只传一个字符串而不是整张表，memo 才挡得住每 4s 一次的轮询重渲染。
+   */
+  hostLiveness?: HostSessionLivenessState | null;
   onSelectConversation: (agentSessionId: string) => void;
   onToggleConversationPinned: (agentSessionId: string, pinned: boolean) => void;
   onMarkConversationUnread: (agentSessionId: string) => void;
@@ -121,6 +128,7 @@ export const AgentGUIConversationRailItem = memo(
     uiLanguage,
     workspaceId,
     peerPairGrouped,
+    hostLiveness,
     registerItemElement,
     onSelectConversation,
     onToggleConversationPinned,
@@ -347,7 +355,11 @@ export const AgentGUIConversationRailItem = memo(
       : undefined;
     // 在线圆点（补丁 0119）：蓝=这一轮在跑，绿=活着但闲着，null=会话已结束不画。
     // 只在真有图标时套定位盒——没有图标就没有可以挂角的东西。
-    const conversationPresence = agentGUIConversationPresence(item);
+    // 宿主说「已关闭」时压过 working/idle：见 agentGUIConversationPresence 的注释。
+    const conversationPresence = agentGUIConversationPresence(
+      item,
+      hostLiveness
+    );
     const conversationIconWithPresence =
       conversationIconNode && conversationPresence ? (
         <span className={styles.conversationProviderIconSlot}>

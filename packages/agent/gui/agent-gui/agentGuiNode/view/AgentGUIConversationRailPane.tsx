@@ -53,6 +53,7 @@ import type {
   AgentGUIProjectActionDialog
 } from "./agentGUIConversationRailTypes";
 import { useAgentGUIConversationRailBatchDeletion } from "./useAgentGUIConversationRailBatchDeletion";
+import { useHostSessionLiveness } from "../../../shared/agentConversation/useHostSessionLiveness";
 export type { AgentGUIProjectActionDialog } from "./agentGUIConversationRailTypes";
 export interface AgentGUIConversationRailControllerProps {
   activityContextKey?: string;
@@ -403,6 +404,17 @@ export const AgentGUIConversationRailPane = memo(
       userProjects
     ]);
     const groupedConversations = groupedConversationResult.groups;
+    // 会话栏圆点按宿主任务行终态隐藏（补丁 0122）：把当前**所有分组里**渲染着的
+    // 会话号收一遍交给轮询钩子，宿主判「已关闭」的那些行不画圆点。宿主没这组
+    // 能力时钩子返回空表，会话栏原样走 0119 的判据。
+    const railHostLivenessIds = useMemo(
+      () =>
+        groupedConversations.flatMap((section) =>
+          section.items.map((item) => item.id)
+        ),
+      [groupedConversations]
+    );
+    const railHostLiveness = useHostSessionLiveness(railHostLivenessIds);
     const hasRailContent = groupedConversations.some(
       (section) =>
         section.items.length > 0 ||
@@ -711,6 +723,7 @@ export const AgentGUIConversationRailPane = memo(
                           }
                           isRailInteractionLocked={isInteractionLocked}
                           isProjectActionLocked={isProjectActionLocked}
+                          hostLiveness={railHostLiveness}
                           projectDragging={
                             projectDragState !== null &&
                             projectDragState.projectId === section.project?.id

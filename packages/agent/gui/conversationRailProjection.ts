@@ -61,3 +61,13 @@ export {
   type PeerPairRequestSide,
   type PeerPairRequestView
 } from "./shared/agentConversation/peerPairRequestHost.ts";
+
+// 会话栏圆点按宿主任务行终态隐藏（补丁 0122）：宿主端口注册口挂同一个子路径。
+export {
+  registerSessionLivenessHost,
+  sessionLivenessHost,
+  SESSION_LIVENESS_MAX_IDS,
+  type HostSessionLivenessEntry,
+  type HostSessionLivenessState,
+  type SessionLivenessHost
+} from "./shared/agentConversation/sessionLivenessHost.ts";

@@ -12,6 +12,7 @@ import { installHostAgentSessionBridge } from "../../../platform/desktop/web/web
 import { registerEmbeddedHostCreatedSessionOpener } from "../../workspace-agent/services/internal/embeddedHostCreatedSessionOpener.ts";
 import { installEmbeddedRailPeerPairingHost } from "./embeddedRailPeerPairingHost.ts";
 import { installEmbeddedPeerPairRequestHost } from "./embeddedPeerPairRequestHost.ts";
+import { installEmbeddedSessionLivenessHost } from "./embeddedSessionLivenessHost.ts";
 import {
   embeddedSplitViewController,
   embeddedSplitViewPaneDescriptor,
@@ -120,9 +121,12 @@ export function installEmbeddedDintalDockSessionBridge(
   const unregisterPeerPairing = installEmbeddedRailPeerPairingHost();
   // 配对请求就地审批（补丁 0116）：同样只在嵌入 DinTalDock 时接上。
   const unregisterPeerRequests = installEmbeddedPeerPairRequestHost();
+  // 会话栏圆点按宿主任务行终态隐藏（补丁 0122）：同样只在嵌入 DinTalDock 时接上。
+  const unregisterSessionLiveness = installEmbeddedSessionLivenessHost();
   const uninstallBridge = installHostAgentSessionBridge(openSession, windowRef);
   return () => {
     uninstallBridge();
+    unregisterSessionLiveness();
     unregisterPeerRequests();
     unregisterPeerPairing();
     unregisterOpener();
