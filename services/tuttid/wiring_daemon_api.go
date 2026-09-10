@@ -777,9 +777,6 @@ func buildDaemonAPI(
 		replayComposition, agentModelCatalog, agentSessionService, events,
 	)
 
-	if refreshAgentExtensionsInBackground {
-		startAgentExtensionBackgroundRefresh(agentExtensionManager)
-	}
 	agentSessionReplayVerifier := composeAgentReplayVerifier(agentProcessComposition.replay, replaySemanticRuntime)
 
 	return tuttiapi.DaemonAPI{
@@ -828,6 +825,9 @@ func buildDaemonAPI(
 		CLIRegistry:       cliRegistry,
 		AnalyticsReporter: analyticsReporter,
 		OnListenerReady: func() {
+			if refreshAgentExtensionsInBackground {
+				startAgentExtensionBackgroundRefresh(agentExtensionManager)
+			}
 			tuttiModeMainWakeRecovery.MarkReady()
 			for _, workspace := range workspaces {
 				issueService.ExecutionRecoveryQueue.Enqueue(workspace.ID)

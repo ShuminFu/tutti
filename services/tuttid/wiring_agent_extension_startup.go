@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"os"
 	"time"
 
 	agentextensionservice "github.com/tutti-os/tutti/services/tuttid/service/agentextension"
@@ -17,6 +18,9 @@ func restoreAgentExtensionsForStartup(
 	for _, restoreErr := range restoreErrors {
 		payload, _ := json.Marshal(map[string]string{"error": restoreErr.Error()})
 		slog.Warn("agent_extension.restore_failed", "payload", string(payload))
+	}
+	if os.Getenv("RNDMASTER_TUTTI_EMBEDDED") == "1" {
+		return true
 	}
 	if !requiresSynchronousReconcile {
 		return true
