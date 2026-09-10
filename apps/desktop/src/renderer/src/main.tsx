@@ -23,36 +23,58 @@ registerDesktopPastedTextMention();
 registerDesktopModelMention();
 registerBrowserElementMention();
 
-const root = document.querySelector<HTMLDivElement>("#app");
+async function bootstrapRenderer(): Promise<void> {
+  const root = document.querySelector<HTMLDivElement>("#app");
+  if (!root) {
+    throw new Error("Renderer root element '#app' was not found.");
+  }
 
-if (!root) {
-  throw new Error("Renderer root element '#app' was not found.");
+  const logRendererDiagnostic = createRendererDiagnosticSink();
+  installBrowserCrashLogging({
+    logRendererDiagnostic
+  });
+  const [{ RendererApp }, { createWorkspaceWindowContainer }] =
+    await Promise.all([
+      import("./app/index.tsx"),
+      import("./app/windows/workspace/createWorkspaceWindowContainer.ts")
+    ]);
+  const application = (
+    <RendererApp
+      workspaceWindowContainer={await createWorkspaceWindowContainer()}
+    />
+  );
+  const rendererApp =
+    import.meta.env.DEV && import.meta.env.VITE_TUTTI_REACT_PROFILER === "1"
+      ? createProfiledRendererApp(logRendererDiagnostic, application)
+      : application;
+  const logReactRootError = createReactRootErrorLogger({
+    captureOwnerStack: React.captureOwnerStack,
+    logRendererDiagnostic
+  });
+
+  createRoot(root, {
+    onCaughtError(error, errorInfo) {
+      logReactRootError("caught", error, errorInfo);
+    },
+    onRecoverableError(error, errorInfo) {
+      logReactRootError("recoverable", error, errorInfo);
+    },
+    onUncaughtError(error, errorInfo) {
+      logReactRootError("uncaught", error, errorInfo);
+    }
+  }).render(
+    <StrictMode>
+      <I18nProvider>
+        <TooltipProvider>
+          <NativeTooltipSuppressor />
+          <DesktopToastProvider>{rendererApp}</DesktopToastProvider>
+        </TooltipProvider>
+      </I18nProvider>
+    </StrictMode>
+  );
 }
 
-const logRendererDiagnostic = createRendererDiagnosticSink();
-
-installBrowserCrashLogging({
-  logRendererDiagnostic
-});
-const [{ RendererApp }, { createWorkspaceWindowContainer }] = await Promise.all(
-  [
-    import("./app/index.tsx"),
-    import("./app/windows/workspace/createWorkspaceWindowContainer.ts")
-  ]
-);
-const application = (
-  <RendererApp
-    workspaceWindowContainer={await createWorkspaceWindowContainer()}
-  />
-);
-const rendererApp =
-  import.meta.env.DEV && import.meta.env.VITE_TUTTI_REACT_PROFILER === "1"
-    ? createProfiledRendererApp(logRendererDiagnostic, application)
-    : application;
-const logReactRootError = createReactRootErrorLogger({
-  captureOwnerStack: React.captureOwnerStack,
-  logRendererDiagnostic
-});
+void bootstrapRenderer();
 
 function createProfiledRendererApp(
   logRendererDiagnostic: ReturnType<typeof createRendererDiagnosticSink>,
@@ -87,24 +109,3 @@ function createProfiledRendererApp(
     </React.Profiler>
   );
 }
-
-createRoot(root, {
-  onCaughtError(error, errorInfo) {
-    logReactRootError("caught", error, errorInfo);
-  },
-  onRecoverableError(error, errorInfo) {
-    logReactRootError("recoverable", error, errorInfo);
-  },
-  onUncaughtError(error, errorInfo) {
-    logReactRootError("uncaught", error, errorInfo);
-  }
-}).render(
-  <StrictMode>
-    <I18nProvider>
-      <TooltipProvider>
-        <NativeTooltipSuppressor />
-        <DesktopToastProvider>{rendererApp}</DesktopToastProvider>
-      </TooltipProvider>
-    </I18nProvider>
-  </StrictMode>
-);
