@@ -44,10 +44,13 @@ import {
   reconcilePendingCancelForSubmit,
   reconcilePendingCancelFromMessages,
   reconcilePendingCancels,
-  sessionVersion
+  sessionVersion,
+  TURN_CANCEL_TIMEOUT_MS
 } from "./sessionLifecycle.cancel.ts";
+import { isPreTurnSendFailure } from "./promptSendFailure.ts";
 const NO_COMMANDS: readonly EngineCommand[] = [];
-const TURN_CANCEL_TIMEOUT_MS = 30_000;
+const STALE_INTERACTIVE_REQUEST_ERROR_REASON =
+  "agent_interactive_request_stale";
 
 export function createInitialSessionLifecycleState(): SessionLifecycleState {
   return {
@@ -181,6 +184,7 @@ export function sessionLifecycleReducer(
             commandId: `submit:cancel:${intent.clientSubmitId}`,
             awaitingTurnExpiresAtUnixMs:
               intent.requestedAtUnixMs + TURN_CANCEL_TIMEOUT_MS,
+            clientSubmitId: intent.clientSubmitId,
             timeoutMs: TURN_CANCEL_TIMEOUT_MS,
             workspaceId: intent.workspaceId
           })
@@ -241,6 +245,12 @@ export function sessionLifecycleReducer(
         );
       if (
         intent.commandType === "queue/sendPrompt" &&
+        isPreTurnSendFailure(intent)
+      ) {
+        return abandonPendingSubmitCancel(state, intent);
+      }
+      if (
+        intent.commandType === "queue/sendPrompt" &&
         context.sendResultValidation?.kind === "valid"
       ) {
         const sendResult = context.sendResultValidation.result;
@@ -267,6 +277,20 @@ export function sessionLifecycleReducer(
   }
 }
 
+function abandonPendingSubmitCancel(
+  state: SessionLifecycleState,
+  intent: Extract<EngineIntent, { type: "engine/commandResult" }>
+): EngineReducerResult<SessionLifecycleState> {
+  const clientSubmitId = intent.correlationId?.trim() ?? "";
+  if (!clientSubmitId) return unchanged(state);
+  const entry = Object.entries(state.operationBySessionId).find(
+    ([, operation]) =>
+      operation.cancel.status === "awaitingTurn" &&
+      (operation.cancel.targetClientSubmitId === clientSubmitId ||
+        operation.cancel.commandId === `submit:cancel:${clientSubmitId}`)
+  );
+  return entry ? clearCancel(state, entry[0]) : unchanged(state);
+}
 function changeRuntimeActivity(
   state: SessionLifecycleState,
   rawAgentSessionId: string,
@@ -535,7 +559,11 @@ function requestCancel(
   const turn = activeTurnId
     ? state.turnsById[canonicalTurnKey(id, activeTurnId)]
     : null;
-  if (turn && turn.phase !== "settled" && !targetClientSubmitId) {
+  if (
+    turn &&
+    turn.phase !== "settled" &&
+    (!targetClientSubmitId || intent.commandId.startsWith("submit:cancel:"))
+  ) {
     const next = setCancel(
       nextState,
       id,
