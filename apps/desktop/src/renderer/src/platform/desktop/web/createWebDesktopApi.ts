@@ -122,7 +122,7 @@ function createWebWallpaperApi(): DesktopWallpaperApi {
 }
 
 function createWebRuntimeApi(
-  backendConfig: DesktopBackendConfig
+  backendConfig: Promise<DesktopBackendConfig>
 ): DesktopRuntimeApi {
   return {
     getAgentSessionReplayPlayback() {
@@ -138,11 +138,11 @@ function createWebRuntimeApi(
       return Promise.resolve({ active: false });
     },
     getBackendConfig() {
-      return Promise.resolve(backendConfig);
+      return backendConfig;
     },
     getBusinessEventStreamUrl() {
-      return Promise.resolve(
-        resolveWebSocketUrl(backendConfig, "/v1/events/ws").toString()
+      return backendConfig.then((config) =>
+        resolveWebSocketUrl(config, "/v1/events/ws").toString()
       );
     },
     importAgentSessionReplayCassettes() {
@@ -181,15 +181,15 @@ function createWebRuntimeApi(
     waitForAgentSessionReplay() {
       return Promise.reject(electronDebugRequired("waitForAgentSessionReplay"));
     },
-    getTerminalStreamUrl(input) {
+    async getTerminalStreamUrl(input) {
       const url = resolveWebSocketUrl(
-        backendConfig,
+        await backendConfig,
         `/v1/workspaces/${encodeURIComponent(input.workspaceId)}/terminals/${encodeURIComponent(input.sessionId)}/ws`
       );
       if (input.afterSeq !== undefined) {
         url.searchParams.set("afterSeq", String(input.afterSeq));
       }
-      return Promise.resolve(url.toString());
+      return url.toString();
     },
     logRendererDiagnostic(input) {
       const method =
@@ -545,7 +545,7 @@ function createWebUpdateApi(): DesktopUpdateApi {
   };
 }
 
-function resolveWebBackendConfig(): DesktopBackendConfig {
+function resolveWebBackendConfig(): Promise<DesktopBackendConfig> {
   // Runtime injection first (URL query), then build-time env fallback so a
   // single static build can target any tuttid instance.
   return resolveWebBackendConfigFrom({
@@ -553,7 +553,32 @@ function resolveWebBackendConfig(): DesktopBackendConfig {
       VITE_TUTTID_ACCESS_TOKEN: import.meta.env.VITE_TUTTID_ACCESS_TOKEN,
       VITE_TUTTID_BASE_URL: import.meta.env.VITE_TUTTID_BASE_URL
     },
-    search: window.location.search
+    search: window.location.search,
+    fetchBootstrap: async (endpoint, nonce) => {
+      const url = new URL(endpoint, window.location.origin);
+      if (
+        url.protocol !== "http:" ||
+        (url.hostname !== "127.0.0.1" && url.hostname !== "[::1]") ||
+        !url.port ||
+        url.pathname !== "/tutti/bootstrap" ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash
+      ) {
+        throw new Error("managed tutti bootstrap endpoint is invalid");
+      }
+      url.searchParams.set("nonce", nonce);
+      const response = await fetch(url, {
+        cache: "no-store",
+        credentials: "omit",
+        headers: { Accept: "application/json" }
+      });
+      if (!response.ok) {
+        throw new Error("managed tutti bootstrap unavailable");
+      }
+      return response.json() as Promise<unknown>;
+    }
   });
 }
 

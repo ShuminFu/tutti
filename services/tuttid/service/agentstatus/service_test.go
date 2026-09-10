@@ -2026,6 +2026,39 @@ func TestServiceResolveProviderCommandUsesManagedCodexWithoutPATH(t *testing.T) 
 	}
 }
 
+func TestServiceManagedProviderResolutionFailsClosedWithoutCoordinates(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repo, "pnpm-workspace.yaml"), []byte("packages: []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	entry := filepath.Join(repo, "packages", "agent", "claude-sdk-sidecar", "src", "main.ts")
+	if err := os.MkdirAll(filepath.Dir(entry), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(entry, []byte("export {};\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	binDir := filepath.Join(repo, "bin")
+	writeExecutable(t, filepath.Join(binDir, "claude"), "#!/bin/sh\nexit 0\n")
+	writeExecutable(t, filepath.Join(binDir, "codex"), "#!/bin/sh\nexit 0\n")
+	t.Chdir(repo)
+	t.Setenv("PATH", binDir)
+	t.Setenv(managedProvidersRuntimeEnv, "1")
+	t.Setenv(managedCodexRuntimeEnv, "1")
+	t.Setenv(claudeSDKSidecarEntryPathEnv, "")
+	t.Setenv(managedCodexAppServerPathEnv, "")
+	t.Setenv(managedCodexGatewayBaseEnv, "")
+	t.Setenv(managedCodexGatewayKeyEnv, "")
+
+	service := probeTestService(repo)
+	if _, err := service.ResolveProviderCommand(context.Background(), "claude-code"); err == nil || !strings.Contains(err.Error(), ReasonClaudeSDKSidecarUnavailable) {
+		t.Fatalf("managed Claude must reject cwd/PATH fallback, got %v", err)
+	}
+	if _, err := service.ResolveProviderCommand(context.Background(), "codex"); err == nil || !strings.Contains(err.Error(), "managed_codex_runtime_invalid") {
+		t.Fatalf("managed Codex must reject PATH fallback, got %v", err)
+	}
+}
+
 func TestServiceResolveProviderCommandFallsBackToManagedNodeForCodex(t *testing.T) {
 	home := t.TempDir()
 	binDir := filepath.Join(home, "bin")

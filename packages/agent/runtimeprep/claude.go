@@ -15,6 +15,7 @@ const claudeSystemPromptFileEnv = "TUTTI_CLAUDE_SYSTEM_PROMPT_FILE"
 const claudePluginDirEnv = "TUTTI_CLAUDE_PLUGIN_DIR"
 const claudeSkillListingBudgetEnv = "SLASH_COMMAND_TOOL_CHAR_BUDGET"
 const claudeSkillListingBudgetChars = "20000"
+const managedProvidersRuntimeEnv = "TUTTI_MANAGED_PROVIDERS"
 
 // claudeCodeExecutableEnvName always wins inside the sidecar, even over a
 // bundled native SDK binary — it is the operator escape hatch.
@@ -120,6 +121,9 @@ func installClaudeTuttiPlugin(pluginDir string, input PrepareInput) error {
 // sidecar only uses the fallback when the SDK cannot self-resolve a native
 // binary next to itself.
 func (p ClaudeCodePreparer) claudeCodeExecutableEnv() []string {
+	if os.Getenv(managedProvidersRuntimeEnv) == "1" {
+		return nil
+	}
 	if configured := strings.TrimSpace(os.Getenv(claudeCodeExecutableEnvName)); configured != "" {
 		return []string{claudeCodeExecutableEnvName + "=" + configured}
 	}

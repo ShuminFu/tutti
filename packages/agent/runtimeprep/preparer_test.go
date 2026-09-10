@@ -1874,6 +1874,27 @@ func TestDefaultPreparerClaudeCodePrefersManagedBinaryOverPath(t *testing.T) {
 	}
 }
 
+func TestDefaultPreparerManagedClaudeCodeDoesNotUsePATH(t *testing.T) {
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	t.Setenv("CLAUDE_CODE_EXECUTABLE", "")
+	t.Setenv(managedProvidersRuntimeEnv, "1")
+
+	prepared, err := NewDefaultPreparer(t.TempDir()).Prepare(t.Context(), PrepareInput{
+		WorkspaceID: "workspace-1", AgentSessionID: "session-1",
+		Provider: "claude-code", Cwd: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	if got := envValue(prepared.Env, "CLAUDE_CODE_EXECUTABLE"); got != "" {
+		t.Fatalf("managed Claude inherited system executable %q", got)
+	}
+}
+
 func TestDefaultPreparerCursorUsesRuntimePluginDir(t *testing.T) {
 	stateDir := t.TempDir()
 	cwd := t.TempDir()

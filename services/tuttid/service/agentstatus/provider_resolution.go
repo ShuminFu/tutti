@@ -26,6 +26,7 @@ const ReasonClaudeSDKSidecarUnavailable = "claude_sdk_sidecar_unavailable"
 const claudeSDKSidecarCommandEnv = "TUTTI_CLAUDE_SDK_SIDECAR_COMMAND"
 const claudeSDKSidecarEntryPathEnv = "TUTTI_CLAUDE_SDK_SIDECAR_ENTRY_PATH"
 const claudeSDKSidecarDefaultNodeArg = "--experimental-strip-types"
+const managedProvidersRuntimeEnv = "TUTTI_MANAGED_PROVIDERS"
 const managedCodexRuntimeEnv = "TUTTI_CODEX_MANAGED"
 const managedCodexAppServerPathEnv = "TUTTI_CODEX_APP_SERVER_PATH"
 const managedCodexGatewayBaseEnv = "TUTTI_CODEX_GATEWAY_BASE"
@@ -173,6 +174,9 @@ func (s Service) resolveClaudeSDKSidecarEntryPath() string {
 		if s.fileExists(entry) {
 			return entry
 		}
+		return ""
+	}
+	if os.Getenv(managedProvidersRuntimeEnv) == "1" {
 		return ""
 	}
 	root := findClaudeSDKRepoRoot()

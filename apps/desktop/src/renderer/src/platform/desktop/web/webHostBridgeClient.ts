@@ -35,6 +35,13 @@ export function isHostBridgeAvailable(): boolean {
   );
 }
 
+function bridgeCoordinates(): { nonce: string; hostOrigin: string } | null {
+  const params = new URLSearchParams(window.location.search);
+  const nonce = params.get("tuttiBootstrap")?.trim();
+  const hostOrigin = params.get("tuttiHostOrigin")?.trim();
+  return nonce && hostOrigin ? { nonce, hostOrigin } : null;
+}
+
 let requestCounter = 0;
 
 function nextRequestId(): string {
@@ -50,7 +57,8 @@ export function requestHostCapability<T>(
   args: unknown[] = [],
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
-  if (!isHostBridgeAvailable()) {
+  const coordinates = isHostBridgeAvailable() ? bridgeCoordinates() : null;
+  if (!coordinates) {
     return Promise.reject(
       new HostBridgeUnavailableError("tutti host bridge: not embedded")
     );
@@ -68,14 +76,17 @@ export function requestHostCapability<T>(
 
     const onMessage = (event: MessageEvent): void => {
       const data = event.data as
-        | { type?: unknown; id?: unknown; result?: T; error?: unknown }
+        | { type?: unknown; id?: unknown; nonce?: unknown; result?: T; error?: unknown }
         | null
         | undefined;
       if (
         !data ||
         typeof data !== "object" ||
         data.type !== RESPONSE_TYPE ||
-        data.id !== id
+        data.id !== id ||
+        data.nonce !== coordinates.nonce ||
+        event.source !== window.parent ||
+        event.origin !== coordinates.hostOrigin
       ) {
         return;
       }
@@ -111,6 +122,9 @@ export function requestHostCapability<T>(
     }, timeoutMs);
 
     window.addEventListener("message", onMessage);
-    window.parent.postMessage({ type: REQUEST_TYPE, capability, id, args }, "*");
+    window.parent.postMessage(
+      { type: REQUEST_TYPE, capability, id, args, nonce: coordinates.nonce },
+      coordinates.hostOrigin === "null" ? "*" : coordinates.hostOrigin
+    );
   });
 }

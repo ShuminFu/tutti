@@ -2,73 +2,48 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveWebBackendConfigFrom } from "./resolveWebBackendConfig.ts";
 
-test("resolveWebBackendConfigFrom uses query params when both base URL and token are present", () => {
-  const config = resolveWebBackendConfigFrom({
-    search: "?tuttidBaseUrl=http%3A%2F%2F127.0.0.1%3A51234&tuttidToken=query-token",
-    env: {
-      VITE_TUTTID_BASE_URL: "http://127.0.0.1:18080",
-      VITE_TUTTID_ACCESS_TOKEN: "env-token"
+test("bootstrap nonce resolves the connection in memory", async () => {
+  let called: [string, string] | null = null;
+  const config = await resolveWebBackendConfigFrom({
+    search: "?tuttiBootstrap=n1&tuttiBootstrapUrl=%2Ftutti%2Fbootstrap",
+    env: {},
+    fetchBootstrap: async (endpoint, nonce) => {
+      called = [endpoint, nonce];
+      return { base_url: "http://127.0.0.1:51234", access_token: "memory-token" };
     }
   });
-
-  assert.deepEqual(config, {
-    accessToken: "query-token",
-    baseUrl: "http://127.0.0.1:51234"
-  });
+  assert.deepEqual(called, ["/tutti/bootstrap", "n1"]);
+  assert.deepEqual(config, { baseUrl: "http://127.0.0.1:51234", accessToken: "memory-token" });
 });
 
-test("resolveWebBackendConfigFrom falls back to build-time env when query params are absent", () => {
-  const config = resolveWebBackendConfigFrom({
+test("rejects a non-loopback bootstrap response", async () => {
+  await assert.rejects(
+    resolveWebBackendConfigFrom({
+      search: "?tuttiBootstrap=n1&tuttiBootstrapUrl=%2Ftutti%2Fbootstrap",
+      env: {},
+      fetchBootstrap: async () => ({ base_url: "https://evil.example", access_token: "token" })
+    }),
+    /invalid/
+  );
+});
+
+test("falls back to build-time env only without a complete bootstrap", async () => {
+  const config = await resolveWebBackendConfigFrom({
     search: "",
     env: {
       VITE_TUTTID_BASE_URL: "http://127.0.0.1:18080",
       VITE_TUTTID_ACCESS_TOKEN: "env-token"
     }
   });
-
-  assert.deepEqual(config, {
-    accessToken: "env-token",
-    baseUrl: "http://127.0.0.1:18080"
-  });
+  assert.deepEqual(config, { accessToken: "env-token", baseUrl: "http://127.0.0.1:18080" });
 });
 
-test("resolveWebBackendConfigFrom ignores an incomplete query (base URL only) and falls back to env", () => {
-  const config = resolveWebBackendConfigFrom({
-    search: "?tuttidBaseUrl=http%3A%2F%2F127.0.0.1%3A51234",
-    env: {
-      VITE_TUTTID_BASE_URL: "http://127.0.0.1:18080",
-      VITE_TUTTID_ACCESS_TOKEN: "env-token"
-    }
-  });
-
-  assert.deepEqual(config, {
-    accessToken: "env-token",
-    baseUrl: "http://127.0.0.1:18080"
-  });
-});
-
-test("resolveWebBackendConfigFrom ignores an incomplete query (token only) and falls back to env", () => {
-  const config = resolveWebBackendConfigFrom({
-    search: "?tuttidToken=query-token",
-    env: {
-      VITE_TUTTID_BASE_URL: "http://127.0.0.1:18080",
-      VITE_TUTTID_ACCESS_TOKEN: "env-token"
-    }
-  });
-
-  assert.deepEqual(config, {
-    accessToken: "env-token",
-    baseUrl: "http://127.0.0.1:18080"
-  });
-});
-
-test("resolveWebBackendConfigFrom throws when neither query nor env can supply a complete config", () => {
-  assert.throws(
-    () =>
-      resolveWebBackendConfigFrom({
-        search: "?tuttidToken=query-token",
-        env: {}
-      }),
-    /is required for desktop web development/
+test("does not accept legacy token query parameters", async () => {
+  await assert.rejects(
+    resolveWebBackendConfigFrom({
+      search: "?tuttidBaseUrl=http%3A%2F%2F127.0.0.1%3A1&tuttidToken=query-token",
+      env: {}
+    }),
+    /is required/
   );
 });

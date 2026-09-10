@@ -7,6 +7,8 @@ export interface ResolvedDesktopEnvironment {
   startupWorkspaceID: string | null;
 }
 
+let webDesktopApi: DesktopApi | undefined;
+
 export function resolveDesktopEnvironment(
   desktopApi: DesktopApi | undefined
 ): ResolvedDesktopEnvironment {
@@ -25,7 +27,7 @@ export function resolveDesktopEnvironment(
   }
 
   return {
-    desktopApi: createWebDesktopApi(),
+    desktopApi: (webDesktopApi ??= createWebDesktopApi()),
     mode: "web",
     startupWorkspaceID: readEnvString(
       import.meta.env.VITE_TUTTI_WEB_WORKSPACE_ID
