@@ -601,15 +601,18 @@ function DesktopAgentGUISurfaceImpl({
       connectors: {
         enabled: isFeatureEnabled(featureFlags, LAB_CONNECTORS_FLAG)
       },
+      // Embedded DinTalDock has no standalone `tutti` CLI; hide DinTalDock Mode
+      // (tuttiMode orchestration) so the composer cannot activate a broken path.
       tuttiMode: {
-        enabled: true
+        enabled: !embeddedDintalDock
       }
     };
   }, [
     computerUseStatus,
     desktopPreferencesState.browserUseConnectionMode,
     desktopPreferencesState.changingFeatureFlags,
-    desktopPreferencesState.featureFlags
+    desktopPreferencesState.featureFlags,
+    embeddedDintalDock
   ]);
   const handleAgentEnvPanelOpen = useCallback<
     NonNullable<AgentGUIProps["hostActions"]["onAgentEnvPanelOpen"]>
