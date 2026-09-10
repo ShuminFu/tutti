@@ -493,6 +493,66 @@ func TestDefaultPreparerFastCodexSkipsPersonalExtensions(t *testing.T) {
 	}
 }
 
+func TestDefaultPreparerFastCodexSanitizesExistingRunConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv(codexFastStartEnv, "1")
+
+	stateDir := t.TempDir()
+	store := LocalStore{StateDir: stateDir}
+	runtimeRoot, err := store.RuntimeRoot("workspace-existing", "session-existing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	existingConfigPath := filepath.Join(runtimeRoot, "codex-home", "config.toml")
+	existingConfig := strings.Join([]string{
+		`model = "keep-existing-model"`,
+		`notify = ["keep-existing-hook"]`,
+		"",
+		`[plugins."browser@openai-bundled"]`,
+		`enabled = true`,
+		"",
+		`[mcp_servers.node_repl]`,
+		`command = "node_repl"`,
+		"",
+		`[features]`,
+		`apps = true`,
+		`plugins = true`,
+		`remote_plugin = true`,
+		"",
+	}, "\n")
+	writeSidecarTestFile(t, existingConfigPath, existingConfig)
+
+	prepared, err := NewDefaultPreparer(stateDir).Prepare(t.Context(), PrepareInput{
+		WorkspaceID: "workspace-existing", AgentSessionID: "session-existing",
+		Provider: "codex", Cwd: t.TempDir(), BrowserUse: true,
+	})
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	codexHome := envValue(prepared.Env, "CODEX_HOME")
+	content, err := os.ReadFile(filepath.Join(codexHome, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := string(content)
+	if strings.Contains(config, "mcp_servers") || strings.Contains(config, "[plugins.") {
+		t.Fatalf("existing personal extensions survived fast-start sanitization: %q", config)
+	}
+	for _, want := range []string{
+		`model = "keep-existing-model"`,
+		`notify = ["keep-existing-hook"]`,
+		"apps = false",
+		"plugins = false",
+		"remote_plugin = false",
+	} {
+		if !strings.Contains(config, want) {
+			t.Fatalf("sanitized config missing %q: %q", want, config)
+		}
+	}
+}
+
 func TestDefaultPreparerReturnsAuthoritativeMCPBindings(t *testing.T) {
 	setTestHome(t, t.TempDir())
 	input := PrepareInput{
