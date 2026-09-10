@@ -150,14 +150,19 @@ func (s *SQLiteStore) applyModelPlanRevisionsV1(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin model plan revisions v1 migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
 	if !hasRevision {
-		if _, err := s.writeDB.ExecContext(ctx, `ALTER TABLE model_plans ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;`); err != nil {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE model_plans ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;`); err != nil {
 			return fmt.Errorf("add model plan revision: %w", err)
 		}
 	}
 
 	now := unixMs(time.Now().UTC())
-	_, err = s.writeDB.ExecContext(ctx, `
+	if _, err = tx.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS model_plan_revisions (
   workspace_id TEXT NOT NULL,
   plan_id TEXT NOT NULL,
@@ -181,7 +186,11 @@ CREATE TABLE IF NOT EXISTS model_plan_revisions (
 
 CREATE INDEX IF NOT EXISTS idx_model_plan_revisions_lookup
   ON model_plan_revisions(workspace_id, plan_id, revision DESC);
+	`); err != nil {
+		return fmt.Errorf("create model plan revisions v1 schema: %w", err)
+	}
 
+	if _, err = tx.ExecContext(ctx, `
 INSERT OR IGNORE INTO model_plan_revisions (
   workspace_id, plan_id, revision, name, template_kind, protocol,
   api_key_ciphertext, base_url, models_json, default_model, enabled,
@@ -192,12 +201,27 @@ SELECT workspace_id, plan_id, revision, name, template_kind, protocol,
   api_key_ciphertext, base_url, models_json, default_model, enabled,
   detection_json, first_use_json, created_at_unix_ms, updated_at_unix_ms, ?
 FROM model_plans;
-
+`, now); err != nil {
+		return fmt.Errorf("backfill model plan revisions v1: %w", err)
+	}
+	// The original multi-statement Exec bound the backfill timestamp to the
+	// marker statement on modernc SQLite, producing rows shaped like
+	// (id=<timestamp>, applied_at_unix_ms='model_plan_revisions_v1'). Remove
+	// only that impossible ledger shape before recording the correct marker.
+	if _, err = tx.ExecContext(ctx, `
+DELETE FROM tuttid_schema_migrations
+WHERE CAST(applied_at_unix_ms AS TEXT) = ?
+`, schemaMigrationModelPlanRevisionsV1); err != nil {
+		return fmt.Errorf("repair malformed model plan revisions v1 marker: %w", err)
+	}
+	if _, err = tx.ExecContext(ctx, `
 INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms)
   VALUES (?, ?);
-`, now, schemaMigrationModelPlanRevisionsV1, now)
-	if err != nil {
-		return fmt.Errorf("migrate model plan revisions v1: %w", err)
+`, schemaMigrationModelPlanRevisionsV1, now); err != nil {
+		return fmt.Errorf("record model plan revisions v1 migration: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit model plan revisions v1 migration: %w", err)
 	}
 	return nil
 }

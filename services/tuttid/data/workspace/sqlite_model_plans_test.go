@@ -270,6 +270,55 @@ WHERE workspace_id = 'ws-retry' AND provider_id = 'openai'
 	}
 }
 
+func TestModelPlanRevisionsMigrationRecordsStableMarkerOnce(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := openTestSQLiteStore(t)
+	if _, err := store.writeDB.ExecContext(ctx, `
+DELETE FROM tuttid_schema_migrations WHERE id = ?
+`, schemaMigrationModelPlanRevisionsV1); err != nil {
+		t.Fatalf("delete correct model plan revision marker: %v", err)
+	}
+	if _, err := store.writeDB.ExecContext(ctx, `
+INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms)
+VALUES ('1730000000000', ?)
+`, schemaMigrationModelPlanRevisionsV1); err != nil {
+		t.Fatalf("seed malformed model plan revision marker: %v", err)
+	}
+	if err := store.applyModelPlanRevisionsV1(ctx); err != nil {
+		t.Fatalf("first applyModelPlanRevisionsV1() error = %v", err)
+	}
+	if err := store.applyModelPlanRevisionsV1(ctx); err != nil {
+		t.Fatalf("second applyModelPlanRevisionsV1() error = %v", err)
+	}
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatalf("Migrate() after direct retries error = %v", err)
+	}
+
+	var markerCount int
+	if err := store.writeDB.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM tuttid_schema_migrations WHERE id = ?
+`, schemaMigrationModelPlanRevisionsV1).Scan(&markerCount); err != nil {
+		t.Fatalf("count model plan revision marker: %v", err)
+	}
+	if markerCount != 1 {
+		t.Fatalf("model plan revision marker count = %d, want 1", markerCount)
+	}
+
+	var misplacedCount int
+	if err := store.writeDB.QueryRowContext(ctx, `
+SELECT COUNT(*)
+FROM tuttid_schema_migrations
+WHERE CAST(applied_at_unix_ms AS TEXT) = ?
+`, schemaMigrationModelPlanRevisionsV1).Scan(&misplacedCount); err != nil {
+		t.Fatalf("count misplaced model plan revision marker: %v", err)
+	}
+	if misplacedCount != 0 {
+		t.Fatalf("misplaced model plan revision markers = %d, want 0", misplacedCount)
+	}
+}
+
 func TestModelPlanFirstUseCandidatesMigrationRepairsLegacyModelPlansV1Schema(t *testing.T) {
 	t.Parallel()
 
