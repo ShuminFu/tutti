@@ -424,6 +424,36 @@ func TestDefaultPreparerManagedCodexDoesNotReadPersonalHome(t *testing.T) {
 	}
 }
 
+func TestDefaultPreparerCodexUsesConfiguredHome(t *testing.T) {
+	home := t.TempDir()
+	setTestHome(t, home)
+	configuredHome := filepath.Join(t.TempDir(), "company-codex")
+	t.Setenv("CODEX_HOME", configuredHome)
+	writeSidecarTestFile(t, filepath.Join(home, ".codex", "config.toml"), `model_provider = "official"`)
+	writeSidecarTestFile(t, filepath.Join(configuredHome, "config.toml"), `model_provider = "company"`)
+	writeSidecarTestFile(t, filepath.Join(configuredHome, "auth.json"), `{"token":"company"}`)
+
+	prepared, err := newTestPreparer(t.TempDir()).Prepare(t.Context(), PrepareInput{
+		WorkspaceID: "workspace-custom-home", AgentSessionID: "session-custom-home",
+		Provider: "codex", Cwd: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	runHome := envValue(prepared.Env, "CODEX_HOME")
+	config, err := os.ReadFile(filepath.Join(runHome, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(config), `model_provider = "company"`) || strings.Contains(string(config), `model_provider = "official"`) {
+		t.Fatalf("run config = %q, want configured CODEX_HOME", config)
+	}
+	auth, err := os.ReadFile(filepath.Join(runHome, "auth.json"))
+	if err != nil || string(auth) != `{"token":"company"}` {
+		t.Fatalf("run auth = %q, err = %v", auth, err)
+	}
+}
+
 func TestDefaultPreparerFastCodexSkipsPersonalExtensions(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

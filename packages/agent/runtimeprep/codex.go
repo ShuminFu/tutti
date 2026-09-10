@@ -93,11 +93,11 @@ func projectCodexAuth(ctx context.Context, codexHome string, projector AuthFileP
 	if projector == nil {
 		return nil, nil
 	}
-	userHome, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(userHome) == "" {
+	userCodexHome := configuredCodexHome()
+	if userCodexHome == "" {
 		return nil, nil
 	}
-	source := filepath.Join(userHome, ".codex", "auth.json")
+	source := filepath.Join(userCodexHome, "auth.json")
 	if _, err := os.Stat(source); err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -246,11 +246,10 @@ func codexApprovalRule(pattern []string) string {
 }
 
 func exposeUserCodexFiles(codexHome string, fastStart bool) error {
-	userHome, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(userHome) == "" {
+	userCodexHome := configuredCodexHome()
+	if userCodexHome == "" {
 		return nil
 	}
-	userCodexHome := filepath.Join(userHome, ".codex")
 	for _, name := range []string{"auth.json"} {
 		source := filepath.Join(userCodexHome, name)
 		if _, err := os.Stat(source); err != nil {
@@ -306,11 +305,10 @@ func exposeCodexImportedRolloutFile(codexHome string, sourcePath string) error {
 	if sourcePath == "" {
 		return nil
 	}
-	userHome, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(userHome) == "" {
+	userCodexHome := configuredCodexHome()
+	if userCodexHome == "" {
 		return nil
 	}
-	userCodexHome := filepath.Join(userHome, ".codex")
 	rel, err := filepath.Rel(userCodexHome, sourcePath)
 	if err != nil || rel == ".." || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		// Not under the real ~/.codex tree we know how to mirror - leave it to
@@ -842,11 +840,11 @@ func codexConfigStringAssignmentValueAt(lines []string, index int, key string) (
 }
 
 func exposeUserCodexSkillFolders(targetRoot string, input PrepareInput) error {
-	userHome, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(userHome) == "" {
+	userCodexHome := configuredCodexHome()
+	if userCodexHome == "" {
 		return nil
 	}
-	sourceRoot := filepath.Join(userHome, ".codex", "skills")
+	sourceRoot := filepath.Join(userCodexHome, "skills")
 	entries, err := os.ReadDir(sourceRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -896,6 +894,17 @@ func exposeUserCodexSkillFolders(targetRoot string, input PrepareInput) error {
 		}
 	}
 	return nil
+}
+
+func configuredCodexHome() string {
+	if home := strings.TrimSpace(os.Getenv("CODEX_HOME")); home != "" {
+		return filepath.Clean(home)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return ""
+	}
+	return filepath.Join(home, ".codex")
 }
 
 func hasDelimitedSkillFrontmatter(path string) bool {
