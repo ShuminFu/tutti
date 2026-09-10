@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   applyEmbeddedDintalDockContributions,
   isEmbeddedDintalDock,
@@ -15,9 +16,9 @@ test("detects only the protected host bootstrap query", () => {
 test("projects the embedded Agent frame for its body and header", () => {
   const rawFrame = { height: 192, width: 320, x: 13, y: 52 };
   const projectedFrame = { height: 825, width: 759, x: 0, y: 0 };
-  const bodyFrames: typeof rawFrame[] = [];
-  const headerFrames: typeof rawFrame[] = [];
-  const keyFrames: typeof rawFrame[] = [];
+  const bodyFrames: (typeof rawFrame)[] = [];
+  const headerFrames: (typeof rawFrame)[] = [];
+  const keyFrames: (typeof rawFrame)[] = [];
   const renderBody = (context: { node: { frame: typeof rawFrame } }) => {
     bodyFrames.push(context.node.frame);
     return null;
@@ -51,15 +52,17 @@ test("projects the embedded Agent frame for its body and header", () => {
   assert.ok(getHeaderFrameRenderKey);
   assert.ok(renderHeader);
 
-  renderHeader({
-    dragHandleProps: {
-      "data-workbench-drag-handle": "true",
-      onDoubleClick: () => undefined,
-      onPointerDown: () => undefined
-    },
-    node: { frame: rawFrame },
-    surfaceSize: { height: 825, width: 759 }
-  } as never);
+  renderToStaticMarkup(
+    renderHeader({
+      dragHandleProps: {
+        "data-workbench-drag-handle": "true",
+        onDoubleClick: () => undefined,
+        onPointerDown: () => undefined
+      },
+      node: { frame: rawFrame },
+      surfaceSize: { height: 825, width: 759 }
+    } as never) as never
+  );
   assert.equal(
     getHeaderFrameRenderKey({
       node: { frame: rawFrame },
@@ -82,6 +85,73 @@ test("projects the embedded Agent frame for its body and header", () => {
   assert.deepEqual(headerFrames, [projectedFrame]);
   assert.deepEqual(keyFrames, [projectedFrame]);
   assert.deepEqual(bodyFrames, [projectedFrame]);
+});
+
+test("shares a session-only narrow rail intent between header and body", () => {
+  const frame = { height: 825, width: 600, x: 0, y: 0 };
+  let headerExpanded: boolean | undefined;
+  let bodyExpanded: boolean | undefined;
+  let setHeaderExpanded: ((expanded: boolean) => void) | undefined;
+  const controller = {
+    getSnapshot: () => ({ surfaceSize: { height: 825, width: 600 } }),
+    subscribe: () => () => undefined
+  };
+  const contribution = applyEmbeddedDintalDockContributions([
+    {
+      id: "agent",
+      nodes: [
+        {
+          frame,
+          renderBody: ((context: {
+            conversationRailNarrowExpanded?: boolean;
+          }) => {
+            bodyExpanded = context.conversationRailNarrowExpanded;
+            return null;
+          }) as never,
+          renderHeader: ((context: {
+            conversationRailNarrowExpanded?: boolean;
+            onConversationRailNarrowExpandedChange?: (
+              expanded: boolean
+            ) => void;
+          }) => {
+            headerExpanded = context.conversationRailNarrowExpanded;
+            setHeaderExpanded = context.onConversationRailNarrowExpandedChange;
+            return null;
+          }) as never,
+          title: "Agent",
+          typeId: "agent-gui"
+        }
+      ]
+    }
+  ])?.[0]?.nodes?.[0];
+  assert.ok(contribution?.renderHeader);
+
+  const headerContext = {
+    dragHandleProps: {},
+    node: { frame, id: "agent-node" },
+    surfaceSize: { height: 825, width: 600 }
+  } as never;
+  const bodyContext = {
+    host: {
+      controller,
+      getSnapshot: controller.getSnapshot
+    },
+    node: { frame, id: "agent-node" }
+  } as never;
+  const renderSharedState = (): void => {
+    renderToStaticMarkup(contribution.renderHeader?.(headerContext) as never);
+    renderToStaticMarkup(contribution.renderBody(bodyContext) as never);
+  };
+
+  renderSharedState();
+  assert.equal(headerExpanded, false);
+  assert.equal(bodyExpanded, false);
+  assert.ok(setHeaderExpanded);
+
+  setHeaderExpanded(true);
+  renderSharedState();
+  assert.equal(headerExpanded, true);
+  assert.equal(bodyExpanded, true);
 });
 
 test("waits for a positive body surface and keeps narrow auto-collapse", () => {

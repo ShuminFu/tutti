@@ -717,6 +717,8 @@ export interface AgentGUINodeViewProps extends AgentGUIComposerExternalPromptPro
     confirmDeleteConversation: () => void;
   };
   conversationRailCollapsed: boolean;
+  conversationRailOverlay?: boolean;
+  onConversationRailOverlayDismiss?: () => void;
   conversationRailWidthPx: number;
   conversationRailMinWidthPx: number;
   conversationRailMaxWidthPx: number;

@@ -116,6 +116,38 @@ describe("AgentGUINode status controller integration", () => {
     agentProbeInfoPopoverSpy.mockReset();
   });
 
+  it("projects an expanded embedded narrow rail as an overlay", () => {
+    mockViewModel = createViewModel();
+    const onConversationRailNarrowExpandedChange = vi.fn();
+
+    render(
+      <AgentGUINode
+        {...createProps({
+          frame: {
+            position: { x: 0, y: 0 },
+            width: 600,
+            height: 520,
+            desktopSize: { width: 600, height: 720 },
+            isActive: true,
+            embedded: true,
+            conversationRailNarrowExpanded: true,
+            onConversationRailNarrowExpandedChange
+          }
+        })}
+      />
+    );
+
+    const viewProps = agentGuiNodeViewSpy.mock.calls.at(-1)?.[0] as {
+      conversationRailCollapsed: boolean;
+      conversationRailOverlay: boolean;
+      onConversationRailOverlayDismiss?: () => void;
+    };
+    expect(viewProps.conversationRailCollapsed).toBe(false);
+    expect(viewProps.conversationRailOverlay).toBe(true);
+    viewProps.onConversationRailOverlayDismiss?.();
+    expect(onConversationRailNarrowExpandedChange).toHaveBeenCalledWith(false);
+  });
+
   it("routes info, config, and slash status through exact-scope requests", () => {
     mockViewModel = createViewModel();
     const queries: AgentStatusQuery[] = [];

@@ -828,6 +828,10 @@ function DesktopAgentGUISurfaceImpl({
         frame={{
           conversationRailAutoCollapseMode:
             surface.conversationRailAutoCollapseMode,
+          conversationRailNarrowExpanded:
+            surface.conversationRailNarrowExpanded,
+          onConversationRailNarrowExpandedChange:
+            surface.onConversationRailNarrowExpandedChange,
           position: DESKTOP_AGENT_GUI_POSITION,
           width: frame.width,
           height: frame.height,
@@ -891,6 +895,9 @@ function DesktopAgentGUIWorkbenchBodyAdapter({
   }
   const surface: DesktopAgentGUISurfaceContext = {
     activation: context.activation,
+    conversationRailNarrowExpanded: context.conversationRailNarrowExpanded,
+    onConversationRailNarrowExpandedChange:
+      context.onConversationRailNarrowExpandedChange,
     conversationRailStateOwner: "workbench-node-source",
     displayMode: context.displayMode,
     frame: context.node.frame,

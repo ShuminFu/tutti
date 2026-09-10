@@ -1546,6 +1546,60 @@ describe("agent GUI workbench contribution copy", () => {
     ]);
   });
 
+  it("opens a narrow embedded rail without resizing or persisting auto collapse", () => {
+    const contribution = createTestAgentGuiWorkbenchContribution({
+      renderBody: () => null,
+      workspaceId: "workspace-1"
+    });
+    const resize = vi.fn();
+    const setNarrowExpanded = vi.fn();
+    const createHeader = (conversationRailNarrowExpanded: boolean) =>
+      contribution.nodes?.[0]?.renderHeader?.({
+        activation: null,
+        conversationRailNarrowExpanded,
+        defaultActions: null,
+        displayMode: "floating",
+        dragHandleProps: {},
+        externalNodeState: {
+          conversationRailCollapsed: false,
+          lastActiveAgentSessionId: null
+        },
+        externalWorkspaceState: null,
+        instanceId: "agent-gui:codex:panel:test-1",
+        instanceKey: null,
+        isFocused: true,
+        node: {
+          data: { runtimeNodeState: null },
+          displayMode: "floating",
+          frame: { height: 560, width: 600, x: 0, y: 0 },
+          id: "agent-gui-node-1",
+          title: "Codex"
+        },
+        onConversationRailNarrowExpandedChange: setNarrowExpanded,
+        surfaceSize: { height: 800, width: 600 },
+        windowActions: {
+          applyQuickLayout: () => {},
+          close: () => {},
+          focus: () => {},
+          minimize: () => {},
+          resize,
+          toggleDisplayMode: () => {}
+        }
+      } as never) ?? null;
+
+    const view = render(createHeader(false));
+    const toggle = screen.getByTestId("agent-gui-toggle-conversation-rail");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.pointerDown(toggle, { button: 0, pointerType: "mouse" });
+    expect(setNarrowExpanded).toHaveBeenLastCalledWith(true);
+
+    view.rerender(createHeader(true));
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    fireEvent.pointerDown(toggle, { button: 0, pointerType: "mouse" });
+    expect(setNarrowExpanded).toHaveBeenLastCalledWith(false);
+    expect(resize).not.toHaveBeenCalled();
+  });
+
   it("shows the active session icon and title when the rail is collapsed", () => {
     const contribution = createTestAgentGuiWorkbenchContribution({
       renderBody: () => null,

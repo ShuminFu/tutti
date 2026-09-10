@@ -77,6 +77,7 @@ export function resolveAgentGUIConversationRailPresentation(input: {
   autoCollapseMode?: AgentGUIConversationRailAutoCollapseMode;
   containerWidthPx: number;
   conversationRailCollapsed?: boolean | null;
+  conversationRailNarrowExpanded?: boolean;
   conversationRailWidthPx?: number | null;
 }): AgentGUIConversationRailPresentation {
   const isAutoCollapsed = shouldAutoCollapseAgentGUIConversationRail(
@@ -92,7 +93,9 @@ export function resolveAgentGUIConversationRailPresentation(input: {
       input.containerWidthPx
     ),
     isAutoCollapsed,
-    isCollapsed: input.conversationRailCollapsed === true || isAutoCollapsed
+    isCollapsed:
+      input.conversationRailCollapsed === true ||
+      (isAutoCollapsed && input.conversationRailNarrowExpanded !== true)
   };
 }
 

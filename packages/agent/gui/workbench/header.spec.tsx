@@ -28,6 +28,11 @@ describe("AgentGuiWorkbenchHeader conversation identity", () => {
     );
 
     const toggle = screen.getByTestId("agent-gui-toggle-conversation-rail");
+    expect(toggle).toHaveAttribute(
+      "aria-controls",
+      "agent-gui-conversation-rail"
+    );
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
     fireEvent.pointerDown(toggle, { button: 0, pointerType: "mouse" });
     fireEvent.click(toggle, { detail: 1 });
 

@@ -5032,6 +5032,37 @@ aside.workspace-agents-status-panel
   transition: none;
 }
 
+/* DinTalDock cannot resize its fixed iframe to escape the responsive rail
+   threshold. Keep the narrow rail usable as a non-modal drawer instead. */
+.agent-gui-node__layout[data-agent-gui-conversation-rail-overlay="true"]
+  .agent-gui-node__provider-rail-panel,
+.agent-gui-node__layout[data-agent-gui-conversation-rail-overlay="true"]
+  .agent-gui-node__rail-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  height: 100%;
+}
+
+.agent-gui-node__layout[data-agent-gui-conversation-rail-overlay="true"]
+  .agent-gui-node__provider-rail-panel {
+  left: 0;
+  z-index: var(--z-panel);
+}
+
+.agent-gui-node__layout[data-agent-gui-conversation-rail-overlay="true"]
+  .agent-gui-node__rail-panel {
+  left: var(--agent-gui-provider-rail-width);
+  z-index: var(--z-panel);
+  width: var(--agent-gui-conversation-rail-width);
+  box-shadow: 12px 0 28px rgb(0 0 0 / 14%);
+}
+
+.agent-gui-node__layout[data-agent-gui-conversation-rail-overlay="true"]
+  .agent-gui-node__detail-panel {
+  grid-column: 3;
+}
+
 .workbench-window[data-window-header-layout="overlay"] {
   --agent-gui-workbench-header-height: 44px;
 

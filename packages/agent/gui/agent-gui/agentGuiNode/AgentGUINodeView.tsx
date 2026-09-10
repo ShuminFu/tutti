@@ -121,6 +121,8 @@ export function AgentGUINodeView({
   onAgentEnvPanelOpen,
   actions,
   conversationRailCollapsed,
+  conversationRailOverlay = false,
+  onConversationRailOverlayDismiss,
   conversationRailWidthPx,
   conversationRailMinWidthPx,
   conversationRailMaxWidthPx,
@@ -202,7 +204,12 @@ export function AgentGUINodeView({
   const createConversationAction = useStableEventCallback(
     actions.createConversation
   );
-  const selectConversation = useStableEventCallback(actions.selectConversation);
+  const selectConversation = useStableEventCallback(
+    (agentSessionId: string) => {
+      actions.selectConversation(agentSessionId);
+      onConversationRailOverlayDismiss?.();
+    }
+  );
   const toggleConversationPinned = useStableEventCallback(
     actions.toggleConversationPinned
   );
@@ -372,8 +379,9 @@ export function AgentGUINodeView({
     "--agent-gui-conversation-rail-content-width": `${visualConversationRailWidthPx}px`,
     "--agent-gui-detail-min-width": `${detailMinWidthPx}px`,
     "--agent-gui-provider-rail-width": `${providerRailWidthPx}px`,
-    gridTemplateColumns:
-      "var(--agent-gui-provider-rail-width) var(--agent-gui-conversation-rail-width) minmax(var(--agent-gui-detail-min-width), 1fr)"
+    gridTemplateColumns: conversationRailOverlay
+      ? "0 0 minmax(0, 1fr)"
+      : "var(--agent-gui-provider-rail-width) var(--agent-gui-conversation-rail-width) minmax(var(--agent-gui-detail-min-width), 1fr)"
   } as CSSProperties;
   const effectiveRailConfigProvider = resolveAgentGUIRailConfigProvider(
     railConfigProvider,
@@ -542,6 +550,9 @@ export function AgentGUINodeView({
           className={styles.layout}
           data-agent-gui-active={isActive ? "true" : "false"}
           data-agent-gui-visible={isVisible ? "true" : "false"}
+          data-agent-gui-conversation-rail-overlay={
+            conversationRailOverlay ? "true" : undefined
+          }
           data-rail-resizing={isRailResizing ? "true" : undefined}
           style={layoutStyle}
         >
@@ -651,35 +662,37 @@ export function AgentGUINodeView({
               />
             </AgentConversationClockProvider>
           </aside>
-          <div
-            id="agent-gui-conversation-rail-resize"
-            className={
-              conversationRailCollapsed
-                ? `${styles.railResizeHandle} ${styles.railResizeHandleCollapsed} nodrag pointer-events-none opacity-0`
-                : `${styles.railResizeHandle} nodrag`
-            }
-            role="separator"
-            aria-label={labels.conversationRailResizeAria}
-            aria-hidden={conversationRailCollapsed ? "true" : undefined}
-            aria-orientation="vertical"
-            aria-valuemin={conversationRailMinWidthPx}
-            aria-valuemax={conversationRailMaxWidthPx}
-            aria-valuenow={
-              conversationRailCollapsed
-                ? undefined
-                : visualConversationRailWidthPx
-            }
-            data-resizing={isRailResizing ? "true" : undefined}
-            data-testid="agent-gui-conversation-rail-resize-handle"
-            tabIndex={conversationRailCollapsed ? -1 : 0}
-            onBlur={() => endConversationRailResize()}
-            onKeyDown={handleConversationRailResizeKeyDown}
-            onPointerCancel={endConversationRailResize}
-            onPointerDown={handleConversationRailResizePointerDown}
-            onLostPointerCapture={endConversationRailResize}
-            onPointerMove={handleConversationRailResizePointerMove}
-            onPointerUp={endConversationRailResize}
-          />
+          {conversationRailOverlay ? null : (
+            <div
+              id="agent-gui-conversation-rail-resize"
+              className={
+                conversationRailCollapsed
+                  ? `${styles.railResizeHandle} ${styles.railResizeHandleCollapsed} nodrag pointer-events-none opacity-0`
+                  : `${styles.railResizeHandle} nodrag`
+              }
+              role="separator"
+              aria-label={labels.conversationRailResizeAria}
+              aria-hidden={conversationRailCollapsed ? "true" : undefined}
+              aria-orientation="vertical"
+              aria-valuemin={conversationRailMinWidthPx}
+              aria-valuemax={conversationRailMaxWidthPx}
+              aria-valuenow={
+                conversationRailCollapsed
+                  ? undefined
+                  : visualConversationRailWidthPx
+              }
+              data-resizing={isRailResizing ? "true" : undefined}
+              data-testid="agent-gui-conversation-rail-resize-handle"
+              tabIndex={conversationRailCollapsed ? -1 : 0}
+              onBlur={() => endConversationRailResize()}
+              onKeyDown={handleConversationRailResizeKeyDown}
+              onPointerCancel={endConversationRailResize}
+              onPointerDown={handleConversationRailResizePointerDown}
+              onLostPointerCapture={endConversationRailResize}
+              onPointerMove={handleConversationRailResizePointerMove}
+              onPointerUp={endConversationRailResize}
+            />
+          )}
           <section id="agent-gui-detail" className={styles.detailPanel}>
             <AgentConversationClockProvider isVisible={isVisible}>
               <AgentGUIDetailPane

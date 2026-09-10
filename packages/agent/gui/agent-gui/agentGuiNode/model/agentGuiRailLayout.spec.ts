@@ -109,6 +109,29 @@ describe("agentGuiRailLayout", () => {
     });
   });
 
+  it("lets an embedded narrow drawer override only automatic collapse", () => {
+    expect(
+      resolveAgentGUIConversationRailPresentation({
+        containerWidthPx: AGENT_GUI_AUTO_COLLAPSE_WIDTH_PX,
+        conversationRailCollapsed: false,
+        conversationRailNarrowExpanded: true,
+        conversationRailWidthPx: 280
+      })
+    ).toEqual({
+      conversationRailWidthPx: 280,
+      isAutoCollapsed: true,
+      isCollapsed: false
+    });
+    expect(
+      resolveAgentGUIConversationRailPresentation({
+        containerWidthPx: AGENT_GUI_AUTO_COLLAPSE_WIDTH_PX,
+        conversationRailCollapsed: true,
+        conversationRailNarrowExpanded: true,
+        conversationRailWidthPx: 280
+      }).isCollapsed
+    ).toBe(true);
+  });
+
   it("preserves standalone middle content and directly collapses the conversation rail", () => {
     expect(AGENT_GUI_STANDALONE_MIDDLE_CONTENT_MIN_WIDTH_PX).toBe(408);
     expect(

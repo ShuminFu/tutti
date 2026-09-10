@@ -426,6 +426,8 @@ function createConversationRailToggleButton({
     Button as never,
     {
       "aria-label": label,
+      "aria-controls": "agent-gui-conversation-rail",
+      "aria-expanded": !isCollapsed,
       className: conversationRailToggleButtonClassName,
       "data-agent-gui-conversation-rail-auto-collapsed": isAutoCollapsed
         ? "true"

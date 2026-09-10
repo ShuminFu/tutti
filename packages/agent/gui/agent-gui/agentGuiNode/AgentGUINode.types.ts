@@ -103,6 +103,9 @@ export interface AgentGUINodeFrameLayout {
    * the default responsive policy.
    */
   conversationRailAutoCollapseMode?: "preserve-middle-content";
+  /** Session-only embedded drawer intent; never persisted as node state. */
+  conversationRailNarrowExpanded?: boolean;
+  onConversationRailNarrowExpandedChange?: (expanded: boolean) => void;
 }
 
 export interface AgentGUINodeRuntimeRequests {
@@ -436,6 +439,7 @@ export function areAgentGUINodePropsEqual(
     pf.embedded === nf.embedded &&
     pf.conversationRailAutoCollapseMode ===
       nf.conversationRailAutoCollapseMode &&
+    pf.conversationRailNarrowExpanded === nf.conversationRailNarrowExpanded &&
     pr.composerFocusSequence === nr.composerFocusSequence &&
     pr.composerAppend === nr.composerAppend &&
     pr.workbench?.instanceId === nr.workbench?.instanceId &&

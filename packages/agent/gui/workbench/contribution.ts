@@ -116,6 +116,11 @@ export interface CreateAgentGuiWorkbenchContributionInput {
   workspaceId: string;
 }
 
+interface AgentGuiWorkbenchNarrowRailContext {
+  conversationRailNarrowExpanded?: boolean;
+  onConversationRailNarrowExpandedChange?: (expanded: boolean) => void;
+}
+
 export function createAgentGuiWorkbenchContribution(
   input: CreateAgentGuiWorkbenchContributionInput
 ): WorkbenchContribution {
@@ -207,16 +212,21 @@ export function createAgentGuiWorkbenchContribution(
             }
           );
         },
-        renderHeader: ({
-          dragHandleProps,
-          displayMode,
-          externalNodeState,
-          instanceId,
-          isFocused,
-          node,
-          surfaceSize,
-          windowActions
-        }) => {
+        renderHeader: (context) => {
+          const {
+            dragHandleProps,
+            displayMode,
+            externalNodeState,
+            instanceId,
+            isFocused,
+            node,
+            surfaceSize,
+            windowActions
+          } = context;
+          const {
+            conversationRailNarrowExpanded,
+            onConversationRailNarrowExpandedChange
+          } = context as typeof context & AgentGuiWorkbenchNarrowRailContext;
           const headerTitle = copy.nodeTitle;
           const rawWorkbenchState = (externalNodeState ??
             node.data.runtimeNodeState) as
@@ -240,6 +250,7 @@ export function createAgentGuiWorkbenchContribution(
           const railPresentation = resolveAgentGUIConversationRailPresentation({
             containerWidthPx: node.frame.width,
             conversationRailCollapsed: nodeState.conversationRailCollapsed,
+            conversationRailNarrowExpanded,
             conversationRailWidthPx: nodeState.conversationRailWidthPx
           });
           const isConversationRailAutoCollapsed =
@@ -326,6 +337,24 @@ export function createAgentGuiWorkbenchContribution(
               }
             },
             onToggleConversationRail: (nextCollapsed) => {
+              if (
+                railPresentation.isAutoCollapsed &&
+                onConversationRailNarrowExpandedChange
+              ) {
+                if (
+                  nextCollapsed === false &&
+                  workbenchState.conversationRailCollapsed === true
+                ) {
+                  dispatchAgentGuiWorkbenchCommand({
+                    conversationRailCollapsed: false,
+                    instanceId,
+                    type: "conversation-rail-toggle"
+                  });
+                  persistConversationRailCollapsed(false);
+                }
+                onConversationRailNarrowExpandedChange(!nextCollapsed);
+                return;
+              }
               dispatchAgentGuiWorkbenchCommand({
                 conversationRailCollapsed: nextCollapsed,
                 instanceId,

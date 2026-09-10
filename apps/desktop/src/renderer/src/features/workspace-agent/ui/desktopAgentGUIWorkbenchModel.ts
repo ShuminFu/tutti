@@ -33,6 +33,8 @@ import type { AgentSessionReplayService } from "../../agent-session-replay/servi
 export interface DesktopAgentGUISurfaceContext {
   activation: WorkbenchHostNodeBodyContext["activation"];
   conversationRailAutoCollapseMode?: "preserve-middle-content";
+  conversationRailNarrowExpanded?: boolean;
+  onConversationRailNarrowExpandedChange?: (expanded: boolean) => void;
   conversationRailStateOwner: "surface" | "workbench-node-source";
   displayMode: WorkbenchHostNodeBodyContext["displayMode"];
   frame: WorkbenchHostNodeBodyContext["node"]["frame"];
@@ -49,6 +51,12 @@ export interface DesktopAgentGUISurfaceContext {
   state: unknown;
 }
 
+export type DesktopAgentGUIWorkbenchBodyContext =
+  WorkbenchHostNodeBodyContext & {
+    conversationRailNarrowExpanded?: boolean;
+    onConversationRailNarrowExpandedChange?: (expanded: boolean) => void;
+  };
+
 export interface DesktopAgentGUIWorkbenchBodyProps {
   agentActivityRuntime: AgentGUIRuntime;
   agentHostApi: AgentHostInputApi;
@@ -59,7 +67,7 @@ export interface DesktopAgentGUIWorkbenchBodyProps {
   >;
   appCenterService: IWorkspaceAppCenterService;
   agentProviderStatusService?: IAgentProviderStatusService;
-  context: WorkbenchHostNodeBodyContext;
+  context: DesktopAgentGUIWorkbenchBodyContext;
   computerUseApi?: Pick<DesktopComputerUseApi, "checkStatus">;
   composerAppendRequest?: AgentGUIComposerAppendRequest | null;
   dockPreviewCache: WorkbenchDockPreviewCache;
@@ -216,12 +224,14 @@ export function areDesktopAgentGUIWorkbenchBodyPropsEqual(
 }
 
 export function areDesktopAgentGUIWorkbenchBodyContextsEqual(
-  previous: WorkbenchHostNodeBodyContext,
-  next: WorkbenchHostNodeBodyContext
+  previous: DesktopAgentGUIWorkbenchBodyContext,
+  next: DesktopAgentGUIWorkbenchBodyContext
 ): boolean {
   return (
     previous === next ||
     (previous.activation === next.activation &&
+      previous.conversationRailNarrowExpanded ===
+        next.conversationRailNarrowExpanded &&
       previous.displayMode === next.displayMode &&
       previous.externalNodeState === next.externalNodeState &&
       previous.host === next.host &&

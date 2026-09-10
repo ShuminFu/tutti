@@ -226,11 +226,17 @@ export const AgentGUINode = memo(function AgentGUINode({
       autoCollapseMode: frame.conversationRailAutoCollapseMode,
       containerWidthPx: width,
       conversationRailCollapsed: state.conversationRailCollapsed,
+      conversationRailNarrowExpanded: frame.conversationRailNarrowExpanded,
       conversationRailWidthPx: state.conversationRailWidthPx
     });
   const isConversationRailAutoCollapsed =
     conversationRailPresentation.isAutoCollapsed;
   const isConversationRailCollapsed = conversationRailPresentation.isCollapsed;
+  const isConversationRailOverlay =
+    embedded &&
+    conversationRailPresentation.isAutoCollapsed &&
+    frame.conversationRailNarrowExpanded === true &&
+    !isConversationRailCollapsed;
   const minSize = useMemo(
     () => ({
       ...resolveCanonicalNodeMinSize("agentGui"),
@@ -470,6 +476,8 @@ export const AgentGUINode = memo(function AgentGUINode({
               autoCollapseMode: frame.conversationRailAutoCollapseMode,
               containerWidthPx: renderedWidth,
               conversationRailCollapsed: state.conversationRailCollapsed,
+              conversationRailNarrowExpanded:
+                frame.conversationRailNarrowExpanded,
               conversationRailWidthPx: state.conversationRailWidthPx
             }).isCollapsed;
 
@@ -526,6 +534,12 @@ export const AgentGUINode = memo(function AgentGUINode({
               }
               onAgentEnvPanelOpen={onAgentEnvPanelOpen}
               conversationRailCollapsed={isRenderedConversationRailCollapsed}
+              conversationRailOverlay={isConversationRailOverlay}
+              onConversationRailOverlayDismiss={
+                isConversationRailOverlay
+                  ? () => frame.onConversationRailNarrowExpandedChange?.(false)
+                  : undefined
+              }
               conversationRailWidthPx={clampAgentGUIConversationRailWidthPx(
                 state.conversationRailWidthPx,
                 renderedWidth
