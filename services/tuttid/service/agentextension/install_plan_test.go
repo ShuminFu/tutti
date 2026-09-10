@@ -243,6 +243,63 @@ func TestValidateRuntimeContractRequiresExactUVPackage(t *testing.T) {
 	}
 }
 
+func TestValidateRuntimeContractAcceptsBundledRuntimeWithoutInstaller(t *testing.T) {
+	manifest := testManifest()
+	manifest.AgentKey = "deepseek-harness"
+	manifest.Runtime.Install.Runner = "bundled"
+	manifest.Runtime.Install.Args = nil
+	manifest.Runtime.Install.Artifacts = nil
+	manifest.Runtime.Launch.Executable = "${installRoot}/bin/deepseek-harness-acp"
+	publish := false
+	manifest.Runtime.Launch.PublishUserCommand = &publish
+	if err := validateRuntimeContract(manifest); err != nil {
+		t.Fatalf("validateRuntimeContract(bundled) error = %v", err)
+	}
+	name, version, artifact, err := runtimeInstallIdentity(manifest, runtimePlatform())
+	if err != nil || name != "bundled-runtime" || version != manifest.Version || artifact != nil {
+		t.Fatalf("bundled identity = %q@%q %#v, %v", name, version, artifact, err)
+	}
+	packageDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(packageDir, "profiles"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "profiles", "discovery.json"), []byte(`{"schemaVersion":"tutti.agent.discovery.v1","candidates":[{"binaryNames":["deepseek-harness-acp"],"version":{"args":["--version"],"constraint":">=0.1.0 <1.0.0"},"launchArgs":[],"probe":{"kind":"acp-initialize","timeoutMs":5000}}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest.Version += "+local.fixture"
+	installation := Installation{
+		ID: "deepseek-harness@" + manifest.Version, AgentKey: manifest.AgentKey,
+		Version: manifest.Version, Manifest: manifest, PackageDir: packageDir,
+	}
+	plan, err := buildInstallPlan("extension:deepseek-harness", testResolvedTempDir(t), installation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(plan.InstallCommand, []string{"bundled"}) || plan.Runner != "bundled" {
+		t.Fatalf("bundled plan = %#v", plan)
+	}
+	t.Setenv(deepSeekHarnessRuntimeChannelEnv, "previous")
+	previous, err := buildInstallPlan("extension:deepseek-harness", testResolvedTempDir(t), installation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previous.PackageName != "bundled-runtime-previous" || previous.RuntimeIdentity == plan.RuntimeIdentity || previous.PlanDigest == plan.PlanDigest {
+		t.Fatalf("previous bundled plan = %#v, current = %#v", previous, plan)
+	}
+	remote := installation
+	remote.Version = "0.1.0"
+	remote.Manifest.Version = remote.Version
+	if _, err := buildInstallPlan("extension:deepseek-harness", testResolvedTempDir(t), remote); err == nil || !strings.Contains(err.Error(), "trusted local") {
+		t.Fatalf("remote bundled package error = %v", err)
+	}
+
+	invalid := manifest
+	invalid.Runtime.Install.Args = []string{"copy", "${installRoot}"}
+	if err := validateRuntimeContract(invalid); err == nil {
+		t.Fatal("bundled runtime installer arguments were accepted")
+	}
+}
+
 func TestRuntimeLaunchEnvironmentIsDeclarativeAndHostScoped(t *testing.T) {
 	manifest := testManifest()
 	manifest.Runtime.Launch.Env = map[string]string{

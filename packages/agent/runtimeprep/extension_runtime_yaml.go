@@ -54,6 +54,64 @@ func yamlSetStringPath(root *yaml.Node, keyPath []string, value string) error {
 	return nil
 }
 
+func mergeYAMLModelEndpointCatalog(config string, keyPath []string, models []ModelEndpointModel) (string, error) {
+	var doc yaml.Node
+	if strings.TrimSpace(config) == "" {
+		doc = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode}}}
+	} else if err := yaml.Unmarshal([]byte(config), &doc); err != nil {
+		return "", fmt.Errorf("parse extension runtime YAML config: %w", err)
+	}
+	root := yamlDocumentRoot(&doc)
+	if root.Kind != yaml.MappingNode {
+		return "", errors.New("extension runtime YAML config must be a mapping")
+	}
+	sequence := &yaml.Node{Kind: yaml.SequenceNode}
+	seen := map[string]struct{}{}
+	for _, model := range models {
+		id := strings.TrimSpace(model.ID)
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		name := strings.TrimSpace(model.Name)
+		if name == "" {
+			name = id
+		}
+		mapping := &yaml.Node{Kind: yaml.MappingNode}
+		yamlSetMappingValue(mapping, "id", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: id})
+		yamlSetMappingValue(mapping, "name", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: name})
+		sequence.Content = append(sequence.Content, mapping)
+	}
+	if err := yamlSetNodePath(root, keyPath, sequence); err != nil {
+		return "", err
+	}
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return "", fmt.Errorf("write extension runtime YAML config: %w", err)
+	}
+	return string(out), nil
+}
+
+func yamlSetNodePath(root *yaml.Node, keyPath []string, value *yaml.Node) error {
+	mapping := root
+	for _, key := range keyPath[:len(keyPath)-1] {
+		next := yamlMappingValue(mapping, key)
+		if next == nil {
+			next = &yaml.Node{Kind: yaml.MappingNode}
+			yamlSetMappingValue(mapping, key, next)
+		}
+		if next.Kind != yaml.MappingNode {
+			return fmt.Errorf("extension runtime YAML %s must be a mapping", strings.Join(keyPath[:len(keyPath)-1], "."))
+		}
+		mapping = next
+	}
+	yamlReplaceMappingValue(mapping, keyPath[len(keyPath)-1], value)
+	return nil
+}
+
 func mergeYAMLStringList(config string, keyPath []string, values []string) (string, error) {
 	dirs := dedupeStringList(values)
 	if len(dirs) == 0 {

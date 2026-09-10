@@ -198,9 +198,10 @@ func ResolveAppVersion() string {
 }
 
 func ResolveAgentExtensionSources() []AgentExtensionSource {
-	result := make([]AgentExtensionSource, 0, len(generatedDefaults.AgentExtensions.Sources))
+	result := make([]AgentExtensionSource, 0, len(generatedDefaults.AgentExtensions.Sources)+1)
 	development := resolveTuttiEnv() == "development"
-	localPackagesEnabled := development || os.Getenv("RNDMASTER_TUTTI_EMBEDDED") == "1"
+	embedded := os.Getenv("RNDMASTER_TUTTI_EMBEDDED") == "1"
+	localPackagesEnabled := development || embedded
 	for _, source := range generatedDefaults.AgentExtensions.Sources {
 		envPrefix := "TUTTI_AGENT_EXTENSION_" + strings.ToUpper(strings.ReplaceAll(source.Key, "-", "_"))
 		localPackageDir := ""
@@ -216,6 +217,15 @@ func ResolveAgentExtensionSources() []AgentExtensionSource {
 			LocalPackageDir:          localPackageDir,
 			Enabled:                  source.Enabled,
 		})
+	}
+	if embedded {
+		if packageDir := strings.TrimSpace(os.Getenv("TUTTI_AGENT_EXTENSION_DEEPSEEK_HARNESS_PACKAGE_DIR")); packageDir != "" {
+			result = append(result, AgentExtensionSource{
+				Key:             "deepseek-harness",
+				LocalPackageDir: packageDir,
+				Enabled:         true,
+			})
+		}
 	}
 	return result
 }

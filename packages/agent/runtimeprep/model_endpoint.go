@@ -33,8 +33,9 @@ type ModelEndpointConfig struct {
 
 // ModelEndpointModel is one selectable model exposed by the bound plan.
 type ModelEndpointModel struct {
-	ID   string `json:"id"`
-	Name string `json:"name,omitempty"`
+	ID               string             `json:"id"`
+	Name             string             `json:"name,omitempty"`
+	ReasoningEfforts map[string]*string `json:"reasoningEfforts,omitempty"`
 }
 
 // ModelPlanProviderID names the provider entry injected into a session-scoped

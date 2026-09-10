@@ -111,6 +111,12 @@ func buildInstallPlan(targetID, runtimeInstallDir string, installation Installat
 	if err != nil {
 		return InstallPlan{}, err
 	}
+	if manifest.Runtime.Install.Runner == "bundled" {
+		if !installation.HasLocalPackageProvenance() {
+			return InstallPlan{}, errors.New("bundled runtime requires a trusted local extension package")
+		}
+		packageName = selectedBundledRuntimePackageName(installation)
+	}
 	var profile DiscoveryProfile
 	if err := readJSON(filepath.Join(installation.PackageDir, installation.Manifest.Profiles.Discovery), &profile); err != nil {
 		return InstallPlan{}, fmt.Errorf("read discovery profile: %w", err)
@@ -141,7 +147,7 @@ func buildInstallPlan(targetID, runtimeInstallDir string, installation Installat
 	// uv creates Windows console-script launchers with an .exe suffix. Extension
 	// manifests keep the portable executable name extensionless, so normalize
 	// the managed path before staging and verifying the runtime on Windows.
-	if runtime.GOOS == "windows" && manifest.Runtime.Install.Runner == "uv" && filepath.Ext(executable) == "" {
+	if runtime.GOOS == "windows" && (manifest.Runtime.Install.Runner == "uv" || manifest.Runtime.Install.Runner == "bundled") && filepath.Ext(executable) == "" {
 		executable += ".exe"
 	}
 	if !pathWithin(executable, installRoot) {
@@ -223,6 +229,12 @@ func runtimeBinaryArtifactForPlatform(manifest Manifest, platform string) (Runti
 }
 
 func runtimeInstallIdentity(manifest Manifest, platform string) (string, string, *RuntimeBinaryArtifact, error) {
+	if manifest.Runtime.Install.Runner == "bundled" {
+		if !validSemver(manifest.Version) {
+			return "", "", nil, errors.New("extension bundled runtime version is invalid")
+		}
+		return "bundled-runtime", manifest.Version, nil, nil
+	}
 	if manifest.Runtime.Install.Runner != "binary" {
 		name, version, err := exactRuntimePackage(manifest.Runtime.Install.Runner, manifest.Runtime.Install.Args)
 		return name, version, nil, err
@@ -236,6 +248,14 @@ func runtimeInstallIdentity(manifest Manifest, platform string) (string, string,
 		return "", "", nil, err
 	}
 	return name, artifact.Version, &artifact, nil
+}
+
+func selectedBundledRuntimePackageName(installation Installation) string {
+	if installation.AgentKey == "deepseek-harness" &&
+		strings.EqualFold(strings.TrimSpace(os.Getenv(deepSeekHarnessRuntimeChannelEnv)), "previous") {
+		return "bundled-runtime-previous"
+	}
+	return "bundled-runtime"
 }
 
 func runtimeBinaryArtifactPointer(manifest Manifest, platform string) *RuntimeBinaryArtifact {

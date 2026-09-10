@@ -41,6 +41,7 @@ func packageContentSHA256(root string) (string, error) {
 	}
 	files := make([]string, 0, maxFiles)
 	var total int64
+	var bundledRuntimeTotal int64
 	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -68,12 +69,20 @@ func packageContentSHA256(root string) (string, error) {
 		if !info.Mode().IsRegular() {
 			return fmt.Errorf("extension package contains non-regular file: %s", relative)
 		}
-		if len(files) >= maxFiles {
+		bundledRuntime := isBundledRuntimePackagePath(relative)
+		if len(files) >= maxFiles+maxBundledRuntimeFiles {
 			return errors.New("extension package file count exceeds limit")
 		}
-		total += info.Size()
-		if total > maxArtifact {
-			return errors.New("extension package exceeds expanded size limit")
+		if bundledRuntime {
+			bundledRuntimeTotal += info.Size()
+			if bundledRuntimeTotal > maxBundledRuntimeBytes {
+				return errors.New("extension bundled runtime exceeds expanded size limit")
+			}
+		} else {
+			total += info.Size()
+			if total > maxArtifact {
+				return errors.New("extension package exceeds expanded size limit")
+			}
 		}
 		files = append(files, relative)
 		return nil

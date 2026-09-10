@@ -43,6 +43,12 @@ func (m *Manager) installLocalPackage(key, sourceDir string) (Installation, erro
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return Installation{}, err
 	}
+	stale, _ := filepath.Glob(filepath.Join(root, ".local-*"))
+	for _, path := range stale {
+		if err := os.RemoveAll(path); err != nil {
+			return Installation{}, fmt.Errorf("remove stale local extension snapshot: %w", err)
+		}
+	}
 	staging, err := os.MkdirTemp(root, ".local-")
 	if err != nil {
 		return Installation{}, err
@@ -116,6 +122,7 @@ func copyLocalPackage(sourceDir, destination string) (string, error) {
 	files := make([]string, 0, maxFiles)
 	entryCount := 0
 	var total int64
+	var bundledRuntimeTotal int64
 	err := filepath.WalkDir(sourceDir, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -124,7 +131,7 @@ func copyLocalPackage(sourceDir, destination string) (string, error) {
 			return nil
 		}
 		entryCount++
-		if entryCount > maxFiles {
+		if entryCount > maxFiles+maxBundledRuntimeFiles {
 			return errors.New("local extension package file count exceeds limit")
 		}
 		relative, err := filepath.Rel(sourceDir, path)
@@ -144,15 +151,23 @@ func copyLocalPackage(sourceDir, destination string) (string, error) {
 		if err != nil {
 			return err
 		}
-		if !info.Mode().IsRegular() || info.Mode()&0o111 != 0 {
+		bundledRuntime := isBundledRuntimePackagePath(relative)
+		if !info.Mode().IsRegular() || (!bundledRuntime && info.Mode()&0o111 != 0) {
 			return fmt.Errorf("local extension package contains forbidden file: %s", relative)
 		}
-		if !allowedExtension(filepath.Ext(relative)) {
+		if !bundledRuntime && !allowedExtension(filepath.Ext(relative)) {
 			return fmt.Errorf("local extension package contains forbidden file type: %s", relative)
 		}
-		total += info.Size()
-		if total > maxArtifact {
-			return errors.New("local extension package exceeds size limit")
+		if bundledRuntime {
+			bundledRuntimeTotal += info.Size()
+			if bundledRuntimeTotal > maxBundledRuntimeBytes {
+				return errors.New("local extension bundled runtime exceeds size limit")
+			}
+		} else {
+			total += info.Size()
+			if total > maxArtifact {
+				return errors.New("local extension package exceeds size limit")
+			}
 		}
 		files = append(files, relative)
 		return nil
@@ -179,11 +194,22 @@ func copyLocalPackage(sourceDir, destination string) (string, error) {
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(targetPath, data, 0o600); err != nil {
+		mode := os.FileMode(0o600)
+		if isBundledRuntimePackagePath(relative) {
+			if info, err := os.Stat(sourcePath); err == nil && info.Mode()&0o111 != 0 {
+				mode = 0o700
+			}
+		}
+		if err := os.WriteFile(targetPath, data, mode); err != nil {
 			return "", err
 		}
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func isBundledRuntimePackagePath(relative string) bool {
+	relative = filepath.ToSlash(filepath.Clean(relative))
+	return strings.HasPrefix(relative, "runtime/") || strings.HasPrefix(relative, "runtime-previous/")
 }
 
 func localPackageVersion(version, digest string) string {

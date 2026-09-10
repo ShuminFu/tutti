@@ -115,6 +115,33 @@ func TestResolveAgentExtensionSourcesAppliesLocalPackageOnlyInDevelopment(t *tes
 	}
 }
 
+func TestResolveAgentExtensionSourcesAddsEmbeddedDeepSeekHarnessPackage(t *testing.T) {
+	packageDir := filepath.Join(t.TempDir(), "deepseek-harness")
+	t.Setenv("TUTTI_ENV", "production")
+	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "1")
+	t.Setenv("TUTTI_AGENT_EXTENSION_DEEPSEEK_HARNESS_PACKAGE_DIR", packageDir)
+
+	source := agentExtensionSourceByKey(t, ResolveAgentExtensionSources(), "deepseek-harness")
+	if !source.Enabled || source.LocalPackageDir != packageDir {
+		t.Fatalf("embedded DeepSeek Harness source = %#v", source)
+	}
+	if source.ReleaseIndexURL != "" || source.SigningKeyID != "" || source.SigningPublicKey != "" {
+		t.Fatalf("embedded local-only source declared remote trust metadata: %#v", source)
+	}
+}
+
+func TestResolveAgentExtensionSourcesDoesNotAddDeepSeekHarnessOutsideEmbeddedHost(t *testing.T) {
+	t.Setenv("TUTTI_ENV", "development")
+	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "")
+	t.Setenv("TUTTI_AGENT_EXTENSION_DEEPSEEK_HARNESS_PACKAGE_DIR", t.TempDir())
+
+	for _, source := range ResolveAgentExtensionSources() {
+		if source.Key == "deepseek-harness" {
+			t.Fatalf("standalone Tutti unexpectedly activated DinTal extension: %#v", source)
+		}
+	}
+}
+
 func TestGrokAgentExtensionSourcePinsApprovedSigningIdentity(t *testing.T) {
 	source := agentExtensionSourceByKey(t, ResolveAgentExtensionSources(), "grok")
 	if source.Enabled || source.SigningKeyID != "tutti-grok-release-v2" ||

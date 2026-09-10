@@ -119,7 +119,7 @@ func validatePermissionLaunchPlaceholders(
 
 func validateRuntimeContract(manifest Manifest) error {
 	runner := manifest.Runtime.Install.Runner
-	if runner != "npm" && runner != "pnpm" && runner != "uv" && runner != "binary" {
+	if runner != "npm" && runner != "pnpm" && runner != "uv" && runner != "binary" && runner != "bundled" {
 		return errors.New("extension runtime install runner is unsupported")
 	}
 	if err := validateRuntimeLaunchEnvironment(manifest.Runtime.Launch.Env); err != nil {
@@ -162,7 +162,7 @@ func validateRuntimeContract(manifest Manifest) error {
 	if !strings.HasPrefix(manifest.Runtime.Launch.Executable, "${installRoot}/") {
 		return errors.New("extension runtime launch must stay under installRoot")
 	}
-	if runner != "binary" && runner != "uv" && !strings.Contains(strings.Join(manifest.Runtime.Install.Args, "\x00"), "${installRoot}") {
+	if runner != "binary" && runner != "uv" && runner != "bundled" && !strings.Contains(strings.Join(manifest.Runtime.Install.Args, "\x00"), "${installRoot}") {
 		return errors.New("extension runtime install and launch must stay under installRoot")
 	}
 	if runner == "binary" {
@@ -170,6 +170,15 @@ func validateRuntimeContract(manifest Manifest) error {
 			return errors.New("extension binary runtime cannot declare installer arguments")
 		}
 		return validateRuntimeBinaryArtifacts(manifest.Runtime.Install.Artifacts)
+	}
+	if runner == "bundled" {
+		if len(manifest.Runtime.Install.Args) != 0 {
+			return errors.New("extension bundled runtime cannot declare installer arguments")
+		}
+		if len(manifest.Runtime.Install.Artifacts) != 0 {
+			return errors.New("extension bundled runtime cannot declare remote artifacts")
+		}
+		return nil
 	}
 	if len(manifest.Runtime.Install.Artifacts) != 0 {
 		return errors.New("extension package-manager runtime cannot declare binary artifacts")

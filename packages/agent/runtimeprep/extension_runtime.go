@@ -28,8 +28,10 @@ func (ExtensionRuntimePreparer) Prepare(ctx context.Context, input ProviderPrepa
 	if err := ValidateExtensionRuntimePrep(*input.ExtensionRuntimePrep); err != nil {
 		return ProviderPrepareResult{}, err
 	}
-	if err := writeExtensionRuntimeInstructions(input); err != nil {
-		return ProviderPrepareResult{}, err
+	if strings.TrimSpace(input.ExtensionRuntimePrep.SessionInstructionsFile) == "" {
+		if err := writeExtensionRuntimeInstructions(input); err != nil {
+			return ProviderPrepareResult{}, err
+		}
 	}
 	if input.ExtensionRuntimePrep.Home == nil {
 		skillRoots, err := cwdExtensionSkillRoots(input.ExtensionSkillRoots)
@@ -45,6 +47,9 @@ func (ExtensionRuntimePreparer) Prepare(ctx context.Context, input ProviderPrepa
 	if err != nil {
 		return ProviderPrepareResult{}, err
 	}
+	if err := writeExtensionSessionInstructions(input, *input.ExtensionRuntimePrep.Home); err != nil {
+		return ProviderPrepareResult{}, err
+	}
 	envs := []string{env}
 	if endpoint, declaration := input.ModelEndpoint, input.ExtensionRuntimePrep.ModelEndpoint; ExtensionModelEndpointApplies(endpoint, declaration) {
 		envs = append(envs, strings.TrimSpace(declaration.APIKeyEnv)+"="+endpoint.APIKey)
@@ -53,6 +58,29 @@ func (ExtensionRuntimePreparer) Prepare(ctx context.Context, input ProviderPrepa
 		Cwd: input.Cwd,
 		Env: envs,
 	}, nil
+}
+
+func writeExtensionSessionInstructions(input ProviderPrepareInput, home ExtensionRuntimeHome) error {
+	fileName := strings.TrimSpace(input.ExtensionRuntimePrep.SessionInstructionsFile)
+	if fileName == "" {
+		return nil
+	}
+	policy, err := tuttiCLIPolicy(input.PrepareInput)
+	if err != nil {
+		return err
+	}
+	sessionHome := filepath.Join(input.RuntimeRoot, filepath.FromSlash(strings.TrimSpace(home.DirName)))
+	filePath := filepath.Join(sessionHome, filepath.FromSlash(fileName))
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o700); err != nil {
+		return fmt.Errorf("create extension session instructions dir: %w", err)
+	}
+	if err := os.WriteFile(filePath, []byte(policy+"\n"), 0o600); err != nil {
+		return fmt.Errorf("write extension session instructions: %w", err)
+	}
+	if input.Manifest != nil {
+		input.Manifest.RecordManagedFile(filePath, "provider-session-instructions", true)
+	}
+	return nil
 }
 
 func writeExtensionRuntimeInstructions(input ProviderPrepareInput) error {
@@ -259,6 +287,23 @@ func writeExtensionRuntimeConfig(
 		return nil
 	}
 	config := string(userConfig)
+	if strings.TrimSpace(home.ConfigFormat) == "json" {
+		if len(externalDirs) > 0 {
+			return errors.New("extension runtime JSON config does not support external skill dirs")
+		}
+		var err error
+		config, err = mergeJSONExtensionRuntimeConfig(config, endpoint, declaration)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(config) == "" {
+			return nil
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return fmt.Errorf("create extension runtime config dir: %w", err)
+		}
+		return os.WriteFile(path, []byte(config), 0o600)
+	}
 	if len(home.ExternalDirsKey) > 0 {
 		var err error
 		config, err = mergeYAMLStringList(config, home.ExternalDirsKey, externalDirs)
@@ -293,6 +338,12 @@ func writeExtensionRuntimeConfig(
 		if err != nil {
 			return err
 		}
+		if len(declaration.ConfigKeys.Models) > 0 {
+			config, err = mergeYAMLModelEndpointCatalog(config, declaration.ConfigKeys.Models, endpoint.Models)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	if strings.TrimSpace(config) == "" {
 		return nil
@@ -312,7 +363,15 @@ func ValidateExtensionRuntimePrep(prep ExtensionRuntimePrep) error {
 			return err
 		}
 	}
+	if file := strings.TrimSpace(prep.SessionInstructionsFile); file != "" {
+		if err := validateExtensionRuntimeRelPath(file, "extension runtime session instructions file"); err != nil {
+			return err
+		}
+	}
 	if prep.Home == nil {
+		if strings.TrimSpace(prep.SessionInstructionsFile) != "" {
+			return errors.New("extension session instructions require a runtime home")
+		}
 		if prep.ModelEndpoint != nil {
 			return errors.New("extension model endpoint requires a runtime home")
 		}
@@ -333,7 +392,8 @@ func ValidateExtensionRuntimePrep(prep ExtensionRuntimePrep) error {
 			return err
 		}
 	}
-	if strings.TrimSpace(home.ConfigFormat) != "" && strings.TrimSpace(home.ConfigFormat) != "yaml" {
+	configFormat := strings.TrimSpace(home.ConfigFormat)
+	if configFormat != "" && configFormat != "yaml" && configFormat != "json" {
 		return errors.New("extension runtime config format is unsupported")
 	}
 	for _, file := range home.CopyFiles {
@@ -361,8 +421,8 @@ func ValidateExtensionRuntimePrep(prep ExtensionRuntimePrep) error {
 	}
 	if prep.ModelEndpoint != nil {
 		endpoint := *prep.ModelEndpoint
-		if strings.TrimSpace(home.ConfigFile) == "" || strings.TrimSpace(home.ConfigFormat) != "yaml" {
-			return errors.New("extension model endpoint requires a YAML config file")
+		if strings.TrimSpace(home.ConfigFile) == "" || (configFormat != "yaml" && configFormat != "json") {
+			return errors.New("extension model endpoint requires a YAML or JSON config file")
 		}
 		if strings.TrimSpace(endpoint.Protocol) != "openai" || strings.TrimSpace(endpoint.WireAPI) != "chat" {
 			return errors.New("extension model endpoint protocol is unsupported")
@@ -374,7 +434,7 @@ func ValidateExtensionRuntimePrep(prep ExtensionRuntimePrep) error {
 			return errors.New("extension model endpoint provider value is required")
 		}
 		paths := [][]string{endpoint.ConfigKeys.Provider, endpoint.ConfigKeys.Model, endpoint.ConfigKeys.BaseURL}
-		for _, optionalPath := range [][]string{endpoint.ConfigKeys.APIKeyEnv, endpoint.ConfigKeys.WireAPI} {
+		for _, optionalPath := range [][]string{endpoint.ConfigKeys.APIKeyEnv, endpoint.ConfigKeys.WireAPI, endpoint.ConfigKeys.Models} {
 			if len(optionalPath) > 0 {
 				paths = append(paths, optionalPath)
 			}

@@ -125,7 +125,8 @@ func (m *Manager) RestoreActive(ctx context.Context) (bool, []error) {
 			}
 			continue
 		}
-		if sourceUsesLocalPackage(source) {
+		deferLocalReconcile := sourceUsesLocalPackage(source) && os.Getenv("RNDMASTER_TUTTI_EMBEDDED") == "1"
+		if sourceUsesLocalPackage(source) && !deferLocalReconcile {
 			// Development overrides are mutable inputs. Always snapshot the
 			// configured directory before serving requests so a missing,
 			// changed, or newly selected package cannot be hidden by an older
@@ -138,14 +139,14 @@ func (m *Manager) RestoreActive(ctx context.Context) (bool, []error) {
 
 		installation, err := m.loadActive(source.Key)
 		if err != nil {
-			requiresSynchronousReconcile = true
+			requiresSynchronousReconcile = requiresSynchronousReconcile || !deferLocalReconcile
 			if !errors.Is(err, os.ErrNotExist) {
 				errs = append(errs, fmt.Errorf("restore active agent extension %s: %w", source.Key, err))
 			}
 			continue
 		}
 		if !installationMatchesConfiguredSource(source, installation) {
-			requiresSynchronousReconcile = true
+			requiresSynchronousReconcile = requiresSynchronousReconcile || !deferLocalReconcile
 			if m.Store != nil {
 				if err := m.Store.DeleteAgentTarget(ctx, targetID(source.Key)); err != nil {
 					errs = append(errs, fmt.Errorf("remove stale agent extension %s target: %w", source.Key, err))

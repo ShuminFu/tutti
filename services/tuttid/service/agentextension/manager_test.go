@@ -450,6 +450,52 @@ func TestManagerRestoreActiveRequiresCurrentLocalPackageReconcile(t *testing.T) 
 	}
 }
 
+func TestManagerRestoreActiveDefersEmbeddedLocalPackageReconcile(t *testing.T) {
+	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "1")
+	targets := &targetStoreStub{targets: map[string]agenttargetbiz.Target{}}
+	manager := Manager{
+		Installations: agentextensiondata.NewFileInstallationStore(t.TempDir()),
+		Store:         targets,
+		Sources: []tuttitypes.AgentExtensionSource{{
+			Key: "deepseek-harness", LocalPackageDir: t.TempDir(), Enabled: true,
+		}},
+	}
+
+	requiresSynchronousReconcile, errs := manager.RestoreActive(context.Background())
+	if len(errs) != 0 || requiresSynchronousReconcile {
+		t.Fatalf("RestoreActive() synchronous = %v, errors = %v", requiresSynchronousReconcile, errs)
+	}
+	if len(targets.targets) != 0 {
+		t.Fatalf("RestoreActive() targets = %#v, want none until background refresh", targets.targets)
+	}
+}
+
+func TestManagerReconcileRemovesStaleLocalPackageStaging(t *testing.T) {
+	sourceDir := t.TempDir()
+	if err := extractPackage(testPackageZIP(t), sourceDir); err != nil {
+		t.Fatal(err)
+	}
+	stateDir := t.TempDir()
+	stale := filepath.Join(stateDir, "agent", "extensions", "gemini", ".local-stale")
+	if err := os.MkdirAll(stale, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	manager := Manager{
+		Installations: agentextensiondata.NewFileInstallationStore(stateDir),
+		Store:         &targetStoreStub{targets: map[string]agenttargetbiz.Target{}},
+		Sources: []tuttitypes.AgentExtensionSource{{
+			Key: "gemini", LocalPackageDir: sourceDir, Enabled: true,
+		}},
+	}
+
+	if errs := manager.Reconcile(context.Background()); len(errs) != 0 {
+		t.Fatalf("Reconcile() errors = %v", errs)
+	}
+	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stale local package staging still exists: %v", err)
+	}
+}
+
 func TestManagerReconcileDoesNotUseCachedLocalInstallationWhenOverrideFails(t *testing.T) {
 	sourceDir := t.TempDir()
 	if err := extractPackage(testPackageZIP(t), sourceDir); err != nil {

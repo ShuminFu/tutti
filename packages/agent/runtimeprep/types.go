@@ -137,9 +137,10 @@ type ConnectorAgentContext struct {
 }
 
 type ExtensionRuntimePrep struct {
-	InstructionsFile string                  `json:"instructionsFile,omitempty"`
-	Home             *ExtensionRuntimeHome   `json:"home,omitempty"`
-	ModelEndpoint    *ExtensionModelEndpoint `json:"modelEndpoint,omitempty"`
+	InstructionsFile        string                  `json:"instructionsFile,omitempty"`
+	SessionInstructionsFile string                  `json:"sessionInstructionsFile,omitempty"`
+	Home                    *ExtensionRuntimeHome   `json:"home,omitempty"`
+	ModelEndpoint           *ExtensionModelEndpoint `json:"modelEndpoint,omitempty"`
 }
 
 // ExtensionModelEndpoint declares how an extension consumes a host-provided
@@ -160,6 +161,7 @@ type ExtensionModelEndpointConfigKeys struct {
 	BaseURL   []string `json:"baseURL"`
 	APIKeyEnv []string `json:"apiKeyEnv,omitempty"`
 	WireAPI   []string `json:"wireAPI,omitempty"`
+	Models    []string `json:"models,omitempty"`
 }
 
 type ExtensionRuntimeHome struct {
