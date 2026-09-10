@@ -92,6 +92,18 @@ export interface WorkspaceWallpaperOption {
 const workspaceWallpaperMetadataKey = "workspaceWallpaper";
 const workspaceWallpaperMetadataSchemaVersion = 1;
 
+// rndmaster: 内置壁纸只保留两张 —— "tutti"（其像素里的品牌字样由
+// scripts/build-tutti-web.sh 的 apply_wallpaper_overlay 换成 dintaldock）与
+// "default"。删掉的 6 张（ocean / sky / peaks / orbit / sand / dunes）源图仍在
+// 仓库里，但没有代码引用，vite 不会打包 —— 产物少约 630KB。
+//
+// 不在本 patch 里删源图：git 的二进制 patch 会带 reverse 块（供 apply -R），
+// 会让 patch 从纯文本涨到几 MB，而产物收益为零。
+//
+// WorkspaceWallpaperId 联合类型刻意保持不变：它不参与运行时判定
+// （isWorkspaceWallpaperId 读的是本数组），保留旧 id 可让上游测试与 fixture
+// 不产生类型错误，把 patch 面压到最小。旧快照里存着 ocean/sky 等选择的用户，
+// 由该函数判定失败后自动回落到 defaultWorkspaceWallpaperId，无需迁移代码。
 export const workspaceWallpaperOptions: WorkspaceWallpaperOption[] = [
   {
     appearance: "dark",
@@ -115,58 +127,6 @@ export const workspaceWallpaperOptions: WorkspaceWallpaperOption[] = [
       import.meta.url
     ).href
   },
-  {
-    appearance: "dark",
-    id: "ocean",
-    titleKey: "workspace.wallpaper.options.ocean",
-    url: new URL(
-      "../../../assets/workspace-wallpaper/ocean.png",
-      import.meta.url
-    ).href
-  },
-  {
-    appearance: "light",
-    id: "sky",
-    titleKey: "workspace.wallpaper.options.sky",
-    url: new URL("../../../assets/workspace-wallpaper/sky.png", import.meta.url)
-      .href
-  },
-  {
-    appearance: "dark",
-    id: "peaks",
-    titleKey: "workspace.wallpaper.options.peaks",
-    url: new URL(
-      "../../../assets/workspace-wallpaper/peaks.png",
-      import.meta.url
-    ).href
-  },
-  {
-    appearance: "dark",
-    id: "orbit",
-    titleKey: "workspace.wallpaper.options.orbit",
-    url: new URL(
-      "../../../assets/workspace-wallpaper/orbit.png",
-      import.meta.url
-    ).href
-  },
-  {
-    appearance: "light",
-    id: "sand",
-    titleKey: "workspace.wallpaper.options.sand",
-    url: new URL(
-      "../../../assets/workspace-wallpaper/sand.png",
-      import.meta.url
-    ).href
-  },
-  {
-    appearance: "dark",
-    id: "dunes",
-    titleKey: "workspace.wallpaper.options.dunes",
-    url: new URL(
-      "../../../assets/workspace-wallpaper/dunes.png",
-      import.meta.url
-    ).href
-  }
 ];
 
 function isWorkspaceWallpaperId(value: string): value is WorkspaceWallpaperId {
