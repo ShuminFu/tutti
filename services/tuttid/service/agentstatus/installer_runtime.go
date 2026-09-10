@@ -93,6 +93,11 @@ func (s Service) resolveExternalProviderRuntime(
 		ReasonCode:     spec.AdapterUnavailableReasonCode,
 		Env:            env,
 	}
+	if isClaudeStatusSpec(spec) {
+		if preferred := strings.TrimSpace(os.Getenv("CLAUDE_CODE_EXECUTABLE")); preferred != "" && s.executableFile(preferred) {
+			result.CLIPath = preferred
+		}
+	}
 	if spec.AdapterInstall.RegistryNPM != nil {
 		npm := spec.AdapterInstall.RegistryNPM
 		result.AdapterPath = strings.TrimSpace(npm.PackageDir)

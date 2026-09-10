@@ -35,6 +35,19 @@ func TestExternalAdapterProbeExecutesCommandNotPackageDirectory(t *testing.T) {
 	}
 }
 
+func TestExternalClaudeRuntimeUsesHostSelectedCLIPath(t *testing.T) {
+	preferred := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(preferred, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDE_CODE_EXECUTABLE", preferred)
+	service := Service{}
+	resolved := service.resolveExternalProviderRuntime(context.Background(), ProviderSpec{Provider: "claude-code"}, service.commandResolver(), os.Environ())
+	if resolved.CLIPath != preferred {
+		t.Fatalf("CLIPath = %q, want host-selected %q", resolved.CLIPath, preferred)
+	}
+}
+
 func TestCodexProbeUsesDetectionCommandLimiter(t *testing.T) {
 	limiter := NewDetectionCommandLimiter(1)
 	release, acquired := limiter.acquire(context.Background())
