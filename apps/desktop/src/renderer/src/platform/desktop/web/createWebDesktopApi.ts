@@ -13,6 +13,7 @@ import type {
   AppUpdateState,
   ClearDeveloperLogsResult,
   DesktopBackendConfig,
+  DesktopCustomWallpaperImage,
   DesktopDeveloperLogsState,
   ExportDeveloperLogsResult
 } from "@shared/contracts/ipc";
@@ -111,16 +112,56 @@ function createWebDockPreviewCacheApi(): DesktopDockPreviewCacheApi {
   };
 }
 
+// Uploading a custom wallpaper needs somewhere to persist it. Upstream only
+// implements that in the Electron main process (main/host/customWallpaperStore),
+// so in the web build every upload used to reject and the settings panel showed
+// "upload failed" no matter what.
+//
+// When embedded in a host shell, delegate all three operations over the host
+// bridge; the host persists the image on its own backend. Browser-side storage
+// is not an option here: the iframe origin carries the host backend's port,
+// which changes whenever that backend restarts, so IndexedDB / localStorage
+// would silently lose the wallpaper.
+//
+// Images can reach a few MB (longest edge 4096, JPEG q0.92), so the write path
+// gets a longer deadline than the 5s bridge default.
+const CUSTOM_WALLPAPER_WRITE_TIMEOUT_MS = 30_000;
+
 function createWebWallpaperApi(): DesktopWallpaperApi {
   return {
     clearCustom() {
-      return Promise.reject(electronDebugRequired("clearCustom"));
+      return requestHostCapability<void>("clearCustomWallpaper").catch(
+        (error: unknown) => {
+          if (error instanceof HostBridgeUnavailableError) {
+            return Promise.reject(electronDebugRequired("clearCustom"));
+          }
+          return Promise.reject(error);
+        }
+      );
     },
     getCustom() {
-      return Promise.resolve(null);
+      // Reads resolve to null rather than rejecting when no host is present:
+      // callers treat "no wallpaper" as a normal state, and rejecting here
+      // would log a custom-wallpaper.load.failed diagnostic on every startup
+      // of a plain (non-embedded) web build.
+      return requestHostCapability<DesktopCustomWallpaperImage | null>(
+        "getCustomWallpaper"
+      ).then(
+        (stored) => stored ?? null,
+        () => null
+      );
     },
-    setCustom() {
-      return Promise.reject(electronDebugRequired("setCustom"));
+    setCustom(input) {
+      return requestHostCapability<DesktopCustomWallpaperImage>(
+        "setCustomWallpaper",
+        [input],
+        CUSTOM_WALLPAPER_WRITE_TIMEOUT_MS
+      ).catch((error: unknown) => {
+        if (error instanceof HostBridgeUnavailableError) {
+          return Promise.reject(electronDebugRequired("setCustom"));
+        }
+        return Promise.reject(error);
+      });
     }
   };
 }
