@@ -32,6 +32,8 @@ export type AgentConversationRailStatus =
 export interface AgentConversationRailSummary {
   agentTargetId?: string | null;
   cwd: string;
+  // 会话已结束的时刻；会话栏据此不画在线圆点。可选以保持既有调用方兼容。
+  endedAtUnixMs?: number | null;
   id: string;
   isolation?: AgentActivitySession["isolation"];
   needsUserAction?: boolean;
@@ -79,6 +81,7 @@ export function projectCanonicalAgentGUIConversationSummaries(
     return {
       agentTargetId: item.session.agentTargetId ?? null,
       cwd: item.session.cwd,
+      endedAtUnixMs: item.session.endedAtUnixMs ?? null,
       id: item.session.agentSessionId,
       isolation: item.session.isolation,
       needsUserAction:

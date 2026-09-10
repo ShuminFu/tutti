@@ -91,6 +91,11 @@ const styles = {
   conversationMoreButton: "agent-gui-node__conversation-more-button",
   conversationProviderImage: "agent-gui-node__conversation-provider-image",
   conversationProviderIcon: "agent-gui-node__conversation-provider-icon",
+  // 图标 + 右下角在线圆点（补丁 0119）：图标本身尺寸不变，外面套一层
+  // 定位盒，圆点绝对定位在它的右下角。
+  conversationProviderIconSlot:
+    "agent-gui-node__conversation-provider-icon-slot",
+  conversationPresenceDot: "agent-gui-node__conversation-presence-dot",
   conversationProviderMaskIcon:
     "agent-gui-node__conversation-provider-mask-icon",
   conversationOpenWindowButton:

@@ -450,6 +450,73 @@ describe("AgentGUIConversationRailItem interaction lock", () => {
   });
 });
 
+describe("AgentGUIConversationRailItem 在线圆点", () => {
+  const presenceDot = (container: HTMLElement): HTMLElement | null =>
+    container.querySelector(".agent-gui-node__conversation-presence-dot");
+
+  it("这一轮在跑：画蓝点 data-presence=working", () => {
+    const { container } = renderRailItem({
+      isRailInteractionLocked: () => false,
+      item: { status: "working" }
+    });
+
+    expect(presenceDot(container)?.getAttribute("data-presence")).toBe(
+      "working"
+    );
+  });
+
+  it("agent 等用户答话也算工作中", () => {
+    const { container } = renderRailItem({
+      isRailInteractionLocked: () => false,
+      item: { status: "waiting" }
+    });
+
+    expect(presenceDot(container)?.getAttribute("data-presence")).toBe(
+      "working"
+    );
+  });
+
+  it("活着但闲着：画绿点 data-presence=idle", () => {
+    const { container } = renderRailItem({
+      isRailInteractionLocked: () => false,
+      item: { status: "ready" }
+    });
+
+    expect(presenceDot(container)?.getAttribute("data-presence")).toBe("idle");
+  });
+
+  it("会话已结束：不画点", () => {
+    const { container } = renderRailItem({
+      isRailInteractionLocked: () => false,
+      item: { status: "completed", endedAtUnixMs: 1_700_000_000_000 }
+    });
+
+    expect(presenceDot(container)).toBeNull();
+    // 图标本身照旧渲染，只是没有角标。
+    expect(
+      container.querySelector(".agent-gui-node__conversation-provider-icon")
+    ).not.toBeNull();
+  });
+
+  it("圆点挂在 provider 图标的定位盒里，且对读屏隐藏", () => {
+    const { container } = renderRailItem({
+      isRailInteractionLocked: () => false,
+      item: { status: "ready" }
+    });
+
+    const slot = container.querySelector(
+      ".agent-gui-node__conversation-provider-icon-slot"
+    );
+    expect(slot).not.toBeNull();
+    expect(
+      slot?.querySelector(".agent-gui-node__conversation-provider-icon")
+    ).not.toBeNull();
+    expect(presenceDot(container)?.getAttribute("aria-hidden")).toBe("true");
+    // 纯装饰：不引入任何文字标签。
+    expect(presenceDot(container)?.textContent).toBe("");
+  });
+});
+
 function renderRailItem(overrides: {
   agentTargets?: readonly AgentMessageMarkdownAgentTarget[];
   isRailInteractionLocked: () => boolean;

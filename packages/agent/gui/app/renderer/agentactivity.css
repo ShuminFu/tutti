@@ -6931,6 +6931,12 @@ button.agent-gui-node__conversation-section-toggle:hover
 }
 
 .agent-gui-node__conversation-item {
+  /* 在线圆点描边用的「行底色」。默认行是透明的，露出的是会话栏面板底色。
+     hover / 选中态各自覆盖成自己那一份，否则圆点周围会留一圈旧底色。 */
+  --agent-gui-conversation-presence-ring: var(
+    --agent-gui-session-sidepanel-background,
+    var(--background-panel)
+  );
   --agent-gui-conversation-actions-width: 72px;
   --agent-gui-conversation-actions-inset: 4px;
   --agent-gui-conversation-actions-gap: 8px;
@@ -7186,11 +7192,13 @@ button.agent-gui-node__conversation-section-toggle:hover
   .agent-gui-node__conversation-actions [data-state="open"]
 ) {
   background-color: var(--agent-gui-surface-hover);
+  --agent-gui-conversation-presence-ring: var(--agent-gui-surface-hover);
 }
 
 .agent-gui-node__conversation-item[data-active="true"] {
   border-color: var(--line-1);
   background-color: var(--background-fronted);
+  --agent-gui-conversation-presence-ring: var(--background-fronted);
 }
 
 .agent-gui-node__conversation-select {
@@ -7405,6 +7413,42 @@ button.agent-gui-node__conversation-section-toggle:hover
 .agent-gui-node__conversation-provider-image {
   display: block;
   object-fit: contain;
+}
+
+/* 会话栏在线圆点（补丁 0119）：像 IM 头像那样压在 provider 图标右下角。
+   蓝 = 这一轮在跑（含 agent 等用户答话），绿 = 活着但闲着；会话已结束时
+   组件根本不渲染这个节点。 */
+
+/* 定位盒：尺寸与图标逐字一致（14×14），只是把 provider 图标变成定位上下文。
+   `flex: 0 0 14px` 要放在这一层——图标那条规则现在管的是盒子里面的东西，
+   外层不定宽的话在 flex 行里会被 max-content 撑开。 */
+.agent-gui-node__conversation-provider-icon-slot {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+}
+
+.agent-gui-node__conversation-presence-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  /* 1px 描边取行底色，圆点压在图标上也能读出来。用 box-shadow 而不是 border：
+     border 会把 6px 撑成 8px，还得反过来改 width。行底色随 hover/选中变，
+     所以这里读的是变量，由 conversation-item 那几条规则各自赋值。 */
+  box-shadow: 0 0 0 1px var(--agent-gui-conversation-presence-ring);
+}
+
+.agent-gui-node__conversation-presence-dot[data-presence="working"] {
+  background-color: var(--agent-gui-accent);
+}
+
+.agent-gui-node__conversation-presence-dot[data-presence="idle"] {
+  background-color: var(--agent-gui-success);
 }
 
 .agent-gui-node__conversation-provider-mask-icon {

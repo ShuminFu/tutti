@@ -240,6 +240,9 @@ export function conversationSummariesRenderEqual(
     left.cwd === right.cwd &&
     left.railSectionKey === right.railSectionKey &&
     left.pinnedAtUnixMs === right.pinnedAtUnixMs &&
+    // 会话结束时刻参与「要不要重渲染」：会话栏的在线圆点靠它决定画不画，
+    // 漏掉这一项会让已结束的会话一直留着圆点直到别的字段恰好也变了。
+    left.endedAtUnixMs === right.endedAtUnixMs &&
     left.sortTimeUnixMs === right.sortTimeUnixMs &&
     left.updatedAtUnixMs === right.updatedAtUnixMs &&
     left.isTransient === right.isTransient &&

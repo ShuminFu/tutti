@@ -47,6 +47,10 @@ export interface AgentGUIConversationSummary {
   pinnedAtUnixMs?: number | null;
   sortTimeUnixMs?: number;
   updatedAtUnixMs: number;
+  // 会话已结束（后端 `CanonicalAgentSession.endedAtUnixMs`）。会话栏据此
+  // 不再画在线圆点：结束的会话既不是「在线」也不是「工作中」。缺省
+  // （undefined / null）= 尚未结束，与新增该字段之前的行为一致。
+  endedAtUnixMs?: number | null;
   hasUnreadCompletion?: boolean;
   unreadCompletionKey?: string | null;
   needsUserAction?: boolean;

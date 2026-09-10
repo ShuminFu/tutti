@@ -99,6 +99,8 @@ function conversationSummariesRenderEqual(
     left.isolation?.mode === right.isolation?.mode &&
     left.railSectionKey === right.railSectionKey &&
     left.pinnedAtUnixMs === right.pinnedAtUnixMs &&
+    // 同 stableHelpers：在线圆点依赖 endedAtUnixMs，必须参与比较。
+    left.endedAtUnixMs === right.endedAtUnixMs &&
     left.sortTimeUnixMs === right.sortTimeUnixMs &&
     left.updatedAtUnixMs === right.updatedAtUnixMs &&
     left.isTransient === right.isTransient &&

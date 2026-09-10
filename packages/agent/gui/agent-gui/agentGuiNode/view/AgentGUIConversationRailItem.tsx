@@ -26,6 +26,7 @@ import type { AgentGUIViewLabels } from "../AgentGUINodeView";
 import type { AgentGUIConversationRailLabels } from "./agentGUIConversationRailLabels";
 import styles from "../AgentGUINode.styles";
 import { conversationPlainTitle } from "./agentGUIViewUtils";
+import { agentGUIConversationPresence } from "./agentGUIConversationPresence";
 import { AgentGUIConversationRailRelativeTime } from "./AgentGUIConversationRailClock";
 import {
   AgentGUIConversationActionsContextMenu,
@@ -344,9 +345,25 @@ export const AgentGUIConversationRailItem = memo(
           .filter((value): value is string => Boolean(value))
           .join(", ")
       : undefined;
+    // 在线圆点（补丁 0119）：蓝=这一轮在跑，绿=活着但闲着，null=会话已结束不画。
+    // 只在真有图标时套定位盒——没有图标就没有可以挂角的东西。
+    const conversationPresence = agentGUIConversationPresence(item);
+    const conversationIconWithPresence =
+      conversationIconNode && conversationPresence ? (
+        <span className={styles.conversationProviderIconSlot}>
+          {conversationIconNode}
+          <span
+            aria-hidden="true"
+            className={styles.conversationPresenceDot}
+            data-presence={conversationPresence}
+          />
+        </span>
+      ) : (
+        conversationIconNode
+      );
     const conversationTitleRow = (
       <span className={styles.conversationTitleRow}>
-        {conversationIconNode}
+        {conversationIconWithPresence}
         <span className={styles.conversationTitle}>{conversationTitle}</span>
       </span>
     );
