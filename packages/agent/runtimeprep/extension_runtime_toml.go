@@ -103,6 +103,7 @@ func tomlApplyModelEndpoint(doc tomlTable, endpoint *ModelEndpointConfig, declar
 		return nil
 	}
 	seen := map[string]struct{}{}
+	allowed := make([]string, 0, len(endpoint.Models))
 	models := append([]ModelEndpointModel(nil), endpoint.Models...)
 	if id := strings.TrimSpace(endpoint.Model); id != "" {
 		models = append([]ModelEndpointModel{{ID: id}}, models...)
@@ -116,6 +117,7 @@ func tomlApplyModelEndpoint(doc tomlTable, endpoint *ModelEndpointConfig, declar
 			continue
 		}
 		seen[id] = struct{}{}
+		allowed = append(allowed, id)
 		name := strings.TrimSpace(model.Name)
 		if name == "" {
 			name = id
@@ -145,6 +147,14 @@ func tomlApplyModelEndpoint(doc tomlTable, endpoint *ModelEndpointConfig, declar
 			if err := tomlSetPath(doc, append(table, rest...), wireAPIValue); err != nil {
 				return err
 			}
+		}
+	}
+	// Only ever written with ids in hand: an empty allowlist would tell the
+	// runtime to hide every model, which is strictly worse than leaving the
+	// key absent (it then keeps whatever it inferred from the tables above).
+	if len(declaration.ConfigKeys.AllowedModels) > 0 && len(allowed) > 0 {
+		if err := tomlSetPath(doc, declaration.ConfigKeys.AllowedModels, allowed); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -271,6 +281,8 @@ func tomlNormalizeValue(value any) (any, error) {
 			return i, nil
 		}
 		return nil, errors.New("extension runtime TOML number is unsupported")
+	case []string:
+		return append([]string(nil), typed...), nil
 	case tomlTable:
 		return typed, nil
 	case map[string]any:
@@ -361,6 +373,12 @@ func tomlLiteral(value any) string {
 		return "false"
 	case int64:
 		return strconv.FormatInt(typed, 10)
+	case []string:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			parts = append(parts, tomlQuote(item))
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
 	default:
 		return tomlQuote(fmt.Sprint(value))
 	}

@@ -162,6 +162,12 @@ type ExtensionModelEndpointConfigKeys struct {
 	APIKeyEnv []string `json:"apiKeyEnv,omitempty"`
 	WireAPI   []string `json:"wireAPI,omitempty"`
 	Models    []string `json:"models,omitempty"`
+	// AllowedModels, when set, receives the ids of every per-model table
+	// written under Models. A runtime may merge its own built-in list with
+	// the mapped tables (grok keeps its defaults next to [model.*]); pointing
+	// this at the config's own allowlist key makes the session see exactly
+	// the host catalog. RNDMASTER_EXTENSION_ALLOWED_MODELS.
+	AllowedModels []string `json:"allowedModels,omitempty"`
 }
 
 type ExtensionRuntimeHome struct {

@@ -70,11 +70,12 @@ func grokExtensionRuntimePrep() *ExtensionRuntimePrep {
 			WireAPIConfigValue: "chat_completions",
 			APIKeyEnv:          "DINTAL_LLM_KEY",
 			ConfigKeys: ExtensionModelEndpointConfigKeys{
-				Model:     []string{"models", "default"},
-				BaseURL:   []string{"model", "base_url"},
-				APIKeyEnv: []string{"model", "env_key"},
-				WireAPI:   []string{"model", "api_backend"},
-				Models:    []string{"model"},
+				Model:         []string{"models", "default"},
+				BaseURL:       []string{"model", "base_url"},
+				APIKeyEnv:     []string{"model", "env_key"},
+				WireAPI:       []string{"model", "api_backend"},
+				Models:        []string{"model"},
+				AllowedModels: []string{"models", "allowed_models"},
 			},
 		},
 	}
@@ -132,6 +133,7 @@ func TestExtensionRuntimePreparerWritesGrokTOMLFromHostLoopback(t *testing.T) {
 		`env_key = "DINTAL_LLM_KEY"`,
 		`api_backend = "chat_completions"`,
 		`default = "grok-\"quote\"\\id"`,
+		`allowed_models = ["grok-\"quote\"\\id", "gpt-5.5"]`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("config.toml missing %q:\n%s", want, body)

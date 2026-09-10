@@ -491,7 +491,7 @@ func ValidateExtensionRuntimePrep(prep ExtensionRuntimePrep) error {
 		if len(endpoint.ConfigKeys.Provider) > 0 {
 			paths = append(paths, endpoint.ConfigKeys.Provider)
 		}
-		for _, optionalPath := range [][]string{endpoint.ConfigKeys.APIKeyEnv, endpoint.ConfigKeys.WireAPI, endpoint.ConfigKeys.Models} {
+		for _, optionalPath := range [][]string{endpoint.ConfigKeys.APIKeyEnv, endpoint.ConfigKeys.WireAPI, endpoint.ConfigKeys.Models, endpoint.ConfigKeys.AllowedModels} {
 			if len(optionalPath) > 0 {
 				paths = append(paths, optionalPath)
 			}
