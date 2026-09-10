@@ -6054,6 +6054,28 @@ aside.workspace-agents-status-panel
   }
 }
 
+/* Conversation-rail toggle for surfaces whose surrounding product owns the only
+   top bar (`frame.hostProvidedTopBar`). In the rail it is just the first cell of
+   the rail's top row; while the rail is collapsed it is pinned to the layout's
+   top-left corner, which is the only place left that is never `inert`. */
+.agent-gui-node__rail-toggle-button {
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: var(--agent-gui-rail-control-radius, 6px);
+}
+
+.agent-gui-node__rail-toggle-button--floating {
+  position: absolute;
+  /* Tracks the same reservation the three columns use, so a surface that has to
+     yield a top inset (window controls) moves this control with them. */
+  top: calc(var(--agent-gui-workbench-header-height, 0px) + 6px);
+  left: 8px;
+  z-index: calc(var(--z-panel) + 1);
+}
+
 .agent-gui-node__rail-toolbar {
   --agent-gui-rail-control-radius: 6px;
 

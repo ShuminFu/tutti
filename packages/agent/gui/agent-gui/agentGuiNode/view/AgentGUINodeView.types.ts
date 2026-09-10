@@ -587,6 +587,14 @@ type AgentGUIComposerExternalPromptProps = Pick<
   | "resolvePastedPath"
   | "promptAssetLimit"
 >;
+export interface AgentGUIConversationRailToggle {
+  collapseLabel: string;
+  expandLabel: string;
+  isAutoCollapsed: boolean;
+  isCollapsed: boolean;
+  onToggle: () => void;
+}
+
 export interface AgentGUINodeViewProps extends AgentGUIComposerExternalPromptProps {
   viewModel: AgentGUINodeViewModel;
   referenceProvenanceFilters?: AgentComposerReferenceProvenanceFilters | null;
@@ -740,6 +748,12 @@ export interface AgentGUINodeViewProps extends AgentGUIComposerExternalPromptPro
   };
   conversationRailCollapsed: boolean;
   conversationRailOverlay?: boolean;
+  /**
+   * Present only where the surrounding product owns the single top bar
+   * (`frame.hostProvidedTopBar`). The Agent then has no header row to host the
+   * conversation-rail toggle, so the view renders it itself.
+   */
+  conversationRailToggle?: AgentGUIConversationRailToggle | null;
   onConversationRailOverlayDismiss?: () => void;
   conversationRailWidthPx: number;
   conversationRailMinWidthPx: number;

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -304,4 +305,63 @@ test("opens an agent when the persisted desktop has none", async () => {
 
   assert.equal(result, "agent-new");
   assert.deepEqual(launched, [{ reason: "host", typeId: "agent-gui" }]);
+});
+
+// Issue 03: the master shell paints the only top bar, so the embedded header
+// context has to tell the Agent header contract to render nothing at all.
+test("marks the embedded header context as host-owned chrome", () => {
+  const frame = { height: 825, width: 900, x: 0, y: 0 };
+  const headerContexts: { embedded?: boolean }[] = [];
+  const contribution = applyEmbeddedDintalDockContributions([
+    {
+      id: "agent",
+      nodes: [
+        {
+          frame,
+          renderBody: (() => null) as never,
+          renderHeader: ((context: { embedded?: boolean }) => {
+            headerContexts.push(context);
+            return null;
+          }) as never,
+          title: "Agent",
+          typeId: "agent-gui"
+        }
+      ]
+    }
+  ])?.[0]?.nodes?.[0];
+  assert.ok(contribution?.renderHeader);
+
+  renderToStaticMarkup(
+    contribution.renderHeader({
+      dragHandleProps: {},
+      node: { frame, id: "agent-node" },
+      surfaceSize: { height: 825, width: 900 }
+    } as never) as never
+  );
+
+  assert.equal(headerContexts.length, 1);
+  assert.equal(headerContexts[0]?.embedded, true);
+});
+
+const embeddedDintalDockCss = readFileSync(
+  new URL("./EmbeddedDintalDock.css", import.meta.url),
+  "utf8"
+);
+
+// With no header row left, the 44px the three columns reserve for it under
+// `[data-window-header-layout="overlay"]` would render as an empty band under
+// the master toolbar. The embedding stylesheet has to zero that reservation.
+test("the embedded surface reserves no height for the removed header row", () => {
+  const reservation = embeddedDintalDockCss.match(
+    /\.rndmaster-dintaldock-embedded\s*\n?\s*\.workbench-window\[data-window-header-layout="overlay"\] \{([^}]*)\}/
+  );
+  assert.notEqual(reservation, null);
+  assert.match(
+    String(reservation?.[1] ?? ""),
+    /--agent-gui-workbench-header-height:\s*0px;/
+  );
+  assert.match(
+    embeddedDintalDockCss,
+    /\.workbench-window__header \{\n\s*display: none !important;/
+  );
 });

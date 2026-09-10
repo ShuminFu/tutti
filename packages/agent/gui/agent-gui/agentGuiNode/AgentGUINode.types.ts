@@ -98,6 +98,12 @@ export interface AgentGUINodeFrameLayout {
   isVisible?: boolean;
   embedded?: boolean;
   /**
+   * The surrounding product already paints a single top bar (the rndmaster
+   * DinTalDock embedding). The Agent then renders no header row of its own and
+   * moves the conversation-rail toggle into the rail's own top row.
+   */
+  hostProvidedTopBar?: boolean;
+  /**
    * Standalone windows preserve the middle conversation width and collapse
    * the conversation Rail before it can be compressed. Other surfaces retain
    * the default responsive policy.
@@ -437,6 +443,7 @@ export function areAgentGUINodePropsEqual(
     pf.isActive === nf.isActive &&
     pf.isVisible === nf.isVisible &&
     pf.embedded === nf.embedded &&
+    pf.hostProvidedTopBar === nf.hostProvidedTopBar &&
     pf.conversationRailAutoCollapseMode ===
       nf.conversationRailAutoCollapseMode &&
     pf.conversationRailNarrowExpanded === nf.conversationRailNarrowExpanded &&

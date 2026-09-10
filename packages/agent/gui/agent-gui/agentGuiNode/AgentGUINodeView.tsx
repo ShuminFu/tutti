@@ -31,6 +31,7 @@ import { AgentGUIConfigMenu } from "./view/AgentGUIAccountConfig";
 import { AgentGUIProviderRail } from "./view/AgentGUIProviderRail";
 import { type AgentGUIConversationRailState } from "./view/AgentGUIConversationRailPane";
 import { AgentGUIConversationRailController } from "./controller/AgentGUIConversationRailController";
+import { AgentGUIConversationRailToggleButton } from "./view/AgentGUIConversationRailToggleButton";
 import {
   AgentGUIDetailPane,
   EMPTY_WORKSPACE_APP_ICONS
@@ -122,6 +123,7 @@ export function AgentGUINodeView({
   actions,
   conversationRailCollapsed,
   conversationRailOverlay = false,
+  conversationRailToggle = null,
   onConversationRailOverlayDismiss,
   conversationRailWidthPx,
   conversationRailMinWidthPx,
@@ -460,6 +462,13 @@ export function AgentGUINodeView({
       uiLanguage,
       createConversationDisabled,
       isCollapsed: conversationRailCollapsed,
+      railToolbarLeadingAccessory:
+        conversationRailToggle && !conversationRailCollapsed ? (
+          <AgentGUIConversationRailToggleButton
+            placement="rail"
+            toggle={conversationRailToggle}
+          />
+        ) : null,
       agentTargets: viewModel.rail.agentTargets,
       agentTargetsLoading: viewModel.rail.agentTargetsLoading,
       conversationFilter: viewModel.rail.conversationFilter,
@@ -488,6 +497,7 @@ export function AgentGUINodeView({
       confirmDeleteConversations,
       confirmDeleteProjectConversations,
       conversationRailCollapsed,
+      conversationRailToggle,
       createConversationDisabled,
       conversationRailLabels,
       openConversationWindow,
@@ -556,6 +566,15 @@ export function AgentGUINodeView({
           data-rail-resizing={isRailResizing ? "true" : undefined}
           style={layoutStyle}
         >
+          {/* The collapsed rail is `inert`, so its own toggle is unreachable.
+              Surfaces without an Agent header row keep a floating one pinned to
+              the layout's top-left corner instead. */}
+          {conversationRailToggle && conversationRailCollapsed ? (
+            <AgentGUIConversationRailToggleButton
+              placement="floating"
+              toggle={conversationRailToggle}
+            />
+          ) : null}
           <aside
             className={`${styles.providerRailPanel} nodrag tsh-desktop-no-drag`}
             aria-label={labels.providerSwitchLabel}

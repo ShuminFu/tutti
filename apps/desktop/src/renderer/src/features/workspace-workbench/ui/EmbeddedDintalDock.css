@@ -41,3 +41,32 @@
   cursor: default;
   user-select: auto;
 }
+
+/* Single top bar (issue 03).
+ *
+ * The master shell's canvas toolbar is the only top bar the user sees, so the
+ * Agent renders no header row of its own here (`embedded` in the workbench
+ * header contract). Its functional controls — conversation-rail toggle, session
+ * search, new session — live in the conversation rail's own top row instead.
+ *
+ * Upstream the three columns reserve 44px of header height with `padding-top`
+ * under `[data-window-header-layout="overlay"]`. With no header row that
+ * reservation would leave an empty band between the master toolbar and the
+ * Agent's content, so zero it. This wins on specificity over the upstream
+ * `.workbench-window[data-window-header-layout="overlay"]` declaration.
+ *
+ * The header element itself is hidden as a belt-and-braces guard: the wrapper
+ * `.workbench-window__header` is still emitted by the window shell even when its
+ * body renders nothing, and it is an absolutely positioned overlay that would
+ * otherwise keep a 44px hit-test layer over the rail's first row.
+ */
+.rndmaster-dintaldock-embedded
+  .workbench-window[data-window-header-layout="overlay"] {
+  --agent-gui-workbench-header-height: 0px;
+}
+
+.rndmaster-dintaldock-embedded
+  .workbench-window-shell[data-workbench-node-type-id="agent-gui"]
+  .workbench-window__header {
+  display: none !important;
+}

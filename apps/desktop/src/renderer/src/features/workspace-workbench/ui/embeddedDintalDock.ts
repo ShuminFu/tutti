@@ -257,9 +257,14 @@ function EmbeddedDintalDockHeader({
     context,
     context.surfaceSize
   );
+  // Issue 03: the master shell already paints the only top bar, so the Agent
+  // header row renders nothing here. Its controls move into the conversation
+  // rail's own top row; this component stays mounted because it still owns the
+  // narrow-drawer focus and Escape handling above.
   return renderHeader({
     ...projectedContext,
     conversationRailNarrowExpanded: narrowExpanded,
+    embedded: true,
     dragHandleProps: {
       ...projectedContext.dragHandleProps,
       onDoubleClick: undefined,

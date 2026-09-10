@@ -84,7 +84,8 @@ export const AgentGUINode = memo(function AgentGUINode({
     isMaximized = false,
     isActive,
     isVisible = true,
-    embedded = false
+    embedded = false,
+    hostProvidedTopBar = false
   } = frame;
   const widthRef = useRef(width);
   widthRef.current = width;
@@ -250,6 +251,33 @@ export const AgentGUINode = memo(function AgentGUINode({
       conversationRailCollapsed: current.conversationRailCollapsed !== true
     }));
   }, [onUpdateNode]);
+  // Without an Agent header row the toggle lives in the rail itself, so it must
+  // drive the same two intents the header used to: the narrow drawer while the
+  // rail is auto-collapsed, the persisted collapse otherwise. The embedded
+  // surface always fills its host frame, so no window resize is involved.
+  const handleHostTopBarConversationRailToggle = useCallback(() => {
+    const onNarrowExpandedChange = frame.onConversationRailNarrowExpandedChange;
+    if (isConversationRailAutoCollapsed && onNarrowExpandedChange) {
+      onUpdateNode((current) => {
+        if (current.conversationRailCollapsed !== true) {
+          return current;
+        }
+        return {
+          ...current,
+          conversationRailCollapsed: false
+        };
+      });
+      onNarrowExpandedChange(frame.conversationRailNarrowExpanded !== true);
+      return;
+    }
+    toggleConversationRailCollapsed();
+  }, [
+    frame.conversationRailNarrowExpanded,
+    frame.onConversationRailNarrowExpandedChange,
+    isConversationRailAutoCollapsed,
+    onUpdateNode,
+    toggleConversationRailCollapsed
+  ]);
   const handleConversationRailToggle = useCallback(() => {
     if (!isConversationRailAutoCollapsed) {
       toggleConversationRailCollapsed();
@@ -535,6 +563,21 @@ export const AgentGUINode = memo(function AgentGUINode({
               onAgentEnvPanelOpen={onAgentEnvPanelOpen}
               conversationRailCollapsed={isRenderedConversationRailCollapsed}
               conversationRailOverlay={isConversationRailOverlay}
+              conversationRailToggle={
+                hostProvidedTopBar
+                  ? {
+                      collapseLabel: t(
+                        "agentHost.agentGui.collapseConversationRail"
+                      ),
+                      expandLabel: t(
+                        "agentHost.agentGui.expandConversationRail"
+                      ),
+                      isAutoCollapsed: isConversationRailAutoCollapsed,
+                      isCollapsed: isRenderedConversationRailCollapsed,
+                      onToggle: handleHostTopBarConversationRailToggle
+                    }
+                  : null
+              }
               onConversationRailOverlayDismiss={
                 isConversationRailOverlay
                   ? () => frame.onConversationRailNarrowExpandedChange?.(false)

@@ -198,6 +198,8 @@ const styles = {
   railPanelCollapsed: "agent-gui-node__rail-panel--collapsed",
   railResizeHandle: "agent-gui-node__rail-resize-handle",
   railResizeHandleCollapsed: "agent-gui-node__rail-resize-handle--collapsed",
+  railToggleButton: "agent-gui-node__rail-toggle-button",
+  railToggleButtonFloating: "agent-gui-node__rail-toggle-button--floating",
   railToolbar: "agent-gui-node__rail-toolbar",
   activityEmpty: "agent-gui-node__activity-empty",
   activityHeading: "agent-gui-node__activity-heading",

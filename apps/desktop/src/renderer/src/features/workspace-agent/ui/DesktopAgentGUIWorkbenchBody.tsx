@@ -839,7 +839,10 @@ function DesktopAgentGUISurfaceImpl({
           isMaximized: surface.displayMode === "fullscreen",
           isActive: surface.isFocused,
           isVisible: surface.isVisible,
-          embedded: true
+          embedded: true,
+          // Issue 03: the master shell owns the single top bar, so the Agent
+          // renders no header row and the rail carries its own toggle.
+          hostProvidedTopBar: embeddedDintalDock
         }}
         state={nodeState}
         runtimeRequests={agentGUIHostProps.runtimeRequests}

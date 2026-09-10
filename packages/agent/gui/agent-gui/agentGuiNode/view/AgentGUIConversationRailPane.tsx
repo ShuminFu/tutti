@@ -60,6 +60,11 @@ export interface AgentGUIConversationRailControllerProps {
   currentUserId?: string | null;
   nodeId?: string | null;
   footer?: React.ReactNode;
+  /**
+   * Leading cell of the rail's own top row. Surfaces without an Agent header
+   * row (`frame.hostProvidedTopBar`) pass the conversation-rail toggle here.
+   */
+  railToolbarLeadingAccessory?: React.ReactNode;
   workspaceId: string;
   userProjects: AgentGUINodeViewModel["rail"]["userProjects"];
   activeConversation: AgentGUINodeViewModel["rail"]["activeConversation"];
@@ -137,6 +142,7 @@ export const AgentGUIConversationRailPane = memo(
   function AgentGUIConversationRailPane({
     conversations,
     footer,
+    railToolbarLeadingAccessory,
     workspaceId,
     userProjects,
     activeConversation,
@@ -531,6 +537,7 @@ export const AgentGUIConversationRailPane = memo(
           conversationQuery={conversationQuery}
           createConversationDisabled={createConversationDisabled}
           labels={labels}
+          leadingAccessory={railToolbarLeadingAccessory}
           onConversationQueryChange={onConversationQueryChange}
           onCreateConversation={() => onCreateConversation()}
         />

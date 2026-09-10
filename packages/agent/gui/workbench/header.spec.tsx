@@ -227,3 +227,53 @@ describe("AgentGuiWorkbenchHeader conversation identity", () => {
     ).toBeInTheDocument();
   });
 });
+
+// Issue 03: where the surrounding product already paints the only top bar, the
+// Agent must not add a second 44px row. The header renders nothing at all and
+// its functional controls move into the conversation rail's own top row.
+describe("AgentGuiWorkbenchHeader embedded single top bar", () => {
+  const embeddedHeaderProps = {
+    agentTitle: "Agent",
+    conversationTitle: "Embedded session",
+    copy: {
+      collapseConversationRail: "Collapse",
+      expandConversationRail: "Expand",
+      fallbackAgentLabel: "Agent",
+      newConversation: "New conversation"
+    },
+    hasConversation: true,
+    isConversationRailAutoCollapsed: false,
+    isConversationRailCollapsed: false,
+    nodeId: "embedded-agent-gui",
+    onCreateConversation: vi.fn(),
+    onToggleConversationRail: vi.fn()
+  } as const;
+
+  it("renders no header row when the host owns the top bar", () => {
+    const { container } = render(
+      <AgentGuiWorkbenchHeader {...embeddedHeaderProps} embedded />
+    );
+
+    expect(container.querySelector("header")).toBeNull();
+    expect(
+      container.querySelector("[data-agent-gui-workbench-header]")
+    ).toBeNull();
+    expect(
+      screen.queryByTestId("agent-gui-toggle-conversation-rail")
+    ).toBeNull();
+    expect(screen.queryByText("Agent")).toBeNull();
+  });
+
+  it("keeps the standalone header row untouched", () => {
+    const { container } = render(
+      <AgentGuiWorkbenchHeader {...embeddedHeaderProps} />
+    );
+
+    expect(
+      container.querySelector("header[data-agent-gui-workbench-header]")
+    ).not.toBeNull();
+    expect(
+      screen.getByTestId("agent-gui-toggle-conversation-rail")
+    ).toBeInTheDocument();
+  });
+});

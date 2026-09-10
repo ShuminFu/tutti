@@ -119,6 +119,11 @@ export interface CreateAgentGuiWorkbenchContributionInput {
 interface AgentGuiWorkbenchNarrowRailContext {
   conversationRailNarrowExpanded?: boolean;
   onConversationRailNarrowExpandedChange?: (expanded: boolean) => void;
+  /**
+   * Set by an embedding host that already paints the single top bar. The
+   * header row then renders nothing; its controls live in the rail's top row.
+   */
+  embedded?: boolean;
 }
 
 export function createAgentGuiWorkbenchContribution(
@@ -225,6 +230,7 @@ export function createAgentGuiWorkbenchContribution(
           } = context;
           const {
             conversationRailNarrowExpanded,
+            embedded,
             onConversationRailNarrowExpandedChange
           } = context as typeof context & AgentGuiWorkbenchNarrowRailContext;
           const headerTitle = copy.nodeTitle;
@@ -305,6 +311,7 @@ export function createAgentGuiWorkbenchContribution(
             conversationIconFallbackUrl,
             conversationRailWidthPx,
             displayMode,
+            embedded,
             isConversationRailAutoCollapsed,
             isConversationRailCollapsed,
             nodeId: node.id,

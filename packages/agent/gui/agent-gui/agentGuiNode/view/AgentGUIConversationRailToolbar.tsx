@@ -14,6 +14,7 @@ export function AgentGUIConversationRailToolbar({
   conversationQuery,
   createConversationDisabled,
   labels,
+  leadingAccessory,
   onConversationQueryChange,
   onCreateConversation
 }: {
@@ -21,11 +22,18 @@ export function AgentGUIConversationRailToolbar({
   conversationQuery: string;
   createConversationDisabled: boolean;
   labels: AgentGUIConversationRailLabels;
+  /**
+   * Rendered before the search field. Surfaces without an Agent header row
+   * (`frame.hostProvidedTopBar`) put the conversation-rail toggle here so this
+   * row is the single top row of the rail.
+   */
+  leadingAccessory?: React.ReactNode;
   onConversationQueryChange: (query: string) => void;
   onCreateConversation: () => void;
 }): React.JSX.Element {
   return (
     <div className={styles.railToolbar}>
+      {leadingAccessory}
       <TaskSearchField
         value={conversationQuery}
         placeholder={labels.searchPlaceholder}

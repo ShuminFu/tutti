@@ -72,6 +72,14 @@ export interface AgentGuiWorkbenchHeaderProps extends HTMLAttributes<HTMLElement
   agentTitle?: string | null;
   defaultActions?: ReactNode;
   displayMode?: WorkbenchDisplayMode;
+  /**
+   * The surrounding product already renders the single top bar (the rndmaster
+   * DinTalDock embedding). This header row then renders nothing at all: its
+   * functional controls live in the conversation rail's own top row, and its
+   * 44px reservation is zeroed by the embedding stylesheet so no empty band is
+   * left behind.
+   */
+  embedded?: boolean;
   isConversationRailAutoCollapsed: boolean;
   isConversationRailCollapsed: boolean;
   conversationRailWidthPx?: number | null;
@@ -110,6 +118,7 @@ export function AgentGuiWorkbenchHeader({
   agentTitle,
   defaultActions: _defaultActions,
   displayMode,
+  embedded = false,
   isConversationRailAutoCollapsed,
   isConversationRailCollapsed,
   conversationRailWidthPx,
@@ -210,6 +219,10 @@ export function AgentGuiWorkbenchHeader({
         }
       : {})
   } as CSSProperties;
+
+  if (embedded) {
+    return null;
+  }
 
   return createElement(
     "header",
