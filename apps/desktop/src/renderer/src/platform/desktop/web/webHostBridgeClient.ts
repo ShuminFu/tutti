@@ -3,9 +3,8 @@
 // When the static web build is embedded as an iframe inside a native host
 // shell, a few desktop-only capabilities (directory / file selection) can be
 // delegated to the host over `postMessage`. The host answers with the native
-// dialog result. Outside an iframe (or when the host does not implement the
-// capability, or does not answer in time) callers must fall back to their
-// original web behaviour.
+// dialog result. Interactive pickers have a bounded acknowledgement wait;
+// after acceptance, the native dialog owns completion or user cancellation.
 //
 // Wire protocol (mirrors the host side):
 //   request  (iframe -> host): { type: "tutti-host-request", capability, id, args?, nonce }
@@ -432,83 +431,89 @@ function nextRequestId(): string {
 
 // Sends a capability request to the host and resolves with its result. Rejects
 // with HostBridgeUnavailableError when not embedded, unsupported, or timed out;
-// with a plain Error when the host reports an execution failure.
+// with a plain Error when the host reports an execution failure. Picker ACKs
+// clear only the acceptance timer, never the final response listener.
 export function requestHostCapability<T>(
   capability: string,
   args: unknown[] = [],
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
+  const interactive = capability === "selectUploadFiles" || capability === "selectDirectory";
+  const failure = (message: string, code: string): Error =>
+    Object.assign(new HostBridgeUnavailableError(message), { code });
   const coordinates = isHostBridgeAvailable() ? bridgeCoordinates() : null;
   if (!coordinates) {
-    return Promise.reject(
-      new HostBridgeUnavailableError("tutti host bridge: not embedded")
-    );
+    return Promise.reject(failure(interactive ? "宿主连接不可用，请重新打开工作台后重试" : "tutti host bridge: not embedded", "host_bridge_unavailable"));
   }
-
   const id = nextRequestId();
-
+  const startedAt = Date.now();
+  const log = (stage: string, code?: string): void => {
+    if (interactive) console.debug("[DinTalDock picker]", {
+      requestId: id, capability, stage, elapsedMs: Date.now() - startedAt, code
+    });
+  };
   return new Promise<T>((resolve, reject) => {
     let settled = false;
-
+    let accepted = false;
+    let timer: ReturnType<typeof window.setTimeout> | undefined;
     const cleanup = (): void => {
       window.removeEventListener("message", onMessage);
+      window.removeEventListener("pagehide", onPageHide);
       window.clearTimeout(timer);
     };
-
+    const finishError = (error: Error & { code?: string }): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      log(error.code === "host_request_cancelled" ? "cancelled" : "failed", error.code);
+      reject(error);
+    };
+    const onPageHide = (): void => finishError(failure(
+      "文件选择页面已关闭，请重新打开后重试", "host_request_cancelled"
+    ));
     const onMessage = (event: MessageEvent): void => {
       const data = event.data as
         | { type?: unknown; id?: unknown; nonce?: unknown; result?: T; error?: unknown; code?: unknown }
-        | null
-        | undefined;
-      if (
-        !data ||
-        typeof data !== "object" ||
-        data.type !== RESPONSE_TYPE ||
-        data.id !== id ||
-        data.nonce !== coordinates.nonce ||
-        event.source !== window.parent ||
-        event.origin !== coordinates.hostOrigin
-      ) {
+        | null | undefined;
+      if (!data || typeof data !== "object" ||
+          (data.type !== RESPONSE_TYPE && data.type !== "tutti-host-request-accepted") ||
+          data.id !== id || data.nonce !== coordinates.nonce ||
+          event.source !== window.parent || event.origin !== coordinates.hostOrigin || settled) return;
+      if (data.type === "tutti-host-request-accepted") {
+        if (interactive && !accepted) {
+          accepted = true;
+          window.clearTimeout(timer);
+          log("accepted");
+        }
         return;
       }
-      if (settled) {
-        return;
-      }
-      settled = true;
-      cleanup();
       if (typeof data.error === "string") {
         const error = data.error === "unsupported"
-          ? new HostBridgeUnavailableError(
-              `tutti host bridge: ${capability} unsupported`
-            )
+          ? failure(interactive ? "宿主不支持此文件选择操作" : `tutti host bridge: ${capability} unsupported`, "host_capability_unsupported")
           : new Error(data.error);
-        if (typeof data.code === "string" && data.code.trim()) {
-          Object.assign(error, { code: data.code.trim() });
-        }
-        reject(error);
-        return;
-      }
-      resolve(data.result as T);
-    };
-
-    const timer = window.setTimeout(() => {
-      if (settled) {
+        if (typeof data.code === "string" && data.code.trim()) Object.assign(error, { code: data.code.trim() });
+        finishError(error);
         return;
       }
       settled = true;
       cleanup();
-      reject(
-        new HostBridgeUnavailableError(
-          `tutti host bridge: ${capability} timed out`
-        )
-      );
-    }, timeoutMs);
-
+      log("completed");
+      resolve(data.result as T);
+    };
+    timer = window.setTimeout(() => finishError(failure(
+      interactive ? "宿主文件选择器未响应，请重试" : `tutti host bridge: ${capability} timed out`, "host_request_timeout"
+    )), timeoutMs);
     window.addEventListener("message", onMessage);
-    window.parent.postMessage(
-      { type: REQUEST_TYPE, capability, id, args, nonce: coordinates.nonce },
-      coordinates.hostOrigin === "null" ? "*" : coordinates.hostOrigin
-    );
+    if (interactive) window.addEventListener("pagehide", onPageHide);
+    log("sent");
+    try {
+      window.parent.postMessage(
+        { type: REQUEST_TYPE, capability, id, args, nonce: coordinates.nonce },
+        coordinates.hostOrigin === "null" ? "*" : coordinates.hostOrigin
+      );
+    } catch (error) {
+      finishError(failure(String(error), "host_bridge_unavailable"));
+    }
   });
 }
 

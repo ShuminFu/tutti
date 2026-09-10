@@ -410,14 +410,14 @@ function createWebHostApi(): DesktopHostApi {
       },
       selectDirectory() {
         // Delegate to the embedding host when available; the host answers with
-        // a native dialog result shaped as { path }. Fall back to the web
-        // rejection when not embedded / unsupported / timed out.
+        // a native dialog result shaped as { path }. Embedded errors retain
+        // their cause; only standalone web uses the Electron rejection.
         return requestHostCapability<{ path?: string } | null>(
           "selectDirectory"
         ).then(
           (result) => result?.path ?? null,
           (error) => {
-            if (error instanceof HostBridgeUnavailableError) {
+            if (error instanceof HostBridgeUnavailableError && !isHostBridgeAvailable()) {
               return Promise.reject(electronDebugRequired("selectDirectory"));
             }
             return Promise.reject(error);
@@ -499,8 +499,7 @@ function createWebHostApi(): DesktopHostApi {
       selectUploadFiles(input) {
         // Delegate to the embedding host; it returns the native picker result
         // shaped as { files: [{ path }] } (or a bare string[]). Normalise to the
-        // string[] shape expected here. Fall back to the web rejection when not
-        // embedded / unsupported / timed out.
+        // string[] shape expected here. Embedded errors retain their cause.
         return requestHostCapability<
           { files?: Array<{ path?: string }> } | string[] | null
         >("selectUploadFiles", input === undefined ? [] : [input]).then(
@@ -513,7 +512,7 @@ function createWebHostApi(): DesktopHostApi {
               .filter((path): path is string => typeof path === "string");
           },
           (error) => {
-            if (error instanceof HostBridgeUnavailableError) {
+            if (error instanceof HostBridgeUnavailableError && !isHostBridgeAvailable()) {
               return Promise.reject(electronDebugRequired("selectUploadFiles"));
             }
             return Promise.reject(error);

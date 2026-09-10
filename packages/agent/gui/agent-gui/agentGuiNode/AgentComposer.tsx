@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
   AgentComposerDraft,
   AgentComposerDraftFile,
@@ -586,12 +586,20 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     },
     [addDraftFiles, editorHandleRef, resolveExternalPromptEntries]
   );
+  // A native picker can outlive the draft, including switching away and back.
+  const pickerScopeRef = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    pickerScopeRef.current = {};
+    return () => { pickerScopeRef.current = null; };
+  }, [draftScopeKey, slashStatusAgentSessionId]);
   const agentHostApi = useOptionalAgentHostApi();
   const selectLocalPromptFiles = useCallback(async (): Promise<void> => {
     const selectFiles = agentHostApi?.workspace?.selectFiles;
-    if (!selectFiles) return;
+    const scope = pickerScopeRef.current;
+    if (!selectFiles || !scope) return;
     try {
       const selected = await selectFiles({ allowDirectories: false });
+      if (pickerScopeRef.current !== scope) return;
       const files = selected
         .map((entry) => {
           const path = entry.path.trim();
@@ -607,6 +615,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
         .filter((file): file is File => file !== null);
       if (files.length > 0) addExternalPromptEntries(files);
     } catch (error) {
+      if (pickerScopeRef.current !== scope) return;
       agentHostApi?.toast?.error(
         error instanceof Error
           ? error.message
