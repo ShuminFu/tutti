@@ -202,8 +202,8 @@ func TestGatewayConvertsResponsesLiteAdditionalTools(t *testing.T) {
 			"choices":[{
 				"index":0,
 				"message":{"role":"assistant","content":null,"tool_calls":[{
-					"id":"call_spawn","type":"function",
-					"function":{"name":"collaboration__spawn_agent","arguments":"{\"task_name\":\"review\"}"}
+					"id":"call_exec","type":"custom",
+					"custom":{"name":"exec","input":"await tools.exec_command({cmd:\"pwd\"})"}
 				}]},
 				"finish_reason":"tool_calls"
 			}],
@@ -218,14 +218,17 @@ func TestGatewayConvertsResponsesLiteAdditionalTools(t *testing.T) {
 		"model":"model-a",
 		"input":[
 			{"type":"additional_tools","role":"developer","tools":[
-				{"type":"function","name":"exec","description":"Run code","parameters":{"type":"object"},"strict":false},
+				{"type":"custom","name":"exec","description":"Run code","format":{"type":"grammar","syntax":"lark","definition":"start: /.+/"}},
 				{"type":"namespace","name":"collaboration","description":"Agent coordination","tools":[
 					{"type":"function","name":"spawn_agent","description":"Spawn an agent","parameters":{"type":"object"},"strict":false}
 				]}
 			]},
 			{"type":"message","role":"developer","content":[{"type":"input_text","text":"Follow instructions"}]},
+			{"type":"custom_tool_call","call_id":"call_previous","name":"exec","input":"return 1"},
+			{"type":"custom_tool_call_output","call_id":"call_previous","output":"1"},
 			{"type":"message","role":"user","content":[{"type":"input_text","text":"Inspect"}]}
 		],
+		"tool_choice":{"type":"custom","name":"exec"},
 		"stream":false
 	}`
 	response := postResponses(t, endpoint, body, nil)
@@ -233,16 +236,27 @@ func TestGatewayConvertsResponsesLiteAdditionalTools(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.StatusCode, readBody(t, response.Body))
 	}
-	if len(upstreamRequest.Messages) != 2 || upstreamRequest.Messages[0]["role"] != "system" || upstreamRequest.Messages[1]["role"] != "user" {
+	if len(upstreamRequest.Messages) != 4 || upstreamRequest.Messages[0]["role"] != "system" || upstreamRequest.Messages[3]["role"] != "user" {
 		t.Fatalf("upstream messages = %#v", upstreamRequest.Messages)
+	}
+	historyCalls := upstreamRequest.Messages[1]["tool_calls"].([]any)
+	historyCustom := historyCalls[0].(map[string]any)["custom"].(map[string]any)
+	if historyCustom["name"] != "exec" || historyCustom["input"] != "return 1" || upstreamRequest.Messages[2]["content"] != "1" {
+		t.Fatalf("upstream custom history = %#v, output = %#v", historyCustom, upstreamRequest.Messages[2])
 	}
 	if len(upstreamRequest.Tools) != 2 {
 		t.Fatalf("upstream tools = %#v", upstreamRequest.Tools)
 	}
-	firstFunction := upstreamRequest.Tools[0]["function"].(map[string]any)
+	firstCustom := upstreamRequest.Tools[0]["custom"].(map[string]any)
 	secondFunction := upstreamRequest.Tools[1]["function"].(map[string]any)
-	if firstFunction["name"] != "exec" || secondFunction["name"] != "collaboration__spawn_agent" {
+	format := firstCustom["format"].(map[string]any)
+	grammar := format["grammar"].(map[string]any)
+	if firstCustom["name"] != "exec" || grammar["syntax"] != "lark" || grammar["definition"] != "start: /.+/" || secondFunction["name"] != "collaboration__spawn_agent" {
 		t.Fatalf("upstream tools = %#v", upstreamRequest.Tools)
+	}
+	choice := upstreamRequest.ToolChoice.(map[string]any)
+	if choice["type"] != "custom" || choice["custom"].(map[string]any)["name"] != "exec" {
+		t.Fatalf("upstream tool choice = %#v", upstreamRequest.ToolChoice)
 	}
 
 	var converted map[string]any
@@ -251,7 +265,7 @@ func TestGatewayConvertsResponsesLiteAdditionalTools(t *testing.T) {
 	}
 	output := converted["output"].([]any)
 	toolCall := output[len(output)-1].(map[string]any)
-	if toolCall["type"] != "function_call" || toolCall["namespace"] != "collaboration" || toolCall["name"] != "spawn_agent" {
+	if toolCall["type"] != "custom_tool_call" || toolCall["name"] != "exec" || toolCall["input"] != `await tools.exec_command({cmd:"pwd"})` {
 		t.Fatalf("converted tool call = %#v", toolCall)
 	}
 }
@@ -537,6 +551,60 @@ func TestGatewayStreamsInterleavedToolCallsReasoningAndUTF8WithoutDone(t *testin
 	responseObject := completed["response"].(map[string]any)
 	if responseObject["status"] != "completed" {
 		t.Fatalf("completed response = %#v", responseObject)
+	}
+}
+
+func TestGatewayStreamsCustomToolCalls(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "text/event-stream")
+		for _, event := range []string{
+			`{"id":"chat-custom","model":"model-a","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_exec","type":"custom","custom":{"name":"exec","input":"await "}}]}}]}`,
+			`{"id":"chat-custom","model":"model-a","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"custom":{"input":"tools.exec_command({cmd:\"pwd\"})"}}]},"finish_reason":"tool_calls"}]}`,
+		} {
+			_, _ = io.WriteString(writer, "data: "+event+"\n\n")
+		}
+		_, _ = io.WriteString(writer, "data: [DONE]\n\n")
+	}))
+	defer upstream.Close()
+
+	gateway := newTestGateway(t, Config{})
+	endpoint := registerTestRoute(t, gateway, upstream.URL, "secret", "model-a", "workspace", "session")
+	response := postResponses(t, endpoint, `{
+		"model":"model-a",
+		"input":"inspect",
+		"tools":[{"type":"custom","name":"exec","format":{"type":"text"}}],
+		"stream":true
+	}`, nil)
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.StatusCode, readBody(t, response.Body))
+	}
+
+	var deltas strings.Builder
+	var completed map[string]any
+	seenDone := false
+	for _, event := range readSSEEvents(t, response.Body) {
+		var payload map[string]any
+		if err := json.Unmarshal(event.Data, &payload); err != nil {
+			t.Fatalf("decode %s: %v", event.Event, err)
+		}
+		switch event.Event {
+		case "response.custom_tool_call_input.delta":
+			deltas.WriteString(payload["delta"].(string))
+		case "response.custom_tool_call_input.done":
+			seenDone = true
+		case "response.output_item.done":
+			item, _ := payload["item"].(map[string]any)
+			if item["type"] == "custom_tool_call" {
+				completed = item
+			}
+		}
+	}
+	wantInput := `await tools.exec_command({cmd:"pwd"})`
+	if deltas.String() != wantInput || !seenDone || completed["name"] != "exec" || completed["input"] != wantInput {
+		t.Fatalf("custom stream deltas=%q done=%v item=%#v", deltas.String(), seenDone, completed)
 	}
 }
 

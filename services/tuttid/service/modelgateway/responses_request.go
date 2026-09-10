@@ -159,6 +159,7 @@ type chatRequest struct {
 type responseToolIdentity struct {
 	Name      string
 	Namespace string
+	Type      string
 }
 
 type responseToolMap map[string]responseToolIdentity
@@ -302,6 +303,7 @@ type responseInputItem struct {
 	Name      string          `json:"name"`
 	Namespace string          `json:"namespace"`
 	Arguments string          `json:"arguments"`
+	Input     string          `json:"input"`
 	CallID    string          `json:"call_id"`
 	Output    json.RawMessage `json:"output"`
 	Summary   []struct {
@@ -415,9 +417,22 @@ func convertResponseInput(
 					"arguments": item.Arguments,
 				},
 			})
-		case "function_call_output":
+		case "custom_tool_call":
+			if strings.TrimSpace(item.CallID) == "" || strings.TrimSpace(item.Name) == "" {
+				return nil, invalidParam(fmt.Sprintf("input[%d]", index), "custom_tool_call requires call_id and name")
+			}
+			current := ensureAssistant()
+			current.toolCalls = append(current.toolCalls, map[string]any{
+				"id":   item.CallID,
+				"type": "custom",
+				"custom": map[string]any{
+					"name":  chatNameForResponseTool(item.Namespace, item.Name, toolMap),
+					"input": item.Input,
+				},
+			})
+		case "function_call_output", "custom_tool_call_output":
 			if strings.TrimSpace(item.CallID) == "" {
-				return nil, invalidParam(fmt.Sprintf("input[%d].call_id", index), "function_call_output requires call_id")
+				return nil, invalidParam(fmt.Sprintf("input[%d].call_id", index), item.Type+" requires call_id")
 			}
 			output, err := functionOutputText(item.Output)
 			if err != nil {
@@ -427,8 +442,7 @@ func convertResponseInput(
 			messages = append(messages, map[string]any{
 				"role": "tool", "tool_call_id": item.CallID, "content": output,
 			})
-		case "web_search_call", "computer_call", "file_search_call", "code_interpreter_call",
-			"local_shell_call", "custom_tool_call", "custom_tool_call_output":
+		case "web_search_call", "computer_call", "file_search_call", "code_interpreter_call", "local_shell_call":
 			return nil, invalidParam(
 				fmt.Sprintf("input[%d].type", index),
 				fmt.Sprintf("Responses input item type %q is not supported", item.Type),
@@ -639,7 +653,7 @@ func convertResponseTools(tools []json.RawMessage) ([]map[string]any, responseTo
 			Type string `json:"type"`
 			Name string `json:"name"`
 		}
-		if err := json.Unmarshal(encoded, &header); err != nil || header.Type != "function" {
+		if err := json.Unmarshal(encoded, &header); err != nil || (header.Type != "function" && header.Type != "custom") {
 			continue
 		}
 		name := strings.TrimSpace(header.Name)
@@ -649,7 +663,7 @@ func convertResponseTools(tools []json.RawMessage) ([]map[string]any, responseTo
 		if _, exists := seenNames[name]; exists {
 			return nil, nil, nil, invalidParam(
 				fmt.Sprintf("tools[%d].name", index),
-				fmt.Sprintf("function tool name %q is duplicated", name),
+				fmt.Sprintf("tool name %q is duplicated", name),
 			)
 		}
 		seenNames[name] = struct{}{}
@@ -660,6 +674,7 @@ func convertResponseTools(tools []json.RawMessage) ([]map[string]any, responseTo
 			Name        string            `json:"name"`
 			Description string            `json:"description"`
 			Parameters  json.RawMessage   `json:"parameters"`
+			Format      json.RawMessage   `json:"format"`
 			Strict      *bool             `json:"strict"`
 			Tools       []json.RawMessage `json:"tools"`
 		}
@@ -680,8 +695,17 @@ func convertResponseTools(tools []json.RawMessage) ([]map[string]any, responseTo
 			}
 			name := function["name"].(string)
 			seenIdentities["\x00"+name] = struct{}{}
-			toolMap[name] = responseToolIdentity{Name: name}
+			toolMap[name] = responseToolIdentity{Name: name, Type: "function"}
 			result = append(result, map[string]any{"type": "function", "function": function})
+		case "custom":
+			custom, err := convertCustomTool(tool.Name, tool.Description, tool.Format, fmt.Sprintf("tools[%d]", index))
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			name := custom["name"].(string)
+			seenIdentities["\x00"+name] = struct{}{}
+			toolMap[name] = responseToolIdentity{Name: name, Type: "custom"}
+			result = append(result, map[string]any{"type": "custom", "custom": custom})
 		case "namespace":
 			namespace := strings.TrimSpace(tool.Name)
 			if namespace == "" {
@@ -721,14 +745,14 @@ func convertResponseTools(tools []json.RawMessage) ([]map[string]any, responseTo
 				if _, exists := seenIdentities[identityKey]; exists {
 					return nil, nil, nil, invalidParam(
 						param+".name",
-						fmt.Sprintf("function tool name %q is duplicated within namespace %q", responseName, namespace),
+						fmt.Sprintf("tool name %q is duplicated within namespace %q", responseName, namespace),
 					)
 				}
 				seenIdentities[identityKey] = struct{}{}
 				chatName := flattenedChatToolName(namespace, responseName, seenNames)
 				function["name"] = chatName
 				seenNames[chatName] = struct{}{}
-				toolMap[chatName] = responseToolIdentity{Name: responseName, Namespace: namespace}
+				toolMap[chatName] = responseToolIdentity{Name: responseName, Namespace: namespace, Type: "function"}
 				result = append(result, map[string]any{"type": "function", "function": function})
 			}
 		default:
@@ -788,6 +812,46 @@ func convertFunctionTool(
 	return function, nil
 }
 
+func convertCustomTool(name string, description string, encodedFormat json.RawMessage, param string) (map[string]any, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, invalidParam(param+".name", "custom tool name is required")
+	}
+	custom := map[string]any{"name": name}
+	if description != "" {
+		custom["description"] = description
+	}
+	if len(bytes.TrimSpace(encodedFormat)) == 0 || bytes.Equal(bytes.TrimSpace(encodedFormat), []byte("null")) {
+		return custom, nil
+	}
+	var format struct {
+		Type       string `json:"type"`
+		Definition string `json:"definition"`
+		Syntax     string `json:"syntax"`
+	}
+	if err := json.Unmarshal(encodedFormat, &format); err != nil {
+		return nil, invalidParam(param+".format", "custom tool format must be valid JSON")
+	}
+	switch format.Type {
+	case "text":
+		custom["format"] = map[string]any{"type": "text"}
+	case "grammar":
+		if format.Definition == "" || (format.Syntax != "lark" && format.Syntax != "regex") {
+			return nil, invalidParam(param+".format", "custom tool grammar requires a definition and lark or regex syntax")
+		}
+		custom["format"] = map[string]any{
+			"type": "grammar",
+			"grammar": map[string]any{
+				"definition": format.Definition,
+				"syntax":     format.Syntax,
+			},
+		}
+	default:
+		return nil, invalidParam(param+".format.type", fmt.Sprintf("unsupported custom tool format %q", format.Type))
+	}
+	return custom, nil
+}
+
 func convertResponseToolChoice(encoded json.RawMessage, toolMap responseToolMap, toolCount int) (any, error) {
 	trimmed := bytes.TrimSpace(encoded)
 	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
@@ -815,22 +879,25 @@ func convertResponseToolChoice(encoded json.RawMessage, toolMap responseToolMap,
 	if err := json.Unmarshal(trimmed, &choice); err != nil {
 		return nil, invalidParam("tool_choice", "named tool_choice must be a valid object")
 	}
-	if choice.Type != "function" {
+	if choice.Type != "function" && choice.Type != "custom" {
 		return nil, invalidParam(
 			"tool_choice",
 			fmt.Sprintf("tool_choice type %q cannot be translated to Chat Completions", choice.Type),
 		)
 	}
 	if strings.TrimSpace(choice.Name) == "" {
-		return nil, invalidParam("tool_choice", "named function tool_choice requires a name")
+		return nil, invalidParam("tool_choice", "named tool_choice requires a name")
 	}
 	chatName, found := responseToolChatName(choice.Namespace, choice.Name, toolMap)
 	if !found {
-		return nil, invalidParam("tool_choice", fmt.Sprintf("selected function tool %q is not registered", choice.Name))
+		return nil, invalidParam("tool_choice", fmt.Sprintf("selected %s tool %q is not registered", choice.Type, choice.Name))
+	}
+	if toolMap[chatName].Type != choice.Type {
+		return nil, invalidParam("tool_choice", fmt.Sprintf("selected tool %q is not a %s tool", choice.Name, choice.Type))
 	}
 	return map[string]any{
-		"type": "function",
-		"function": map[string]any{
+		"type": choice.Type,
+		choice.Type: map[string]any{
 			"name": chatName,
 		},
 	}, nil

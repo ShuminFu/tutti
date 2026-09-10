@@ -44,6 +44,10 @@ type chatToolCall struct {
 		Name      string          `json:"name"`
 		Arguments json.RawMessage `json:"arguments"`
 	} `json:"function"`
+	Custom struct {
+		Name  string `json:"name"`
+		Input string `json:"input"`
+	} `json:"custom"`
 }
 
 type chatUsage struct {
@@ -101,7 +105,7 @@ func convertChatResponse(
 		toolCalls = append(toolCalls, legacy)
 	}
 	for _, toolCall := range toolCalls {
-		output = append(output, completedFunctionCallItem(toolCall, toolMap))
+		output = append(output, completedToolCallItem(toolCall, toolMap))
 	}
 	responseID := responseIDFromUpstream(upstream.ID)
 	createdAt := upstream.Created
@@ -170,10 +174,25 @@ func completedMessageItem(text string) map[string]any {
 	}
 }
 
-func completedFunctionCallItem(toolCall chatToolCall, toolMap responseToolMap) map[string]any {
+func completedToolCallItem(toolCall chatToolCall, toolMap responseToolMap) map[string]any {
 	callID := strings.TrimSpace(toolCall.ID)
 	if callID == "" {
 		callID = newResponseID("call")
+	}
+	if toolCall.Type == "custom" {
+		identity := responseIdentityForChatTool(toolCall.Custom.Name, toolMap)
+		item := map[string]any{
+			"id":      newResponseID("ctc"),
+			"type":    "custom_tool_call",
+			"status":  "completed",
+			"call_id": callID,
+			"name":    identity.Name,
+			"input":   toolCall.Custom.Input,
+		}
+		if identity.Namespace != "" {
+			item["namespace"] = identity.Namespace
+		}
+		return item
 	}
 	arguments := rawJSONString(toolCall.Function.Arguments)
 	identity := responseIdentityForChatTool(toolCall.Function.Name, toolMap)

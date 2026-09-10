@@ -116,6 +116,7 @@ type toolStreamItem struct {
 	chatIndex int
 	id        string
 	callID    string
+	toolType  string
 	name      string
 	toolMap   responseToolMap
 	arguments strings.Builder
@@ -125,6 +126,26 @@ func (i *toolStreamItem) outputIndex() int { return i.index }
 
 func (i *toolStreamItem) finish(writer *responsesSSEWriter) (map[string]any, error) {
 	identity := responseIdentityForChatTool(i.name, i.toolMap)
+	if i.toolType == "custom" {
+		if err := writer.Event("response.custom_tool_call_input.done", map[string]any{
+			"item_id": i.id, "output_index": i.index, "input": i.arguments.String(),
+		}); err != nil {
+			return nil, err
+		}
+		item := map[string]any{
+			"id": i.id, "type": "custom_tool_call", "status": "completed",
+			"call_id": i.callID, "name": identity.Name, "input": i.arguments.String(),
+		}
+		if identity.Namespace != "" {
+			item["namespace"] = identity.Namespace
+		}
+		if err := writer.Event("response.output_item.done", map[string]any{
+			"output_index": i.index, "item": item,
+		}); err != nil {
+			return nil, err
+		}
+		return item, nil
+	}
 	if err := writer.Event("response.function_call_arguments.done", map[string]any{
 		"item_id": i.id, "output_index": i.index, "name": identity.Name, "arguments": i.arguments.String(),
 	}); err != nil {
@@ -327,15 +348,29 @@ func (s *chatStreamState) addToolDelta(delta chatToolCall) error {
 		if callID == "" {
 			callID = newResponseID("call")
 		}
+		toolType := delta.Type
+		if toolType == "" {
+			toolType = "function"
+		}
+		idPrefix := "fc"
+		itemType := "function_call"
+		inputKey := "arguments"
+		initialName := delta.Function.Name
+		if toolType == "custom" {
+			idPrefix = "ctc"
+			itemType = "custom_tool_call"
+			inputKey = "input"
+			initialName = delta.Custom.Name
+		}
 		item = &toolStreamItem{
 			index: s.nextOutputIndex(), chatIndex: delta.Index,
-			id: newResponseID("fc"), callID: callID, toolMap: s.toolMap,
+			id: newResponseID(idPrefix), callID: callID, toolType: toolType, name: initialName, toolMap: s.toolMap,
 		}
 		s.tools[delta.Index] = item
 		s.items = append(s.items, item)
 		added := map[string]any{
-			"id": item.id, "type": "function_call", "status": "in_progress",
-			"call_id": item.callID, "name": item.name, "arguments": "",
+			"id": item.id, "type": itemType, "status": "in_progress",
+			"call_id": item.callID, "name": item.name, inputKey: "",
 		}
 		if err := s.writer.Event("response.output_item.added", map[string]any{
 			"output_index": item.index, "item": added,
@@ -345,6 +380,18 @@ func (s *chatStreamState) addToolDelta(delta chatToolCall) error {
 	}
 	if strings.TrimSpace(delta.ID) != "" {
 		item.callID = delta.ID
+	}
+	if item.toolType == "custom" {
+		if delta.Custom.Name != "" {
+			item.name = mergeStreamedName(item.name, delta.Custom.Name)
+		}
+		if delta.Custom.Input == "" {
+			return nil
+		}
+		item.arguments.WriteString(delta.Custom.Input)
+		return s.writer.Event("response.custom_tool_call_input.delta", map[string]any{
+			"item_id": item.id, "output_index": item.index, "delta": delta.Custom.Input,
+		})
 	}
 	if delta.Function.Name != "" {
 		item.name = mergeStreamedName(item.name, delta.Function.Name)
