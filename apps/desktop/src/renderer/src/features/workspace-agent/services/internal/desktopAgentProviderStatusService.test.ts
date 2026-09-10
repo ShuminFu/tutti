@@ -1154,6 +1154,57 @@ test("runAction short-polls install status while daemon action is pending", asyn
   assert.equal(service.isActionPending("claude-code", "install"), false);
 });
 
+test("refresh resumes polling an install that started before the renderer", async () => {
+  const statusCalls: Array<readonly WorkspaceAgentProvider[] | undefined> = [];
+  const pollScheduler = createManualPollScheduler();
+  const service = new DesktopAgentProviderStatusService({
+    loginStatusPollScheduler: pollScheduler.scheduler,
+    tuttidClient: createTuttidClient({
+      onStatusRequest: (providers) => statusCalls.push(providers),
+      snapshots: [
+        createStatusResponse([
+          createProviderStatus({
+            actions: [],
+            activeAction: {
+              error: null,
+              log: [],
+              phase: "install",
+              registry: null,
+              steps: []
+            },
+            availability: "unknown",
+            provider: "claude-code",
+            reasonCode: "acp_adapter_launch_failed"
+          })
+        ]),
+        createStatusResponse([
+          createProviderStatus({
+            actions: [],
+            availability: "ready",
+            provider: "claude-code"
+          })
+        ])
+      ]
+    }),
+    terminalCommandRunner: {
+      async runTerminalCommand() {}
+    }
+  });
+
+  await service.refresh(["claude-code"]);
+  assert.equal(service.isActionPending("claude-code", "install"), true);
+  assert.equal(pollScheduler.pendingTimerCount(), 1);
+
+  pollScheduler.runNext();
+  await waitFor(
+    () => service.getStatus("claude-code")?.availability.status === "ready"
+  );
+
+  assert.equal(service.getStatus("claude-code")?.availability.status, "ready");
+  assert.equal(service.isActionPending("claude-code", "install"), false);
+  assert.equal(pollScheduler.pendingTimerCount(), 0);
+});
+
 test("runAction reports daemon install action failures and skips refresh", async () => {
   const notifications = createNotificationRecorder();
   const statusCalls: Array<readonly WorkspaceAgentProvider[] | undefined> = [];
@@ -2552,6 +2603,7 @@ function createNotificationRecorder(): {
 }
 
 function createProviderStatus(input: {
+  activeAction?: AgentProviderStatus["activeAction"];
   actions: AgentProviderStatus["actions"];
   adapterInstalled?: boolean;
   availability: AgentProviderStatus["availability"]["status"];
@@ -2566,6 +2618,7 @@ function createProviderStatus(input: {
     (input.availability !== "not_installed" &&
       input.availability !== "unsupported");
   return {
+    activeAction: input.activeAction,
     actions: input.actions,
     adapter: {
       command: ["codex"],

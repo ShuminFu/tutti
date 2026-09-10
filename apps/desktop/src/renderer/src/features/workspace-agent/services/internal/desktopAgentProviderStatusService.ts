@@ -101,6 +101,7 @@ export class DesktopAgentProviderStatusService implements IAgentProviderStatusSe
     string,
     AgentProviderStatusPollTimer
   >();
+  private readonly recoveredDaemonActions = new Set<string>();
   private requestSequence = 0;
   private latestWildcardRequestId = 0;
   private readonly latestRequestIdByProvider = new Map<
@@ -152,6 +153,7 @@ export class DesktopAgentProviderStatusService implements IAgentProviderStatusSe
       this.loginStatusPollScheduler.clearTimeout(timer);
     }
     this.pendingActionStatusPolls.clear();
+    this.recoveredDaemonActions.clear();
     this.loginLifecycle.dispose();
     this.listeners.clear();
   }
@@ -308,15 +310,30 @@ export class DesktopAgentProviderStatusService implements IAgentProviderStatusSe
             responseStatuses: currentResponseStatuses,
             transientDowngradeCounts: this.transientDowngradeCounts
           });
+          const pendingActions = this.reconcileRecoveredDaemonActions(
+            currentResponseStatuses
+          );
           responseProviders = [...reconciledStatuses];
           this.setSnapshot({
             capturedAt: response.capturedAt,
             defaultProvider: response.defaultProvider,
             error: null,
             isLoading: this.inflightRequests.size > 1,
-            pendingActions: this.snapshot.pendingActions,
+            pendingActions,
             statuses: reconciledStatuses
           });
+          for (const action of pendingActions) {
+            if (
+              this.recoveredDaemonActions.has(
+                pendingActionKey(action.provider, action.actionId)
+              )
+            ) {
+              this.startPendingActionStatusPolling(
+                action.provider,
+                action.actionId
+              );
+            }
+          }
           this.diagnostics.logActiveActionSnapshotDiagnostics(
             reconciledStatuses,
             (provider) =>
@@ -809,6 +826,47 @@ export class DesktopAgentProviderStatusService implements IAgentProviderStatusSe
     this.startPendingActionStatusPolling(provider, actionId);
   }
 
+  private reconcileRecoveredDaemonActions(
+    statuses: readonly AgentProviderStatus[]
+  ): AgentProviderStatusSnapshot["pendingActions"] {
+    let pendingActions = [...this.snapshot.pendingActions];
+    const activeKeys = new Set<string>();
+    const returnedProviders = new Set(
+      statuses.map((status) => status.provider)
+    );
+    for (const status of statuses) {
+      const actionId = daemonActiveActionId(status);
+      if (!actionId) {
+        continue;
+      }
+      const key = pendingActionKey(status.provider, actionId);
+      activeKeys.add(key);
+      this.recoveredDaemonActions.add(key);
+      if (
+        !pendingActions.some(
+          (action) =>
+            action.provider === status.provider && action.actionId === actionId
+        )
+      ) {
+        pendingActions.push({ provider: status.provider, actionId });
+      }
+    }
+    for (const key of [...this.recoveredDaemonActions]) {
+      const separator = key.lastIndexOf(":");
+      const provider = key.slice(0, separator) as WorkspaceAgentProvider;
+      const actionId = key.slice(separator + 1);
+      if (!returnedProviders.has(provider) || activeKeys.has(key)) {
+        continue;
+      }
+      this.recoveredDaemonActions.delete(key);
+      this.stopPendingActionStatusPolling(provider, actionId);
+      pendingActions = pendingActions.filter(
+        (action) => action.provider !== provider || action.actionId !== actionId
+      );
+    }
+    return pendingActions;
+  }
+
   private removePendingAction(
     provider: WorkspaceAgentProvider,
     actionId: string
@@ -827,6 +885,7 @@ export class DesktopAgentProviderStatusService implements IAgentProviderStatusSe
       }
     );
     this.stopPendingActionStatusPolling(provider, actionId);
+    this.recoveredDaemonActions.delete(pendingActionKey(provider, actionId));
     this.setSnapshot({
       ...this.snapshot,
       pendingActions
@@ -915,6 +974,16 @@ function pendingActionKey(
   actionId: string
 ): string {
   return `${provider}:${actionId}`;
+}
+
+function daemonActiveActionId(
+  status: AgentProviderStatus
+): "install" | "update" | null {
+  const phase = status.activeAction?.phase;
+  if (!phase || phase === "done" || phase === "error") {
+    return null;
+  }
+  return phase === "update" ? "update" : "install";
 }
 
 // Avoid decorator syntax so the renderer Babel pass can parse this file.
