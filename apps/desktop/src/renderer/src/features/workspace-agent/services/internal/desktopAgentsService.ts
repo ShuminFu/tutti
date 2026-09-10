@@ -25,6 +25,10 @@ export interface DesktopAgentsServiceDependencies {
     iconKey: string | null;
     provider: string;
   }) => string;
+  resolveAgentTargetMaskIconUrl?: (identity: {
+    iconKey: string | null;
+    provider: string;
+  }) => string;
   retryDelayMs?: number;
   setTimeout?: (
     callback: () => void,
@@ -196,7 +200,10 @@ export class DesktopAgentsService implements IAgentsService {
       const daemonAgentTargets = mapAgentTargetsToPresentations(
         targetResponse.targets,
         {
-          resolveAgentTargetIconUrl: this.dependencies.resolveAgentTargetIconUrl
+          resolveAgentTargetIconUrl:
+            this.dependencies.resolveAgentTargetIconUrl,
+          resolveAgentTargetMaskIconUrl:
+            this.dependencies.resolveAgentTargetMaskIconUrl
         }
       );
       const daemonAgentTargetIconUrls = new Map(
@@ -313,25 +320,36 @@ export function mapAgentTargetsToPresentations(
       iconKey: string | null;
       provider: string;
     }) => string;
+    resolveAgentTargetMaskIconUrl?: (identity: {
+      iconKey: string | null;
+      provider: string;
+    }) => string;
   } = {}
 ): readonly AgentTargetPresentation[] {
   return [...targets].sort(compareAgentTargetsForDisplay).map((target) => {
     const isExtension = target.launchRef.type === "agent_extension";
+    const identity = {
+      iconKey: target.iconKey?.trim() || null,
+      provider: target.provider
+    };
+    const daemonIconUrl = target.iconUrl?.trim() ?? "";
+    const daemonMaskIconUrl = target.maskIconUrl?.trim() ?? "";
+    const hasPrivateIconUrl = isPrivateAgentAssetUrl(daemonIconUrl);
     const iconUrl =
-      target.iconUrl?.trim() ||
-      (isExtension
+      (hasPrivateIconUrl ? "" : daemonIconUrl) ||
+      (isExtension && !hasPrivateIconUrl
         ? ""
-        : (options.resolveAgentTargetIconUrl?.({
-            iconKey: target.iconKey?.trim() || null,
-            provider: target.provider
-          }) ?? ""));
+        : (options.resolveAgentTargetIconUrl?.(identity) ?? ""));
+    const maskIconUrl = isPrivateAgentAssetUrl(daemonMaskIconUrl)
+      ? options.resolveAgentTargetMaskIconUrl?.(identity)?.trim() || null
+      : daemonMaskIconUrl || null;
     return {
       agentTargetId: target.id,
       createdAtUnixMs: target.createdAtUnixMs,
       enabled: target.enabled === true,
       iconKey: target.iconKey ?? null,
       iconUrl,
-      maskIconUrl: target.maskIconUrl?.trim() || null,
+      maskIconUrl,
       heroImageUrl: target.heroImageUrl?.trim() || null,
       availability: {
         status:
@@ -352,6 +370,10 @@ export function mapAgentTargetsToPresentations(
       updatedAtUnixMs: target.updatedAtUnixMs
     };
   });
+}
+
+function isPrivateAgentAssetUrl(value: string): boolean {
+  return value.toLowerCase().startsWith("tutti-asset://agent/");
 }
 
 export function mapAgentTargetPresentationsToAgents(

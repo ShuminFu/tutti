@@ -126,28 +126,37 @@ test("desktop agents service hydrates a detached-window bootstrap snapshot befor
   assert.equal(service.getSnapshot().agents[0]?.agentTargetId, "local:codex");
 });
 
-test("desktop agents service maps enabled daemon targets into the AgentGUI agents directory", () => {
-  const presentations = mapAgentTargetsToPresentations([
-    createAgentTarget({
-      enabled: false,
-      id: "local:claude-code",
-      iconUrl: "tutti-asset://agent/claudecode.png",
-      maskIconUrl: "tutti-asset://agent/claudecode-mask.svg",
-      name: "Claude Code",
-      provider: "claude-code",
-      sortOrder: 20
-    }),
-    createAgentTarget({
-      id: "local:codex",
-      heroImageUrl: "data:image/jpeg;base64,hero",
-      maskIconUrl: "data:image/svg+xml;base64,mask",
-      iconKey: "codex-descriptor",
-      iconUrl: "tutti-asset://agent/codex.png",
-      name: "Codex",
-      provider: "codex",
-      sortOrder: 10
-    })
-  ]);
+test("desktop agents service replaces private daemon asset URLs with renderer assets", () => {
+  const presentations = mapAgentTargetsToPresentations(
+    [
+      createAgentTarget({
+        enabled: false,
+        id: "local:claude-code",
+        iconKey: "claude-code",
+        iconUrl: "tutti-asset://agent/claudecode.png",
+        maskIconUrl: "tutti-asset://agent/claudecode-mask.svg",
+        name: "Claude Code",
+        provider: "claude-code",
+        sortOrder: 20
+      }),
+      createAgentTarget({
+        id: "local:codex",
+        heroImageUrl: "data:image/jpeg;base64,hero",
+        maskIconUrl: "data:image/svg+xml;base64,mask",
+        iconKey: "codex-descriptor",
+        iconUrl: "TUTTI-ASSET://agent/codex.png",
+        name: "Codex",
+        provider: "codex",
+        sortOrder: 10
+      })
+    ],
+    {
+      resolveAgentTargetIconUrl: ({ iconKey }) =>
+        `renderer://rounded/${iconKey}`,
+      resolveAgentTargetMaskIconUrl: ({ iconKey }) =>
+        `renderer://flat/${iconKey}`
+    }
+  );
 
   assert.deepEqual(
     presentations.map((target) => ({
@@ -161,7 +170,7 @@ test("desktop agents service maps enabled daemon targets into the AgentGUI agent
     [
       {
         agentTargetId: "local:codex",
-        iconUrl: "tutti-asset://agent/codex.png",
+        iconUrl: "renderer://rounded/codex-descriptor",
         maskIconUrl: "data:image/svg+xml;base64,mask",
         heroImageUrl: "data:image/jpeg;base64,hero",
         launchRefType: "builtin_local",
@@ -169,8 +178,8 @@ test("desktop agents service maps enabled daemon targets into the AgentGUI agent
       },
       {
         agentTargetId: "local:claude-code",
-        iconUrl: "tutti-asset://agent/claudecode.png",
-        maskIconUrl: "tutti-asset://agent/claudecode-mask.svg",
+        iconUrl: "renderer://rounded/claude-code",
+        maskIconUrl: "renderer://flat/claude-code",
         heroImageUrl: null,
         launchRefType: "builtin_local",
         provider: "claude-code"
@@ -182,7 +191,7 @@ test("desktop agents service maps enabled daemon targets into the AgentGUI agent
     {
       agentTargetId: "local:codex",
       availability: { status: "ready" },
-      iconUrl: "tutti-asset://agent/codex.png",
+      iconUrl: "renderer://rounded/codex-descriptor",
       maskIconUrl: "data:image/svg+xml;base64,mask",
       heroImageUrl: "data:image/jpeg;base64,hero",
       name: "Codex",

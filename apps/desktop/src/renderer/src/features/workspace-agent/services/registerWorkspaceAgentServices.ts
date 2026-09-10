@@ -64,6 +64,10 @@ export interface WorkspaceAgentServiceRegistrationInput {
     iconKey: string | null;
     provider: string;
   }) => string;
+  resolveAgentTargetMaskIconUrl?: (identity: {
+    iconKey: string | null;
+    provider: string;
+  }) => string;
   terminalCommandRunner: AgentProviderTerminalCommandRunner;
   windowLifecycle: WorkspaceWindowLifecycle;
   workspaceId: string;
@@ -131,6 +135,7 @@ export function registerWorkspaceAgentServices(
       EARLY_ACCESS_AGENT_INTEGRATIONS_FLAG
     ),
     resolveAgentTargetIconUrl: input.resolveAgentTargetIconUrl,
+    resolveAgentTargetMaskIconUrl: input.resolveAgentTargetMaskIconUrl,
     tuttidClient: input.tuttidClient,
     workspaceId: input.workspaceId
   });

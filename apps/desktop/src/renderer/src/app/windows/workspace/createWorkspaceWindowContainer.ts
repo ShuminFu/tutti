@@ -241,6 +241,7 @@ export async function createWorkspaceWindowContainer(): Promise<WorkspaceWindowC
     notifications: notificationService,
     reporterService,
     resolveAgentTargetIconUrl: resolveWorkspaceAgentTargetIconUrl,
+    resolveAgentTargetMaskIconUrl: resolveWorkspaceAgentTargetMaskIconUrl,
     runtimeApi: desktopApi.runtime,
     terminalCommandRunner: createAgentProviderTerminalCommandRunner(
       desktopApi.runtime
@@ -544,5 +545,18 @@ function resolveWorkspaceAgentTargetIconUrl(identity: {
     resolveProviderIconAsset(catalogIconKey, "rounded") ??
     resolveProviderIconAsset(catalogIconKey, "manage") ??
     managedAgentRoundedIconUrl(identity.provider)
+  );
+}
+
+function resolveWorkspaceAgentTargetMaskIconUrl(identity: {
+  iconKey: string | null;
+  provider: string;
+}): string {
+  const catalogIconKey =
+    identity.iconKey ||
+    resolveAgentGUIProviderCatalogIdentity(identity.provider)?.iconKey;
+  return (
+    resolveProviderIconAsset(catalogIconKey, "sessionFlat") ??
+    resolveWorkspaceAgentTargetIconUrl(identity)
   );
 }
