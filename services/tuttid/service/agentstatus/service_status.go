@@ -188,6 +188,9 @@ func (s Service) statusForSpec(
 			availability.Status = AvailabilityUnknown
 			availability.ReasonCode = adapterLaunchFailureReasonCode(adapterProbe)
 			actions = append(actions, Action{ID: ActionRefresh, Kind: ActionKindRefresh})
+			if strings.TrimSpace(spec.ExternalRegistryID) != "" {
+				actions = append(actions, daemonAction(ActionInstall))
+			}
 		} else {
 			availability.Status = AvailabilityNotInstalled
 			// When the adapter probe classified its failure (e.g. a Codex launch

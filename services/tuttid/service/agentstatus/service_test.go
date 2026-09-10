@@ -1365,6 +1365,56 @@ func TestServiceListReportsRuntimeBugWhenCodexAppServerFails(t *testing.T) {
 	}
 }
 
+func TestServiceStatusOffersRepairWhenManagedAdapterLaunchFails(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, "bin")
+	cliPath := filepath.Join(binDir, "nexight")
+	adapterPath := filepath.Join(binDir, "nexight-acp")
+	packageDir := filepath.Join(home, "managed-adapters", "node_modules", "@agentclientprotocol", "nexight-acp")
+	writeExecutable(t, cliPath, "#!/bin/sh\necho 'nexight 1.0.0'\n")
+	writeExecutable(t, adapterPath, "#!/bin/sh\nexit 1\n")
+	writePackageManifest(t, packageDir, "@agentclientprotocol/nexight-acp", "0.50.0")
+
+	service := probeTestService(home)
+	service.Environ = func() []string { return []string{"PATH=" + binDir} }
+	service.LookPath = func(name string) (string, error) {
+		if name == "nexight" {
+			return cliPath, nil
+		}
+		return "", errors.New("not found")
+	}
+	service.IsExecutableFile = isTestExecutable
+	service.RunAuthStatusCommand = func(context.Context, ProviderSpec, string) (AuthInfo, bool) {
+		return AuthInfo{Status: AuthAuthenticated}, true
+	}
+	spec := ProviderSpec{
+		Provider:           "nexight",
+		BinaryNames:        []string{"nexight"},
+		AdapterCommand:     []string{adapterPath},
+		ExternalRegistryID: "nexight-acp",
+		AdapterPackage: AdapterPackageRequirement{
+			Name:    "@agentclientprotocol/nexight-acp",
+			Version: "0.50.0",
+		},
+		AdapterInstall: InstallerSpec{
+			Kind: InstallerKindExternalAgentRegistryNPM,
+			RegistryNPM: &ExternalAgentRegistryNPMInstallerSpec{
+				Package:    "@agentclientprotocol/nexight-acp@0.50.0",
+				PackageDir: packageDir,
+				PrefixDir:  filepath.Dir(filepath.Dir(filepath.Dir(packageDir))),
+			},
+		},
+	}
+
+	status := service.statusForSpec(context.Background(), spec, service.Now(), statusDetectionOptions{})
+	if status.Availability.Status != AvailabilityUnknown || status.Availability.ReasonCode != "acp_adapter_launch_failed" {
+		t.Fatalf("Availability = %#v, want repairable adapter launch failure", status.Availability)
+	}
+	if !hasProviderAction(status.Actions, ActionRefresh) || !hasProviderAction(status.Actions, ActionInstall) {
+		t.Fatalf("Actions = %#v, want refresh and install repair actions", status.Actions)
+	}
+}
+
 func TestServiceListTreatsUnknownAuthAsAuthRequired(t *testing.T) {
 	service := testService(func(name string) (string, error) {
 		return "/usr/local/bin/" + name, nil

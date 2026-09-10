@@ -131,6 +131,30 @@ func TestRunExternalAgentRegistryNPMInstallerPurgesDirtyTreeBeforeRetry(t *testi
 	}
 }
 
+func TestRunExternalAgentRegistryNPMInstallerPurgesExistingTreeBeforeFirstAttempt(t *testing.T) {
+	runtimeRoot := fakeManagedRuntimeRoot(t)
+	service := Service{
+		ManagedRuntime: fakeManagedRuntimeResolver(t, runtimeRoot),
+		Environ:        func() []string { return []string{"PATH=/usr/bin:/bin"} },
+		HTTPClient:     agentNPMRegistryProbeHTTPClient(nil),
+	}
+	spec := npmInstallerSpec(t)
+	stalePackage := filepath.Join(spec.RegistryNPM.PrefixDir, "node_modules", "@agentclientprotocol", "sdk")
+	if err := os.MkdirAll(stalePackage, 0o755); err != nil {
+		t.Fatalf("seed incomplete dependency: %v", err)
+	}
+	service.InstallCommand = func(_ context.Context, _ InstallCommandInput) (InstallCommandResult, error) {
+		if _, err := os.Stat(stalePackage); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("stale package still exists before first npm attempt: %v", err)
+		}
+		return InstallCommandResult{ExitCode: 0}, nil
+	}
+
+	if _, err := service.runExternalAgentRegistryNPMInstaller(context.Background(), "claude-code", spec); err != nil {
+		t.Fatalf("runExternalAgentRegistryNPMInstaller() error = %v", err)
+	}
+}
+
 func TestRunExternalAgentRegistryNPMInstallerReplacesExistingRegistryEnv(t *testing.T) {
 	runtimeRoot := fakeManagedRuntimeRoot(t)
 	service := Service{

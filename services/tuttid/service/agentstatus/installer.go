@@ -626,6 +626,10 @@ func (s Service) runExternalAgentRegistryNPMInstaller(ctx context.Context, provi
 	if err := os.MkdirAll(npmSpec.PrefixDir, 0o755); err != nil {
 		return InstallCommandResult{ExitCode: 1, Stderr: err.Error()}, nil
 	}
+	// The prefix is tutti-owned and an install action is also the repair path.
+	// Rebuild node_modules before the first npm attempt so a manifest that still
+	// looks current cannot hide an interrupted or otherwise incomplete tree.
+	purgeNPMInstallTree(npmSpec.PrefixDir)
 	resolver := s.managedRuntimeResolver()
 	var appRuntime managedruntime.ResolvedRuntime
 	var err error
