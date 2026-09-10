@@ -2178,6 +2178,76 @@ test("launchNode restores the last manually resized dock window frame after clos
   secondSession.dispose();
 });
 
+test("pagehide flushes a pending debounced snapshot save", async () => {
+  const pageHideHandlers: Array<() => void> = [];
+  const originalAddEventListener = globalThis.addEventListener;
+  const originalRemoveEventListener = globalThis.removeEventListener;
+  globalThis.addEventListener = ((type: string, handler: () => void) => {
+    if (type === "pagehide") {
+      pageHideHandlers.push(handler);
+    }
+  }) as typeof globalThis.addEventListener;
+  globalThis.removeEventListener = (() => {}) as typeof globalThis.removeEventListener;
+
+  try {
+    let savedSnapshot = createWorkbenchSnapshotFromState({
+      nodeStack: [],
+      nodes: []
+    });
+    const session = createWorkbenchHostSession({
+      nodes: [filesNodeDefinition],
+      snapshotRepository: {
+        async load() {
+          return savedSnapshot;
+        },
+        async save(_workspaceId, snapshot) {
+          savedSnapshot = snapshot;
+          return snapshot;
+        }
+      },
+      workspaceId: "workspace-1"
+    });
+
+    await session.load();
+    session.controller.commands.setSurfaceSize({ width: 1280, height: 800 });
+    session.controller.commands.resizeNode("workspace-files", {
+      x: 70,
+      y: 75,
+      width: 900,
+      height: 600
+    });
+
+    assert.equal(pageHideHandlers.length, 1);
+    for (const handler of pageHideHandlers) {
+      handler();
+    }
+    await Promise.resolve();
+
+    const savedNode = savedSnapshot.nodes.find(
+      (node) => node.id === "workspace-files"
+    );
+    assert.deepEqual(
+      {
+        height: savedNode?.frame.height,
+        width: savedNode?.frame.width,
+        x: savedNode?.frame.x,
+        y: savedNode?.frame.y
+      },
+      {
+        height: 600,
+        width: 900,
+        x: 70,
+        y: 75
+      }
+    );
+
+    session.dispose();
+  } finally {
+    globalThis.addEventListener = originalAddEventListener;
+    globalThis.removeEventListener = originalRemoveEventListener;
+  }
+});
+
 test("launchNode logs host launch failures without opening a shell", async () => {
   const diagnostics: unknown[] = [];
   const session = createWorkbenchHostSession({

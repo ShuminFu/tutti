@@ -135,6 +135,7 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
   private readyPromise: Promise<void>;
   private resolveReady: () => void = noop;
   private saveTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  private pageHideFlushListener: (() => void) | null = null;
   private appliedSaveSequence = 0;
   private saveSequence = 0;
   private readonly externalStatePersistenceSubscriptions = new Map<
@@ -335,11 +336,8 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.disposeExternalStatePersistenceSubscriptions();
-    if (this.saveTimer !== null) {
-      globalThis.clearTimeout(this.saveTimer);
-      this.saveTimer = null;
-      this.saveSnapshot();
-    }
+    this.unsubscribeFromPageHideFlush();
+    this.flushPendingSnapshotSave();
     this.disposeNodeLeases();
   }
 
@@ -1114,6 +1112,36 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
     }, snapshotSaveDelayMs);
   }
 
+  private flushPendingSnapshotSave(): void {
+    if (this.saveTimer === null) {
+      return;
+    }
+    globalThis.clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    this.saveSnapshot();
+  }
+
+  private subscribeToPageHideFlush(): void {
+    if (
+      this.pageHideFlushListener !== null ||
+      typeof globalThis.addEventListener !== "function"
+    ) {
+      return;
+    }
+    this.pageHideFlushListener = () => this.flushPendingSnapshotSave();
+    globalThis.addEventListener("pagehide", this.pageHideFlushListener);
+  }
+
+  private unsubscribeFromPageHideFlush(): void {
+    if (this.pageHideFlushListener === null) {
+      return;
+    }
+    if (typeof globalThis.removeEventListener === "function") {
+      globalThis.removeEventListener("pagehide", this.pageHideFlushListener);
+    }
+    this.pageHideFlushListener = null;
+  }
+
   private subscribeToPersistence(): void {
     if (this.unsubscribe !== null) {
       return;
@@ -1123,6 +1151,7 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
       this.schedulePersistedSnapshotWrite();
       this.refreshExternalStatePersistenceSubscription();
     });
+    this.subscribeToPageHideFlush();
     this.refreshExternalStatePersistenceSubscription();
   }
 

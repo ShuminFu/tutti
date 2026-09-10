@@ -905,6 +905,11 @@ export function createTuttidClient(
       const response = await putWorkspaceWorkbench({
         client,
         body: { snapshot },
+        // keepalive lets the write survive page unload (the workbench host
+        // flushes its pending debounced save on pagehide). Browsers cap
+        // keepalive payloads at 64KB, so fall back to a regular request for
+        // oversized snapshots rather than failing the save outright.
+        keepalive: JSON.stringify(snapshot).length < 60000,
         path: { workspaceID }
       });
       return unwrapData(response, "Persist workspace workbench request failed.")
