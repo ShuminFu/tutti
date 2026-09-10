@@ -164,6 +164,10 @@ type responseToolIdentity struct {
 type responseToolMap map[string]responseToolIdentity
 
 func convertResponsesRequest(request responsesRequest) (chatRequest, responseToolMap, error) {
+	request, err := normalizeResponsesLiteRequest(request)
+	if err != nil {
+		return chatRequest{}, nil, err
+	}
 	tools, toolNamespaces, filteredToolTypes, err := convertResponseTools(request.Tools)
 	if err != nil {
 		return chatRequest{}, nil, err
@@ -212,6 +216,58 @@ func convertResponsesRequest(request responsesRequest) (chatRequest, responseToo
 		result.ReasoningEffort = strings.TrimSpace(request.Reasoning.Effort)
 	}
 	return result, toolNamespaces, nil
+}
+
+// Responses Lite carries the current turn's tool declarations in an
+// additional_tools input item instead of the top-level tools field. Normalize
+// that wire shape before the regular Responses-to-Chat conversion so the
+// gateway preserves the same tool and namespace semantics for both forms.
+func normalizeResponsesLiteRequest(request responsesRequest) (responsesRequest, error) {
+	var items []json.RawMessage
+	if err := json.Unmarshal(request.Input, &items); err != nil {
+		return request, nil
+	}
+
+	kept := make([]json.RawMessage, 0, len(items))
+	found := false
+	for index, raw := range items {
+		var header struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(raw, &header); err != nil || strings.TrimSpace(header.Type) != "additional_tools" {
+			kept = append(kept, raw)
+			continue
+		}
+
+		found = true
+		var item struct {
+			Tools json.RawMessage `json:"tools"`
+		}
+		if err := json.Unmarshal(raw, &item); err != nil {
+			return responsesRequest{}, &invalidRequestError{
+				Param: fmt.Sprintf("input[%d]", index), Code: "invalid_value",
+				Message: "Responses additional_tools input item must be an object",
+			}
+		}
+		var tools []json.RawMessage
+		toolsJSON := bytes.TrimSpace(item.Tools)
+		if len(toolsJSON) == 0 || bytes.Equal(toolsJSON, []byte("null")) || json.Unmarshal(toolsJSON, &tools) != nil {
+			return responsesRequest{}, &invalidRequestError{
+				Param: fmt.Sprintf("input[%d].tools", index), Code: "invalid_value",
+				Message: "Responses additional_tools input item requires a tools array",
+			}
+		}
+		request.Tools = append(request.Tools, tools...)
+	}
+	if !found {
+		return request, nil
+	}
+	input, err := json.Marshal(kept)
+	if err != nil {
+		return responsesRequest{}, err
+	}
+	request.Input = input
+	return request, nil
 }
 
 // chatCompatibleMetadata keeps optional request metadata from blocking model

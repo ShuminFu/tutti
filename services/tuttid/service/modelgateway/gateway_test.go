@@ -184,6 +184,78 @@ func TestGatewayConvertsResponsesRequestAndChatJSON(t *testing.T) {
 	}
 }
 
+func TestGatewayConvertsResponsesLiteAdditionalTools(t *testing.T) {
+	t.Parallel()
+
+	var upstreamRequest chatRequest
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if err := json.NewDecoder(request.Body).Decode(&upstreamRequest); err != nil {
+			http.Error(writer, "invalid request", http.StatusBadRequest)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(writer, `{
+			"id":"chatcmpl-lite",
+			"object":"chat.completion",
+			"created":123,
+			"model":"model-a",
+			"choices":[{
+				"index":0,
+				"message":{"role":"assistant","content":null,"tool_calls":[{
+					"id":"call_spawn","type":"function",
+					"function":{"name":"collaboration__spawn_agent","arguments":"{\"task_name\":\"review\"}"}
+				}]},
+				"finish_reason":"tool_calls"
+			}],
+			"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}
+		}`)
+	}))
+	defer upstream.Close()
+
+	gateway := newTestGateway(t, Config{})
+	endpoint := registerTestRoute(t, gateway, upstream.URL, "secret", "model-a", "workspace", "session")
+	body := `{
+		"model":"model-a",
+		"input":[
+			{"type":"additional_tools","role":"developer","tools":[
+				{"type":"function","name":"exec","description":"Run code","parameters":{"type":"object"},"strict":false},
+				{"type":"namespace","name":"collaboration","description":"Agent coordination","tools":[
+					{"type":"function","name":"spawn_agent","description":"Spawn an agent","parameters":{"type":"object"},"strict":false}
+				]}
+			]},
+			{"type":"message","role":"developer","content":[{"type":"input_text","text":"Follow instructions"}]},
+			{"type":"message","role":"user","content":[{"type":"input_text","text":"Inspect"}]}
+		],
+		"stream":false
+	}`
+	response := postResponses(t, endpoint, body, nil)
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.StatusCode, readBody(t, response.Body))
+	}
+	if len(upstreamRequest.Messages) != 2 || upstreamRequest.Messages[0]["role"] != "system" || upstreamRequest.Messages[1]["role"] != "user" {
+		t.Fatalf("upstream messages = %#v", upstreamRequest.Messages)
+	}
+	if len(upstreamRequest.Tools) != 2 {
+		t.Fatalf("upstream tools = %#v", upstreamRequest.Tools)
+	}
+	firstFunction := upstreamRequest.Tools[0]["function"].(map[string]any)
+	secondFunction := upstreamRequest.Tools[1]["function"].(map[string]any)
+	if firstFunction["name"] != "exec" || secondFunction["name"] != "collaboration__spawn_agent" {
+		t.Fatalf("upstream tools = %#v", upstreamRequest.Tools)
+	}
+
+	var converted map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&converted); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	output := converted["output"].([]any)
+	toolCall := output[len(output)-1].(map[string]any)
+	if toolCall["type"] != "function_call" || toolCall["namespace"] != "collaboration" || toolCall["name"] != "spawn_agent" {
+		t.Fatalf("converted tool call = %#v", toolCall)
+	}
+}
+
 func TestGatewayFiltersUntranslatableToolRegistrations(t *testing.T) {
 	t.Parallel()
 
@@ -540,6 +612,11 @@ func TestGatewayRejectsUnsupportedResponsesInputs(t *testing.T) {
 			name:  "hosted tool call history",
 			body:  `{"model":"model-a","input":[{"type":"web_search_call","id":"search_1"}]}`,
 			param: "input[0].type",
+		},
+		{
+			name:  "malformed Responses Lite tools",
+			body:  `{"model":"model-a","input":[{"type":"additional_tools","tools":{"type":"function"}}]}`,
+			param: "input[0].tools",
 		},
 		{
 			name:  "previous response",
