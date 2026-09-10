@@ -52,6 +52,11 @@ export const STABLE_AGENT_EXTENSION_INTEGRATIONS = [
     targetId: "extension:deepseek-harness"
   },
   {
+    key: "grok",
+    labelKey: "workspace.settings.agent.agents.extensionGrok",
+    targetId: "extension:grok"
+  },
+  {
     key: "kimi-code",
     labelKey: "workspace.settings.agent.agents.extensionKimiCode",
     targetId: "extension:kimi-code"
@@ -88,12 +93,6 @@ export const EARLY_ACCESS_AGENT_EXTENSION_INTEGRATIONS = [
     key: "qwen",
     labelKey: "workspace.settings.agent.agents.extensionQwen",
     targetId: "extension:qwen"
-  },
-  {
-    activationFlag: AGENT_EXTENSION_GROK_FLAG,
-    key: "grok",
-    labelKey: "workspace.settings.agent.agents.extensionGrok",
-    targetId: "extension:grok"
   }
 ] as const;
 

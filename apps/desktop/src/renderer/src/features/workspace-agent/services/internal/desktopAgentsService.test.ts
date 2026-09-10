@@ -482,6 +482,24 @@ test("desktop agents service keeps stable extensions visible without Early Acces
       createdAtUnixMs: 1780272000000,
       enabled: true,
       heroImageUrl: null,
+      iconKey: "extension:grok",
+      iconUrl: "data:image/svg+xml;base64,grok",
+      maskIconUrl: null,
+      id: "extension:grok",
+      launchRef: {
+        extensionInstallationId: "grok@0.2.103",
+        type: "agent_extension"
+      },
+      name: "Grok Build",
+      provider: "acp:grok",
+      sortOrder: 700,
+      source: "system",
+      updatedAtUnixMs: 1780272000000
+    },
+    {
+      createdAtUnixMs: 1780272000000,
+      enabled: true,
+      heroImageUrl: null,
       iconKey: "extension:hermes",
       iconUrl: "data:image/svg+xml;base64,hermes",
       maskIconUrl: null,
@@ -522,13 +540,23 @@ test("desktop agents service keeps stable extensions visible without Early Acces
     mapAgentTargetPresentationsToAgents(presentations).map(
       (agent) => agent.agentTargetId
     ),
-    ["extension:deepseek-harness", "extension:hermes", "extension:kimi-code"]
+    [
+      "extension:deepseek-harness",
+      "extension:grok",
+      "extension:hermes",
+      "extension:kimi-code"
+    ]
   );
   assert.deepEqual(
     mapAgentTargetPresentationsToAgents(presentations, {
       earlyAccessEnabled: false
     }).map((agent) => agent.agentTargetId),
-    ["extension:deepseek-harness", "extension:hermes", "extension:kimi-code"]
+    [
+      "extension:deepseek-harness",
+      "extension:grok",
+      "extension:hermes",
+      "extension:kimi-code"
+    ]
   );
   // Early Access on: the remaining extension also becomes launchable.
   assert.deepEqual(
@@ -538,6 +566,7 @@ test("desktop agents service keeps stable extensions visible without Early Acces
     [
       "extension:deepseek-harness",
       "extension:gemini",
+      "extension:grok",
       "extension:hermes",
       "extension:kimi-code"
     ]

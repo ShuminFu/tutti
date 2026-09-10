@@ -33,6 +33,12 @@ test("stable extension rows remain visible without Early Access", () => {
       },
       {
         activationFlag: null,
+        agentTargetId: "extension:grok",
+        earlyAccess: false,
+        toggleDisabled: true
+      },
+      {
+        activationFlag: null,
         agentTargetId: "extension:kimi-code",
         earlyAccess: false,
         toggleDisabled: true
@@ -64,7 +70,7 @@ test("stable targets and early-access activation project independently", () => {
     status: "connected",
     toggleDisabled: false
   });
-  assert.deepEqual(rows[3], {
+  assert.deepEqual(rows[4], {
     activationFlag: "agent.extension.gemini",
     agentTargetId: "extension:gemini",
     earlyAccess: true,
@@ -75,8 +81,8 @@ test("stable targets and early-access activation project independently", () => {
     status: "auth_required",
     toggleDisabled: false
   });
-  assert.equal(rows[4]?.enabled, false);
-  assert.equal(rows[4]?.status, "unknown");
+  assert.equal(rows[5]?.enabled, false);
+  assert.equal(rows[5]?.status, "unknown");
 });
 
 function extensionTarget(
