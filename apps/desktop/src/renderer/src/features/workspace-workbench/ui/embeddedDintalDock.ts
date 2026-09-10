@@ -11,6 +11,7 @@ import {
 import { installHostAgentSessionBridge } from "../../../platform/desktop/web/webHostBridgeClient.ts";
 import { registerEmbeddedHostCreatedSessionOpener } from "../../workspace-agent/services/internal/embeddedHostCreatedSessionOpener.ts";
 import { installEmbeddedRailPeerPairingHost } from "./embeddedRailPeerPairingHost.ts";
+import { installEmbeddedPeerPairRequestHost } from "./embeddedPeerPairRequestHost.ts";
 import {
   embeddedSplitViewController,
   embeddedSplitViewPaneDescriptor,
@@ -117,9 +118,12 @@ export function installEmbeddedDintalDockSessionBridge(
   const unregisterOpener = registerEmbeddedHostCreatedSessionOpener(openSession);
   // 只在嵌入 DinTalDock 时接上配对能力；普通 web 构建里侧栏没有这组 UI。
   const unregisterPeerPairing = installEmbeddedRailPeerPairingHost();
+  // 配对请求就地审批（补丁 0116）：同样只在嵌入 DinTalDock 时接上。
+  const unregisterPeerRequests = installEmbeddedPeerPairRequestHost();
   const uninstallBridge = installHostAgentSessionBridge(openSession, windowRef);
   return () => {
     uninstallBridge();
+    unregisterPeerRequests();
     unregisterPeerPairing();
     unregisterOpener();
   };

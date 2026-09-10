@@ -23,6 +23,12 @@
 //                 result  = { pairId, relaunchedTaskId?, relaunchedSessionId? }
 // deletePeerPair  args[0] = { taskId, pairId }
 //                 result  = { ok: true }
+//
+// 配对请求就地审批（补丁 0116）：
+// listPeerRequests  args[0] = { agentSessionId, status: "pending" }
+//                   result  = { requests: [{ id, status, reason, createdAt, from: Endpoint, to: Endpoint }] }
+// decidePeerRequest args[0] = { requestId, decision: "approve" | "reject" }
+//                   result  = { request: {...} }
 // 别名由宿主算，iframe 传空串；后端拒绝时回 { error: <中文文案>, code }。
 
 import { writeWorkspaceFileDropData } from "@tutti-os/agent-gui/workspace-file-drop";
@@ -621,4 +627,39 @@ export function requestHostDeletePeerPair(args: {
   taskId: string;
 }): Promise<unknown> {
   return requestHostCapability<unknown>("deletePeerPair", [args]);
+}
+
+export interface HostPeerRequest {
+  createdAt: string;
+  from: HostPeerPairEndpoint;
+  id: string;
+  reason: string;
+  status: string;
+  to: HostPeerPairEndpoint;
+}
+
+export function requestHostListPeerRequests(args: {
+  agentSessionId: string;
+}): Promise<{ requests: HostPeerRequest[] }> {
+  return requestHostCapability<{ requests?: HostPeerRequest[] }>(
+    "listPeerRequests",
+    [{ agentSessionId: args.agentSessionId, status: "pending" }]
+  ).then((result) => ({
+    requests: Array.isArray(result?.requests) ? result.requests : []
+  }));
+}
+
+export function requestHostDecidePeerRequest(args: {
+  decision: "approve" | "reject";
+  requestId: string;
+}): Promise<{ request: HostPeerRequest }> {
+  return requestHostCapability<{ request?: HostPeerRequest }>(
+    "decidePeerRequest",
+    [args]
+  ).then((result) => {
+    if (!result?.request || typeof result.request.id !== "string") {
+      throw new Error("tutti host bridge: decidePeerRequest result missing request");
+    }
+    return { request: result.request };
+  });
 }

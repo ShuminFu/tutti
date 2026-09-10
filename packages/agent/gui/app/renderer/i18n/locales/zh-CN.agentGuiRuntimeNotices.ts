@@ -14,6 +14,11 @@ export const zhCNAgentGuiRuntimeNotices = {
   visibleErrorSessionInterrupted: "{{provider}} 在完成前意外停止，请重试",
   visibleErrorDetails: "查看详情",
   peerMessageFrom: "来自",
+  peerPairRequestLead: "本会话请求与 {{peer}} 配对",
+  peerPairRequestApprove: "批准",
+  peerPairRequestApproveHint: "两个会话之后可以互发消息",
+  peerPairRequestReject: "拒绝",
+  peerPairRequestRejectHint: "agent 会收到「请求失败」",
   visibleErrorRawDetails: "原始错误",
   visibleErrorCliNotFound:
     "未检测到 {{provider}} CLI，无法运行。请先完成安装。",

@@ -51,3 +51,13 @@ export {
   type SplitLayoutState,
   type SplitSide
 } from "./agent-gui/agentGuiNode/model/agentGuiSplitLayout.ts";
+
+// 配对请求就地审批（补丁 0116）：宿主端口注册口，同样挂在这个子路径上。
+export {
+  peerPairRequestHost,
+  registerPeerPairRequestHost,
+  type PeerPairRequestDecision,
+  type PeerPairRequestHost,
+  type PeerPairRequestSide,
+  type PeerPairRequestView
+} from "./shared/agentConversation/peerPairRequestHost.ts";

@@ -16,6 +16,7 @@ import {
 import { cn } from "../../../app/renderer/lib/utils";
 import styles from "../AgentGUINode.styles";
 import { AgentInteractivePromptSurface } from "../AgentInteractivePromptSurface";
+import { AgentPeerPairRequestSurface } from "../../../shared/agentConversation/components/AgentPeerPairRequestSurface";
 import { AgentQueuedPromptPanel } from "../AgentQueuedPromptPanel";
 import {
   AgentProjectDropdown,
@@ -308,6 +309,11 @@ export function AgentComposerView(input: Props): React.JSX.Element {
       onSubmit={submit}
     >
       {fileDropOverlay}
+      {/* 配对请求就地审批（补丁 0116）：与 agent 交互提示共用作曲区上方的浮层位，提示在时让位。 */}
+      <AgentPeerPairRequestSurfaceSlot
+        agentSessionId={input.props.agentSessionId ?? null}
+        suppressed={Boolean(visibleActivePrompt)}
+      />
       {visibleActivePrompt ? (
         <div
           className={styles.composerFloatingPrompt}
@@ -792,5 +798,30 @@ export function AgentComposerView(input: Props): React.JSX.Element {
         ) : null}
       </div>
     </form>
+  );
+}
+
+// 浮层壳只在有卡可画时才占位：空 div 也会盖住上方一小条转录的点击。
+function AgentPeerPairRequestSurfaceSlot({
+  agentSessionId,
+  suppressed
+}: {
+  agentSessionId: string | null;
+  suppressed: boolean;
+}): React.JSX.Element | null {
+  "use memo";
+  return (
+    <div
+      className={styles.composerFloatingPrompt}
+      data-testid="agent-gui-composer-peer-pair-request"
+      style={{ pointerEvents: "none" }}
+    >
+      <div style={{ pointerEvents: "auto" }}>
+        <AgentPeerPairRequestSurface
+          agentSessionId={agentSessionId}
+          suppressed={suppressed}
+        />
+      </div>
+    </div>
   );
 }

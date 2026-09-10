@@ -20,6 +20,11 @@ export const enAgentGuiRuntimeNotices = {
     "{{provider}} stopped unexpectedly before it finished. Try again.",
   visibleErrorDetails: "View details",
   peerMessageFrom: "Message from",
+  peerPairRequestLead: "This session asks to pair with {{peer}}",
+  peerPairRequestApprove: "Approve",
+  peerPairRequestApproveHint: "Let the two sessions message each other",
+  peerPairRequestReject: "Reject",
+  peerPairRequestRejectHint: "The agent will be told the request failed",
   visibleErrorRawDetails: "Raw error",
   visibleErrorCliNotFound:
     "{{provider}} CLI wasn't found, so it couldn't run. Set it up to continue.",
