@@ -18,6 +18,10 @@ import type {
 } from "@shared/contracts/ipc";
 import { desktopErrorCodes } from "@shared/errors/desktopErrors";
 import { resolveWebBackendConfigFrom } from "./resolveWebBackendConfig";
+import {
+  HostBridgeUnavailableError,
+  requestHostCapability
+} from "./webHostBridgeClient";
 
 const webAppUpdateState: AppUpdateState = {
   channel: "rc",
@@ -286,7 +290,20 @@ function createWebHostApi(): DesktopHostApi {
         return Promise.reject(electronDebugRequired("selectAppIconImage"));
       },
       selectDirectory() {
-        return Promise.reject(electronDebugRequired("selectDirectory"));
+        // Delegate to the embedding host when available; the host answers with
+        // a native dialog result shaped as { path }. Fall back to the web
+        // rejection when not embedded / unsupported / timed out.
+        return requestHostCapability<{ path?: string } | null>(
+          "selectDirectory"
+        ).then(
+          (result) => result?.path ?? null,
+          (error) => {
+            if (error instanceof HostBridgeUnavailableError) {
+              return Promise.reject(electronDebugRequired("selectDirectory"));
+            }
+            return Promise.reject(error);
+          }
+        );
       },
       openFile() {
         return Promise.reject(electronDebugRequired("openFile"));
@@ -340,8 +357,29 @@ function createWebHostApi(): DesktopHostApi {
       resolveEntryIcon() {
         return Promise.resolve(null);
       },
-      selectUploadFiles() {
-        return Promise.reject(electronDebugRequired("selectUploadFiles"));
+      selectUploadFiles(input) {
+        // Delegate to the embedding host; it returns the native picker result
+        // shaped as { files: [{ path }] } (or a bare string[]). Normalise to the
+        // string[] shape expected here. Fall back to the web rejection when not
+        // embedded / unsupported / timed out.
+        return requestHostCapability<
+          { files?: Array<{ path?: string }> } | string[] | null
+        >("selectUploadFiles", input === undefined ? [] : [input]).then(
+          (result) => {
+            if (Array.isArray(result)) {
+              return result;
+            }
+            return (result?.files ?? [])
+              .map((file) => file?.path)
+              .filter((path): path is string => typeof path === "string");
+          },
+          (error) => {
+            if (error instanceof HostBridgeUnavailableError) {
+              return Promise.reject(electronDebugRequired("selectUploadFiles"));
+            }
+            return Promise.reject(error);
+          }
+        );
       },
       copyImageToClipboard() {
         return Promise.reject(electronDebugRequired("copyImageToClipboard"));
