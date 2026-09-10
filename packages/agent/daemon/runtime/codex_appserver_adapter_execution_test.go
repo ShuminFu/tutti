@@ -3,11 +3,13 @@ package agentruntime
 import (
 	"context"
 	"fmt"
-	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
 )
 
 func TestCodexAppServerAdapterExecStreamsTurn(t *testing.T) {
@@ -23,6 +25,9 @@ func TestCodexAppServerAdapterExecStreamsTurn(t *testing.T) {
 	}
 
 	turnStart := appServerRequestParams(t, transport.conn, appServerMethodTurnStart)
+	if got := asString(turnStart["cwd"]); got != session.CWD {
+		t.Fatalf("turn/start cwd = %q, want %q", got, session.CWD)
+	}
 	if asString(turnStart["threadId"]) != "codex-thread-1" {
 		t.Fatalf("turn/start threadId = %q", turnStart["threadId"])
 	}
@@ -107,6 +112,20 @@ func TestCodexAppServerAdapterExecStreamsTurn(t *testing.T) {
 	}
 	if total, _ := int64Value(contextWindow["totalTokens"]); total != 272000 {
 		t.Fatalf("usage totalTokens = %#v", usage)
+	}
+}
+
+func TestCodexAppServerSandboxPolicyKeepsHostPathSemantics(t *testing.T) {
+	t.Parallel()
+
+	windowsPolicy := codexAppServerSandboxPolicyForPlatform("auto", false, "windows")
+	if _, ok := windowsPolicy["writableRoots"]; ok {
+		t.Fatalf("Windows writableRoots = %#v, want omitted", windowsPolicy["writableRoots"])
+	}
+	posixPolicy := codexAppServerSandboxPolicyForPlatform("auto", false, "darwin")
+	writableRoots, ok := posixPolicy["writableRoots"].([]string)
+	if !ok || len(writableRoots) != 1 || writableRoots[0] != "/sandbox-tmp" {
+		t.Fatalf("POSIX writableRoots = %#v, want [/sandbox-tmp]", posixPolicy["writableRoots"])
 	}
 }
 
@@ -292,9 +311,15 @@ func TestCodexAppServerAdapterExecAutoPermissionUsesAutoReviewer(t *testing.T) {
 	if asString(sandboxPolicy["type"]) != "workspaceWrite" {
 		t.Fatalf("turn/start sandboxPolicy = %#v", turnStart["sandboxPolicy"])
 	}
-	writableRoots, ok := sandboxPolicy["writableRoots"].([]any)
-	if !ok || len(writableRoots) != 1 || asString(writableRoots[0]) != "/sandbox-tmp" {
-		t.Fatalf("turn/start sandboxPolicy writableRoots = %#v, want [/sandbox-tmp]", sandboxPolicy["writableRoots"])
+	if runtime.GOOS == "windows" {
+		if _, ok := sandboxPolicy["writableRoots"]; ok {
+			t.Fatalf("turn/start sandboxPolicy writableRoots = %#v, want omitted on Windows", sandboxPolicy["writableRoots"])
+		}
+	} else {
+		writableRoots, ok := sandboxPolicy["writableRoots"].([]any)
+		if !ok || len(writableRoots) != 1 || asString(writableRoots[0]) != "/sandbox-tmp" {
+			t.Fatalf("turn/start sandboxPolicy writableRoots = %#v, want [/sandbox-tmp]", sandboxPolicy["writableRoots"])
+		}
 	}
 	if asString(turnStart["approvalsReviewer"]) != "auto_review" {
 		t.Fatalf("turn/start approvalsReviewer = %q, want auto_review", turnStart["approvalsReviewer"])
