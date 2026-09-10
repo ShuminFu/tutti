@@ -1,5 +1,5 @@
 // Package tuttigoalreview exposes the isolated structured verdict capability
-// used by dedicated Tutti Mode review sessions.
+// used by dedicated DinTalDock Mode review sessions.
 package tuttigoalreview
 
 import (

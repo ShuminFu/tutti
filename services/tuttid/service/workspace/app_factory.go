@@ -25,7 +25,7 @@ const (
 	defaultFactoryAppVersion        = "0.1.0"
 	defaultFactoryValidationTimeout = 45 * time.Second
 	defaultFactoryPrepareTimeout    = 5 * time.Minute
-	interruptedFactoryJobReason     = "App Factory job was interrupted because Tutti stopped before it finished."
+	interruptedFactoryJobReason     = "App Factory job was interrupted because DinTalDock stopped before it finished."
 	tuttiRuntimeManagedBlockBegin   = "<!-- BEGIN TUTTI-RUNTIME (auto-managed; do not edit) -->"
 	tuttiRuntimeManagedBlockEnd     = "<!-- END TUTTI-RUNTIME -->"
 )

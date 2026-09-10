@@ -26,7 +26,7 @@ The package builder should:
 Generated `bootstrap.sh` should:
 
 - Resolve `TUTTI_APP_PACKAGE_DIR`, defaulting to its own directory for local direct startup.
-- Export app-specific env vars from Tutti runtime env vars.
+- Export app-specific env vars from DinTalDock runtime env vars.
 - Use `TUTTI_APP_NODE` instead of bare `node`.
 - Use `TUTTI_APP_DATA_DIR` for durable artifacts, `TUTTI_APP_DATABASE_DIR` for active databases, `TUTTI_APP_RUNTIME_DIR` for scratch files, and `TUTTI_APP_LOG_DIR` for logs.
 - Set a package-local path for bundled MCP tools when local agents need them.
@@ -62,7 +62,7 @@ Keep install/build work out of `bootstrap.sh`; use `prepare.sh` only when prepar
 
 ## CLI Surface
 
-If the user asks to connect the app to the Tutti ecosystem, the app must expose a `tutti.cli.json` surface and declare it from `tutti.app.json`. Do not skip CLI integration as optional in that case. If the app has no obvious domain action yet, expose a small useful command such as `status`, `summary`, or `open-context` that proves the app is discoverable and callable.
+If the user asks to connect the app to the DinTalDock ecosystem, the app must expose a `tutti.cli.json` surface and declare it from `tutti.app.json`. Do not skip CLI integration as optional in that case. If the app has no obvious domain action yet, expose a small useful command such as `status`, `summary`, or `open-context` that proves the app is discoverable and callable.
 
 If the app exposes `tutti.cli.json`:
 

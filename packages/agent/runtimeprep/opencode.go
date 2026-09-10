@@ -10,7 +10,7 @@ import (
 )
 
 // OpenCodePreparer creates a session-scoped native config directory containing
-// Tutti runtime instructions and Skills. A bound OpenAI-compatible model plan
+// DinTalDock runtime instructions and Skills. A bound OpenAI-compatible model plan
 // also gains an opencode.json provider block in that directory; its API key
 // stays out of the file because the config references an {env:...} token.
 type OpenCodePreparer struct{}

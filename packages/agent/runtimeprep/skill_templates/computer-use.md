@@ -1,13 +1,13 @@
 ---
 name: computer-use
-description: Use to operate the supported desktop — take screenshots, click, type, press keys, scroll — through the Tutti CLI.
+description: Use to operate the supported desktop — take screenshots, click, type, press keys, scroll — through the DinTalDock CLI.
 ---
 
 # Computer Use
 
 Use this skill for supported desktop automation (macOS or Windows): screenshot, click, type, press keys, scroll, or move the cursor.
 
-Drive the desktop only through `{{.CLICommand}} computer`. The Tutti daemon owns the cua-driver session. Do not use platform-native scripts, direct accessibility APIs, or the standalone cua-driver CLI; those are outside the managed session.
+Drive the desktop only through `{{.CLICommand}} computer`. The DinTalDock daemon owns the cua-driver session. Do not use platform-native scripts, direct accessibility APIs, or the standalone cua-driver CLI; those are outside the managed session.
 
 ## Stable Window Workflow
 
@@ -83,7 +83,7 @@ Desktop capture and input are not one uniform scope:
 
 ## Guardrails
 
-- The Tutti computer session is shared per workspace and reused across commands. cua-driver's persisted `capture_scope` is broader global state and is never a hidden per-call switch. Native `set_config` may change it explicitly when the requested workflow requires desktop capture.
+- The DinTalDock computer session is shared per workspace and reused across commands. cua-driver's persisted `capture_scope` is broader global state and is never a hidden per-call switch. Native `set_config` may change it explicitly when the requested workflow requires desktop capture.
 - Prefer explicit `--pid <pid> --window-id <window-id>` for stable window commands. Omit both only when automatic visible-window selection is intentional.
-- Native `tool list` and `tool describe` preserve the live catalog and show Tutti's `allowed` and `denialReason` decision. `tool call` enforces that decision; never try to invoke an entry with `allowed: false`.
+- Native `tool list` and `tool describe` preserve the live catalog and show DinTalDock's `allowed` and `denialReason` decision. `tool call` enforces that decision; never try to invoke an entry with `allowed: false`.
 - If cua-driver is missing or Screen Recording/Accessibility permission is denied, report that error instead of falling back to AppleScript or shell automation.

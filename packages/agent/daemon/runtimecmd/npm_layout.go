@@ -26,8 +26,8 @@ func ResolveNPMGlobalLayout(installBinDir string) NPMGlobalLayout {
 	return NPMGlobalLayout{PrefixDir: prefixDir, BinDir: installBinDir}
 }
 
-// UserManagedNPMExecutableDirs returns Tutti's current user-level npm launcher
-// directory followed by any backward-compatible directory that older Tutti
+// UserManagedNPMExecutableDirs returns DinTalDock's current user-level npm launcher
+// directory followed by any backward-compatible directory that older DinTalDock
 // releases used. Callers use this list for discovery only; fresh installs still
 // target the first entry.
 func UserManagedNPMExecutableDirs(home string) []string {

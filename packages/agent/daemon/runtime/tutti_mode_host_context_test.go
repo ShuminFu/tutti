@@ -202,8 +202,8 @@ func TestRenderTuttiModeHostContextCarriesTypedActiveState(t *testing.T) {
 		`"revision":7`,
 		`"state":"active"`,
 		"The JSON `state` field is authoritative",
-		"Determine and report Tutti Mode status only from that field",
-		"Provider collaboration mode and Tutti workflow existence are independent facts",
+		"Determine and report DinTalDock Mode status only from that field",
+		"Provider collaboration mode and DinTalDock workflow existence are independent facts",
 		"When the user requests a plan and the request is clear",
 		"Do not execute the user's request directly in this turn.",
 		"ask the user focused clarifying questions",
@@ -213,7 +213,7 @@ func TestRenderTuttiModeHostContextCarriesTypedActiveState(t *testing.T) {
 		"Read-only investigation",
 		"do not substitute a provider-native planning mode",
 		"independent of the provider collaboration mode",
-		"Tutti CLI capabilities remain available",
+		"DinTalDock CLI capabilities remain available",
 	} {
 		if !strings.Contains(contextText, expected) {
 			t.Fatalf("host context = %q, want %q", contextText, expected)
@@ -249,11 +249,11 @@ func TestRenderTuttiModeHostContextCarriesExplicitInactiveState(t *testing.T) {
 		`"revisionId":"revision-8"`,
 		`"revision":8`,
 		`"state":"inactive"`,
-		"Tutti mode is inactive for this turn.",
+		"DinTalDock mode is inactive for this turn.",
 		"The JSON `state` field is authoritative",
-		"Determine and report Tutti Mode status only from that field",
-		"Provider collaboration mode and Tutti workflow existence are independent facts",
-		"Tutti CLI capabilities remain available",
+		"Determine and report DinTalDock Mode status only from that field",
+		"Provider collaboration mode and DinTalDock workflow existence are independent facts",
+		"DinTalDock CLI capabilities remain available",
 	} {
 		if !strings.Contains(contextText, expected) {
 			t.Fatalf("inactive host context = %q, want %q", contextText, expected)
@@ -277,7 +277,7 @@ func TestRenderTuttiModeHostContextSeparatesActivationFromWorkflowExistence(t *t
 	contextText := renderTuttiModeHostContextForCLI(testActiveTuttiModeSnapshot(), "tutti")
 	for _, expected := range []string{
 		"must not override the activation state",
-		"A Tutti plan exists only after plan propose returns a workflowId",
+		"A DinTalDock plan exists only after plan propose returns a workflowId",
 	} {
 		if !strings.Contains(contextText, expected) {
 			t.Fatalf("host context = %q, want %q", contextText, expected)

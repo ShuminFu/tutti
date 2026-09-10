@@ -698,7 +698,7 @@ func TestRootProviderTurnFailurePersistsVisibleErrorCode(t *testing.T) {
 	if !ok {
 		t.Fatal("activityEventContext() returned !ok")
 	}
-	const errorMessage = "You've hit your usage limit. Insufficient credits. View Tutti plans at https://tutti.sh/profile/plan, or try again later."
+	const errorMessage = "You've hit your usage limit. Insufficient credits. View DinTalDock plans at https://tutti.sh/profile/plan, or try again later."
 	failed := activityshared.NewRootProviderTurnCompleted(ctx, "root-turn-1", "provider-turn-1", activityshared.TurnOutcomeFailed)
 	failed.Payload.Metadata = map[string]any{"error": errorMessage}
 

@@ -202,7 +202,7 @@ func planProviderDisplayName(endpoint *ModelEndpointConfig) string {
 	if name := strings.TrimSpace(endpoint.PlanName); name != "" {
 		return name
 	}
-	return "Tutti Model Plan"
+	return "DinTalDock Model Plan"
 }
 
 // codexConfigWithTopLevelAssignment replaces the first top-level assignment of

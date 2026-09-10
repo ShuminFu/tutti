@@ -1040,7 +1040,7 @@ func TestTuttiCLIShimPathUsesDevelopmentCommand(t *testing.T) {
 }
 
 func TestWorkspaceAppCLIPathUsesNativeWindowsExecutable(t *testing.T) {
-	target := filepath.Join(t.TempDir(), "Tutti CLI.exe")
+	target := filepath.Join(t.TempDir(), "DinTalDock CLI.exe")
 	if err := os.WriteFile(target, []byte("fixture"), 0o755); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -1071,8 +1071,8 @@ func TestWorkspaceAppCLIEnvOverridesIncludeWindowsListenerPath(t *testing.T) {
 	listenerPath := filepath.Join(t.TempDir(), "run", "tuttid.listener.json")
 	t.Setenv("TUTTID_LISTENER_INFO_PATH", listenerPath)
 
-	overrides := workspaceAppCLIEnvOverrides("windows", `C:\Program Files\Tutti\tutti.exe`)
-	if got := envValue(overrides, "TUTTI_CLI"); got != `C:\Program Files\Tutti\tutti.exe` {
+	overrides := workspaceAppCLIEnvOverrides("windows", `C:\Program Files\DinTalDock\tutti.exe`)
+	if got := envValue(overrides, "TUTTI_CLI"); got != `C:\Program Files\DinTalDock\tutti.exe` {
 		t.Fatalf("TUTTI_CLI = %q", got)
 	}
 	if got := envValue(overrides, "TUTTID_LISTENER_INFO_PATH"); got != listenerPath {

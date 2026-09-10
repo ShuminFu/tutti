@@ -368,7 +368,7 @@ func TestRuntimeControllerPreservesTypedExecIdentity(t *testing.T) {
 		t.Fatalf("projected capability refs = %#v", projected.CapabilityRefs)
 	}
 	if projected.TuttiModeSnapshot == nil {
-		t.Fatal("projected Tutti Mode snapshot is nil")
+		t.Fatal("projected DinTalDock Mode snapshot is nil")
 	}
 	legacyOrchestrationIntensity := projected.TuttiModeSnapshot.OrchestrationIntensity //nolint:staticcheck // Compatibility assertion covers the deprecated alias.
 	if projected.TuttiModeSnapshot.ActivationID != "activation-1" ||
@@ -377,6 +377,6 @@ func TestRuntimeControllerPreservesTypedExecIdentity(t *testing.T) {
 		projected.TuttiModeSnapshot.PreferenceVersion != agentruntime.TuttiModePreferenceVersionEffectSpeed ||
 		projected.TuttiModeSnapshot.Effect != 75 || projected.TuttiModeSnapshot.Speed != 60 ||
 		legacyOrchestrationIntensity != 75 {
-		t.Fatalf("projected Tutti Mode snapshot = %#v", projected.TuttiModeSnapshot)
+		t.Fatalf("projected DinTalDock Mode snapshot = %#v", projected.TuttiModeSnapshot)
 	}
 }

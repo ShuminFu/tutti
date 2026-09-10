@@ -90,7 +90,7 @@ func appServerTurnStartParams(
 		params["collaborationMode"] = collaborationMode
 	} else if hostContext := strings.TrimSpace(tuttiModeHostContext); hostContext != "" {
 		// collaborationMode/list is an experimental capability and can be absent
-		// or fail transiently. Preserve Tutti-owned turn state through a
+		// or fail transiently. Preserve DinTalDock-owned turn state through a
 		// provider-transport-only synthetic block instead of silently dropping
 		// it. User prompt previews and activity projection continue to use the
 		// original content passed to this function.
@@ -339,7 +339,7 @@ func splitSlashCommand(prompt string) (string, string) {
 	return strings.ToLower(strings.TrimSpace(command)), strings.TrimSpace(args)
 }
 
-// codexAppServerApprovalPolicy maps Tutti permission modes onto the
+// codexAppServerApprovalPolicy maps DinTalDock permission modes onto the
 // app-server AskForApproval policy.
 func codexAppServerApprovalPolicy(modeID string) string {
 	switch codexACPModeID(modeID) {

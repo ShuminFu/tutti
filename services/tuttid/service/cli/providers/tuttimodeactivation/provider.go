@@ -1,5 +1,5 @@
-// Package tuttimodeactivation exposes the durable Tutti Mode activation as an
-// Agent-facing CLI capability. It lets an Agent enable or disable Tutti Mode
+// Package tuttimodeactivation exposes the durable DinTalDock Mode activation as an
+// Agent-facing CLI capability. It lets an Agent enable or disable DinTalDock Mode
 // for its own session; the mutation flows through the activation service Set
 // path, so the durable state and the live GUI toggle stay authoritative.
 package tuttimodeactivation
@@ -38,7 +38,7 @@ func (p Provider) Commands() []cliservice.Command {
 
 func (p Provider) requireActivations() error {
 	if p.activations == nil {
-		return cliservice.ServiceUnavailableError("Tutti Mode activation service is unavailable", nil)
+		return cliservice.ServiceUnavailableError("DinTalDock Mode activation service is unavailable", nil)
 	}
 	return nil
 }

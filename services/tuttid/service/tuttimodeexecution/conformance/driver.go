@@ -309,7 +309,7 @@ type AutomationTurnCancellation struct {
 	TurnID    string
 }
 
-// Driver is the narrow public contract exercised by Tutti execution product
+// Driver is the narrow public contract exercised by DinTalDock execution product
 // conformance. Implementations may compose real services and persistence, but
 // scenarios do not reach through this seam to implementation details.
 type Driver interface {
@@ -411,14 +411,14 @@ type Driver interface {
 	// delivery time so the contract can reject wall-clock deadline drift.
 	SettleWakeTurnAt(context.Context, string, string, string, time.Time) error
 	// SetCanonicalWakeTurnSettledAt mutates only the canonical Agent fake and
-	// deliberately skips the Tutti product observer to model a lost callback
+	// deliberately skips the DinTalDock product observer to model a lost callback
 	// projection that durable recovery must repair.
 	SetCanonicalWakeTurnSettledAt(string, string, string, time.Time)
 	SetExecutionStatus(context.Context, string, string, string) error
 	CorruptWakeTargetSession(context.Context, string, string, string) error
 	ObserveSourceSessionActivity(context.Context, SourceSessionActivity) error
 	// CommitCanonicalSourceActivity persists the canonical Agent fact without
-	// invoking the Tutti observer, modeling a lost post-commit projection.
+	// invoking the DinTalDock observer, modeling a lost post-commit projection.
 	// clientSubmitID is retained when present for user_turn and ignored for
 	// agent_turn.
 	CommitCanonicalSourceActivity(
@@ -426,7 +426,7 @@ type Driver interface {
 	) error
 	// CommitCanonicalSourceActivityBeforeNextWakeClaim commits canonical source
 	// activity after the dispatchable scan but before the durable claim while
-	// deliberately losing the low-latency Tutti observer projection.
+	// deliberately losing the low-latency DinTalDock observer projection.
 	CommitCanonicalSourceActivityBeforeNextWakeClaim(
 		context.Context, SourceSessionActivity, string,
 	)
@@ -436,7 +436,7 @@ type Driver interface {
 	ObserveSourceActivityAfterNextWakeClaim(context.Context, SourceSessionActivity)
 	// CommitCanonicalSourceActivityAfterNextWakeClaim commits canonical source
 	// activity in the claim-to-send window while deliberately losing the
-	// low-latency Tutti observer projection.
+	// low-latency DinTalDock observer projection.
 	CommitCanonicalSourceActivityAfterNextWakeClaim(
 		context.Context, SourceSessionActivity, string,
 	)
@@ -446,7 +446,7 @@ type Driver interface {
 	ObserveSourceActivityDuringNextWakeSend(context.Context, SourceSessionActivity)
 	// CommitCanonicalSourceActivityDuringNextWakeSend commits canonical source
 	// activity in the send-to-finalize window while deliberately losing the
-	// low-latency Tutti observer projection.
+	// low-latency DinTalDock observer projection.
 	CommitCanonicalSourceActivityDuringNextWakeSend(
 		context.Context, SourceSessionActivity, string,
 	)

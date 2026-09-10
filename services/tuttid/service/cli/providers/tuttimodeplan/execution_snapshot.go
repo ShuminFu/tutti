@@ -12,18 +12,18 @@ import (
 )
 
 type issueGetInput struct {
-	IssueID string `cli:"issue-id" validate:"required" description:"Tutti-owned Issue id."`
+	IssueID string `cli:"issue-id" validate:"required" description:"DinTalDock-owned Issue id."`
 }
 
 type issueResumeInput struct {
-	IssueID string `cli:"issue-id" validate:"required" description:"Paused Tutti-owned Issue id."`
+	IssueID string `cli:"issue-id" validate:"required" description:"Paused DinTalDock-owned Issue id."`
 }
 
 func (p Provider) newIssueGetCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[issueGetInput]{
 		ID:          appID + ".plan.issue.get",
 		Path:        []string{"plan", "issue", "get"},
-		Summary:     "Get authoritative Tutti Mode execution state",
+		Summary:     "Get authoritative DinTalDock Mode execution state",
 		Description: "Read the source-session-scoped execution, active checkpoint, graph revision, task readiness blockers, and allowed recovery actions.",
 		Kind:        framework.KindGet,
 		Visibility:  cliservice.CapabilityVisibilityPublic,
@@ -39,8 +39,8 @@ func (p Provider) newIssueResumeCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[issueResumeInput]{
 		ID:          appID + ".plan.issue.resume",
 		Path:        []string{"plan", "issue", "resume"},
-		Summary:     "Resume a paused Tutti Mode Issue",
-		Description: "Reopen dispatch for a paused Tutti-owned Issue. Caller authority comes from the invoking source Agent session; generic managed-Issue mutation remains forbidden.",
+		Summary:     "Resume a paused DinTalDock Mode Issue",
+		Description: "Reopen dispatch for a paused DinTalDock-owned Issue. Caller authority comes from the invoking source Agent session; generic managed-Issue mutation remains forbidden.",
 		Kind:        framework.KindAction,
 		Visibility:  cliservice.CapabilityVisibilityPublic,
 		Workspace:   framework.WorkspaceRequired,
@@ -70,7 +70,7 @@ func (p Provider) runIssueGet(
 		return nil, cliservice.InvalidInputReasonError(
 			string(executionbiz.RejectionWrongSourceSession),
 			"execution belongs to a different source session. "+
-				"Hint: run this command from the original Tutti Mode conversation",
+				"Hint: run this command from the original DinTalDock Mode conversation",
 			nil,
 		)
 	}

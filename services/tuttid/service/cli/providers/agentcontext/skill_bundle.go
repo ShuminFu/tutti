@@ -25,8 +25,8 @@ func (p Provider) newSkillBundleCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[skillBundleInput]{
 		ID:          appID + ".agent.tutti-cli-skill-bundle",
 		Path:        []string{"agent", "tutti-cli-skill-bundle"},
-		Summary:     "Get Tutti CLI skill bundle",
-		Description: "Get a dynamically rendered Tutti skill bundle for an external agent runtime.",
+		Summary:     "Get DinTalDock CLI skill bundle",
+		Description: "Get a dynamically rendered DinTalDock skill bundle for an external agent runtime.",
 		Kind:        framework.KindGet,
 		Visibility:  cliservice.CapabilityVisibilityIntegration,
 		Workspace:   framework.WorkspaceRequired,

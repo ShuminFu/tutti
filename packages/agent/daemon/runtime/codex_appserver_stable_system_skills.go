@@ -287,7 +287,7 @@ func replaceSystemSkillRootWithSymlink(systemRoot string, target string) error {
 }
 
 // replaceSystemSkillRootWithDirectoryCopy is the privilege-free fallback used
-// on Windows when a non-elevated Tutti daemon cannot create a directory
+// on Windows when a non-elevated DinTalDock daemon cannot create a directory
 // symlink. The target has already been validated against the content digest by
 // the caller, so copying it into the session home preserves the same trusted
 // bundle without requiring SeCreateSymbolicLinkPrivilege.

@@ -1,6 +1,6 @@
 # Host App Context
 
-You are running inside the Tutti desktop app host, which can render local and web references from Markdown responses.
+You are running inside the DinTalDock desktop app host, which can render local and web references from Markdown responses.
 
 ## Media
 

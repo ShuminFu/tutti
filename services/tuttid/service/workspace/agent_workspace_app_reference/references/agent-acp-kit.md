@@ -4,11 +4,11 @@ Use this reference whenever a workspace app owns local Agent execution.
 
 ## Rule
 
-Depend on a released exact version of `@tutti-os/agent-acp-kit`. The kit owns provider plugins, detection, canonical provider aliases, managed header handling, ACP lifecycle/event parsing, permission responses, MCP normalization, Tutti CLI execution, timeout/cancellation, and schema validation.
+Depend on a released exact version of `@tutti-os/agent-acp-kit`. The kit owns provider plugins, detection, canonical provider aliases, managed header handling, ACP lifecycle/event parsing, permission responses, MCP normalization, DinTalDock CLI execution, timeout/cancellation, and schema validation.
 
 The app owns product orchestration, its backend endpoint, prompt policy, app tools, persistence, and UI. It must not patch kit build output or copy platform protocol code.
 
-Daemon-owned Agent Session apps are a different execution model: they may use Tutti CLI session commands and must not instantiate an app-owned local runtime merely for consistency. They must begin discovery with `tutti agent list --json`, select an exact returned `agents[].id`, and pass it to `tutti agent start --agent-id <agent-id> ...` for starts or handoffs. Provider-specific launch families and provider-only starts are legacy compatibility, not new-session authority.
+Daemon-owned Agent Session apps are a different execution model: they may use DinTalDock CLI session commands and must not instantiate an app-owned local runtime merely for consistency. They must begin discovery with `tutti agent list --json`, select an exact returned `agents[].id`, and pass it to `tutti agent start --agent-id <agent-id> ...` for starts or handoffs. Provider-specific launch families and provider-only starts are legacy compatibility, not new-session authority.
 
 ## Runtime shape
 
@@ -30,7 +30,7 @@ export const localAgentRuntime = createDefaultLocalAgentRuntime();
 
 Provider IDs are canonical opaque strings. Built-in runtime examples include
 `codex`, `claude-code`, and `tutti-agent`, but this is not an exhaustive agent
-catalog: discover selectable agents and their exact ids from the current Tutti
+catalog: discover selectable agents and their exact ids from the current DinTalDock
 catalog. The runtime accepts legacy `claude` input internally. `nexight` is
 historical activity compatibility only: apps must not register it as a new
 provider or map it to/from `tutti-agent`.
@@ -51,7 +51,7 @@ import {
 
 Do not pass a mode. When `TUTTI_CLI` is absent, catalog/composer use standalone runtime discovery and skill context is empty with `source: "standalone"`. When `TUTTI_CLI` exists, the kit uses it. A configured CLI failure is a typed error and never silently falls back.
 
-In a Tutti-hosted process, daemon Agent Targets own agent visibility. A disabled target is omitted by the CLI catalog, and the kit must not add it back from local runtime detection. Composer and Skill requests for a disabled agent id fail before discovery or materialization. Standalone detection is used only when Tutti CLI is genuinely absent.
+In a DinTalDock-hosted process, daemon Agent Targets own agent visibility. A disabled target is omitted by the CLI catalog, and the kit must not add it back from local runtime detection. Composer and Skill requests for a disabled agent id fail before discovery or materialization. Standalone detection is used only when DinTalDock CLI is genuinely absent.
 
 The app does not use daemon URL, server credential, workspace identity, or app identity for Agent catalog/composer queries. Those values may still be required for unrelated app-scoped resources.
 
@@ -62,7 +62,7 @@ For each run:
 1. Generate a stable run ID, select an exact agent target id from the facade, and derive its runtime provider from that catalog entry.
 2. Await `createManagedAgentRunContextFromHeaders(...)` directly. It reads and validates the managed credential, canonicalizes supported legacy input internally, creates a safe managed cwd, and rejects unsupported managed providers. The app must not pre-read the credential or perform a separate provider-support precheck.
 3. When no managed header exists, use an app-owned local cwd.
-4. Load Tutti skill context when platform skills are useful. Omit browser/computer capability flags unless the app actually wires those tools and trusted server-side policy enables them.
+4. Load DinTalDock skill context when platform skills are useful. Omit browser/computer capability flags unless the app actually wires those tools and trusted server-side policy enables them.
 5. Create a run-scoped MCP/tool gateway and prompt envelope.
 6. Call the local runtime with the same canonical provider ID. Always omit
    `permission`: Workspace Apps do not expose a permission selector. The SDK
@@ -70,7 +70,7 @@ For each run:
 7. Adapt events to the app stream and persist only session/resume metadata.
 8. Revoke gateway tokens and clean app-owned temporary files in `finally`.
 
-Workspace apps do not present, persist, or pass a permission selection. Omit `permission` from every run input; the kit applies the Workspace App default of full access. Permission choices such as `auto` remain part of Tutti AgentGUI and interactive CLI, not the Workspace App integration surface. Never add a permission picker to an app to mirror daemon composer options.
+Workspace apps do not present, persist, or pass a permission selection. Omit `permission` from every run input; the kit applies the Workspace App default of full access. Permission choices such as `auto` remain part of DinTalDock AgentGUI and interactive CLI, not the Workspace App integration surface. Never add a permission picker to an app to mirror daemon composer options.
 
 Skeleton:
 
@@ -132,7 +132,7 @@ The runtime call intentionally omits `permission`. Workspace Apps default to
 SDK-owned `full-access`: Claude receives `bypassPermissions`, Codex receives its
 unrestricted mode, and ACP permission requests are approved. Do not reproduce
 those mappings or inject a default mode in app code. If an App exposes a
-permission selector, remove it. Provider permission modes belong to Tutti's
+permission selector, remove it. Provider permission modes belong to DinTalDock's
 host-owned Agent GUI and manual CLI flows, not the Workspace App integration
 contract.
 
@@ -154,7 +154,7 @@ const tuttiContext = await loadTuttiAgentSkillContext({
 ```
 
 Only pass `true` from trusted server-side capability policy. These booleans
-filter the Skill guidance returned by Tutti; they do **not** install a tool,
+filter the Skill guidance returned by DinTalDock; they do **not** install a tool,
 grant an OS permission, launch a browser, or bypass the app's authorization.
 Omit the fields when the capability is unavailable. Do not add placeholder
 policy variables merely to satisfy this example.
@@ -225,4 +225,4 @@ Add tests for:
 - absence of raw Agent catalog clients, provider alias helpers, and dependency patch scripts.
 - absence of app permission selectors, permission persistence, and run-level permission arguments.
 
-For a real smoke test inside Tutti, load the catalog, one agent's composer options, and skill context before running a narrow cancellable prompt with no irreversible side effects.
+For a real smoke test inside DinTalDock, load the catalog, one agent's composer options, and skill context before running a narrow cancellable prompt with no irreversible side effects.

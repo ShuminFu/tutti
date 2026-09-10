@@ -1,6 +1,6 @@
 ---
 name: workspace-app
-description: Use for `mention://workspace-app/<appId>?workspaceId=...` links to map a workspace app id to exact entries in the injected Tutti command guide. This skill is not a CLI scope.
+description: Use for `mention://workspace-app/<appId>?workspaceId=...` links to map a workspace app id to exact entries in the injected DinTalDock command guide. This skill is not a CLI scope.
 ---
 
 # Workspace App
@@ -24,7 +24,7 @@ Do not infer app behavior from the mention label alone.
 
 ## Context Recovery
 
-After reading the mention query, recover the smallest useful app context through Tutti CLI:
+After reading the mention query, recover the smallest useful app context through DinTalDock CLI:
 
 1. If the user explicitly asks to open or show the mentioned app window, or confirms the app window should be opened, {{if has "workspace-apps.app.open"}}use `{{command "workspace-apps.app.open" (args "app-id" "<appId>")}}` for the mentioned app.{{else}}report that the current Host advertises no app-window command; do not guess one.{{end}}
 2. Do not call {{if has "workspace-apps.app.open"}}`{{path "workspace-apps.app.open"}}`{{else}}an app-window command{{end}} or app-specific open commands such as `{{.CLICommand}} <scope> open` by default. For ordinary app work, prefer the app-specific CLI command that inspects, queries, updates, starts, or executes the requested operation. After generated media succeeds, render it inline with Markdown instead of opening the app, unless the user asked to open or show the app window.

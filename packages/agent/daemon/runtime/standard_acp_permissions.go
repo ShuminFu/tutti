@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// RNDMASTER_ACP_AUTO_PERMISSION is the managed Tutti source marker for
+// RNDMASTER_ACP_AUTO_PERMISSION is the managed DinTalDock source marker for
 // resolving session/request_permission from the RnDMaster runtime contract
 // when the target has no permission tier.
 const RNDMASTER_ACP_AUTO_PERMISSION = "RNDMASTER_ACP_AUTO_PERMISSION"

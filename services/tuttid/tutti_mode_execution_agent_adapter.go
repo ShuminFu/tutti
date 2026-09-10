@@ -202,7 +202,7 @@ func (observer tuttiModeSourceTurnActivityObserver) ObserveRootTurnSettled(
 	); err != nil {
 		slog.WarnContext(
 			ctx,
-			"observe Tutti mode source Agent Turn failed",
+			"observe DinTalDock mode source Agent Turn failed",
 			"event", "tutti_mode_execution.source_agent_turn_observation_failed",
 			"workspaceId", workspaceID,
 			"agentSessionId", sessionID,
@@ -240,7 +240,7 @@ func (observer tuttiModeMainWakeTurnObserver) ObserveRootTurnSettled(
 		ctx, workspaceID, sessionID, turn.TurnID,
 		time.UnixMilli(turn.SettledAtUnixMS).UTC(),
 	); err != nil {
-		slog.WarnContext(ctx, "observe Tutti mode main wake Turn settlement failed",
+		slog.WarnContext(ctx, "observe DinTalDock mode main wake Turn settlement failed",
 			"event", "tutti_mode_execution.main_wake_turn_settlement_failed",
 			"workspaceId", workspaceID,
 			"agentSessionId", sessionID,
@@ -339,7 +339,7 @@ func repairTuttiModeMainWakesAtStartup(
 	if err := recoverer.PrepareStartupMainWakeRecovery(
 		ctx, workspaceID,
 	); err != nil {
-		slog.WarnContext(ctx, "recover Tutti mode main wakes at startup failed",
+		slog.WarnContext(ctx, "recover DinTalDock mode main wakes at startup failed",
 			"event", "tutti_mode_execution.main_wake_startup_recovery_failed",
 			"workspaceId", workspaceID,
 			"error", err,

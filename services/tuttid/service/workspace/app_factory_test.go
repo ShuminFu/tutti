@@ -483,7 +483,7 @@ func TestAppFactoryServiceCreateUsesDraftDirAndReferenceContext(t *testing.T) {
 		t.Fatalf("initial prompt should not inline factory context:\n%s", prompt)
 	}
 	for _, forbidden := range []string{
-		"Create this Tutti workspace app from the user request below.",
+		"Create this DinTalDock workspace app from the user request below.",
 		"User request:",
 		"Factory context:",
 		"App Factory Context",
@@ -518,7 +518,7 @@ func TestAppFactoryServiceCreateUsesDraftDirAndReferenceContext(t *testing.T) {
 	if mentionContext.Action != "create" {
 		t.Fatalf("context action = %q, want create", mentionContext.Action)
 	}
-	if mentionContext.Task != "Create a Tutti workspace app package under the output packageRoot directory." {
+	if mentionContext.Task != "Create a DinTalDock workspace app package under the output packageRoot directory." {
 		t.Fatalf("context task = %q", mentionContext.Task)
 	}
 	if mentionContext.Output.PackageRoot != appFactoryPackageRootRelativePath {
@@ -563,14 +563,14 @@ func TestAppFactoryServiceCreateUsesDraftDirAndReferenceContext(t *testing.T) {
 		t.Fatalf("context workspace files should be readonly by default")
 	}
 	constraints := strings.Join(mentionContext.Constraints, "\n")
-	if len(mentionContext.Constraints) == 0 || !strings.Contains(constraints, "Do not assume hidden Tutti daemon internals") {
+	if len(mentionContext.Constraints) == 0 || !strings.Contains(constraints, "Do not assume hidden DinTalDock daemon internals") {
 		t.Fatalf("context constraints = %#v", mentionContext.Constraints)
 	}
 	for _, want := range []string{
 		"Default new apps to a Node server",
 		"@tutti-os/agent-acp-kit",
 		"raw TUTTI_CLI agent commands or session polling",
-		"current Tutti Agent Target catalog",
+		"current DinTalDock Agent Target catalog",
 		"exact agent ids as selection identity",
 		"dynamic-agent-providers.md",
 	} {
@@ -1048,7 +1048,7 @@ func TestAppFactoryValidationRejectsAgentsFileWithOnlyRuntimeManagedBlock(t *tes
 	if err := os.WriteFile(filepath.Join(packageDir, "bootstrap.sh"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatalf("write bootstrap: %v", err)
 	}
-	managedOnly := tuttiRuntimeManagedBlockBegin + "\n# Tutti Runtime\n" + tuttiRuntimeManagedBlockEnd + "\n"
+	managedOnly := tuttiRuntimeManagedBlockBegin + "\n# DinTalDock Runtime\n" + tuttiRuntimeManagedBlockEnd + "\n"
 	if err := os.WriteFile(filepath.Join(packageDir, "AGENTS.md"), []byte(managedOnly), 0o644); err != nil {
 		t.Fatalf("write AGENTS.md: %v", err)
 	}

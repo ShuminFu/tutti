@@ -3,7 +3,7 @@ name: tutti-handoff
 description: Use for any turn that mentions another agent (`mention://agent-target/...`) where work may move between agents, and for follow-up turns about work already handed to another agent session in this conversation — deciding whether to hand off, which task to hand off, how results come back, handling launch failures, and routing follow-up instructions after a delegation. A `mention://agent-session/...` link on its own is a context reference, not a handoff trigger.
 ---
 
-# Tutti Agent Handoff
+# DinTalDock Agent Handoff
 
 This skill is the handoff contract between agents: who executes, what gets handed off, how results return, and where follow-ups go. Use `$tutti-cli` for command syntax and the command guide; this skill decides behavior, not flags.
 

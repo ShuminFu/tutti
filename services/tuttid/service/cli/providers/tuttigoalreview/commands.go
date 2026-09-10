@@ -13,7 +13,7 @@ import (
 )
 
 type verdictInput struct {
-	IssueID               string `cli:"issue-id" validate:"required" description:"Tutti-owned Issue id."`
+	IssueID               string `cli:"issue-id" validate:"required" description:"DinTalDock-owned Issue id."`
 	ReviewID              string `cli:"review-id" validate:"required" description:"Durable review operation id from the reviewer prompt."`
 	CheckpointID          string `cli:"checkpoint-id" validate:"required" description:"Exact Goal Review checkpoint."`
 	ExpectedGraphRevision int64  `cli:"expected-graph-revision" validate:"required,min=1" description:"Current execution graph revision."`
@@ -27,7 +27,7 @@ func (p Provider) newVerdictCommand() cliservice.Command {
 		ID:          appID + ".goal-review.verdict",
 		Path:        []string{"goal-review", "verdict"},
 		Summary:     "Submit a structured Goal Review verdict",
-		Description: "Submit advisory evidence from the exact dedicated reviewer Session and Turn. This capability cannot mutate or complete the Tutti Mode execution.",
+		Description: "Submit advisory evidence from the exact dedicated reviewer Session and Turn. This capability cannot mutate or complete the DinTalDock Mode execution.",
 		Kind:        framework.KindAction,
 		Visibility:  cliservice.CapabilityVisibilityIntegration,
 		Workspace:   framework.WorkspaceRequired,
@@ -52,7 +52,7 @@ func (p Provider) runVerdict(
 	input verdictInput,
 ) (any, error) {
 	if p.verdicts == nil || p.turns == nil {
-		return nil, cliservice.ServiceUnavailableError("Tutti Goal Review service is unavailable", nil)
+		return nil, cliservice.ServiceUnavailableError("DinTalDock Goal Review service is unavailable", nil)
 	}
 	sessionID := strings.TrimSpace(invoke.Request.Context.AgentSessionID)
 	if sessionID == "" {

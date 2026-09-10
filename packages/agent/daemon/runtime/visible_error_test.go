@@ -198,7 +198,7 @@ func TestVisibleFailureCodeClassifiesInsufficientCredits(t *testing.T) {
 		`unexpected status 402 Payment Required: {"error":{"message":"insufficient credits","type":"billing_error","code":"insufficient_credits"}}`,
 		`Kimi API request failed: 402 Payment Required: OAuth credentials rejected`,
 		`Provider request failed because the account balance is insufficient`,
-		`You've hit your usage limit. Insufficient credits. View Tutti plans at https://tutti.sh/profile/plan, or try again later.`,
+		`You've hit your usage limit. Insufficient credits. View DinTalDock plans at https://tutti.sh/profile/plan, or try again later.`,
 	} {
 		if got := visibleFailureCode(detail); got != "insufficient_credits" {
 			t.Fatalf("visibleFailureCode(%q) = %q, want insufficient_credits", detail, got)
@@ -224,7 +224,7 @@ func TestVisibleFailureCodeClassifiesSubscriptionAndQuotaBeforeAuthWrapper(t *te
 
 func TestVisibleFailureContentDescribesProviderInsufficientCredits(t *testing.T) {
 	got := visibleFailureContent(ProviderTuttiAgent, "turn", "insufficient_credits")
-	want := "Tutti Agent could not continue because the account has insufficient credits or balance."
+	want := "DinTalDock Agent could not continue because the account has insufficient credits or balance."
 	if got != want {
 		t.Fatalf("visibleFailureContent() = %q, want %q", got, want)
 	}

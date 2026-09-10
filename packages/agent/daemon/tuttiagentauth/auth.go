@@ -1,4 +1,4 @@
-// Package tuttiagentauth owns the host-neutral Tutti Agent credential
+// Package tuttiagentauth owns the host-neutral DinTalDock Agent credential
 // reconciliation order. Account sessions, credential paths, process execution,
 // and VM transport remain host adapters.
 package tuttiagentauth

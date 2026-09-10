@@ -79,7 +79,7 @@ func (adapter tuttiModeReviewerAgentAdapter) SendReviewer(
 	visible := false
 	browserUse := false
 	computerUse := false
-	title := "Tutti Mode Goal Review"
+	title := "DinTalDock Mode Goal Review"
 	permissionModeID := "read-only"
 	result, err := adapter.Sessions.CreateWithResult(
 		ctx,
@@ -215,7 +215,7 @@ func (observer tuttiModeReviewerTurnObserver) ObserveRootTurnSettled(
 	}
 	slog.WarnContext(
 		ctx,
-		"observe Tutti mode reviewer Turn settlement failed",
+		"observe DinTalDock mode reviewer Turn settlement failed",
 		"event", "tutti_mode_execution.reviewer_turn_settlement_failed",
 		"workspaceId", workspaceID,
 		"agentSessionId", sessionID,

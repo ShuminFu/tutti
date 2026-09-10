@@ -195,7 +195,7 @@ func (p Provider) newIssueCreateFromPlanCommand() cliservice.Command {
 		ID:          appID + ".issue.create-from-plan",
 		Path:        []string{"issue", "create-from-plan"},
 		Summary:     "Create an executable issue from a reviewed plan",
-		Description: "Persist a reviewed traditional Plan as one issue with an ordered, validated task dependency graph. Tutti mode plans are materialized only by the daemon workflow after checkpoint approval.",
+		Description: "Persist a reviewed traditional Plan as one issue with an ordered, validated task dependency graph. DinTalDock mode plans are materialized only by the daemon workflow after checkpoint approval.",
 		Kind:        framework.KindAction,
 		Workspace:   framework.WorkspaceRequired,
 		Workspaces:  p.workspaces,

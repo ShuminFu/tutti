@@ -42,7 +42,7 @@ func defaultStateDir() string {
 }
 
 // IsDevelopmentEnv reports whether this process runs against the development
-// state root, which also selects the development Tutti CLI binary name.
+// state root, which also selects the development DinTalDock CLI binary name.
 func IsDevelopmentEnv() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("TUTTI_ENV"))) {
 	case "dev", "development", "local":

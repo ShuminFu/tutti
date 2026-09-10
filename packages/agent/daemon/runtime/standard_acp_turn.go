@@ -101,7 +101,7 @@ func (a *standardACPAdapter) Exec(
 		})
 	}
 	// ACP v1 has no developer/system or synthetic-message channel. Keep the
-	// canonical Tutti-owned context in the provider-only prompt payload; the
+	// canonical DinTalDock-owned context in the provider-only prompt payload; the
 	// activity event above is still projected exclusively from the original
 	// user content.
 	acpPromptContent = appendTuttiModeHostContextPrompt(

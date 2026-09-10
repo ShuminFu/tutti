@@ -77,13 +77,13 @@ func TestMigratedTuttiAgentDescriptorRequiresRefreshCapableVersion(t *testing.T)
 		t.Fatalf("Status.Install = %#v", descriptor.Status.Install)
 	}
 	if slices.Contains(descriptor.ComposerProfile.Capabilities, CapabilityRateLimits) {
-		t.Fatal("Tutti Agent must not advertise ChatGPT rate limits")
+		t.Fatal("DinTalDock Agent must not advertise ChatGPT rate limits")
 	}
 	if descriptor.ComposerProfile.ReasoningEffort ||
 		descriptor.ComposerProfile.Speed ||
 		descriptor.ComposerProfile.ConfigOptionIDs.Reasoning != "" ||
 		descriptor.ComposerProfile.ConfigOptionIDs.Speed != "" {
-		t.Fatalf("Tutti Agent must hide provider-wide reasoning and speed controls: %#v", descriptor.ComposerProfile)
+		t.Fatalf("DinTalDock Agent must hide provider-wide reasoning and speed controls: %#v", descriptor.ComposerProfile)
 	}
 	if descriptor.ComposerProfile.CapabilityCatalog.Kind != CapabilityCatalogKindAppServerSkills {
 		t.Fatalf("CapabilityCatalog = %#v, want skills-only app-server catalog", descriptor.ComposerProfile.CapabilityCatalog)

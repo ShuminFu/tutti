@@ -21,20 +21,20 @@ func workspaceAppCLIPathForPlatform(platform string) (string, error) {
 
 	configured := strings.TrimSpace(os.Getenv("TUTTI_WORKSPACE_APP_CLI_PATH"))
 	if configured == "" {
-		return "", fmt.Errorf("native Tutti CLI path is not configured")
+		return "", fmt.Errorf("native DinTalDock CLI path is not configured")
 	}
 	if !filepath.IsAbs(configured) {
-		return "", fmt.Errorf("native Tutti CLI path must be absolute")
+		return "", fmt.Errorf("native DinTalDock CLI path must be absolute")
 	}
 	if !strings.EqualFold(filepath.Ext(configured), ".exe") {
-		return "", fmt.Errorf("native Tutti CLI path must point to an .exe")
+		return "", fmt.Errorf("native DinTalDock CLI path must point to an .exe")
 	}
 	info, err := os.Stat(configured)
 	if err != nil {
-		return "", fmt.Errorf("inspect native Tutti CLI: %w", err)
+		return "", fmt.Errorf("inspect native DinTalDock CLI: %w", err)
 	}
 	if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("native Tutti CLI path must point to a regular file")
+		return "", fmt.Errorf("native DinTalDock CLI path must point to a regular file")
 	}
 	return configured, nil
 }

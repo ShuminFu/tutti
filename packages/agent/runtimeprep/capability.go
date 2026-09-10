@@ -116,8 +116,8 @@ func Resolve(ctx context.Context, input PrepareInput, profile DeploymentProfile,
 func StandardProfile() DeploymentProfile {
 	return DeploymentProfile{
 		Name:      "tutti-standard",
-		Title:     "Tutti Runtime",
-		Intro:     "This directory is being used by a Tutti AgentGUI session.",
+		Title:     "DinTalDock Runtime",
+		Intro:     "This directory is being used by a DinTalDock AgentGUI session.",
 		HostFacts: DefaultHostFacts(),
 		Packs: []CapabilityPack{
 			CoreSkillsPack(), ConnectorDiscoveryPack(), TuttiDesktopHostPack(), BrowserUsePack(), ComputerUsePack(),
@@ -145,9 +145,9 @@ func ConnectorDiscoveryPack() CapabilityPack {
 	}}
 }
 
-// CoreSkillsPack contributes the provider-neutral Tutti CLI and mention
+// CoreSkillsPack contributes the provider-neutral DinTalDock CLI and mention
 // routing skills. Deployment profiles should include this pack when they want
-// the shared skills without inheriting Tutti desktop-host policy.
+// the shared skills without inheriting DinTalDock desktop-host policy.
 func CoreSkillsPack() CapabilityPack {
 	return CapabilityPack{Name: "tutti-core-skills", Resolve: func(_ context.Context, input PrepareInput) (CapabilityContribution, error) {
 		tuttiCLI, err := tuttiCLISkill(input)
@@ -193,7 +193,7 @@ func CoreSkillsPack() CapabilityPack {
 	}}
 }
 
-// TuttiDesktopHostPack contributes policy that is true for the local Tutti
+// TuttiDesktopHostPack contributes policy that is true for the local DinTalDock
 // desktop host but not necessarily for other deployments such as managed VMs.
 func TuttiDesktopHostPack() CapabilityPack {
 	return CapabilityPack{Name: "tutti-desktop-host", Resolve: func(_ context.Context, input PrepareInput) (CapabilityContribution, error) {
@@ -340,10 +340,10 @@ func resolveCapabilities(ctx context.Context, input PrepareInput, profile Deploy
 		HostFacts: hostFacts,
 	}
 	if resolved.Title == "" {
-		resolved.Title = "Tutti Runtime"
+		resolved.Title = "DinTalDock Runtime"
 	}
 	if resolved.Intro == "" {
-		resolved.Intro = "This directory is being used by a Tutti AgentGUI session."
+		resolved.Intro = "This directory is being used by a DinTalDock AgentGUI session."
 	}
 	packNames := make(map[string]struct{}, len(profile.Packs))
 	for _, pack := range profile.Packs {

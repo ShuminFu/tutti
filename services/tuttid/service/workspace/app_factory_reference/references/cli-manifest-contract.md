@@ -1,6 +1,6 @@
-# Tutti App CLI Manifest Contract
+# DinTalDock App CLI Manifest Contract
 
-Create `tutti.cli.json` when the app exposes capabilities to the Tutti ecosystem. The app manifest must declare:
+Create `tutti.cli.json` when the app exposes capabilities to the DinTalDock ecosystem. The app manifest must declare:
 
 ```json
 {
@@ -52,17 +52,17 @@ Shape:
 Rules:
 
 - `scope` is required and may differ from `appId`. Agent and app-mention integrations must match commands by app id metadata, then invoke the listed CLI scope; they must not assume `scope == appId`.
-- If the user asks to connect the app to the Tutti ecosystem, `tutti.cli.json` is required and must expose at least one useful command.
+- If the user asks to connect the app to the DinTalDock ecosystem, `tutti.cli.json` is required and must expose at least one useful command.
 - `scope` and every command path segment must use lowercase letters, numbers, and hyphen only.
 - `description` is optional. When present, it describes the CLI scope as a whole for app-level discovery surfaces such as `tutti --help` and `@app` mentions.
 - Command `path` must not repeat `scope`.
 - Command `visibility` is optional. It may be `public` or `integration`; when omitted, it defaults to `public`.
-- `public` commands appear in ordinary Tutti CLI help, Agent command guides, and command discovery.
+- `public` commands appear in ordinary DinTalDock CLI help, Agent command guides, and command discovery.
 - `integration` commands are hidden from ordinary user and Agent discovery, but are still available to app-runtime integrations that call local capabilities through `$TUTTI_CLI`.
 - `visibility` is not an authorization boundary. Do not use `integration` for secrets, privileged operations, or commands that must be blocked from a user who already knows the command.
 - `documentation` is optional. When present, `documentation.file` must be a relative package path to app-owned command documentation, usually `COMMANDS.md`. CLI capabilities expose the resolved absolute documentation path for help output.
 - Handler `kind` must be `http`, `method` must be `POST`, and `path` must start with `/tutti/cli/`.
-- Do not declare host, port, or full URLs; Tutti routes to the app runtime port.
+- Do not declare host, port, or full URLs; DinTalDock routes to the app runtime port.
 - Handler `timeoutMs`, when present, must be an integer between `1000` and `600000`.
 - Handler `timeoutMs` is a per-invocation transport budget, not a workflow deadline or total CLI wait timeout.
 - Supported input schema is a small object-only subset: `type`, `properties`, `required`, and property `description`, `enum`, and `default`.
@@ -131,7 +131,7 @@ internal continuation:
 `retryAfterMs` must be between `250` and `60000`. Prefer an event-driven or
 long-polling handler when the App already has an efficient change signal. If a
 handler returns promptly, choose a retry delay that avoids a hot status-query
-loop. The Tutti CLI suppresses pending outputs, waits for the declared delay,
+loop. The DinTalDock CLI suppresses pending outputs, waits for the declared delay,
 and invokes the same command again.
 
 At a stop point, return the final JSON output without `continuation`:
@@ -149,7 +149,7 @@ At a stop point, return the final JSON output without `continuation`:
 ```
 
 Wait commands receive the common CLI flag `--timeout-ms`. It is reserved by
-Tutti and must not be declared in the App input schema. Omitting it waits until
+DinTalDock and must not be declared in the App input schema. Omitting it waits until
 a stop point. When the total deadline expires, the CLI returns exit code zero
 with a JSON result shaped like:
 
@@ -229,15 +229,15 @@ Handler rules:
 Frontend/runtime rules:
 
 - Serve every self-open route directly. Static or SPA apps should fall back to the app shell for valid app routes instead of returning 404.
-- On first open, Tutti Desktop navigates the app webview to the resolved route.
+- On first open, DinTalDock Desktop navigates the app webview to the resolved route.
 - When the app is already mounted and receives another open request, handle it with `window.tuttiExternal?.workspace?.onLaunchIntent?.((intent) => { ... })` and route the existing frontend to `intent.route`.
 - The launch intent may contain `params` and `state`, but the route remains the stable public entrypoint.
 
 Runtime request body:
 
-- Tutti posts an invoke envelope to the app handler, not the command input object directly.
+- DinTalDock posts an invoke envelope to the app handler, not the command input object directly.
 - App handlers must validate and execute `body.input` against the command `inputSchema`.
-- Keep accepting direct raw input only as an optional local-test/backward-compatibility path; do not require it for Tutti runtime calls.
+- Keep accepting direct raw input only as an optional local-test/backward-compatibility path; do not require it for DinTalDock runtime calls.
 
 Example handler request body:
 
@@ -306,4 +306,4 @@ Error response body:
 }
 ```
 
-Return a non-2xx HTTP status for errors. Tutti surfaces the `error.message` to CLI callers.
+Return a non-2xx HTTP status for errors. DinTalDock surfaces the `error.message` to CLI callers.

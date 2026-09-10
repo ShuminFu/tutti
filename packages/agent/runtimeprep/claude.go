@@ -94,9 +94,9 @@ func installClaudeTuttiPlugin(pluginDir string, input PrepareInput) error {
 	manifest := map[string]any{
 		"name":        "tutti-cli",
 		"version":     "0.1.0",
-		"description": "Tutti CLI skill for AgentGUI sessions.",
+		"description": "DinTalDock CLI skill for AgentGUI sessions.",
 		"author": map[string]string{
-			"name": "Tutti",
+			"name": "DinTalDock",
 		},
 	}
 	content, err := json.MarshalIndent(manifest, "", "  ")

@@ -259,7 +259,7 @@ func TestTuttiModeLaunchPreservesSourceRailPlacement(t *testing.T) {
 		t.Fatal("rail placement aliases the source snapshot")
 	}
 	if !launch.HideSession {
-		t.Fatal("Tutti Mode delegate launch must request a hidden session")
+		t.Fatal("DinTalDock Mode delegate launch must request a hidden session")
 	}
 }
 

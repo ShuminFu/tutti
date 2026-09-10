@@ -212,7 +212,7 @@ func (*CodexAppServerAdapter) NormalizeGoalObservation(raw map[string]any) map[s
 }
 
 // normalizedCodexGoal translates provider-specific app-server fields into the
-// canonical Tutti SessionGoal contract. Provider payloads use seconds and
+// canonical DinTalDock SessionGoal contract. Provider payloads use seconds and
 // tokensUsed; the durable/public model uses milliseconds and tokens.
 func normalizedCodexGoal(raw map[string]any) map[string]any {
 	if len(raw) == 0 {

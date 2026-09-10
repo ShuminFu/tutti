@@ -1,20 +1,20 @@
 ---
 name: tutti-workspace-app-factory
-description: "Create, convert, or repair one Tutti workspace app as either a self-contained publishable package under package/ or a Chrome-style local debug app under .tutti/dev-app/. Use for mention://workspace-app-factory/create handoffs, mention://workspace-app-factory handoffs, standalone app generation, adapting existing repositories, Load unpacked repair flows for invalid local project directories, tutti.app.json and tutti.cli.json manifests, bootstrap.sh scripts, package-local AGENTS.md, local HTTP runtimes, TUTTI_APP_* host/port/storage rules, healthchecks, app assets, i18n, validation, and optional Tutti CLI integration."
+description: "Create, convert, or repair one DinTalDock workspace app as either a self-contained publishable package under package/ or a Chrome-style local debug app under .tutti/dev-app/. Use for mention://workspace-app-factory/create handoffs, mention://workspace-app-factory handoffs, standalone app generation, adapting existing repositories, Load unpacked repair flows for invalid local project directories, tutti.app.json and tutti.cli.json manifests, bootstrap.sh scripts, package-local AGENTS.md, local HTTP runtimes, TUTTI_APP_* host/port/storage rules, healthchecks, app assets, i18n, validation, and optional DinTalDock CLI integration."
 ---
 
-# Tutti Workspace App Factory
+# DinTalDock Workspace App Factory
 
-Use this skill to create, convert, or repair one Tutti workspace app. Choose one output mode before editing:
+Use this skill to create, convert, or repair one DinTalDock workspace app. Choose one output mode before editing:
 
-- **Publishable package**: create a self-contained app under `package/`, runnable by the Tutti custom app runtime and safe to copy into a workspace app archive.
+- **Publishable package**: create a self-contained app under `package/`, runnable by the DinTalDock custom app runtime and safe to copy into a workspace app archive.
 - **Local debug app**: create a small `.tutti/dev-app/` wrapper that launches the user's existing source tree through the Chrome-style "Load unpacked" flow.
 
-When the user selected a directory in App Center and Tutti reports that it cannot be loaded, treat the task as local debug repair. Adapt the selected project by creating or fixing `.tutti/dev-app/`; do not create a zip wrapper or copy the repository into `package/` unless the user explicitly asks for release packaging.
+When the user selected a directory in App Center and DinTalDock reports that it cannot be loaded, treat the task as local debug repair. Adapt the selected project by creating or fixing `.tutti/dev-app/`; do not create a zip wrapper or copy the repository into `package/` unless the user explicitly asks for release packaging.
 
-For a full agent-enabled Tutti app repository with `apps/web`, `apps/server`, `packages/shared`, `@tutti-os/agent-acp-kit`, kit-owned `TUTTI_CLI` agent/composer discovery, dynamic local agent runtimes, MCP tool gateways, and an app-owned package builder, use `$tutti-agent-workspace-app` first. Return to this skill for the final package contract and validation. Do not invent managed-agent credential, cwd, JSB fallback, request-body credential, `CODEX_HOME`, CLI argv, app ID, token, or provider alias behavior in this factory skill; the agent app skill keeps those concerns in server-side kit calls.
+For a full agent-enabled DinTalDock app repository with `apps/web`, `apps/server`, `packages/shared`, `@tutti-os/agent-acp-kit`, kit-owned `TUTTI_CLI` agent/composer discovery, dynamic local agent runtimes, MCP tool gateways, and an app-owned package builder, use `$tutti-agent-workspace-app` first. Return to this skill for the final package contract and validation. Do not invent managed-agent credential, cwd, JSB fallback, request-body credential, `CODEX_HOME`, CLI argv, app ID, token, or provider alias behavior in this factory skill; the agent app skill keeps those concerns in server-side kit calls.
 
-If the user request needs local agent or local LLM execution, the Tutti agent catalog, or app-owned MCP/tooling, load `$tutti-agent-workspace-app` and read its `references/dynamic-agent-providers.md` and `references/agent-acp-kit.md`. Agent-enabled apps must use a Node server and `@tutti-os/agent-acp-kit`; do not implement app-owned local agent execution by shelling out to raw `$TUTTI_CLI agent ...` commands, provider-specific command families, or session polling.
+If the user request needs local agent or local LLM execution, the DinTalDock agent catalog, or app-owned MCP/tooling, load `$tutti-agent-workspace-app` and read its `references/dynamic-agent-providers.md` and `references/agent-acp-kit.md`. Agent-enabled apps must use a Node server and `@tutti-os/agent-acp-kit`; do not implement app-owned local agent execution by shelling out to raw `$TUTTI_CLI agent ...` commands, provider-specific command families, or session polling.
 
 ## Version Check And Update Reminder
 
@@ -35,7 +35,7 @@ Before generating, repairing, or validating an app package, perform a best-effor
 3. If the published skill differs from the local copy, state this at the start of the reply before doing other work:
 
    ```text
-   This Tutti skill has a newer version available. I can continue with the currently loaded copy, but updating first is recommended so the latest manifest rules and runtime guidance are used.
+   This DinTalDock skill has a newer version available. I can continue with the currently loaded copy, but updating first is recommended so the latest manifest rules and runtime guidance are used.
 
    Update the Codex plugin marketplace:
    codex plugin marketplace upgrade tutti-agent-skills
@@ -46,13 +46,13 @@ Before generating, repairing, or validating an app package, perform a best-effor
 
 4. If the user has explicitly asked to update local installs, or if the current task is itself about keeping the skill current, run the update commands that are available in the environment before continuing. Tell the user that newly installed skill content may take effect only after the next skill reload or new session.
 
-5. If the freshness check fails because network access, GitHub, `codex`, or `npx` is unavailable, mention the check was skipped or failed briefly and continue the requested Tutti app work.
+5. If the freshness check fails because network access, GitHub, `codex`, or `npx` is unavailable, mention the check was skipped or failed briefly and continue the requested DinTalDock app work.
 
 ## Required Context
 
-If the current working directory contains `context.json`, or the task includes `mention://workspace-app-factory/create` or `mention://workspace-app-factory`, operate in Tutti factory handoff mode. Read `context.json` before writing files, then follow its metadata, output rules, workspace context, and constraints exactly. Do not copy the context file into generated app outputs.
+If the current working directory contains `context.json`, or the task includes `mention://workspace-app-factory/create` or `mention://workspace-app-factory`, operate in DinTalDock factory handoff mode. Read `context.json` before writing files, then follow its metadata, output rules, workspace context, and constraints exactly. Do not copy the context file into generated app outputs.
 
-If `context.json` is absent, operate in standalone mode. Treat the current working directory as the app authoring workspace. If the user asks for local debugging, Load unpacked support, or repair of a selected project directory, create or update `.tutti/dev-app/`. Otherwise, if the directory already contains an app or repository, adapt it into a self-contained Tutti package under `package/`; if it does not, create a new self-contained package under `package/`. Infer missing metadata conservatively from the user request.
+If `context.json` is absent, operate in standalone mode. Treat the current working directory as the app authoring workspace. If the user asks for local debugging, Load unpacked support, or repair of a selected project directory, create or update `.tutti/dev-app/`. Otherwise, if the directory already contains an app or repository, adapt it into a self-contained DinTalDock package under `package/`; if it does not, create a new self-contained package under `package/`. Infer missing metadata conservatively from the user request.
 
 For publishable packages, the package root is the only generated app output directory; files outside it are scratch or coordination files and will not be published. For local debugging, `.tutti/dev-app/` is the generated dev app directory and the surrounding project source remains owned by the user repository.
 
@@ -63,10 +63,10 @@ Treat a `mention://workspace-app-factory/create` or `mention://workspace-app-fac
 Before writing files, read these bundled references:
 
 - `references/manifest-contract.md` for `tutti.app.json`.
-- `references/cli-manifest-contract.md` for `tutti.cli.json` when exposing app capabilities to the Tutti ecosystem.
+- `references/cli-manifest-contract.md` for `tutti.cli.json` when exposing app capabilities to the DinTalDock ecosystem.
 - `references/runtime-env.md` for runtime environment variables and storage ownership.
 - `references/i18n-harness.md` when the app has localized metadata, user-facing in-app copy, or an existing localization system.
-- `references/tutti-cli-commands.md` when the generated app runtime should call, combine, or expose local Tutti CLI capabilities.
+- `references/tutti-cli-commands.md` when the generated app runtime should call, combine, or expose local DinTalDock CLI capabilities.
 - `references/validation-checklist.md` for completion checks.
 
 Read `references/demos/simple-node-static-app/` only when you need a concrete complete package shape. Do not copy its demo app id, display name, description, or tags unless the user explicitly asks for the demo itself.
@@ -76,7 +76,7 @@ Read `references/demos/simple-node-static-app/` only when you need a concrete co
 For a publishable package, create or update these files under `output.packageRoot` from the context in handoff mode, or under `package/` in standalone mode:
 
 - `tutti.app.json`: valid JSON manifest matching `references/manifest-contract.md`.
-- `tutti.cli.json`: CLI manifest matching `references/cli-manifest-contract.md`, required when the user asks to connect the app to the Tutti ecosystem; otherwise create it only when `tutti.app.json` declares `cli.manifest`.
+- `tutti.cli.json`: CLI manifest matching `references/cli-manifest-contract.md`, required when the user asks to connect the app to the DinTalDock ecosystem; otherwise create it only when `tutti.app.json` declares `cli.manifest`.
 - `bootstrap.sh`: backward-compatible executable shell entrypoint that starts the app server with no arguments.
 - Platform-native binaries under `bin/<platform>/` when the package supports Windows or uses the `standalone` profile; keep all supported artifacts in the same fat package and select them from `bootstrap.sh` using `TUTTI_PLATFORM`.
 - `AGENTS.md`: package-local guidance describing layout, runtime command, endpoints, data storage, and modification rules.
@@ -92,7 +92,7 @@ For a local debug app, create or update these files under `.tutti/dev-app/` inst
 - `AGENTS.md`: dev-app guidance describing the project root, dev/watch command, host/port contract, source hot-reload ownership, and how to reload from App Center.
 - Optional app assets referenced by the manifest.
 
-Keep `.tutti/dev-app/` small. It should describe and launch the local app, not copy the whole project. Tutti Desktop can load either the `.tutti/dev-app/` directory directly or the project root that contains it.
+Keep `.tutti/dev-app/` small. It should describe and launch the local app, not copy the whole project. DinTalDock Desktop can load either the `.tutti/dev-app/` directory directly or the project root that contains it.
 
 If the task supplies exact metadata such as `appId`, version, display name, or description, copy those values exactly into `tutti.app.json`. If metadata is missing, choose conservative defaults:
 
@@ -106,7 +106,7 @@ If the task supplies exact metadata such as `appId`, version, display name, or d
 - `runtime.healthcheckPath`: `/healthz`
 - `localizationInfo`: omit unless the user asks for localized app metadata; when needed, follow `references/manifest-contract.md` and create each referenced locale file.
 
-If the user asks to connect the app to the Tutti ecosystem, expose at least one app capability through `tutti.cli.json` and declare it from `tutti.app.json`. If the app has a UI, include a business-level open command when there is a meaningful target to open, such as `open-project`, `open-file`, `open-run`, or `open-context`. The command should own the full self-open flow: accept stable domain identifiers, validate them, map them to an app-owned origin-root route, and request opening this same app through `$TUTTI_CLI` with an argv list equivalent to `--json app open --app-id "$TUTTI_APP_ID" --route ...`. `--json` is the CLI machine-readable output flag. Do not return route parameters for a caller or agent to interpret and then call `app open`; that makes the integration chain too indirect. Do not expose raw frontend route construction as the public contract; callers should invoke the app's business open command without needing to know the app's internal router.
+If the user asks to connect the app to the DinTalDock ecosystem, expose at least one app capability through `tutti.cli.json` and declare it from `tutti.app.json`. If the app has a UI, include a business-level open command when there is a meaningful target to open, such as `open-project`, `open-file`, `open-run`, or `open-context`. The command should own the full self-open flow: accept stable domain identifiers, validate them, map them to an app-owned origin-root route, and request opening this same app through `$TUTTI_CLI` with an argv list equivalent to `--json app open --app-id "$TUTTI_APP_ID" --route ...`. `--json` is the CLI machine-readable output flag. Do not return route parameters for a caller or agent to interpret and then call `app open`; that makes the integration chain too indirect. Do not expose raw frontend route construction as the public contract; callers should invoke the app's business open command without needing to know the app's internal router.
 
 ## Runtime Rules
 
@@ -123,11 +123,11 @@ The runtime must:
 - Write scratch/runtime files only under `$TUTTI_APP_RUNTIME_DIR`.
 - Write logs only under `$TUTTI_APP_LOG_DIR` when backend/server-side file logs are needed.
 - Store reusable app-managed binaries only under `$TUTTI_APP_TOOLCHAIN_ROOT`.
-- Prefer `window.tuttiExternal?.logs?.write?.()` for browser-side diagnostics in Tutti Desktop; reserve `$TUTTI_APP_LOG_DIR` for backend process logs.
+- Prefer `window.tuttiExternal?.logs?.write?.()` for browser-side diagnostics in DinTalDock Desktop; reserve `$TUTTI_APP_LOG_DIR` for backend process logs.
 - Do not expect a workspace-root environment variable. Use `$TUTTI_WORKSPACE_ID` and `$TUTTI_CLI` for explicit workspace-scoped capabilities, and treat caller-supplied absolute file paths as opaque inputs rather than deriving a root from them.
 - Launch Python with `$TUTTI_APP_PYTHON` and Node with `$TUTTI_APP_NODE`; use `$TUTTI_APP_NPM` for npm install/build work.
 - When the app exposes an open command, support the routed pages in the app runtime itself: direct navigation to the route must render the intended page, and an already-mounted frontend should handle repeated open intents through `window.tuttiExternal?.workspace?.onLaunchIntent?.(...)`.
-- When the generated app calls another local Tutti capability at runtime, use `$TUTTI_CLI` and follow `references/tutti-cli-commands.md`.
+- When the generated app calls another local DinTalDock capability at runtime, use `$TUTTI_CLI` and follow `references/tutti-cli-commands.md`.
 - Read the current UI locale from the optional host-injected app context when localized in-app copy is needed. Do not pass locale in the launch URL query.
 - Keep localized in-app copy behind stable keys and use the harness pattern in `references/i18n-harness.md` so future edits can check locale parity.
 - Use CSS `prefers-color-scheme` / `matchMedia("(prefers-color-scheme: dark)")` for dark/light rendering. Do not pass theme in the launch URL query.
@@ -137,17 +137,17 @@ The runtime must:
 
 For a full agent-enabled app repository, prefer `$tutti-agent-workspace-app` first. When this skill still needs to package or repair an app that already uses `@tutti-os/agent-acp-kit`, keep the app in control of agent policy:
 
-- Keep the generic `@tutti-os/agent-acp-kit` runtime path product-neutral. Tutti-specific agent catalog, composer, and skill discovery stays behind the explicit `@tutti-os/agent-acp-kit/tutti` subpath; app code owns only product policy and DTO projection.
+- Keep the generic `@tutti-os/agent-acp-kit` runtime path product-neutral. DinTalDock-specific agent catalog, composer, and skill discovery stays behind the explicit `@tutti-os/agent-acp-kit/tutti` subpath; app code owns only product policy and DTO projection.
 - Use a Node server for the app host process. Do not start with a Python server and plan to migrate later.
-- To give the app's local agent runs access to Tutti's dynamic CLI skills, prefer the `@tutti-os/agent-acp-kit/tutti` helper instead of hand-writing `$TUTTI_CLI agent tutti-cli-skill-bundle` execution and response parsing in each app.
-- Use `loadTuttiAgentSkillContext(...)` from the app host process. Pass the selected agent target id, run id, workspace cwd, and optional Tutti CLI command configuration such as `commandEnvNames`; provider is derived from the selected catalog entry.
+- To give the app's local agent runs access to DinTalDock's dynamic CLI skills, prefer the `@tutti-os/agent-acp-kit/tutti` helper instead of hand-writing `$TUTTI_CLI agent tutti-cli-skill-bundle` execution and response parsing in each app.
+- Use `loadTuttiAgentSkillContext(...)` from the app host process. Pass the selected agent target id, run id, workspace cwd, and optional DinTalDock CLI command configuration such as `commandEnvNames`; provider is derived from the selected catalog entry.
 - Pass `tuttiContext.skillManifest` into `runtime.run({ ..., skillManifest })`, merging it with app-owned skills when needed.
 - Treat `tuttiContext.recommendedSystemPrompt?.content` as advisory raw prompt content. The app may merge it into its own `systemPrompt`, edit it, place it elsewhere, or ignore it. Do not inject it silently, and do not reintroduce duplicated CLI parsing unless the installed kit lacks the helper.
-- Keep run-scoped app tools and MCP credentials app-owned. Do not pass broad Tutti daemon credentials or app secrets directly to the agent process.
+- Keep run-scoped app tools and MCP credentials app-owned. Do not pass broad DinTalDock daemon credentials or app secrets directly to the agent process.
 
-Agent app main flows must call `loadTuttiAgentCatalog` and lazy `loadTuttiAgentComposerOptions` from `@tutti-os/agent-acp-kit/tutti`. Do not use the deprecated provider-catalog projection because it cannot represent multiple agents sharing a provider. The kit automatically uses `TUTTI_CLI` inside Tutti and standalone runtime detection when the CLI is absent. App code must not pass a mode, app ID, daemon URL, token, provider alias map, or CLI arguments. Follow `$tutti-agent-workspace-app` and its `references/dynamic-agent-providers.md`. Show every returned agent, persist exact agent target ids, keep unavailable agents disabled with a reason, and treat provider as derived runtime metadata. A configured CLI failure is explicit; never synthesize a fixed catalog.
+Agent app main flows must call `loadTuttiAgentCatalog` and lazy `loadTuttiAgentComposerOptions` from `@tutti-os/agent-acp-kit/tutti`. Do not use the deprecated provider-catalog projection because it cannot represent multiple agents sharing a provider. The kit automatically uses `TUTTI_CLI` inside DinTalDock and standalone runtime detection when the CLI is absent. App code must not pass a mode, app ID, daemon URL, token, provider alias map, or CLI arguments. Follow `$tutti-agent-workspace-app` and its `references/dynamic-agent-providers.md`. Show every returned agent, persist exact agent target ids, keep unavailable agents disabled with a reason, and treat provider as derived runtime metadata. A configured CLI failure is explicit; never synthesize a fixed catalog.
 
-Do not assume a Tutti API token, browser extension, daemon internals, or
+Do not assume a DinTalDock API token, browser extension, daemon internals, or
 undocumented desktop APIs. Generated apps may consume the documented
 `window.tuttiExternal` browser surfaces described in `references/runtime-env.md`.
 Use `agentActivity` only when the app intentionally orchestrates the official
@@ -173,25 +173,25 @@ Use this workflow when the user asks for local app debugging, load-unpacked beha
 3. In `bootstrap.sh`, read `$TUTTI_APP_HOST` and `$TUTTI_APP_PORT`; exit with a clear error if the port is missing. The daemon owns port allocation.
 4. If the app server lives in the project root, compute it from the dev app directory, for example `PROJECT_ROOT="$(cd "$TUTTI_APP_PACKAGE_DIR/../.." && pwd)"`, then `cd "$PROJECT_ROOT"` before launching.
 5. Translate the project's known dev/watch command explicitly. For example, run Vite with host and port flags, run Next with `-H "$TUTTI_APP_HOST" -p "$TUTTI_APP_PORT"`, or run backend servers through their watch mode such as `tsx watch`, `nodemon`, `uvicorn --reload`, `air`, or `cargo watch`. Do not depend on daemon-side framework detection.
-6. Treat source hot-reload as the project dev server's responsibility. The Tutti host does not watch the user's project root and should not be expected to restart on normal frontend or backend source edits. If a server-side project lacks a watch/dev command, add or document a project-owned one such as `dev:tutti` rather than adding daemon-side source watching.
+6. Treat source hot-reload as the project dev server's responsibility. The DinTalDock host does not watch the user's project root and should not be expected to restart on normal frontend or backend source edits. If a server-side project lacks a watch/dev command, add or document a project-owned one such as `dev:tutti` rather than adding daemon-side source watching.
 7. Treat `.tutti/dev-app/` files as host contract configuration. Changes to `tutti.app.json`, `tutti.cli.json`, `bootstrap.sh`, assets, or dev-app `AGENTS.md` require App Center's local-dev Reload action so the daemon rereads the manifest and restarts the runtime when needed.
 8. Use `$TUTTI_APP_NODE` and `$TUTTI_APP_NPM` for Node-based dev servers. Do not call system `node`, `npm`, `pnpm`, or `yarn` directly from `bootstrap.sh` unless the user explicitly owns that dependency and accepts the portability tradeoff.
-9. Document the source project entrypoint, the dev/watch command, which edits hot-reload through the project dev server, which edits require App Center Reload, and the fact that Tutti Desktop loads the project root or `.tutti/dev-app/` in `.tutti/dev-app/AGENTS.md`.
+9. Document the source project entrypoint, the dev/watch command, which edits hot-reload through the project dev server, which edits require App Center Reload, and the fact that DinTalDock Desktop loads the project root or `.tutti/dev-app/` in `.tutti/dev-app/AGENTS.md`.
 10. Run `scripts/check_local_dev_app.py <project-root-or-.tutti/dev-app>` from this skill after creating or repairing `.tutti/dev-app/`. Fix every reported failure before saying the local debug repair is complete.
-11. Tell the user to retry App Center's Load unpacked action on the project root or `.tutti/dev-app/`. Do not auto-open a Tutti app window.
+11. Tell the user to retry App Center's Load unpacked action on the project root or `.tutti/dev-app/`. Do not auto-open a DinTalDock app window.
 
 The old zip/wrapper conversion approach is a fallback for compatibility or release packaging work only. Do not recommend it for normal local debugging; prefer `.tutti/dev-app/` plus Load unpacked.
 
 ## Conversion Workflow
 
-When converting an existing repository into a Tutti workspace app package:
+When converting an existing repository into a DinTalDock workspace app package:
 
 1. Inspect the repository shape first: package manifests, lockfiles, source directories, existing start/build scripts, ports, static assets, storage paths, and localization files.
 2. If the user wants local debugging, use the Local Debug Workflow and generate `.tutti/dev-app/` instead of a package wrapper.
 3. For publishable packages, create a self-contained package under `package/` that copies the smallest runnable subset of the existing project. Do not reference source files outside `package/`, and do not rewrite the original repository outside `package/` unless the user explicitly asks.
 4. Translate the existing start command into `bootstrap.sh`. If the project needs install or build work for a publishable package, put that in executable `prepare.sh` and keep `bootstrap.sh` launch-only.
-5. Replace hard-coded host, port, data, runtime, and log paths with the Tutti runtime environment variables from `references/runtime-env.md`.
-6. If the user asks to connect the app to the Tutti ecosystem, expose stable app capabilities through `tutti.cli.json`; otherwise, if the project already exposes commands, convert the stable user-facing commands into `tutti.cli.json`.
+5. Replace hard-coded host, port, data, runtime, and log paths with the DinTalDock runtime environment variables from `references/runtime-env.md`.
+6. If the user asks to connect the app to the DinTalDock ecosystem, expose stable app capabilities through `tutti.cli.json`; otherwise, if the project already exposes commands, convert the stable user-facing commands into `tutti.cli.json`.
 7. If the project already has localized metadata or UI copy, preserve it using `localizationInfo` for manifest metadata and the i18n harness from `references/i18n-harness.md` for in-app copy.
 8. Document the adapted layout, original project entrypoints, runtime command, storage ownership, and any unsupported original features in package `AGENTS.md` or `.tutti/dev-app/AGENTS.md`.
 9. Validate publishable packages against `references/validation-checklist.md`; for `.tutti/dev-app/`, run `scripts/check_local_dev_app.py <project-root-or-.tutti/dev-app>` and then validate any project-specific startup behavior manually.

@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 )
 
-// RNDMASTER_EXTENSION_TOML_PREP is the managed Tutti source marker for
+// RNDMASTER_EXTENSION_TOML_PREP is the managed DinTalDock source marker for
 // extension runtimePrep configFormat=toml.
 const RNDMASTER_EXTENSION_TOML_PREP = "RNDMASTER_EXTENSION_TOML_PREP"
 

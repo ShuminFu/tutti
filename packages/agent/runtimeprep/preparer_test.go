@@ -289,7 +289,7 @@ func TestDefaultPreparerCodexWritesInstructionsSkillManifestAndEnv(t *testing.T)
 		!strings.Contains(string(commandGuideReference), "tutti issue get --issue-id <issue-id> --json") {
 		t.Fatalf("tutti command guide reference = %q", string(commandGuideReference))
 	}
-	if !strings.Contains(string(skill), "local Tutti daemon") ||
+	if !strings.Contains(string(skill), "local DinTalDock daemon") ||
 		!strings.Contains(string(skill), "localhost/IPC") ||
 		!strings.Contains(string(skill), "execution environment") ||
 		!strings.Contains(string(skill), "Issue execution sequencing belongs to `$issue-manager`") {
@@ -1351,7 +1351,7 @@ func TestDefaultPreparerCodexWritesProjectRootMarkersDisabledConfigWithoutUserCo
 		!strings.Contains(config, "[tutti]") ||
 		!strings.Contains(config, `conversationDetailMode = "coding"`) ||
 		strings.Contains(config, "### Non-technical UI") {
-		t.Fatalf("codex config = %q, want project root markers disabled and Tutti coding marker only", config)
+		t.Fatalf("codex config = %q, want project root markers disabled and DinTalDock coding marker only", config)
 	}
 }
 
@@ -1384,7 +1384,7 @@ func TestDefaultPreparerCodexWritesGeneralConversationDetailModeToSessionConfig(
 		!strings.Contains(config, "### Non-technical UI") ||
 		!strings.Contains(config, "don't name bash commands you're running") ||
 		!strings.Contains(config, "focus on outputs") {
-		t.Fatalf("codex config = %q, want Tutti general marker and non-technical UI developer instructions", config)
+		t.Fatalf("codex config = %q, want DinTalDock general marker and non-technical UI developer instructions", config)
 	}
 }
 
@@ -1407,7 +1407,7 @@ func TestCodexConfigWithTuttiConversationDetailModeUpdatesExistingMarker(t *test
 		!strings.Contains(next, `conversationDetailMode = "general"`) ||
 		strings.Contains(next, `conversationDetailMode = "coding"`) ||
 		!strings.Contains(next, "[model_providers.proxy]") {
-		t.Fatalf("merged config = %q, want updated Tutti conversation detail mode marker", next)
+		t.Fatalf("merged config = %q, want updated DinTalDock conversation detail mode marker", next)
 	}
 }
 
@@ -1876,7 +1876,7 @@ func TestDefaultPreparerClaudeCodeUsesSessionScopedSystemPrompt(t *testing.T) {
 		!strings.Contains(string(systemPrompt), `Skill(skill="tutti-cli:workspace-app")`) ||
 		!strings.Contains(string(systemPrompt), `Skill(skill="tutti-cli:tutti-handoff")`) ||
 		!strings.Contains(string(systemPrompt), "Do not use `ToolSearch` to select Claude Code's native `SendMessage`") ||
-		!strings.Contains(string(systemPrompt), "never pass a Tutti agent target id such as `local:opencode` to native `SendMessage`") ||
+		!strings.Contains(string(systemPrompt), "never pass a DinTalDock agent target id such as `local:opencode` to native `SendMessage`") ||
 		!strings.Contains(string(systemPrompt), "Do not call a plain skill name that is not visible") ||
 		!strings.Contains(string(systemPrompt), "Do not pass arguments to Skill") ||
 		!strings.Contains(string(systemPrompt), "the skill reads the mention URI from the current user turn") ||
@@ -1910,7 +1910,7 @@ func TestDefaultPreparerClaudeCodeUsesSessionScopedSystemPrompt(t *testing.T) {
 		!strings.Contains(string(systemPrompt), "`mention://agent-target/<targetId>?workspaceId=...`") ||
 		!strings.Contains(string(systemPrompt), "agent get --session-id <session-id> --json") ||
 		!strings.Contains(string(systemPrompt), "issue get --issue-id <issue-id> --json") {
-		t.Fatalf("claude system prompt content = %q, want strict Tutti mention routing", string(systemPrompt))
+		t.Fatalf("claude system prompt content = %q, want strict DinTalDock mention routing", string(systemPrompt))
 	}
 	if strings.Contains(string(systemPrompt), "CODEX_HOME/skills/<skill>/SKILL.md") ||
 		strings.Contains(string(systemPrompt), ".claude/skills/<skill>/SKILL.md") ||
@@ -1937,7 +1937,7 @@ func TestDefaultPreparerClaudeCodeUsesSessionScopedSystemPrompt(t *testing.T) {
 		t.Fatalf("claude plugin manifest = %q", string(pluginManifest))
 	}
 	if !strings.Contains(string(pluginManifest), `"author": {`) ||
-		!strings.Contains(string(pluginManifest), `"name": "Tutti"`) {
+		!strings.Contains(string(pluginManifest), `"name": "DinTalDock"`) {
 		t.Fatalf("claude plugin manifest author = %q", string(pluginManifest))
 	}
 	pluginSkill, err := os.ReadFile(filepath.Join(pluginDir, "skills", "tutti-cli", "SKILL.md"))
@@ -2114,7 +2114,7 @@ func TestDefaultPreparerCursorUsesRuntimePluginDir(t *testing.T) {
 	if !strings.Contains(string(pluginManifest), `"name": "tutti-cli"`) ||
 		!strings.Contains(string(pluginManifest), `"skills": "./skills/"`) ||
 		!strings.Contains(string(pluginManifest), `"rules": []`) ||
-		!strings.Contains(string(pluginManifest), `"displayName": "Tutti CLI"`) {
+		!strings.Contains(string(pluginManifest), `"displayName": "DinTalDock CLI"`) {
 		t.Fatalf("cursor plugin manifest = %q", string(pluginManifest))
 	}
 	if strings.Contains(string(pluginManifest), `"hooks"`) {
@@ -2221,7 +2221,7 @@ func TestTuttiAgentManagedConfigRemovesOnlyLegacyPinnedProvider(t *testing.T) {
 		`custom_root = "preserved"`,
 		``,
 		`[model_providers.tutti-llm]`,
-		`name = "Tutti LLM"`,
+		`name = "DinTalDock LLM"`,
 		`base_url = "https://llm-api.tutti.sh/v1"`,
 		`wire_api = "responses"`,
 		``,
@@ -2284,7 +2284,7 @@ func TestTuttiAgentManagedConfigPreservesPartialLegacyLookalike(t *testing.T) {
 		`model = "gpt-5.4"`,
 		``,
 		`[model_providers.tutti-llm]`,
-		`name = "Custom Tutti Gateway"`,
+		`name = "Custom DinTalDock Gateway"`,
 		`base_url = "https://llm-api.tutti.sh/v1"`,
 		`wire_api = "responses"`,
 	}, "\n")
@@ -2304,7 +2304,7 @@ func TestTuttiAgentManagedConfigPreservesCommentedLegacySignature(t *testing.T) 
 		`# model = "gpt-5.4"`,
 		``,
 		`[model_providers.tutti-llm]`,
-		`name = "Tutti LLM"`,
+		`name = "DinTalDock LLM"`,
 		`base_url = "https://llm-api.tutti.sh/v1"`,
 		`wire_api = "responses"`,
 	}, "\n")
@@ -2324,7 +2324,7 @@ func TestTuttiAgentManagedConfigPreservesLegacyProviderWithExtraKey(t *testing.T
 		`model = "gpt-5.4"`,
 		``,
 		`[model_providers.tutti-llm]`,
-		`name = "Tutti LLM"`,
+		`name = "DinTalDock LLM"`,
 		`base_url = "https://llm-api.tutti.sh/v1"`,
 		`wire_api = "responses"`,
 		`http_headers = { X-Custom = "preserve" }`,

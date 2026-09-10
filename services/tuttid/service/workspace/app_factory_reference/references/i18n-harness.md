@@ -1,13 +1,13 @@
 # I18n Harness
 
-Use this reference when an app has localized manifest metadata, user-facing in-app copy, or an existing localization system being converted into a Tutti package.
+Use this reference when an app has localized manifest metadata, user-facing in-app copy, or an existing localization system being converted into a DinTalDock package.
 
 ## Goals
 
 - Keep all user-facing in-app copy behind stable keys.
 - Preserve a default locale and every requested or existing non-default locale.
 - Make missing or extra locale keys easy to detect during future edits.
-- Read the current locale from the optional Tutti browser context or browser locale APIs, never from launch URL query parameters.
+- Read the current locale from the optional DinTalDock browser context or browser locale APIs, never from launch URL query parameters.
 
 ## Package Pattern
 
@@ -114,4 +114,4 @@ Before finishing:
 - All localized manifest files referenced by `localizationInfo` exist.
 - All app-owned locale dictionaries have the same flattened key set as the default locale.
 - No UI text that should be localized is introduced outside the dictionary/helper pattern.
-- Locale is read from Tutti app context or browser locale APIs, not URL query params.
+- Locale is read from DinTalDock app context or browser locale APIs, not URL query params.

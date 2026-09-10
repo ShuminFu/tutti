@@ -79,7 +79,7 @@ type PrepareInput struct {
 	ExtensionSkillRoots []string
 	// ExtensionRuntimePrep carries a signed agent-extension runtime overlay.
 	// It is provider-neutral: package profiles describe any required per-run
-	// home, user-home file copies, and config merges instead of Tutti core
+	// home, user-home file copies, and config merges instead of DinTalDock core
 	// branching on a provider ID.
 	ExtensionRuntimePrep *ExtensionRuntimePrep
 	Metadata             map[string]any
@@ -145,7 +145,7 @@ type ExtensionRuntimePrep struct {
 
 // ExtensionModelEndpoint declares how an extension consumes a host-provided
 // model endpoint. The bundled extension profile owns provider-specific config
-// locations; Tutti only applies this generic mapping inside the session home.
+// locations; DinTalDock only applies this generic mapping inside the session home.
 type ExtensionModelEndpoint struct {
 	Protocol           string                           `json:"protocol"`
 	WireAPI            string                           `json:"wireAPI"`

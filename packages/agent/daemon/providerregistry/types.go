@@ -46,7 +46,7 @@ const (
 )
 
 // ModelPlanProtocol identifies the external model API protocol that a runtime
-// can consume through Tutti's model-plan endpoint injection.
+// can consume through DinTalDock's model-plan endpoint injection.
 type ModelPlanProtocol string
 
 const (
@@ -616,7 +616,7 @@ type DesktopIntegrationDescriptor struct {
 	VisibilityGate       DesktopVisibilityGate
 	RuntimeProbeFallback DesktopRuntimeProbeFallback
 	// CommandNetworkAccess explicitly opts a Codex-compatible app-server into
-	// command networking when it runs under the Tutti Desktop host.
+	// command networking when it runs under the DinTalDock Desktop host.
 	CommandNetworkAccess       bool
 	InstallBootstrap           bool
 	RefreshOnAccountChange     bool

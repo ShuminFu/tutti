@@ -7,7 +7,7 @@ Use this reference whenever an app exposes an Agent picker, default agent, runti
 The integration has three layers:
 
 ```text
-Tutti CLI owns platform capability and enabled Agent Target visibility
+DinTalDock CLI owns platform capability and enabled Agent Target visibility
   -> @tutti-os/agent-acp-kit/tutti owns execution, parsing, validation, and fallback
     -> the app owns product policy, API projection, persistence, and UI
 ```
@@ -49,7 +49,7 @@ Do not pass `mode` or `required`, and do not check `process.env.TUTTI_CLI` in ap
 - if `TUTTI_CLI` is absent, the kit automatically builds a `source: "standalone"` catalog from `runtime.listProviders()` and `runtime.detect()`;
 - if `TUTTI_CLI` is configured but execution, timeout, cancellation, or schema validation fails, the kit throws `TuttiIntegrationError`; it does not invent a standalone catalog.
 
-The app may project the returned browser-safe DTO into product-specific fields, but it must not copy the Tutti CLI schema. Frontend code may import guards and types without Node dependencies:
+The app may project the returned browser-safe DTO into product-specific fields, but it must not copy the DinTalDock CLI schema. Frontend code may import guards and types without Node dependencies:
 
 ```ts
 import {
@@ -65,7 +65,7 @@ UI rules:
 - localize `availability.reasonCode` instead of displaying raw codes;
 - prefer the last persisted available agent id, then the available `defaultAgentTargetId`, then the first available agent; do not use provider identity to break ties;
 - use `displayName` for presentation, with app-owned icon overrides only;
-- never use kit registration to add an agent omitted by the Tutti CLI catalog.
+- never use kit registration to add an agent omitted by the DinTalDock CLI catalog.
 
 ## Composer options
 
@@ -84,9 +84,9 @@ const composer = await loadTuttiAgentComposerOptions({
 });
 ```
 
-The kit first verifies that `agentTargetId` is present in the canonical catalog. In Tutti it calls `tutti --json agent composer-options --agent-id <agentTargetId>`; standalone mode derives conservative model options from runtime detection and marks unsupported controls `configurable: false`.
+The kit first verifies that `agentTargetId` is present in the canonical catalog. In DinTalDock it calls `tutti --json agent composer-options --agent-id <agentTargetId>`; standalone mode derives conservative model options from runtime detection and marks unsupported controls `configurable: false`.
 
-Workspace Apps do not expose, persist, or pass a permission choice. Do not project a permission option returned by composer metadata into App UI, and omit `permission` from runtime execution input. The kit applies the Workspace App default of full access when `permission` is omitted. Interactive choices such as `auto` belong to Tutti AgentGUI and the manual CLI, not to an App-owned agent picker or composer.
+Workspace Apps do not expose, persist, or pass a permission choice. Do not project a permission option returned by composer metadata into App UI, and omit `permission` from runtime execution input. The kit applies the Workspace App default of full access when `permission` is omitted. Interactive choices such as `auto` belong to DinTalDock AgentGUI and the manual CLI, not to an App-owned agent picker or composer.
 
 Do not eagerly load composer options for every agent. A failure belongs to the selected agent UI and must not delete other catalog entries.
 

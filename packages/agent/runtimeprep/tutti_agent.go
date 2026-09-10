@@ -264,8 +264,8 @@ func ensureTuttiAgentSessionConfig(configPath string, input PrepareInput) error 
 		next = mcpNext
 		changed = true
 	}
-	// Tutti Agent uses the same Codex-derived app-server sandbox runtime as
-	// Codex, but it is launched by Tutti's non-elevated desktop daemon. Keep
+	// DinTalDock Agent uses the same Codex-derived app-server sandbox runtime as
+	// Codex, but it is launched by DinTalDock's non-elevated desktop daemon. Keep
 	// the Windows implementation aligned with Codex session homes so an
 	// interactive UAC setup helper cannot block app-server startup.
 	if windowsSandboxNext, windowsSandboxChanged := codexConfigWithTuttiWindowsSandbox(next); windowsSandboxChanged {
@@ -330,7 +330,7 @@ func tuttiAgentConfigWithoutLegacyPinnedProvider(content string) (string, bool) 
 		return content, false
 	}
 	legacyKeys := map[string]bool{
-		`name = "Tutti LLM"`:                       false,
+		`name = "DinTalDock LLM"`:                       false,
 		`base_url = "https://llm-api.tutti.sh/v1"`: false,
 		`wire_api = "responses"`:                   false,
 	}

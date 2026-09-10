@@ -1,7 +1,7 @@
 package agentruntime
 
 // OpenCode exposes build/plan as ACP session modes. Those modes select a
-// workflow agent and are intentionally independent from Tutti's permission
+// workflow agent and are intentionally independent from DinTalDock's permission
 // tiers. Permissions are enforced through OpenCode's permission config plus
 // client-side resolution of ACP permission requests.
 
@@ -121,7 +121,7 @@ func openCodeFinalEnv(
 // OpenCode's default policy allows most tools without consulting the ACP
 // client. This baseline keeps local read/search operations immediate while
 // routing every other tool through session/request_permission, which lets the
-// selected Tutti tier ask, approve, or deny it live. The protected .env rules
+// selected DinTalDock tier ask, approve, or deny it live. The protected .env rules
 // mirror OpenCode's built-in defaults.
 func openCodeInteractivePermissionRules() map[string]any {
 	return map[string]any{

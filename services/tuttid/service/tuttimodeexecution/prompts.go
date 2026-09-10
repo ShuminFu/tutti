@@ -60,7 +60,7 @@ func MainWakePrompt(wake executionbiz.Wake) string {
 		"tutti plan issue stop --issue-id %s --checkpoint-id %s --expected-graph-revision %d",
 		wake.IssueID, wake.CheckpointID, wake.CheckpointRevision,
 	)
-	header := fmt.Sprintf(`A durable Tutti Mode execution checkpoint requires your review.
+	header := fmt.Sprintf(`A durable DinTalDock Mode execution checkpoint requires your review.
 
 Issue: %s
 Checkpoint: %s
@@ -83,7 +83,7 @@ To replace a task while preserving its history, use:
 
 Mutation entries use the "kind" field; "op" and "replacement" are not supported. Rework and supersede preserve task and Run history. A rework replacement inherits omitted launch settings, execution directory, and dependencies from the old task; explicit replacement values override those defaults. Rework automatically redirects active, not-started dependents from the old task ID to the replacement task ID in the same mutation.
 
-Use the Tutti CLI as the only supported execution control plane. Do not inspect or modify Tutti's backing SQLite databases to diagnose or bypass a rejected command; report the CLI error if the current Issue snapshot and documented recovery commands cannot resolve it.
+Use the DinTalDock CLI as the only supported execution control plane. Do not inspect or modify DinTalDock's backing SQLite databases to diagnose or bypass a rejected command; report the CLI error if the current Issue snapshot and documented recovery commands cannot resolve it.
 
 If this Issue has been replaced or should not continue, stop it explicitly so no later checkpoint wake is emitted:
 %s --reason '<audited-reason>' --request-id '<stable-request-id>'`,
@@ -166,7 +166,7 @@ Do not use acknowledge for initial scheduling or Goal Review; choose a legal che
 }
 
 func ReviewerPrompt(review executionbiz.GoalReview) string {
-	return fmt.Sprintf(`Review this Tutti Mode execution as an independent, read-only reviewer.
+	return fmt.Sprintf(`Review this DinTalDock Mode execution as an independent, read-only reviewer.
 
 Issue: %s
 Review: %s

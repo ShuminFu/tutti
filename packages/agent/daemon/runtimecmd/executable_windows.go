@@ -22,7 +22,7 @@ func executableNameCandidates(command string, env []string) []string {
 	// both a POSIX `opencode` shim and a Windows `opencode.cmd` shim into the
 	// same prefix; choosing the POSIX shim makes ACP probes hang or fail on
 	// Windows. Keep the extensionless candidate as a final fallback for managed
-	// PE launchers such as the Tutti agent binary.
+	// PE launchers such as the DinTalDock agent binary.
 	result := make([]string, 0, 6)
 	seen := map[string]struct{}{}
 	extensions := strings.Split(pathExt, ";")

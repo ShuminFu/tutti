@@ -37,7 +37,7 @@ func TestMainWakePromptLeadsWithParsableCheckpointMarker(t *testing.T) {
 	}
 	// The full prompt body must remain intact after the marker so the agent
 	// contract is unchanged.
-	if !strings.Contains(prompt, "A durable Tutti Mode execution checkpoint requires your review.") {
+	if !strings.Contains(prompt, "A durable DinTalDock Mode execution checkpoint requires your review.") {
 		t.Fatalf("marker replaced the prompt body instead of prefixing it:\n%s", prompt)
 	}
 }
@@ -104,7 +104,7 @@ func TestTaskCanceledMainWakePromptCarriesExactMutationSchema(t *testing.T) {
 		"canceled task cannot be updated or scheduled directly",
 		"graphRevision returned by the successful mutation",
 		"only supported execution control plane",
-		"Do not inspect or modify Tutti's backing SQLite databases",
+		"Do not inspect or modify DinTalDock's backing SQLite databases",
 		"tutti plan issue stop",
 		"--reason '<audited-reason>'",
 		"so no later checkpoint wake is emitted",

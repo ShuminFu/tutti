@@ -18,9 +18,9 @@ func TestTuttiRuntimePolicyDefinesHostContextWithoutGatingCLI(t *testing.T) {
 	}
 	for _, expected := range []string{
 		"<tutti-host-context>",
-		"Tutti-owned",
+		"DinTalDock-owned",
 		"independent of Default/Plan",
-		"Tutti CLI is always available",
+		"DinTalDock CLI is always available",
 	} {
 		if !strings.Contains(policy, expected) {
 			t.Fatalf("runtime policy missing %q: %s", expected, policy)

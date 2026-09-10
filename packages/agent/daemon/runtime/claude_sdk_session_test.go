@@ -472,7 +472,7 @@ func TestClaudeCodeSDKAdapterStartPassesPreparedClaudeMetaPathsToSidecar(t *test
 		t.Fatalf("env = %#v, want prepared Claude metadata paths", env)
 	}
 	if got, _ := payload["planModeInstructions"].(string); !strings.Contains(got, "do not edit files") || !strings.Contains(got, "implementation plan") {
-		t.Fatalf("planModeInstructions = %#v, want Tutti plan workflow instructions", payload["planModeInstructions"])
+		t.Fatalf("planModeInstructions = %#v, want DinTalDock plan workflow instructions", payload["planModeInstructions"])
 	}
 	settings := payloadMap(payload, "settings")
 	if _, ok := settings["plansDirectory"]; ok {

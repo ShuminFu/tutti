@@ -36,7 +36,7 @@ For a multi-app catalog repository, use `apps/<app-id>/` with each app owning it
 ## Boundaries
 
 - `apps/web`: React/Next/Vite UI, UI state, API/WS client, host bridge wrappers. Do not place core orchestration here.
-- `apps/server`: local HTTP runtime, static asset hosting, WebSocket, storage, domain use-cases, local agent runtime providers, tool gateway, Tutti CLI/reference endpoints.
+- `apps/server`: local HTTP runtime, static asset hosting, WebSocket, storage, domain use-cases, local agent runtime providers, tool gateway, DinTalDock CLI/reference endpoints.
 - `packages/shared`: stable contracts consumed by web and server: DTOs, WebSocket messages, command output envelopes, runtime profile types, and schema helpers.
 - `scripts`: deterministic build, validation, and package generation.
 - `docs`: plans and architecture notes. Keep executable contracts in code and package manifests.
@@ -64,7 +64,7 @@ Local development:
 - Add `/api/ws` only when real-time state or streaming is required.
 - Add `/tutti/cli/*` and `/tutti/references/*` only for external agent or CLI surfaces.
 
-Tutti package startup:
+DinTalDock package startup:
 
 - `bootstrap.sh` takes no arguments.
 - Bind to `$TUTTI_APP_HOST:$TUTTI_APP_PORT`.
@@ -78,7 +78,7 @@ Tutti package startup:
 
 ## Host Bridge
 
-Use one narrow browser wrapper for Tutti host calls. The web app must continue to run in a normal browser.
+Use one narrow browser wrapper for DinTalDock host calls. The web app must continue to run in a normal browser.
 
 ```ts
 export interface TuttiWorkspaceAppBridge {

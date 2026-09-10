@@ -92,7 +92,7 @@ func TestProviderTurnBindingHooksOwnForkability(t *testing.T) {
 		},
 	)
 	if err != nil || !forkable {
-		t.Fatalf("Tutti Agent binding forkable=%v error=%v", forkable, err)
+		t.Fatalf("DinTalDock Agent binding forkable=%v error=%v", forkable, err)
 	}
 
 	forkable, err = codex.CanForkProviderTurn(

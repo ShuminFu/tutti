@@ -58,7 +58,7 @@ func handleReadGuide(response http.ResponseWriter, request *http.Request, packag
 		writeJSON(response, http.StatusInternalServerError, map[string]any{
 			"error": map[string]string{
 				"code":    "guide_unavailable",
-				"message": "Tutti guide is unavailable.",
+				"message": "DinTalDock guide is unavailable.",
 			},
 		})
 		return
@@ -66,7 +66,7 @@ func handleReadGuide(response http.ResponseWriter, request *http.Request, packag
 	writeJSON(response, http.StatusOK, map[string]any{
 		"kind": "json",
 		"value": map[string]any{
-			"title":   "Tutti 产品知识库",
+			"title":   "DinTalDock 产品知识库",
 			"format":  "markdown",
 			"content": string(content),
 		},

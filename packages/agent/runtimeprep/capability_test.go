@@ -89,7 +89,7 @@ func TestCustomDeploymentProfileDoesNotInheritTuttiDesktopHostPolicy(t *testing.
 	}
 	for _, forbidden := range []string{
 		"# Host App Context",
-		"Tutti desktop app host",
+		"DinTalDock desktop app host",
 		"sandbox_permissions=require_escalated",
 		"`tutti-dev`",
 	} {

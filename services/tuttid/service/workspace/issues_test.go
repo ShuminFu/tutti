@@ -263,7 +263,7 @@ func TestCancelIssueExecutionForSourceSessionRequiresDurableTuttiService(t *test
 		t.Fatal(err)
 	}
 	if persisted.DispatchPaused {
-		t.Fatal("managed Tutti Issue was partially stopped without the durable execution service")
+		t.Fatal("managed DinTalDock Issue was partially stopped without the durable execution service")
 	}
 }
 
@@ -297,7 +297,7 @@ func TestIssueManagerReservesTuttiModePlanIssueIDsForWorkflowMaterialization(t *
 	ctx := context.Background()
 	store := openIssueServiceStore(t)
 	const workspaceID = "workspace-reserved-tutti-issue"
-	if err := store.Create(ctx, workspacebiz.Summary{ID: workspaceID, Name: "Reserved Tutti Issue"}); err != nil {
+	if err := store.Create(ctx, workspacebiz.Summary{ID: workspaceID, Name: "Reserved DinTalDock Issue"}); err != nil {
 		t.Fatalf("Create() workspace error = %v", err)
 	}
 	service := IssueManagerService{Store: store}
@@ -313,11 +313,11 @@ func TestIssueManagerReservesTuttiModePlanIssueIDsForWorkflowMaterialization(t *
 	if _, err := service.CreateIssue(ctx, workspaceID, CreateIssueManagerIssueInput{
 		IssueID:         "ordinary-forged-tutti",
 		TopicID:         workspaceissues.DefaultTopicID,
-		Title:           "Forged Tutti provenance",
+		Title:           "Forged DinTalDock provenance",
 		PlanningSource:  string(workspaceissues.PlanningSourceTuttiModePlan),
 		SourceSessionID: "session-1",
 	}); !errors.Is(err, workspaceissues.ErrInvalidArgument) {
-		t.Fatalf("CreateIssue(forged Tutti provenance) error = %v, want ErrInvalidArgument", err)
+		t.Fatalf("CreateIssue(forged DinTalDock provenance) error = %v, want ErrInvalidArgument", err)
 	}
 
 	for name, issue := range map[string]CreateIssueManagerIssueInput{
@@ -330,7 +330,7 @@ func TestIssueManagerReservesTuttiModePlanIssueIDsForWorkflowMaterialization(t *
 		"untrusted tutti source cannot use reserved id": {
 			IssueID:         workflowbiz.TuttiModePlanIssueIDPrefix + "untrusted-tutti",
 			TopicID:         workspaceissues.DefaultTopicID,
-			Title:           "Untrusted Tutti preemption",
+			Title:           "Untrusted DinTalDock preemption",
 			PlanningSource:  string(workspaceissues.PlanningSourceTuttiModePlan),
 			SourceSessionID: "session-1",
 		},
@@ -345,7 +345,7 @@ func TestIssueManagerReservesTuttiModePlanIssueIDsForWorkflowMaterialization(t *
 		"ordinary id cannot forge tutti provenance": {
 			IssueID:         "ordinary-forged-tutti-plan",
 			TopicID:         workspaceissues.DefaultTopicID,
-			Title:           "Forged Tutti plan provenance",
+			Title:           "Forged DinTalDock plan provenance",
 			PlanningSource:  string(workspaceissues.PlanningSourceTuttiModePlan),
 			SourceSessionID: "session-1",
 		},
@@ -392,7 +392,7 @@ func TestIssueManagerReservesTuttiModePlanIssueIDsForWorkflowMaterialization(t *
 		Issue: CreateIssueManagerIssueInput{
 			IssueID:                reservedID,
 			TopicID:                workspaceissues.DefaultTopicID,
-			Title:                  "Accepted Tutti workflow",
+			Title:                  "Accepted DinTalDock workflow",
 			PlanningSource:         string(workspaceissues.PlanningSourceTuttiModePlan),
 			SourceSessionID:        "session-1",
 			TuttiModeWorkflowOwned: true,

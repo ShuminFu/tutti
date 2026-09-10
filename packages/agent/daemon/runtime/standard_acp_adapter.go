@@ -10,7 +10,7 @@ import (
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
 )
 
-// standardACPLocalToolBridge projects provider-specific, Tutti-owned tools
+// standardACPLocalToolBridge projects provider-specific, DinTalDock-owned tools
 // through the ACP session's standard HTTP MCP extension point. The returned
 // release function owns the exact binding lease so a replaced process cannot
 // revoke its successor's authority.
@@ -81,7 +81,7 @@ type standardACPConfig struct {
 	automaticPermissionDecision func(permissionModeID string) string
 	// providerPermissionRequestDecision resolves a narrowly recognized
 	// provider request before the permission tier is consulted. It is used only
-	// for non-mutating, Tutti-owned local tools whose own operation presents the
+	// for non-mutating, DinTalDock-owned local tools whose own operation presents the
 	// real user interaction.
 	providerPermissionRequestDecision func(json.RawMessage) string
 	// filterPermissionOptions narrows provider-offered approval choices before

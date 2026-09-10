@@ -1,6 +1,6 @@
 ---
 name: issue-manager
-description: Issue-manager for Tutti workspace issues — `mention://workspace-issue/...` handoffs, issue inspection, execution, breakdown (`mode=breakdown`, persist child tasks), or run reporting. Reach `$tutti-cli` for CLI syntax only.
+description: Issue-manager for DinTalDock workspace issues — `mention://workspace-issue/...` handoffs, issue inspection, execution, breakdown (`mode=breakdown`, persist child tasks), or run reporting. Reach `$tutti-cli` for CLI syntax only.
 ---
 
 # Issue Manager
@@ -151,4 +151,4 @@ Extra reads:
 {{end}}{{if not (or (has "issue-manager.issue.task.get") (has "issue-manager.issue.task.run.get") (has "issue-manager.issue.run.get") (has "issue-manager.issue.topic.list"))}}- No additional issue read commands are advertised. Do not guess one.
 {{end}}
 
-Only mutate Tutti state when the user asked, the active mode requires it, or breakdown mode calls for persist-by-default above.
+Only mutate DinTalDock state when the user asked, the active mode requires it, or breakdown mode calls for persist-by-default above.

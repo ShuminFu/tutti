@@ -1,10 +1,10 @@
 # Getting Started Onboarding Package
 
-This package is the installed Tutti runtime for the Getting Started onboarding
+This package is the installed DinTalDock runtime for the Getting Started onboarding
 app.
 
 - `tutti.app.json` declares `bootstrap.sh` as the single runtime entrypoint.
-  Tutti invokes it through the host shell adapter, and the script selects the
+  DinTalDock invokes it through the host shell adapter, and the script selects the
   matching binary from the fat package by `TUTTI_PLATFORM`.
 - `server.go` is built into `bin/<platform>/tutti-onboarding-server[.exe]`
   during packaging. One fat package carries all declared platform binaries.

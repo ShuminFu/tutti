@@ -9,7 +9,7 @@ Package layout:
 
 Runtime:
 
-- Tutti starts `bootstrap.sh` with no arguments from `TUTTI_APP_RUNTIME_DIR`.
+- DinTalDock starts `bootstrap.sh` with no arguments from `TUTTI_APP_RUNTIME_DIR`.
 - Launch `server.js` with `TUTTI_APP_NODE`.
 - Bind `TUTTI_APP_HOST` and `TUTTI_APP_PORT`.
 - Read package assets from `TUTTI_APP_PACKAGE_DIR`.

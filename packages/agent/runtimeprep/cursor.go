@@ -13,7 +13,7 @@ const cursorPromptContextFileEnv = "TUTTI_CURSOR_PROMPT_CONTEXT_FILE"
 
 const (
 	cursorBackgroundTaskGuardCommand       = `"${CURSOR_PLUGIN_ROOT}/hooks/guard-background-task.sh"`
-	cursorBackgroundTaskGuardDeniedMessage = "Tutti's Cursor ACP integration does not support background Task execution. Retry this Task in the foreground without run_in_background=true."
+	cursorBackgroundTaskGuardDeniedMessage = "DinTalDock's Cursor ACP integration does not support background Task execution. Retry this Task in the foreground without run_in_background=true."
 )
 
 // The background Task guard is intentionally dormant. Cursor Agent
@@ -150,11 +150,11 @@ func installCursorTuttiPlugin(pluginDir string, input PrepareInput) error {
 		Rules       []string          `json:"rules"`
 	}{
 		Name:        "tutti-cli",
-		DisplayName: "Tutti CLI",
+		DisplayName: "DinTalDock CLI",
 		Version:     "0.1.0",
-		Description: "Tutti CLI skills for AgentGUI sessions.",
+		Description: "DinTalDock CLI skills for AgentGUI sessions.",
 		Author: map[string]string{
-			"name": "Tutti",
+			"name": "DinTalDock",
 		},
 		License: "UNLICENSED",
 		Skills:  "./skills/",

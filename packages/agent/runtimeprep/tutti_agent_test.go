@@ -80,7 +80,7 @@ func TestTuttiAgentPreparerUsesExplicitAuthSourceAndInstallsSkills(t *testing.T)
 		}
 	}
 	if runtime.GOOS == "windows" && !containsConfigBlock(string(config), "[windows]\nsandbox = \"unelevated\"") {
-		t.Fatalf("Tutti Agent session config missing Windows sandbox fallback: %s", config)
+		t.Fatalf("DinTalDock Agent session config missing Windows sandbox fallback: %s", config)
 	}
 	if len(result.Env) == 0 || result.Env[0] != "TUTTI_AGENT_HOME="+home {
 		t.Fatalf("Prepare() env = %#v", result.Env)
@@ -148,7 +148,7 @@ func TestPrepareTuttiAgentHomeRemovesLegacyPinnedProvider(t *testing.T) {
 		`model = "gpt-5.4"`,
 		``,
 		`[model_providers.tutti-llm]`,
-		`name = "Tutti LLM"`,
+		`name = "DinTalDock LLM"`,
 		`base_url = "https://llm-api.tutti.sh/v1"`,
 		`wire_api = "responses"`,
 		``,

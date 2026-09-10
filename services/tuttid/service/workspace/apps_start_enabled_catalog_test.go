@@ -456,7 +456,7 @@ func TestAppCenterServiceStartEnabledFallsBackToCachedCatalogWhenRefreshFails(t 
 		AppID:         "tutti-onboarding",
 		Version:       "0.1.0",
 		Name:          "Getting Started",
-		Description:   "Learn Tutti and Agent collaboration",
+		Description:   "Learn DinTalDock and Agent collaboration",
 		Runtime: workspacebiz.AppManifestRuntime{
 			Bootstrap:       "bootstrap.sh",
 			HealthcheckPath: "/healthz",

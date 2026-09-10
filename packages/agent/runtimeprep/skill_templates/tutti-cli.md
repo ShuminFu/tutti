@@ -1,15 +1,15 @@
 ---
 name: tutti-cli
-description: Use for `mention://agent-session/<sessionId>?workspaceId=...` links, `mention://agent-target/<targetId>?workspaceId=...` links, Tutti CLI command syntax, and daemon context lookup when no more specific Tutti skill applies; also serves as the command reference for injected Tutti skills.
+description: Use for `mention://agent-session/<sessionId>?workspaceId=...` links, `mention://agent-target/<targetId>?workspaceId=...` links, DinTalDock CLI command syntax, and daemon context lookup when no more specific DinTalDock skill applies; also serves as the command reference for injected DinTalDock skills.
 ---
 
-# Tutti CLI
+# DinTalDock CLI
 
-Use this skill as the routing and operating contract for the local Tutti CLI. It tells you which command family to reach for, how to call commands safely, and how to handle the dynamic command snapshot rendered for this agent runtime.
+Use this skill as the routing and operating contract for the local DinTalDock CLI. It tells you which command family to reach for, how to call commands safely, and how to handle the dynamic command snapshot rendered for this agent runtime.
 
 ## Route First
 
-Classify the request before invoking any Tutti CLI command:
+Classify the request before invoking any DinTalDock CLI command:
 
 1. Workspace issue work uses the Host-advertised `issue ...` commands. If the request is inspection, breakdown, execution, or run reporting for an issue, invoke `$issue-manager` and use this skill only as its CLI reference.
 2. Workspace app work uses app scopes from the command guide. If the request comes from `mention://workspace-app/<appId>?workspaceId=...`, invoke `$workspace-app` and use this skill as its command reference.
@@ -18,11 +18,11 @@ Classify the request before invoking any Tutti CLI command:
    {{end}}{{if hasFamily "computer"}}5. Desktop automation uses the Host-advertised `computer ...` commands.
    {{end}}6. If none match, read `command-guide.md` before guessing.
 
-Completion criterion: every Tutti CLI call must be traceable to a routed family, a mention URI, prior command output, current CLI help, or a command-guide entry.
+Completion criterion: every DinTalDock CLI call must be traceable to a routed family, a mention URI, prior command output, current CLI help, or a command-guide entry.
 
 ## Mention Links
 
-Tutti mention links are internal handoffs. Parse them as data; do not open them with a browser, WebFetch, or web search.
+DinTalDock mention links are internal handoffs. Parse them as data; do not open them with a browser, WebFetch, or web search.
 
 - `mention://workspace-issue/<issueId>?workspaceId=...`: use `$issue-manager`.
 - `mention://workspace-app/<appId>?workspaceId=...`: use `$workspace-app`.
@@ -54,7 +54,7 @@ This Host separates conversation recovery from session state. Use `{{command "ag
 
 ## Call Protocol
 
-Use this protocol for every Tutti CLI command:
+Use this protocol for every DinTalDock CLI command:
 
 1. Read `command-guide.md` for the family or command. Treat the guide as a snapshot, not a complete or permanent CLI manual.
 2. If exact flags are unclear for a known command, re-check current CLI help such as `{{.CLICommand}} <scope> --help` before guessing.
@@ -63,11 +63,11 @@ Use this protocol for every Tutti CLI command:
 5. Use IDs from mention URIs, prior command output, or list/get commands. {{if has "agent-context.agent.list"}}Before an Agent start, use `{{command "agent-context.agent.list"}}`. {{end}}Do not invent workspace ids, app scopes, issue ids, task ids, run ids, agent ids, provider names, or session ids.
 6. If a required input is missing, ask the user or run the relevant discovery command. Follow daemon recovery hints when an error includes one.
 7. Treat unknown-input or invalid-input errors as a signal to re-read current command help or the guide, not to retry with guessed flags.
-8. Treat the Tutti daemon and CLI as the only supported control plane. Never inspect or modify `~/.tutti*/*.db` or another backing SQLite database to recover state or bypass a rejected command. If the current CLI snapshot and documented recovery command do not resolve an error, report the exact command error instead.
+8. Treat the DinTalDock daemon and CLI as the only supported control plane. Never inspect or modify `~/.tutti*/*.db` or another backing SQLite database to recover state or bypass a rejected command. If the current CLI snapshot and documented recovery command do not resolve an error, report the exact command error instead.
 
 {{if has "tutti-mode-plan.plan.issue.get"}}
 
-## Tutti Mode Execution Recovery
+## DinTalDock Mode Execution Recovery
 
 The `plan issue ...` scope is the source Agent's execution control plane. At every durable wake, first run `{{command "tutti-mode-plan.plan.issue.get" (args "issue-id" "<issue-id>")}}` once. Use only its `activeCheckpoint`, `graphRevision`, `readyTaskIds`, `blockerReason`, and `allowedActions`; do not reuse a revision from an older wake or infer the next revision.
 
@@ -161,7 +161,7 @@ If execution produced no artifact, complete the run with a clear summary when th
 
 ## Execution Environment
 
-The Tutti CLI communicates with the local Tutti daemon over localhost/IPC. Run commands in an execution environment that can access the daemon and injected CLI path. Do not modify global sandbox settings yourself. If no such environment is available, explain that the daemon is inaccessible.
+The DinTalDock CLI communicates with the local DinTalDock daemon over localhost/IPC. Run commands in an execution environment that can access the daemon and injected CLI path. Do not modify global sandbox settings yourself. If no such environment is available, explain that the daemon is inaccessible.
 
 ## Command Reference
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// RNDMASTER_ACP_MCP_TRANSPORT_FILTER is the managed Tutti source marker for
+// RNDMASTER_ACP_MCP_TRANSPORT_FILTER is the managed DinTalDock source marker for
 // dropping contract MCP entries the target extension does not declare.
 const RNDMASTER_ACP_MCP_TRANSPORT_FILTER = "RNDMASTER_ACP_MCP_TRANSPORT_FILTER"
 

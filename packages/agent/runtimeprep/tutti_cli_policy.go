@@ -71,14 +71,14 @@ func resolvedProfileTitle(input PrepareInput) string {
 	if input.resolved != nil && strings.TrimSpace(input.resolved.Title) != "" {
 		return input.resolved.Title
 	}
-	return "Tutti Runtime"
+	return "DinTalDock Runtime"
 }
 
 func resolvedProfileIntro(input PrepareInput) string {
 	if input.resolved != nil && strings.TrimSpace(input.resolved.Intro) != "" {
 		return input.resolved.Intro
 	}
-	return "This directory is being used by a Tutti AgentGUI session."
+	return "This directory is being used by a DinTalDock AgentGUI session."
 }
 
 func tuttiSkillBundleRecommendedPolicy(input PrepareInput) (string, error) {
@@ -123,5 +123,5 @@ func commandGuideReference(input PrepareInput) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "# Tutti CLI Command Guide\n\n" + guide + "\n", nil
+	return "# DinTalDock CLI Command Guide\n\n" + guide + "\n", nil
 }

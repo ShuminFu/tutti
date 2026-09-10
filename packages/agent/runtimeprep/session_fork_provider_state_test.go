@@ -15,7 +15,7 @@ func TestDefaultPreparerDeclaresForkProviderStateBindingPerProvider(t *testing.T
 		t.Fatal("Codex provider state binding = false, want true")
 	}
 	if !preparer.SupportsSessionForkProviderStateBinding("tutti-agent") {
-		t.Fatal("Tutti Agent provider state binding = false, want true")
+		t.Fatal("DinTalDock Agent provider state binding = false, want true")
 	}
 	if preparer.SupportsSessionForkProviderStateBinding("claude-code") {
 		t.Fatal("Claude provider state binding = true before explicit integration")
@@ -83,7 +83,7 @@ func TestDefaultPreparerBindsExactTuttiAgentForkRolloutToIndependentTargetRuntim
 		targetRoot,
 		codexHomeDirectory,
 	)); !os.IsNotExist(err) {
-		t.Fatalf("Tutti Agent rollout leaked into Codex home: %v", err)
+		t.Fatalf("DinTalDock Agent rollout leaked into Codex home: %v", err)
 	}
 }
 

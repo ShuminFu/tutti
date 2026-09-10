@@ -13,15 +13,15 @@ import (
 )
 
 type modeSetInput struct {
-	State string `cli:"state" validate:"required" enum:"active,inactive" description:"Target Tutti Mode activation state for the calling Agent session: active enables Tutti Mode, inactive disables it."`
+	State string `cli:"state" validate:"required" enum:"active,inactive" description:"Target DinTalDock Mode activation state for the calling Agent session: active enables DinTalDock Mode, inactive disables it."`
 }
 
 func (p Provider) newModeSetCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[modeSetInput]{
 		ID:          appID + ".mode.set",
 		Path:        []string{"mode", "set"},
-		Summary:     "Set Tutti Mode for the calling session",
-		Description: "Enable or disable the durable Tutti Mode activation for the invoking Agent session. Effect and speed preferences are preserved; the change is reflected live in the session's Tutti Mode toggle.",
+		Summary:     "Set DinTalDock Mode for the calling session",
+		Description: "Enable or disable the durable DinTalDock Mode activation for the invoking Agent session. Effect and speed preferences are preserved; the change is reflected live in the session's DinTalDock Mode toggle.",
 		Kind:        framework.KindAction,
 		Visibility:  cliservice.CapabilityVisibilityPublic,
 		Workspace:   framework.WorkspaceRequired,
@@ -80,9 +80,9 @@ func (p Provider) runModeSet(
 func modeSetError(err error) error {
 	switch {
 	case errors.Is(err, tuttimodeactivationservice.ErrServiceUnavailable):
-		return cliservice.ServiceUnavailableError("Tutti Mode activation service is unavailable", err)
+		return cliservice.ServiceUnavailableError("DinTalDock Mode activation service is unavailable", err)
 	case errors.Is(err, tuttimodeactivationservice.ErrRevisionConflict):
-		return fmt.Errorf("%w: Tutti Mode activation changed concurrently; retry", cliservice.ErrInvalidInput)
+		return fmt.Errorf("%w: DinTalDock Mode activation changed concurrently; retry", cliservice.ErrInvalidInput)
 	case errors.Is(err, tuttimodeactivationservice.ErrInvalidInput):
 		return fmt.Errorf("%w: %s", cliservice.ErrInvalidInput, err.Error())
 	default:

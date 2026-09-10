@@ -13,7 +13,7 @@ import (
 	tuttimodeexecutionservice "github.com/tutti-os/tutti/services/tuttid/service/tuttimodeexecution"
 )
 
-// Run lifecycle: create and settle. Tutti-mode checkpoint wakes are durable
+// Run lifecycle: create and settle. DinTalDock-mode checkpoint wakes are durable
 // execution-service operations, not Issue-service notifications.
 
 func (s IssueManagerService) ListRuns(ctx context.Context, workspaceID string, issueID string, taskID string) ([]workspaceissues.Run, error) {
@@ -246,7 +246,7 @@ func (s IssueManagerService) applyRunCompletionEffects(ctx context.Context, run 
 		ChangeKind:  eventstreamservice.WorkspaceIssueChangeRunCompleted,
 	})
 	if effects.tuttiManaged {
-		// Durable checkpoint/wake workers own Tutti-mode orchestration. Never
+		// Durable checkpoint/wake workers own DinTalDock-mode orchestration. Never
 		// enter the generic auto-dispatch or in-memory notifier paths.
 		s.enqueueWorkspaceRunReconcile(run.WorkspaceID)
 		return

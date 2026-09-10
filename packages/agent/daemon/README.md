@@ -160,7 +160,7 @@ through its own authoritative provider-status registry.
 
 Agent sessions are durable controller records. For providers that support live
 session release, the runtime reaper may close an idle provider process without
-closing the Tutti agent session. The provider session id remains attached to the
+closing the DinTalDock agent session. The provider session id remains attached to the
 session, and the next `Exec` resumes the provider live session before starting a
 new turn.
 

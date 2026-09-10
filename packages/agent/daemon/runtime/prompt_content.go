@@ -215,7 +215,7 @@ func projectRuntimeConnectorPromptContent(content []PromptContentBlock) []Prompt
 		return providerContent
 	}
 	instruction := fmt.Sprintf(
-		"Selected local connector(s): %s. For this request, use only these installed Tutti connectors for their corresponding external services. Query `%s connector available --json` for their native interfaces. Read connector-owned Skills through the provider's native Skill system. Call MCP tools from the injected `connector` MCP server, or execute the returned connector-specific CLI command through the normal shell. Never use a similarly named user-global Skill, custom MCP server, unrelated connector, or direct service CLI.",
+		"Selected local connector(s): %s. For this request, use only these installed DinTalDock connectors for their corresponding external services. Query `%s connector available --json` for their native interfaces. Read connector-owned Skills through the provider's native Skill system. Call MCP tools from the injected `connector` MCP server, or execute the returned connector-specific CLI command through the normal shell. Never use a similarly named user-global Skill, custom MCP server, unrelated connector, or direct service CLI.",
 		strings.Join(connectorKeys, ", "), tuttiCLICommandName(),
 	)
 	return append([]PromptContentBlock{{Type: "text", Text: instruction}}, providerContent...)

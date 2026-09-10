@@ -541,7 +541,7 @@ func (a *CodexAppServerAdapter) execBlocking(
 	)
 	if clientUserMessageID := metadataString(execMetadata, "clientSubmitId"); clientUserMessageID != "" {
 		// clientSubmitId is an opaque, caller-stable recovery token. The
-		// canonical Turn id stays Tutti-owned and is never used as Codex client
+		// canonical Turn id stays DinTalDock-owned and is never used as Codex client
 		// identity.
 		turnParams["clientUserMessageId"] = clientUserMessageID
 	}

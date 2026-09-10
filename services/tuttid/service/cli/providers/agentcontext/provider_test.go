@@ -271,7 +271,7 @@ func (f *fakeAgentSessions) GetSkillBundle(_ context.Context, workspaceID string
 		CLICommand:     "tutti-dev",
 		RecommendedSystemPrompt: &agentservice.RecommendedSystemPrompt{
 			Format:  "text/markdown",
-			Content: "Use Tutti skills for mention routing.",
+			Content: "Use DinTalDock skills for mention routing.",
 		},
 		Skills: []agentservice.SkillMaterializationRecord{
 			{
@@ -1323,7 +1323,7 @@ func TestSkillBundleCommandReturnsAgentACPKitShape(t *testing.T) {
 		output.Value["agentSessionId"] != "run-1" ||
 		output.Value["cliCommand"] != "tutti-dev" ||
 		recommended["format"] != "text/markdown" ||
-		recommended["content"] != "Use Tutti skills for mention routing." ||
+		recommended["content"] != "Use DinTalDock skills for mention routing." ||
 		first["skillId"] != "tutti/tutti-cli" ||
 		first["slug"] != "tutti-cli" ||
 		first["deliveryMode"] != "materialized-files" ||

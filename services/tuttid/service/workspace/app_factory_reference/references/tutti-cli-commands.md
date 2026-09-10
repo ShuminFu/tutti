@@ -1,10 +1,10 @@
-# Tutti CLI Commands
+# DinTalDock CLI Commands
 
-This reference is for code inside a generated workspace app at runtime. It is not the Agent's own Tutti CLI workflow guide.
+This reference is for code inside a generated workspace app at runtime. It is not the Agent's own DinTalDock CLI workflow guide.
 
-Workspace apps may call local Tutti capabilities through the bundled Tutti CLI.
+Workspace apps may call local DinTalDock capabilities through the bundled DinTalDock CLI.
 
-Do not use `$TUTTI_CLI agent ...`, provider-specific command families, or Agent session polling to implement app-owned local Agent execution. Apps that need local Agent execution, Tutti agent catalog/composer options, dynamic Tutti skills, or app-owned MCP tooling must load `$tutti-agent-workspace-app` and use `@tutti-os/agent-acp-kit` from a Node server. The kit may invoke Agent CLI commands internally; app code must not construct argv or parse their JSON:
+Do not use `$TUTTI_CLI agent ...`, provider-specific command families, or Agent session polling to implement app-owned local Agent execution. Apps that need local Agent execution, DinTalDock agent catalog/composer options, dynamic DinTalDock skills, or app-owned MCP tooling must load `$tutti-agent-workspace-app` and use `@tutti-os/agent-acp-kit` from a Node server. The kit may invoke Agent CLI commands internally; app code must not construct argv or parse their JSON:
 
 ```ts
 import { createDefaultLocalAgentRuntime } from "@tutti-os/agent-acp-kit";
@@ -16,7 +16,7 @@ const catalog = await loadTuttiAgentCatalog({
 });
 ```
 
-The facade returns the enabled agent catalog inside Tutti and automatically returns a standalone runtime catalog when `TUTTI_CLI` is absent. Keep the exact agent target id as selection identity and load composer options lazily for that agent:
+The facade returns the enabled agent catalog inside DinTalDock and automatically returns a standalone runtime catalog when `TUTTI_CLI` is absent. Keep the exact agent target id as selection identity and load composer options lazily for that agent:
 
 ```ts
 import { createDefaultLocalAgentRuntime } from "@tutti-os/agent-acp-kit";
@@ -75,7 +75,7 @@ Use help at runtime before assuming this shape. A different weather app may expo
 
 ## Composition Guidelines
 
-- Call reusable local Tutti capabilities through `TUTTI_CLI`.
+- Call reusable local DinTalDock capabilities through `TUTTI_CLI`.
 - Use `--json` for app-to-app calls so parsing stays stable.
 - Keep timeouts short and handle failures gracefully.
 - Keep command handlers acyclic when the app also exposes `tutti.cli.json` commands.

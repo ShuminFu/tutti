@@ -30,7 +30,7 @@ The check should verify:
 
 ## Locale Source
 
-Locale may come from the app's own route or language switcher. When no app-local locale is set, read optional Tutti host app context and then fall back to browser locale APIs.
+Locale may come from the app's own route or language switcher. When no app-local locale is set, read optional DinTalDock host app context and then fall back to browser locale APIs.
 
 Do not read host locale from launch URL query parameters.
 
@@ -56,7 +56,7 @@ pnpm package:tutti
 
 When local agents are involved:
 
-1. Load the agent catalog through `@tutti-os/agent-acp-kit/tutti`; it automatically uses Tutti CLI or standalone detection.
+1. Load the agent catalog through `@tutti-os/agent-acp-kit/tutti`; it automatically uses DinTalDock CLI or standalone detection.
 2. Verify the web settings/runtime panel or equivalent status UI.
 3. Run an isolated smoke-test turn with one available catalog agent.
 4. Inspect run events, tool calls, generated files, and package-local data writes.

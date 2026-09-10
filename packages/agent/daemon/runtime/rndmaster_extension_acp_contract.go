@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-// RNDMASTER_EXTENSION_RUNTIME_CONTRACT is the managed Tutti source marker for
+// RNDMASTER_EXTENSION_RUNTIME_CONTRACT is the managed DinTalDock source marker for
 // applying the RnDMaster runtime contract to every standard-acp extension:* target.
 const RNDMASTER_EXTENSION_RUNTIME_CONTRACT = "RNDMASTER_EXTENSION_RUNTIME_CONTRACT"
 

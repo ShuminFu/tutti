@@ -1,9 +1,9 @@
 ---
 name: tutti-model-allocation
-description: Allocate Tutti plan tasks to current Agent targets and models using independent effect and speed preferences, C0-C3 capability tiers, a 1-4 parallel target, hard capability constraints, and effect-scaled verification. Use when creating or revising a Tutti Mode task graph, choosing each task's agentTargetId/model/reasoningEffort, or auditing whether assignments satisfy the requested effect and speed.
+description: Allocate DinTalDock plan tasks to current Agent targets and models using independent effect and speed preferences, C0-C3 capability tiers, a 1-4 parallel target, hard capability constraints, and effect-scaled verification. Use when creating or revising a DinTalDock Mode task graph, choosing each task's agentTargetId/model/reasoningEffort, or auditing whether assignments satisfy the requested effect and speed.
 ---
 
-# Tutti Model Allocation
+# DinTalDock Model Allocation
 
 Choose from current runtime evidence, not from memory. This skill supplies the
 selection policy; `agent list` and `agent composer-options` supply the exact

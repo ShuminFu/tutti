@@ -1,4 +1,4 @@
-// Package tuttimodeplan exposes Tutti-owned planning workflows to Agents as
+// Package tuttimodeplan exposes DinTalDock-owned planning workflows to Agents as
 // daemon-backed CLI capabilities. The commands create and observe durable
 // Workflow state; they never mutate Agent Interaction records.
 package tuttimodeplan
@@ -91,7 +91,7 @@ type IssueExecutionReads interface {
 	) (executionbiz.Aggregate, error)
 }
 
-// TuttiModeActivations reads the caller session's durable Tutti Mode
+// TuttiModeActivations reads the caller session's durable DinTalDock Mode
 // activation so the plan and execution mutations can be gated on an active
 // session. It is optional wiring: an unset reader leaves the gate open.
 type TuttiModeActivations interface {
@@ -113,7 +113,7 @@ type Provider struct {
 	activations      TuttiModeActivations
 }
 
-// WithTuttiModeActivations wires the Tutti Mode activation reader used to gate
+// WithTuttiModeActivations wires the DinTalDock Mode activation reader used to gate
 // plan and execution mutations on an active session. It is a fluent optional
 // setter so existing constructors and their many call sites stay unchanged.
 func (p Provider) WithTuttiModeActivations(activations TuttiModeActivations) Provider {
@@ -219,55 +219,55 @@ func (p Provider) Commands() []cliservice.Command {
 
 func (p Provider) requireArchives() error {
 	if p.archives == nil {
-		return cliservice.ServiceUnavailableError("Tutti Mode execution service is unavailable", nil)
+		return cliservice.ServiceUnavailableError("DinTalDock Mode execution service is unavailable", nil)
 	}
 	return nil
 }
 
 func (p Provider) requireCompletions() error {
 	if p.completions == nil {
-		return cliservice.ServiceUnavailableError("Tutti Mode execution service is unavailable", nil)
+		return cliservice.ServiceUnavailableError("DinTalDock Mode execution service is unavailable", nil)
 	}
 	return nil
 }
 
 func (p Provider) requireMutations() error {
 	if p.mutations == nil {
-		return cliservice.ServiceUnavailableError("Tutti Mode execution service is unavailable", nil)
+		return cliservice.ServiceUnavailableError("DinTalDock Mode execution service is unavailable", nil)
 	}
 	return nil
 }
 
 func (p Provider) requireSchedules() error {
 	if p.schedules == nil {
-		return cliservice.ServiceUnavailableError("Tutti Mode execution service is unavailable", nil)
+		return cliservice.ServiceUnavailableError("DinTalDock Mode execution service is unavailable", nil)
 	}
 	return nil
 }
 
 func (p Provider) requireAcknowledgements() error {
 	if p.acknowledgements == nil {
-		return cliservice.ServiceUnavailableError("Tutti Mode execution service is unavailable", nil)
+		return cliservice.ServiceUnavailableError("DinTalDock Mode execution service is unavailable", nil)
 	}
 	return nil
 }
 
 func (p Provider) requirePlans() error {
 	if p.plans == nil {
-		return cliservice.ServiceUnavailableError("Tutti Mode Plan service is unavailable", nil)
+		return cliservice.ServiceUnavailableError("DinTalDock Mode Plan service is unavailable", nil)
 	}
 	return nil
 }
 
 func (p Provider) requireResumes() error {
 	if p.resumes == nil {
-		return cliservice.ServiceUnavailableError("Tutti Mode execution service is unavailable", nil)
+		return cliservice.ServiceUnavailableError("DinTalDock Mode execution service is unavailable", nil)
 	}
 	return nil
 }
 
 // requireTuttiModeActive rejects a plan or execution mutation when the caller
-// session has not enabled Tutti Mode. The reader is optional wiring: when it is
+// session has not enabled DinTalDock Mode. The reader is optional wiring: when it is
 // unset the gate is skipped so the command surface degrades open rather than
 // failing closed.
 func (p Provider) requireTuttiModeActive(ctx context.Context, workspaceID string, sessionID string) error {
@@ -276,12 +276,12 @@ func (p Provider) requireTuttiModeActive(ctx context.Context, workspaceID string
 	}
 	activation, err := p.activations.Get(ctx, workspaceID, sessionID)
 	if err != nil {
-		return cliservice.ServiceUnavailableError("Tutti Mode activation state is unavailable", err)
+		return cliservice.ServiceUnavailableError("DinTalDock Mode activation state is unavailable", err)
 	}
 	if activation == nil || activation.CurrentRevision.State != activationbiz.StateActive {
 		return cliservice.InvalidInputReasonError(
 			"tutti_mode_inactive",
-			"Tutti Mode is not active for this session; enable it with `tutti mode set --state active` before driving a Tutti Mode plan or execution.",
+			"DinTalDock Mode is not active for this session; enable it with `tutti mode set --state active` before driving a DinTalDock Mode plan or execution.",
 			nil,
 		)
 	}

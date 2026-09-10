@@ -26,7 +26,7 @@ func (a *CodexAppServerAdapter) appServerInfo(raw json.RawMessage) map[string]an
 	var result struct {
 		UserAgent string `json:"userAgent"`
 		CodexHome string `json:"codexHome"`
-		// The Tutti Agent fork renames the initialize home field; its serde
+		// The DinTalDock Agent fork renames the initialize home field; its serde
 		// alias only applies to deserialization, so both spellings must be
 		// accepted here.
 		TuttiAgentHome string `json:"tuttiAgentHome"`

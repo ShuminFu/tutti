@@ -39,7 +39,7 @@ type getInput struct {
 }
 
 type issueScheduleInput struct {
-	IssueID               string `cli:"issue-id" validate:"required" description:"Tutti-owned Issue id."`
+	IssueID               string `cli:"issue-id" validate:"required" description:"DinTalDock-owned Issue id."`
 	CheckpointID          string `cli:"checkpoint-id" validate:"required" description:"Active execution checkpoint being resolved."`
 	ExpectedGraphRevision int64  `cli:"expected-graph-revision" validate:"required,min=1" description:"Current execution graph revision."`
 	TaskIDsJSON           string `cli:"task-ids-json" validate:"required" description:"JSON array containing exactly the task ids to admit."`
@@ -47,7 +47,7 @@ type issueScheduleInput struct {
 }
 
 type issueMutateInput struct {
-	IssueID               string `cli:"issue-id" validate:"required" description:"Tutti-owned Issue id."`
+	IssueID               string `cli:"issue-id" validate:"required" description:"DinTalDock-owned Issue id."`
 	CheckpointID          string `cli:"checkpoint-id" validate:"required" description:"Active execution checkpoint to rebind."`
 	ExpectedGraphRevision int64  `cli:"expected-graph-revision" validate:"required,min=1" description:"Current execution graph revision."`
 	OperationsJSON        string `cli:"operations-json" validate:"required" description:"JSON array whose entries use the kind field: add includes task, update includes taskId and task, rework includes taskId plus task whose taskId names the replacement, and supersede includes taskId. The op and replacement keys are invalid."`
@@ -55,14 +55,14 @@ type issueMutateInput struct {
 }
 
 type issueAcknowledgeInput struct {
-	IssueID               string `cli:"issue-id" validate:"required" description:"Tutti-owned Issue id."`
+	IssueID               string `cli:"issue-id" validate:"required" description:"DinTalDock-owned Issue id."`
 	CheckpointID          string `cli:"checkpoint-id" validate:"required" description:"Active task-settlement checkpoint being acknowledged."`
 	ExpectedGraphRevision int64  `cli:"expected-graph-revision" validate:"required,min=1" description:"Current execution graph revision."`
 	RequestID             string `cli:"request-id" validate:"required" description:"Stable acknowledge mutation id. Reuse it only with the identical payload."`
 }
 
 type issueCompleteInput struct {
-	IssueID               string `cli:"issue-id" validate:"required" description:"Tutti-owned Issue id."`
+	IssueID               string `cli:"issue-id" validate:"required" description:"DinTalDock-owned Issue id."`
 	CheckpointID          string `cli:"checkpoint-id" validate:"required" description:"Active Goal Review checkpoint being completed."`
 	ExpectedGraphRevision int64  `cli:"expected-graph-revision" validate:"required,min=1" description:"Current execution graph revision."`
 	RequestID             string `cli:"request-id" validate:"required" description:"Stable completion mutation id. Reuse it only with the identical payload."`
@@ -71,7 +71,7 @@ type issueCompleteInput struct {
 }
 
 type issueStopInput struct {
-	IssueID               string `cli:"issue-id" validate:"required" description:"Tutti-owned Issue id."`
+	IssueID               string `cli:"issue-id" validate:"required" description:"DinTalDock-owned Issue id."`
 	CheckpointID          string `cli:"checkpoint-id" validate:"required" description:"Active execution checkpoint at which the source Agent decided to stop."`
 	ExpectedGraphRevision int64  `cli:"expected-graph-revision" validate:"required,min=1" description:"Current execution graph revision."`
 	RequestID             string `cli:"request-id" validate:"required" description:"Stable stop mutation id. Reuse it only with the identical reason."`
@@ -82,8 +82,8 @@ func (p Provider) newProposeCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[proposeInput]{
 		ID:          appID + ".plan.propose",
 		Path:        []string{"plan", "propose"},
-		Summary:     "Propose a Tutti Mode plan",
-		Description: "Create a durable Tutti-owned workflow from one complete tutti-mode-plan/v1 Markdown document (plan narrative plus the full task graph in the tasks frontmatter) and open the single user review checkpoint.",
+		Summary:     "Propose a DinTalDock Mode plan",
+		Description: "Create a durable DinTalDock-owned workflow from one complete tutti-mode-plan/v1 Markdown document (plan narrative plus the full task graph in the tasks frontmatter) and open the single user review checkpoint.",
 		Kind:        framework.KindAction,
 		Visibility:  cliservice.CapabilityVisibilityPublic,
 		Workspace:   framework.WorkspaceRequired,
@@ -98,7 +98,7 @@ func (p Provider) newReviseCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[reviseInput]{
 		ID:          appID + ".plan.revise",
 		Path:        []string{"plan", "revise"},
-		Summary:     "Revise a Tutti Mode plan",
+		Summary:     "Revise a DinTalDock Mode plan",
 		Description: "Append an immutable replacement plan document (narrative plus full task graph) after the user requests changes, creating the next review checkpoint.",
 		Kind:        framework.KindAction,
 		Visibility:  cliservice.CapabilityVisibilityPublic,
@@ -114,7 +114,7 @@ func (p Provider) newGetCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[getInput]{
 		ID:          appID + ".plan.get",
 		Path:        []string{"plan", "get"},
-		Summary:     "Get a Tutti Mode plan",
+		Summary:     "Get a DinTalDock Mode plan",
 		Description: "Read the authoritative durable workflow, current Markdown revision, checkpoint, and follow-up operation state.",
 		Kind:        framework.KindGet,
 		Visibility:  cliservice.CapabilityVisibilityPublic,
@@ -130,7 +130,7 @@ func (p Provider) newIssueScheduleCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[issueScheduleInput]{
 		ID:          appID + ".plan.issue.schedule",
 		Path:        []string{"plan", "issue", "schedule"},
-		Summary:     "Schedule exact Tutti Mode Issue tasks",
+		Summary:     "Schedule exact DinTalDock Mode Issue tasks",
 		Description: "Atomically admit exactly the requested ready tasks from the active execution checkpoint. Caller authority comes from the invoking Agent session.",
 		Kind:        framework.KindAction,
 		Visibility:  cliservice.CapabilityVisibilityPublic,
@@ -146,7 +146,7 @@ func (p Provider) newIssueMutateCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[issueMutateInput]{
 		ID:          appID + ".plan.issue.mutate",
 		Path:        []string{"plan", "issue", "mutate"},
-		Summary:     "Mutate a Tutti Mode Issue graph",
+		Summary:     "Mutate a DinTalDock Mode Issue graph",
 		Description: "Atomically mutate the active graph with exact source-session, checkpoint, and revision fencing. Supersession preserves task and Run history.",
 		Kind:        framework.KindAction,
 		Visibility:  cliservice.CapabilityVisibilityPublic,
@@ -162,7 +162,7 @@ func (p Provider) newIssueAcknowledgeCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[issueAcknowledgeInput]{
 		ID:          appID + ".plan.issue.acknowledge",
 		Path:        []string{"plan", "issue", "acknowledge"},
-		Summary:     "Acknowledge a Tutti Mode Issue checkpoint",
+		Summary:     "Acknowledge a DinTalDock Mode Issue checkpoint",
 		Description: "Resolve the active task-settlement checkpoint without admitting work. Caller authority comes from the invoking Agent session; Goal Review cannot be acknowledged with this command.",
 		Kind:        framework.KindAction,
 		Visibility:  cliservice.CapabilityVisibilityPublic,
@@ -178,7 +178,7 @@ func (p Provider) newIssueCompleteCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[issueCompleteInput]{
 		ID:          appID + ".plan.issue.complete",
 		Path:        []string{"plan", "issue", "complete"},
-		Summary:     "Complete a Tutti Mode Goal Review",
+		Summary:     "Complete a DinTalDock Mode Goal Review",
 		Description: "Complete the active Goal Review only after the source Agent concludes the goal is satisfied. Caller authority comes from the invoking Agent session.",
 		Kind:        framework.KindAction,
 		Visibility:  cliservice.CapabilityVisibilityPublic,
@@ -194,7 +194,7 @@ func (p Provider) newIssueStopCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[issueStopInput]{
 		ID:          appID + ".plan.issue.stop",
 		Path:        []string{"plan", "issue", "stop"},
-		Summary:     "Stop a Tutti Mode Issue",
+		Summary:     "Stop a DinTalDock Mode Issue",
 		Description: "Stop and durably archive an Issue that should not continue, canceling open Runs and closing checkpoint wakes. Caller authority comes from the invoking source Agent session and is fenced by the active checkpoint and graph revision.",
 		Kind:        framework.KindAction,
 		Visibility:  cliservice.CapabilityVisibilityPublic,
@@ -491,12 +491,12 @@ func readPlanFile(path string) ([]byte, error) {
 	}
 	file, err := os.Open(filepath.Clean(path))
 	if err != nil {
-		return nil, cliservice.WorkspaceOperationError("read Tutti Mode Plan file", err)
+		return nil, cliservice.WorkspaceOperationError("read DinTalDock Mode Plan file", err)
 	}
 	defer file.Close()
 	contents, err := io.ReadAll(io.LimitReader(file, maxPlanFileSize+1))
 	if err != nil {
-		return nil, cliservice.WorkspaceOperationError("read Tutti Mode Plan file", err)
+		return nil, cliservice.WorkspaceOperationError("read DinTalDock Mode Plan file", err)
 	}
 	if len(contents) > maxPlanFileSize {
 		return nil, fmt.Errorf("%w: plan file exceeds %d bytes", cliservice.ErrInvalidInput, maxPlanFileSize)

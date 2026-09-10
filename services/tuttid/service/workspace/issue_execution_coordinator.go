@@ -43,7 +43,7 @@ func (c *IssueExecutionCoordinator) CancelIssueExecution(ctx context.Context, wo
 }
 
 // CancelTuttiModeIssueExecution is the product-authorized stop path for an
-// Issue already proven to be owned by a Tutti execution. Generic Issue
+// Issue already proven to be owned by a DinTalDock execution. Generic Issue
 // cancellation remains rejected for managed graphs.
 func (c *IssueExecutionCoordinator) CancelTuttiModeIssueExecution(
 	ctx context.Context, workspaceID string, issueID string,
@@ -231,7 +231,7 @@ func (s IssueManagerService) pauseTuttiModeIssueExecution(
 
 // ResumeTuttiModeIssueExecution is the source-scoped counterpart to the
 // product-authorized pause path. Generic Issue mutation stays forbidden for a
-// Tutti-owned graph; only its original source Agent may reopen dispatch.
+// DinTalDock-owned graph; only its original source Agent may reopen dispatch.
 func (s IssueManagerService) ResumeTuttiModeIssueExecution(
 	ctx context.Context,
 	workspaceID string,
@@ -288,7 +288,7 @@ func (s IssueManagerService) ResumeTuttiModeIssueExecution(
 }
 
 // CancelIssueExecutionForSourceSession durably archives every nonterminal
-// Tutti execution owned by the planning session. Archive is the product's
+// DinTalDock execution owned by the planning session. Archive is the product's
 // terminal stop boundary: it fences future dispatch before canceling Runs,
 // main wakes, reviewers, checkpoints, and workflow recovery.
 func (c *IssueExecutionCoordinator) CancelIssueExecutionForSourceSession(ctx context.Context, workspaceID string, agentSessionID string) (int, error) {
@@ -310,7 +310,7 @@ func (c *IssueExecutionCoordinator) CancelIssueExecutionForSourceSession(ctx con
 
 // ObserveUserTurnCanceled implements the agent service's turn-cancel
 // observer: a user stopping the planning conversation enters the durable
-// source-session stop boundary. Sessions that are not a Tutti plan source are
+// source-session stop boundary. Sessions that are not a DinTalDock plan source are
 // a no-op, so cascaded child-session cancels cannot loop.
 func (c *IssueExecutionCoordinator) ObserveUserTurnCanceled(ctx context.Context, workspaceID string, agentSessionID string) {
 	if _, err := c.CancelIssueExecutionForSourceSession(ctx, workspaceID, agentSessionID); err != nil {

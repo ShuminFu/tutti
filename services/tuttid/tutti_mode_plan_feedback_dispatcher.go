@@ -102,7 +102,7 @@ func tuttiModePlanFeedbackPrompt(input tuttimodeplanservice.PlanRevisionFeedback
 }
 
 // tuttiModePlanCLICommandName mirrors the CLI shim name provisioned for
-// agents: development installs expose the Tutti CLI as `tutti-dev`.
+// agents: development installs expose the DinTalDock CLI as `tutti-dev`.
 func tuttiModePlanCLICommandName() string {
 	if tuttitypes.IsDevelopmentEnv() {
 		return "tutti-dev"
@@ -111,7 +111,7 @@ func tuttiModePlanCLICommandName() string {
 }
 
 func tuttiModePlanFeedbackPromptForCLI(input tuttimodeplanservice.PlanRevisionFeedbackInput, cliName string) string {
-	return fmt.Sprintf(`The user reviewed your Tutti Mode plan and requested changes.
+	return fmt.Sprintf(`The user reviewed your DinTalDock Mode plan and requested changes.
 
 Workflow ID: %[1]s
 Rejected checkpoint ID: %[2]s

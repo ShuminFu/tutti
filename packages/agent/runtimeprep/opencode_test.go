@@ -178,14 +178,14 @@ func assertOpenCodeTuttiRuntime(t *testing.T, configDir string, expectedSkillCou
 	if !strings.Contains(string(instructions), "Agent handoff decisions belong to `$tutti-handoff`") ||
 		!strings.Contains(string(instructions), "`mention://agent-target/<targetId>?workspaceId=...`") ||
 		!strings.Contains(string(instructions), "`mention://workspace-reference/<id>?source=...&workspaceId=...`") {
-		t.Fatalf("OpenCode runtime instructions do not contain Tutti mention routing: %s", instructions)
+		t.Fatalf("OpenCode runtime instructions do not contain DinTalDock mention routing: %s", instructions)
 	}
 	entries, err := os.ReadDir(filepath.Join(configDir, "skills"))
 	if err != nil {
-		t.Fatalf("read OpenCode Tutti skills: %v", err)
+		t.Fatalf("read OpenCode DinTalDock skills: %v", err)
 	}
 	if len(entries) != expectedSkillCount {
-		t.Fatalf("OpenCode Tutti Skill count = %d, want resolved bundle count %d", len(entries), expectedSkillCount)
+		t.Fatalf("OpenCode DinTalDock Skill count = %d, want resolved bundle count %d", len(entries), expectedSkillCount)
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() {

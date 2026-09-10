@@ -87,7 +87,7 @@ const (
 
 // appServerAdapterConfig captures the provider-specific identity of an
 // app-server CLI so a single adapter implementation can serve Codex and
-// Codex-compatible forks (Tutti Agent) without sharing brand, command, or
+// Codex-compatible forks (DinTalDock Agent) without sharing brand, command, or
 // auth assumptions.
 type appServerAdapterConfig struct {
 	provider                         string
@@ -422,7 +422,7 @@ func NewCodexAppServerAdapterWithHostMetadataAndCommandResolver(
 }
 
 // NewTuttiAgentAppServerAdapterWithHostMetadata serves the tutti-agent
-// provider through the shared app-server adapter with Tutti-branded command,
+// provider through the shared app-server adapter with DinTalDock-branded command,
 // client identity, and auth messaging.
 func NewTuttiAgentAppServerAdapterWithHostMetadata(transport ProcessTransport, host HostMetadata) *CodexAppServerAdapter {
 	return newTuttiAgentAppServerAdapterWithHostMetadata(transport, host)
@@ -458,7 +458,7 @@ func newTuttiAgentAppServerAdapterWithHostMetadata(
 	)
 	appServerAdapter, ok := adapter.(*CodexAppServerAdapter)
 	if !ok {
-		panic(fmt.Sprintf("Tutti Agent provider descriptor constructed %T", adapter))
+		panic(fmt.Sprintf("DinTalDock Agent provider descriptor constructed %T", adapter))
 	}
 	return appServerAdapter
 }
@@ -520,7 +520,7 @@ func (a *CodexAppServerAdapter) resolveCLIVersion(env []string) string {
 // clientInfoParams builds the app-server initialize clientInfo. The served
 // CLI derives its outbound originator/User-Agent from clientInfo.name, so the
 // name comes from the adapter config: the official Codex originator for the
-// codex provider, the Tutti identity for tutti-agent.
+// codex provider, the DinTalDock identity for tutti-agent.
 func (a *CodexAppServerAdapter) clientInfoParams(env []string) map[string]any {
 	return clientInfoParamsForVersion(a.host, a.config.clientInfoName, a.resolveCLIVersion(env))
 }

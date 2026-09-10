@@ -1,7 +1,7 @@
 # Model Tier Reference
 
 This routing prior combines the packaged OpenSquilla provider ladders at
-revision `d8652b72` (2026-07-28), Tutti live-catalog evidence, and current
+revision `d8652b72` (2026-07-28), DinTalDock live-catalog evidence, and current
 vendor descriptions. It is neither a benchmark result nor an availability
 catalog.
 

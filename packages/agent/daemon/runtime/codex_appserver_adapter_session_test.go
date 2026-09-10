@@ -203,7 +203,7 @@ func TestCodexClientInfoParamsPresentsOfficialOriginator(t *testing.T) {
 
 	// A resolved codex version is used verbatim and overrides the host name,
 	// so the outbound originator/User-Agent match the genuine codex_cli_rs.
-	host := HostMetadata{ClientInfo: ClientInfo{Name: "tutti-desktop", Title: "Tutti", Version: "0.1.0"}}
+	host := HostMetadata{ClientInfo: ClientInfo{Name: "tutti-desktop", Title: "DinTalDock", Version: "0.1.0"}}
 	descriptor := codexProviderDescriptorForTest(t)
 	got := clientInfoParamsForVersion(host, descriptor.Runtime.ClientInfoName, "1.2.3")
 
@@ -213,8 +213,8 @@ func TestCodexClientInfoParamsPresentsOfficialOriginator(t *testing.T) {
 	if got["version"] != "1.2.3" {
 		t.Fatalf("version = %v, want the resolved codex version 1.2.3 (not host %q)", got["version"], host.ClientInfo.Version)
 	}
-	if got["title"] != "Tutti" {
-		t.Fatalf("title = %v, want Tutti (passed through from host)", got["title"])
+	if got["title"] != "DinTalDock" {
+		t.Fatalf("title = %v, want DinTalDock (passed through from host)", got["title"])
 	}
 }
 
@@ -223,7 +223,7 @@ func TestCodexClientInfoParamsFallsBackToHostVersion(t *testing.T) {
 
 	// When the codex version cannot be resolved, fall back to the host version
 	// rather than emitting a blank version segment.
-	host := HostMetadata{ClientInfo: ClientInfo{Name: "tutti-desktop", Title: "Tutti", Version: "9.9.9"}}
+	host := HostMetadata{ClientInfo: ClientInfo{Name: "tutti-desktop", Title: "DinTalDock", Version: "9.9.9"}}
 	descriptor := codexProviderDescriptorForTest(t)
 	got := clientInfoParamsForVersion(host, descriptor.Runtime.ClientInfoName, "")
 

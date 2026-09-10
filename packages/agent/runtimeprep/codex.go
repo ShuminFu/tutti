@@ -510,13 +510,13 @@ func ensureCodexSessionConfig(configPath string, input PrepareInput) error {
 		next = mcpNext
 		changed = true
 	}
-	// Tutti launches the Codex app-server from the non-elevated desktop daemon.
+	// DinTalDock launches the Codex app-server from the non-elevated desktop daemon.
 	// On Windows, the elevated sandbox implementation invokes a separate setup
 	// helper through ShellExecuteExW, which requires an interactive UAC consent
 	// flow that is not owned by the app-server protocol. Use the restricted,
-	// non-elevated implementation for Tutti-owned session homes so a hidden or
+	// non-elevated implementation for DinTalDock-owned session homes so a hidden or
 	// canceled UAC prompt cannot prevent every command from starting. The
-	// Codex/Tutti permission mode and approval policy remain unchanged.
+	// Codex/DinTalDock permission mode and approval policy remain unchanged.
 	if windowsSandboxNext, windowsSandboxChanged := codexConfigWithTuttiWindowsSandbox(next); windowsSandboxChanged {
 		next = windowsSandboxNext
 		changed = true
@@ -530,7 +530,7 @@ func ensureCodexSessionConfig(configPath string, input PrepareInput) error {
 	return nil
 }
 
-// codexConfigWithTuttiWindowsSandbox pins Tutti-owned Codex session homes to
+// codexConfigWithTuttiWindowsSandbox pins DinTalDock-owned Codex session homes to
 // the unelevated Windows sandbox implementation. This is intentionally applied
 // only on Windows and only to the copied per-session config, never to the
 // user's global ~/.codex/config.toml.

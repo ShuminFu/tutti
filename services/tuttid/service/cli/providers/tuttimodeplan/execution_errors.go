@@ -15,7 +15,7 @@ func agentPlanError(err error) error {
 	if errors.Is(err, workflowdata.ErrWorkspaceWorkflowNotFound) {
 		return cliservice.InvalidInputReasonError(
 			string(executionbiz.RejectionExecutionNotFound),
-			"Tutti Mode plan was not found",
+			"DinTalDock Mode plan was not found",
 			nil,
 		)
 	}
@@ -161,7 +161,7 @@ func rejectionHint(
 	get := "`tutti plan issue get --issue-id " + issueIDPlaceholder(issueID) + " --json`"
 	switch reason {
 	case executionbiz.RejectionWrongSourceSession:
-		return "run the command from the original Tutti Mode source session; do not supply or guess a source session id"
+		return "run the command from the original DinTalDock Mode source session; do not supply or guess a source session id"
 	case executionbiz.RejectionInactiveExecution:
 		return "run " + get + " and follow its allowedActions; the execution is not accepting this command"
 	case executionbiz.RejectionInactiveCheckpoint:
@@ -207,7 +207,7 @@ func requestIDConflictError(message string) error {
 }
 
 func executionNotFoundError(issueID string) error {
-	message := "Tutti Mode execution was not found"
+	message := "DinTalDock Mode execution was not found"
 	if strings.TrimSpace(issueID) != "" {
 		message += " for Issue " + strings.TrimSpace(issueID)
 	}

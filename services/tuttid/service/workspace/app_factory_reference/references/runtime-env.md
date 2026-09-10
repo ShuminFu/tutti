@@ -20,20 +20,20 @@ Use these environment variables:
 - `TUTTI_APP_NODE`: managed Node.js executable path for generated apps.
 - `TUTTI_APP_NPM`: managed npm executable path for generated apps.
 - `TUTTI_APP_PYTHON`: managed Python interpreter path for existing Python apps or explicitly Python-based requests.
-- `TUTTI_API_BASE_URL`: base URL for server-side calls to the Tutti daemon API.
-- `TUTTI_APP_SERVER_TOKEN`: bearer token for this app server's scoped Tutti API calls.
-- `TUTTI_CLI`: explicit command path for invoking local Tutti CLI capabilities. This is the stable app-runtime entrypoint across development and packaged production.
-- `TUTTI_CLI_CONFIG`: optional host-provided Tutti CLI routing configuration. Treat its value as opaque.
+- `TUTTI_API_BASE_URL`: base URL for server-side calls to the DinTalDock daemon API.
+- `TUTTI_APP_SERVER_TOKEN`: bearer token for this app server's scoped DinTalDock API calls.
+- `TUTTI_CLI`: explicit command path for invoking local DinTalDock CLI capabilities. This is the stable app-runtime entrypoint across development and packaged production.
+- `TUTTI_CLI_CONFIG`: optional host-provided DinTalDock CLI routing configuration. Treat its value as opaque.
 - `TUTTI_WORKSPACE_ID`: current workspace id.
 - `TUTTI_WORKSPACE_NAME`: current workspace display name.
 
-The host does not copy its complete daemon environment into an app process. It inherits only the operating-system baseline needed to launch child processes (path, home and user identity, temporary directories, locale, proxy, certificate, and platform runtime variables) plus the explicit credential, endpoint, provider-home, and command/config variables used by the supported Codex, Claude Code, Cursor, Tutti Agent, and OpenCode targets. App runtime values such as `TUTTI_APP_SERVER_TOKEN` and managed executable paths are added as explicit host-owned overrides. Do not depend on unrelated ambient daemon, database, release, or publishing variables being present.
+The host does not copy its complete daemon environment into an app process. It inherits only the operating-system baseline needed to launch child processes (path, home and user identity, temporary directories, locale, proxy, certificate, and platform runtime variables) plus the explicit credential, endpoint, provider-home, and command/config variables used by the supported Codex, Claude Code, Cursor, DinTalDock Agent, and OpenCode targets. App runtime values such as `TUTTI_APP_SERVER_TOKEN` and managed executable paths are added as explicit host-owned overrides. Do not depend on unrelated ambient daemon, database, release, or publishing variables being present.
 
 The runner does not inject a workspace filesystem root. Use `TUTTI_WORKSPACE_ID` only as identity metadata and use `TUTTI_CLI` for explicit workspace-scoped capabilities. When a caller supplies an absolute input path, treat it as opaque caller data; do not derive a workspace root or default output location from it. Relative path inputs must be resolved by the caller against its own working directory before invoking the app.
 
 `PATH` includes the managed runtime bin directories, but generated apps must still use the explicit `TUTTI_APP_NODE`, `TUTTI_APP_NPM`, and, when applicable, `TUTTI_APP_PYTHON` variables. Do not rely on system `node`, `npm`, `python`, or `python3` commands.
 
-On Windows, Tutti runs the same LF-terminated `bootstrap.sh` through its managed
+On Windows, DinTalDock runs the same LF-terminated `bootstrap.sh` through its managed
 shell adapter. Keep the script POSIX-compatible and use only shell built-ins or
 the documented command subset in
 `docs/conventions/workspace-app-runtime.md`. Do not depend on Git for Windows,
@@ -41,7 +41,7 @@ WSL, or a user-installed Bash.
 
 Read `TUTTI_APP_SERVER_TOKEN` only in the app server process. Never send it to browser code, persist it, or write it to logs. It remains available for non-Agent app-scoped daemon resources. Agent catalog and composer discovery must not use this token, daemon URL, workspace ID, or app ID; call the `@tutti-os/agent-acp-kit/tutti` facade, which owns `TUTTI_CLI` execution.
 
-For local Tutti capabilities, use `TUTTI_CLI`.
+For local DinTalDock capabilities, use `TUTTI_CLI`.
 
 `TUTTI_APP_DATABASE_DIR` is intentionally separate from `TUTTI_APP_DATA_DIR`.
 The data directory may be exposed through app references, uploads, backup, or a
@@ -55,9 +55,9 @@ the data directory while keeping its active database in the database directory.
 skills must not require, parse, or document host-internal CLI configuration
 variables; the host-provided command owns its own connection configuration.
 
-Tutti keeps the managed runtime baseline outside app packages under daemon-owned state. Operators can override the cache with `TUTTI_APP_RUNTIME_CACHE_ROOT`, point at an exact prepared runtime with `TUTTI_APP_RUNTIME_ROOT`, or override first-use runtime downloads with `TUTTI_APP_RUNTIME_CATALOG`. App packages must not set these variables themselves.
+DinTalDock keeps the managed runtime baseline outside app packages under daemon-owned state. Operators can override the cache with `TUTTI_APP_RUNTIME_CACHE_ROOT`, point at an exact prepared runtime with `TUTTI_APP_RUNTIME_ROOT`, or override first-use runtime downloads with `TUTTI_APP_RUNTIME_CATALOG`. App packages must not set these variables themselves.
 
-tuttid may preload the managed runtime during daemon startup or an explicit runtime-preparation workflow, but listing App Center apps does not preload runtimes as a side effect. If the runtime is still missing when an installed app starts, Tutti reports the app as `preparing` while it resolves or downloads the runtime, then moves to `starting` only when `bootstrap.sh` is about to launch.
+tuttid may preload the managed runtime during daemon startup or an explicit runtime-preparation workflow, but listing App Center apps does not preload runtimes as a side effect. If the runtime is still missing when an installed app starts, DinTalDock reports the app as `preparing` while it resolves or downloads the runtime, then moves to `starting` only when `bootstrap.sh` is about to launch.
 
 Default newly generated apps to a small Node server, using Node built-ins when they are enough. Use Python only when adapting an existing Python project or when the user explicitly requests Python. Agent-enabled apps must use a Node server because `@tutti-os/agent-acp-kit` is Node-only. Avoid startup-time dependency installation. If build or install steps are necessary, put them in executable `prepare.sh`, not `bootstrap.sh`. `prepare.sh` may use the managed runtime variables for dependency installation and build commands. `bootstrap.sh` should only launch the already prepared app server.
 
@@ -120,7 +120,7 @@ transport.
 Apps that own Agent policy, run an independent local Agent, or need app-owned
 MCP/tool gateways should instead expose an app backend using
 `@tutti-os/agent-acp-kit/tutti`. The kit automatically uses `TUTTI_CLI` inside
-Tutti and standalone runtime discovery outside it. App code must not spawn or
+DinTalDock and standalone runtime discovery outside it. App code must not spawn or
 parse the Agent CLI itself. Follow `$tutti-agent-workspace-app` and its
 `references/dynamic-agent-providers.md`.
 
@@ -172,7 +172,7 @@ rows/documents after upload using the returned metadata.
 
 ## Browser Frontend Diagnostics
 
-When a workspace app runs inside Tutti Desktop, prefer writing browser-side diagnostics through the optional host bridge instead of posting to an app-owned `/api/log` route:
+When a workspace app runs inside DinTalDock Desktop, prefer writing browser-side diagnostics through the optional host bridge instead of posting to an app-owned `/api/log` route:
 
 ```js
 window.tuttiExternal?.logs?.write?.({
@@ -184,4 +184,4 @@ window.tuttiExternal?.logs?.write?.({
 
 `logs.write()` is fire-and-forget. Invalid payloads and write failures are ignored in the app. Use optional chaining so the same frontend keeps working when opened directly in a normal browser.
 
-Tutti Desktop appends these entries to the workspace app log directory as `web.log`, alongside `runtime.log`. Reserve `$TUTTI_APP_LOG_DIR` for backend/server-side logs written by the app process itself.
+DinTalDock Desktop appends these entries to the workspace app log directory as `web.log`, alongside `runtime.log`. Reserve `$TUTTI_APP_LOG_DIR` for backend/server-side logs written by the app process itself.

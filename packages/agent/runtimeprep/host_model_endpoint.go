@@ -51,7 +51,7 @@ func HostModelRoute(provider string) *HostProviderRoute {
 }
 
 // HostModelEndpoint returns a validated copy of the host default for provider.
-// Invalid or incomplete host input is ignored so standalone Tutti keeps its
+// Invalid or incomplete host input is ignored so standalone DinTalDock keeps its
 // provider-native fallback.
 func HostModelEndpoint(provider string) *ModelEndpointConfig {
 	var document hostModelEndpointsDocument

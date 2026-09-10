@@ -1,6 +1,6 @@
 // Package hostadapter adapts the daemon runtime contract to Agent Host.
 //
-// Both sides of this boundary are owned by Tutti. Product services should
+// Both sides of this boundary are owned by DinTalDock. Product services should
 // provide only the concrete runtime backend and current-user identity instead
 // of maintaining their own lifecycle and error mappings.
 package hostadapter

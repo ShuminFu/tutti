@@ -75,7 +75,7 @@ func cursorACPShouldRetrySessionNew(err error) bool {
 	return strings.Contains(detail, "failed to initialize session services")
 }
 
-// cursorACPModeID maps Tutti permission tiers onto Cursor's ACP session
+// cursorACPModeID maps DinTalDock permission tiers onto Cursor's ACP session
 // modes (switched via session/set_mode). Approval strictness within "agent"
 // is governed by the spawn command, not the session mode.
 func cursorACPModeID(mode string) string {

@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-const tuttiMentionRoutingReminder = "<system-reminder>mention:// links are Tutti internal references; use the exact visible tutti-cli skill first to route them.</system-reminder>"
+const tuttiMentionRoutingReminder = "<system-reminder>mention:// links are DinTalDock internal references; use the exact visible tutti-cli skill first to route them.</system-reminder>"
 
-const tuttiAgentMentionRoutingReminder = "<system-reminder>mention:// links are Tutti internal references; use the exact visible matching skill first — agent mentions: read and follow the tutti-handoff skill before acting.</system-reminder>"
+const tuttiAgentMentionRoutingReminder = "<system-reminder>mention:// links are DinTalDock internal references; use the exact visible matching skill first — agent mentions: read and follow the tutti-handoff skill before acting.</system-reminder>"
 
 var markdownMentionURIRegex = regexp.MustCompile(`\[(?:\\.|[^\]\\\r\n])*\]\((mention://[A-Za-z0-9][A-Za-z0-9._~-]*(?:[/?#][^\s)]*)?)\)`)
 

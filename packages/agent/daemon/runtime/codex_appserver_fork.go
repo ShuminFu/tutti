@@ -72,7 +72,7 @@ func appServerForkCapabilitiesForVersion(
 ) SessionForkCapabilities {
 	return SessionForkCapabilities{
 		StateBindingMode: "host_copy",
-		// The provider protocol can fork a whole thread, but Tutti must not
+		// The provider protocol can fork a whole thread, but DinTalDock must not
 		// advertise that structural capability until the Host/API/Engine/UI
 		// full-session Point is end-to-end. Capabilities describe the product
 		// chain, not an isolated provider method.

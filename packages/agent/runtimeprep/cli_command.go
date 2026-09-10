@@ -25,7 +25,7 @@ func resolveCLICommand(stateDir string) string {
 		name := entry.Name()
 		base := strings.TrimSuffix(name, ".cmd")
 		// Connector-native CLI shims share the state bin directory, but they
-		// are not aliases for the Tutti daemon CLI used in generated policy.
+		// are not aliases for the DinTalDock daemon CLI used in generated policy.
 		if (base == "tutti" || strings.HasPrefix(base, "tutti-")) && !strings.HasPrefix(base, "tutti-connector-") {
 			candidates = append(candidates, base)
 		}

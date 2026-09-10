@@ -27,7 +27,7 @@ type SourceSessionActivity struct {
 }
 
 // ObserveSourceSessionActivity projects exact source-session Turn activity
-// into Tutti's product execution clock. It does not alter Agent Host
+// into DinTalDock's product execution clock. It does not alter Agent Host
 // session/Turn lifecycle.
 func (service Service) ObserveSourceSessionActivity(
 	ctx context.Context,

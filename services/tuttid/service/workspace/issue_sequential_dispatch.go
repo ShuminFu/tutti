@@ -305,7 +305,7 @@ type issueRunLaunchDeliveryOutcomes struct {
 }
 
 // deliverIssueRunLaunch is the single deep delivery seam for generic and
-// Tutti-owned Run claims. Claim persistence and terminal outcome policy stay
+// DinTalDock-owned Run claims. Claim persistence and terminal outcome policy stay
 // strategy-specific; gate fencing, durable revalidation, worktree creation,
 // Agent delivery, and post-launch cancellation are shared.
 func (s IssueManagerService) deliverIssueRunLaunch(
@@ -485,7 +485,7 @@ Dependency outputs: these prerequisite tasks ran in isolated worktrees, so their
 	if issue.PlanningSource == workspaceissues.PlanningSourceTuttiModePlan {
 		prompt += fmt.Sprintf(`
 
-Tutti effect preference: %d/100. %s`,
+DinTalDock effect preference: %d/100. %s`,
 			issue.ExecutionProfile.ReasoningIntensity,
 			tuttiEffectValidationGuidance(issue.ExecutionProfile.ReasoningIntensity),
 		)

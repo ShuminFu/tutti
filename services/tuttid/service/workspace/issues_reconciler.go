@@ -235,7 +235,7 @@ func (c *IssueExecutionCoordinator) requestTimedOutRunCancellation(
 }
 
 // ReconcileIssueExecutions closes generic Issue Run delivery and settlement
-// crash windows, then layers Tutti Mode settlement/launch policy into the same
+// crash windows, then layers DinTalDock Mode settlement/launch policy into the same
 // workspace recovery cadence. Active leases remain fenced and keep the
 // workspace queued.
 func (c *IssueExecutionCoordinator) ReconcileIssueExecutions(

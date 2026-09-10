@@ -134,7 +134,7 @@ func (service Service) recoverDispatchableMainWakes(
 			ctx, store, workspaceID, leaseOwner, wake,
 		); wakeErr != nil {
 			recoveryErrors = append(recoveryErrors, fmt.Errorf(
-				"recover Tutti mode main wake %q: %w",
+				"recover DinTalDock mode main wake %q: %w",
 				wake.ID,
 				wakeErr,
 			))
@@ -158,7 +158,7 @@ func (service Service) reconcileDispatchedMainWakes(
 			ctx, store, workspaceID, wake,
 		); wakeErr != nil {
 			recoveryErrors = append(recoveryErrors, fmt.Errorf(
-				"reconcile dispatched Tutti mode main wake %q: %w",
+				"reconcile dispatched DinTalDock mode main wake %q: %w",
 				wake.ID,
 				wakeErr,
 			))

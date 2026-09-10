@@ -232,7 +232,7 @@ func visibleFailureCode(detail string) string {
 	normalized := strings.ToLower(detail)
 	structuredCode := structuredProviderFailureCode(normalized)
 	switch {
-	// Tutti billing failures are actionable account state, not a generic provider
+	// DinTalDock billing failures are actionable account state, not a generic provider
 	// crash. Prefer the structured code emitted by llm-token-usage, while also
 	// recognizing the legacy 402 text already present in persisted conversations.
 	case structuredCode == FailureCodeInsufficientCredits ||
@@ -299,7 +299,7 @@ func visibleFailureCode(detail string) string {
 		// A clean exit (code 0) or a signal-termination (128+N, e.g. 137 SIGKILL,
 		// 143 SIGTERM) means the app-server was stopped/killed externally — the host
 		// quit, the OS OOM-killed it, or (as seen in the field) an agent killed the
-		// very Tutti process tree hosting its own session. That is the session being
+		// very DinTalDock process tree hosting its own session. That is the session being
 		// interrupted, not Codex erroring out, so it reads calmer and is retryable.
 		// A non-zero, non-signal exit (1/2/101…) is a genuine crash and stays
 		// process_exited ("request failed").

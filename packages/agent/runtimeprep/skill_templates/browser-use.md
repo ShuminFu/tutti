@@ -1,13 +1,13 @@
 ---
 name: browser-use
-description: Use to operate a web browser — open URLs, read page content, click, fill forms, take screenshots — through the Tutti CLI.
+description: Use to operate a web browser — open URLs, read page content, click, fill forms, take screenshots — through the DinTalDock CLI.
 ---
 
 # Browser Use
 
 Use this skill for browser tasks: open URLs, read pages, click, fill forms, run page JS, or capture screenshots.
 
-Drive the browser only through `{{.CLICommand}} browser`. The Tutti daemon owns the browser session. Do not launch `open`, `xdg-open`, `start`, `google-chrome`, `chromium`, or direct browser automation; those are outside the managed session.
+Drive the browser only through `{{.CLICommand}} browser`. The DinTalDock daemon owns the browser session. Do not launch `open`, `xdg-open`, `start`, `google-chrome`, `chromium`, or direct browser automation; those are outside the managed session.
 
 ## Protocol
 

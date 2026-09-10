@@ -105,11 +105,11 @@ func TestMigratedClaudeCodeDescriptorOwnsPermissionModes(t *testing.T) {
 func TestSharedAppServerAdapterKeepsTuttiAgentIdentity(t *testing.T) {
 	adapter := NewTuttiAgentAppServerAdapterWithHostMetadata(nil, HostMetadata{})
 	serverInfo := adapter.appServerInfo(nil)
-	if serverInfo["name"] != "tutti-agent-app-server" || serverInfo["title"] != "Tutti Agent" {
-		t.Fatalf("server info = %#v, want Tutti Agent identity", serverInfo)
+	if serverInfo["name"] != "tutti-agent-app-server" || serverInfo["title"] != "DinTalDock Agent" {
+		t.Fatalf("server info = %#v, want DinTalDock Agent identity", serverInfo)
 	}
 	if adapter.config.rateLimits {
-		t.Fatal("Tutti Agent adapter must not probe ChatGPT rate limits")
+		t.Fatal("DinTalDock Agent adapter must not probe ChatGPT rate limits")
 	}
 	if capabilities := capabilitySnapshotValues(adapter.SessionState(Session{AgentSessionID: "missing"}).Capabilities); len(capabilities) != 0 {
 		t.Fatalf("empty session capabilities = %#v, want nil", capabilities)
@@ -246,12 +246,12 @@ func TestDefaultControllerAppliesCommandNetworkAccessPolicyOnlyToSelectedAppServ
 	tuttiAgentAdapter, ok := controller.adapters[ProviderTuttiAgent].(*CodexAppServerAdapter)
 	if !ok {
 		t.Fatalf(
-			"Tutti Agent adapter = %T, want *CodexAppServerAdapter",
+			"DinTalDock Agent adapter = %T, want *CodexAppServerAdapter",
 			controller.adapters[ProviderTuttiAgent],
 		)
 	}
 	if !tuttiAgentAdapter.config.commandNetworkAccess {
-		t.Fatal("Tutti Agent command network access = false, want true")
+		t.Fatal("DinTalDock Agent command network access = false, want true")
 	}
 	if policyProviders[ProviderCodex] != 1 ||
 		policyProviders[ProviderTuttiAgent] != 1 ||

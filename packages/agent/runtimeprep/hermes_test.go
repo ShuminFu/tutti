@@ -120,7 +120,7 @@ func TestExtensionRuntimePreparerAddsDeclaredSkillRootsToSessionConfig(t *testin
 		t.Fatalf("session skill root should be de-duplicated in config:\n%s", configText)
 	}
 
-	// Tutti skill 物化到 session-scoped root，避免多个 session 共享同一个 cwd
+	// DinTalDock skill 物化到 session-scoped root，避免多个 session 共享同一个 cwd
 	// 下的 extension skill root 时互相覆盖 session/target 相关内容。
 	for _, name := range []string{tuttiHandoffSkillName, tuttiSkillName} {
 		skillPath := filepath.Join(sessionSkillRoot, name, "SKILL.md")

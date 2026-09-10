@@ -1360,7 +1360,7 @@ func TestTuttiModeGateRejectsInactiveSessionsAndAllowsActive(t *testing.T) {
 	_, err := NewProvider(nil, inactivePlans, nil).
 		WithTuttiModeActivations(inactiveReader).
 		runPropose(context.Background(), invoke, proposeInput{File: path, RequestID: "request-1"})
-	if !errors.Is(err, cliservice.ErrInvalidInput) || !strings.Contains(err.Error(), "Tutti Mode is not active") {
+	if !errors.Is(err, cliservice.ErrInvalidInput) || !strings.Contains(err.Error(), "DinTalDock Mode is not active") {
 		t.Fatalf("inactive propose error = %v, want tutti-mode-inactive invalid input", err)
 	}
 	if inactivePlans.proposeInput.RequestID != "" {
@@ -1421,7 +1421,7 @@ func TestTuttiModeGateAppliesToExecutionDrivingCommands(t *testing.T) {
 	for name, run := range map[string]func() error{"schedule": scheduleErr, "mutate": mutateErr} {
 		t.Run(name, func(t *testing.T) {
 			if err := run(); !errors.Is(err, cliservice.ErrInvalidInput) ||
-				!strings.Contains(err.Error(), "Tutti Mode is not active") {
+				!strings.Contains(err.Error(), "DinTalDock Mode is not active") {
 				t.Fatalf("%s inactive error = %v, want tutti-mode-inactive invalid input", name, err)
 			}
 		})

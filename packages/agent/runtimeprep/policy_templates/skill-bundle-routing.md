@@ -1,13 +1,13 @@
-# Tutti Dynamic Skill Routing
+# DinTalDock Dynamic Skill Routing
 
-Host provided a Tutti dynamic skill bundle.
+Host provided a DinTalDock dynamic skill bundle.
 
 {{ENVIRONMENT_POLICY_SECTIONS}}
 
 No-mention default:
 
 - Without `mention://...`, do not treat this bundle alone as intent.
-- Use Tutti only when the user explicitly asks for Tutti, a Tutti workspace/app/issue/session capability, or a command described in this bundle.
+- Use DinTalDock only when the user explicitly asks for DinTalDock, a DinTalDock workspace/app/issue/session capability, or a command described in this bundle.
 
 Required mention routing:
 
@@ -24,7 +24,7 @@ Skill usage:
 - If provider-native Skill tools exist, call the exact visible name for the matching Skill.
 - Otherwise read the materialized `SKILL.md` selected by provider/plugin metadata.
 - Do not infer fixed filesystem paths from slugs.
-- Do not read app source or run shell commands before matching the Tutti Skill.
+- Do not read app source or run shell commands before matching the DinTalDock Skill.
 
 {{PROVIDER_SPECIFIC_MENTION_ROUTING}}
 

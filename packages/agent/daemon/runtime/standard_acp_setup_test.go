@@ -20,7 +20,7 @@ func TestRunStandardACPSetupAuthenticatesWithFreshAdvertisedMethod(t *testing.T)
 	transport.conn.authenticateResult = map[string]any{
 		"_meta": map[string]any{
 			"codebuddy.ai/userinfo": map[string]any{
-				"userId": "user-1", "userName": "Ryan", "userNickname": "Rhinoc", "enterpriseName": "Tutti",
+				"userId": "user-1", "userName": "Ryan", "userNickname": "Rhinoc", "enterpriseName": "DinTalDock",
 			},
 		},
 	}
@@ -32,7 +32,7 @@ func TestRunStandardACPSetupAuthenticatesWithFreshAdvertisedMethod(t *testing.T)
 		t.Fatalf("setup result = %#v", result)
 	}
 	if result.Account == nil || result.Account.ID != "user-1" || result.Account.DisplayName != "Rhinoc" ||
-		result.Account.AuthMethodID != "oauth-personal" || result.Account.Organization != "Tutti" {
+		result.Account.AuthMethodID != "oauth-personal" || result.Account.Organization != "DinTalDock" {
 		t.Fatalf("authenticated account = %#v", result.Account)
 	}
 	if got := transport.conn.authenticatedMethodID(); got != "oauth-personal" {

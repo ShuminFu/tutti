@@ -1,10 +1,10 @@
 # GitHub Actions Release Workflows
 
-Use this reference when creating or updating GitHub Actions that publish a Tutti app package to the Tutti App Center release bucket and catalog.
+Use this reference when creating or updating GitHub Actions that publish a DinTalDock app package to the DinTalDock App Center release bucket and catalog.
 
 ## When To Add
 
-Add release workflows when the target repository is expected to publish a Tutti app from GitHub. Do not add them for local-only prototypes, throwaway demos, or repositories that cannot use GitHub OIDC to assume the Tutti release AWS role.
+Add release workflows when the target repository is expected to publish a DinTalDock app from GitHub. Do not add them for local-only prototypes, throwaway demos, or repositories that cannot use GitHub OIDC to assume the DinTalDock release AWS role.
 
 Create both files for app repositories that need normal staging/production publishing:
 
@@ -15,7 +15,7 @@ Keep PR checks separate from publishing. PR workflows should build, test, run i1
 
 ## Shared Workflow
 
-Use the reusable Tutti release workflow instead of reimplementing S3/catalog logic:
+Use the reusable DinTalDock release workflow instead of reimplementing S3/catalog logic:
 
 ```yaml
 uses: tutti-os/tutti/.github/workflows/publish-tutti-app-release.yml@main
@@ -25,16 +25,16 @@ This reusable workflow builds, publishes, and verifies the app package. It can a
 
 ## Version compatibility contract
 
-Declare one exact stable SemVer in `min_tutti_version` for every normal release. Choose the earliest Tutti version that contains every host API and runtime contract used by the app. Use `0.0.0` only when the app requires no minimum Tutti version. Publish a new app version when this minimum changes.
+Declare one exact stable SemVer in `min_tutti_version` for every normal release. Choose the earliest DinTalDock version that contains every host API and runtime contract used by the app. Use `0.0.0` only when the app requires no minimum DinTalDock version. Publish a new app version when this minimum changes.
 
-Production apps that use the `@tutti-os/agent-acp-kit/tutti` auto facade must pin a stable kit release that supports agent catalog schema version 1 plus agent-id composer and skill context. Set `min_tutti_version` to the exact Tutti release validated with that kit; do not reuse an older provider-catalog minimum by assumption.
+Production apps that use the `@tutti-os/agent-acp-kit/tutti` auto facade must pin a stable kit release that supports agent catalog schema version 1 plus agent-id composer and skill context. Set `min_tutti_version` to the exact DinTalDock release validated with that kit; do not reuse an older provider-catalog minimum by assumption.
 
 ## Production Workflow Template
 
 Fill `app_id`, `package_command`, `package_dir`, `icon_path`, `release_tag_prefix`, `runner`, and `pnpm_version` from the app repository.
 
 ```yaml
-name: Publish Tutti App Production
+name: Publish DinTalDock App Production
 
 on:
   workflow_dispatch:
@@ -94,7 +94,7 @@ Use `macos-latest` only when packaging depends on macOS-only tooling. Prefer `ub
 Staging should not require semver bump or tag creation. It can publish a build-addressed release and optionally refresh the staging catalog.
 
 ```yaml
-name: Publish Tutti App Staging
+name: Publish DinTalDock App Staging
 
 on:
   push:
@@ -140,7 +140,7 @@ jobs:
 
 ## Variables
 
-Prefer organization-level GitHub Actions variables for shared Tutti release infrastructure so new app repositories can reuse the same workflows without copying repo-local configuration. Grant the organization variables only to repositories that are allowed to publish Tutti apps.
+Prefer organization-level GitHub Actions variables for shared DinTalDock release infrastructure so new app repositories can reuse the same workflows without copying repo-local configuration. Grant the organization variables only to repositories that are allowed to publish DinTalDock apps.
 
 Recommended organization variables:
 
@@ -176,6 +176,6 @@ Before considering the release workflows ready:
 - Confirm the app id in `tutti.app.json`, `app_id`, and `release_tag_prefix` are consistent.
 - Confirm the selected runner can build the app package.
 - Confirm the organization or repository variables are visible to the app repository.
-- When `min_tutti_version` is greater than `0.0.0`, confirm a lower Tutti version does not select the release.
-- Confirm the declared minimum or a newer Tutti version selects the release. For `0.0.0`, also test the oldest supported Tutti version.
+- When `min_tutti_version` is greater than `0.0.0`, confirm a lower DinTalDock version does not select the release.
+- Confirm the declared minimum or a newer DinTalDock version selects the release. For `0.0.0`, also test the oldest supported DinTalDock version.
 - Run the staging workflow first, then production only after the staging release and optional staging catalog are verified.

@@ -1164,7 +1164,7 @@ func TestTuttiModePlanInitialScheduleMaterializationIsInert(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	store := openIssueServiceStore(t)
-	if err := store.Create(ctx, workspacebiz.Summary{ID: "ws-inert-tutti", Name: "Inert Tutti"}); err != nil {
+	if err := store.Create(ctx, workspacebiz.Summary{ID: "ws-inert-tutti", Name: "Inert DinTalDock"}); err != nil {
 		t.Fatalf("Create() workspace error = %v", err)
 	}
 	for _, target := range agenttargetbiz.DefaultSystemTargets(time.Now().UnixMilli()) {
@@ -1190,7 +1190,7 @@ func TestTuttiModePlanInitialScheduleMaterializationIsInert(t *testing.T) {
 		Issue: CreateIssueManagerIssueInput{
 			IssueID:                "tutti-mode-plan-inert-tutti",
 			TopicID:                workspaceissues.DefaultTopicID,
-			Title:                  "Inert Tutti issue",
+			Title:                  "Inert DinTalDock issue",
 			PlanningSource:         string(workspaceissues.PlanningSourceTuttiModePlan),
 			SourceSessionID:        "planning-session",
 			SequentialExecution:    true,
@@ -1756,7 +1756,7 @@ func TestTuttiModeTaskPromptScalesValidationWithEffect(t *testing.T) {
 		{effect: 90, want: "edge or variant case"},
 	} {
 		issue := workspaceissues.Issue{
-			Title:          "Tutti preferences",
+			Title:          "DinTalDock preferences",
 			Content:        "Implement the plan",
 			PlanningSource: workspaceissues.PlanningSourceTuttiModePlan,
 			ExecutionProfile: workspaceissues.ExecutionProfile{
@@ -1764,7 +1764,7 @@ func TestTuttiModeTaskPromptScalesValidationWithEffect(t *testing.T) {
 			},
 		}
 		prompt := issueTaskPrompt(issue, task, ".", "", "", nil)
-		if !strings.Contains(prompt, fmt.Sprintf("Tutti effect preference: %d/100", testCase.effect)) ||
+		if !strings.Contains(prompt, fmt.Sprintf("DinTalDock effect preference: %d/100", testCase.effect)) ||
 			!strings.Contains(prompt, testCase.want) {
 			t.Fatalf("effect %d prompt = %q, want validation guidance containing %q", testCase.effect, prompt, testCase.want)
 		}
