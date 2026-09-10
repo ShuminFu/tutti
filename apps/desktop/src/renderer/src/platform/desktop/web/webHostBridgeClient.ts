@@ -13,9 +13,12 @@
 //                              { type: "tutti-host-response", id, error: "unsupported" }
 //                              { type: "tutti-host-response", id, error: "<message>" }
 
+import { writeWorkspaceFileDropData } from "@tutti-os/agent-gui/workspace-file-drop";
+
 const REQUEST_TYPE = "tutti-host-request";
 const RESPONSE_TYPE = "tutti-host-response";
 export const HOST_FOCUS_TYPE = "tutti-host-focus";
+export const HOST_FILE_DROP_TYPE = "tutti-host-file-drop";
 export const HOST_WORKBENCH_LAYOUT_TYPE = "tutti-host-workbench-layout";
 const FULLSCREEN_WORKBENCH_WINDOW_SELECTOR =
   '.workbench-window-shell[data-display-mode="fullscreen"]';
@@ -117,6 +120,85 @@ export function installHostFocusRecovery(
     documentRef.removeEventListener("focusin", onFocusIn);
     windowRef.removeEventListener("message", onMessage);
   };
+}
+
+export function installHostFileDropBridge(
+  windowRef: Window = window,
+  documentRef: Document = document,
+  DataTransferRef: typeof DataTransfer = globalThis.DataTransfer,
+  DragEventRef: typeof DragEvent = globalThis.DragEvent
+): () => void {
+  const coordinates = bridgeCoordinates(windowRef.location.search);
+  if (
+    !coordinates ||
+    !windowRef.parent ||
+    windowRef.parent === windowRef ||
+    !DataTransferRef ||
+    !DragEventRef
+  ) {
+    return () => undefined;
+  }
+
+  const parent = windowRef.parent;
+  const onMessage = (event: MessageEvent): void => {
+    const data = event.data as
+      | {
+          type?: unknown;
+          nonce?: unknown;
+          paths?: unknown;
+          x?: unknown;
+          y?: unknown;
+        }
+      | null
+      | undefined;
+    if (
+      !data ||
+      typeof data !== "object" ||
+      data.type !== HOST_FILE_DROP_TYPE ||
+      data.nonce !== coordinates.nonce ||
+      event.source !== parent ||
+      event.origin !== coordinates.hostOrigin
+    ) {
+      return;
+    }
+    const x = Number(data.x);
+    const y = Number(data.y);
+    const paths = Array.isArray(data.paths)
+      ? data.paths.filter(
+          (path): path is string =>
+            typeof path === "string" && path.trim() !== ""
+        )
+      : [];
+    if (!Number.isFinite(x) || !Number.isFinite(y) || paths.length === 0) {
+      return;
+    }
+    const detail = documentRef
+      .elementFromPoint(x, y)
+      ?.closest?.("#agent-gui-detail");
+    const editor = detail?.querySelector<HTMLElement>(
+      '.agent-gui-node__rich-text-editor-content [contenteditable="true"]'
+    );
+    if (!editor) {
+      return;
+    }
+    const transfer = new DataTransferRef();
+    writeWorkspaceFileDropData(
+      transfer,
+      paths.map((path) => ({ path, name: "", kind: "unknown" as const }))
+    );
+    editor.dispatchEvent(
+      new DragEventRef("drop", {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+        dataTransfer: transfer
+      })
+    );
+  };
+
+  windowRef.addEventListener("message", onMessage);
+  return () => windowRef.removeEventListener("message", onMessage);
 }
 
 export function installHostWorkbenchLayoutNotifications(

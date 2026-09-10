@@ -33,6 +33,7 @@
     "./provider-icons": "./provider-icons.ts",
     "./agentGuiSessionProviderIconUrls": "./agentGuiSessionProviderIconUrls.ts",
     "./workspace-agent-generated-files": "./shared/workspaceAgentGeneratedFiles.ts",
+    "./workspace-file-drop": "./agent-gui/terminalNode/workspaceFileDrop.ts",
     "./conversation-message-controller": "./agentConversationMessageController.ts",
     "./conversation-rail-controller": "./agentConversationRailController.ts",
     "./conversation-rail-runtime": "./agentConversationRailRuntime.ts",
@@ -240,6 +241,10 @@
         "types": "./dist/workspace-agent-generated-files.d.ts",
         "import": "./dist/workspace-agent-generated-files.js"
       },
+      "./workspace-file-drop": {
+        "types": "./dist/workspace-file-drop.d.ts",
+        "import": "./dist/workspace-file-drop.js"
+      },
       "./conversation-message-controller": {
         "types": "./dist/conversation-message-controller.d.ts",
         "import": "./dist/conversation-message-controller.js"
@@ -377,6 +382,9 @@
         ],
         "workspace-agent-generated-files": [
           "./dist/workspace-agent-generated-files.d.ts"
+        ],
+        "workspace-file-drop": [
+          "./dist/workspace-file-drop.d.ts"
         ],
         "conversation-message-controller": [
           "./dist/conversation-message-controller.d.ts"

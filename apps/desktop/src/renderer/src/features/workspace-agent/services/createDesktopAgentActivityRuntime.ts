@@ -28,7 +28,12 @@ interface CreateDesktopAgentActivityRuntimeOptions {
   reporterNow?: () => number;
   reporterService?: Pick<IReporterService, "trackEvents">;
   hostFilesApi?: Partial<
-    Pick<DesktopHostFilesApi, "archiveAgentPromptFile" | "readLocalPreviewFile">
+    Pick<
+      DesktopHostFilesApi,
+      | "agentPromptFileArchiveSupported"
+      | "archiveAgentPromptFile"
+      | "readLocalPreviewFile"
+    >
   >;
   runtimeApi?: Pick<
     DesktopRuntimeApi,
@@ -112,7 +117,10 @@ export function createDesktopAgentActivityRuntime(
       workspaceId: input.workspaceId
     });
   };
-  const archiveAgentPromptFile = options.hostFilesApi?.archiveAgentPromptFile;
+  const archiveAgentPromptFile =
+    options.hostFilesApi?.agentPromptFileArchiveSupported === false
+      ? undefined
+      : options.hostFilesApi?.archiveAgentPromptFile;
   const readLocalPreviewFile = options.hostFilesApi?.readLocalPreviewFile;
   const conversationRailRuntime = createAgentConversationRailRuntime(
     workspaceAgentActivityService

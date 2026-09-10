@@ -21,6 +21,7 @@ import { desktopErrorCodes } from "@shared/errors/desktopErrors";
 import { resolveWebBackendConfigFrom } from "./resolveWebBackendConfig";
 import {
   HostBridgeUnavailableError,
+  installHostFileDropBridge,
   installHostFocusRecovery,
   installHostWorkbenchLayoutNotifications,
   requestHostCapability
@@ -44,6 +45,7 @@ const webAppUpdateState: AppUpdateState = {
 
 export function createWebDesktopApi(): DesktopApi {
   const backendConfig = resolveWebBackendConfig();
+  installHostFileDropBridge();
   installHostFocusRecovery();
   installHostWorkbenchLayoutNotifications();
 
@@ -318,6 +320,9 @@ function createWebPlatformApi(): DesktopPlatformApi {
 function createWebHostApi(): DesktopHostApi {
   return {
     files: {
+      // The web API keeps the desktop method for type compatibility, but the
+      // runtime must not mistake its rejecting stub for upload support.
+      agentPromptFileArchiveSupported: false,
       createUserDocumentsProjectDirectory(input) {
         // Embedded DinTalDock serves this UI and the directory endpoint from
         // the same cliagent origin. Prefer the direct route so session creation

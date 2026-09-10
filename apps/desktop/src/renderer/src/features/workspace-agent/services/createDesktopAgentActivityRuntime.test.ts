@@ -118,6 +118,28 @@ test("desktop agent activity runtime hides prompt uploads without archive suppor
   assert.equal(runtime.stagePastedText, undefined);
 });
 
+test("desktop agent activity runtime ignores an unavailable web archive stub", () => {
+  let archiveCalls = 0;
+  const runtime = createDesktopAgentActivityRuntime(
+    createWorkspaceAgentActivityService(),
+    {
+      hostFilesApi: {
+        agentPromptFileArchiveSupported: false,
+        async archiveAgentPromptFile() {
+          archiveCalls += 1;
+          throw new Error("web archive unavailable");
+        }
+      }
+    }
+  );
+
+  assert.equal(runtime.promptContentUploadSupport?.file, false);
+  assert.equal(runtime.promptContentUploadSupport?.image, false);
+  assert.equal(runtime.uploadPromptContent, undefined);
+  assert.equal(runtime.stagePastedText, undefined);
+  assert.equal(archiveCalls, 0);
+});
+
 test("desktop agent activity runtime stages pasted text as a local prompt asset", async () => {
   const archiveInputs: unknown[] = [];
   const runtime = createDesktopAgentActivityRuntime(

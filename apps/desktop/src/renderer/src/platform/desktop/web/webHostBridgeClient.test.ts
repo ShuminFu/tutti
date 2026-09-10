@@ -1,11 +1,100 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  HOST_FILE_DROP_TYPE,
   HOST_FOCUS_TYPE,
   HOST_WORKBENCH_LAYOUT_TYPE,
+  installHostFileDropBridge,
   installHostFocusRecovery,
   installHostWorkbenchLayoutNotifications
 } from "./webHostBridgeClient.ts";
+
+test("embedded host file drops reuse the workspace-file composer path", () => {
+  let messageListener: ((event: MessageEvent) => void) | null = null;
+  const parent = {} as WindowProxy;
+  const dispatched: Array<{ type: string; data: Record<string, string> }> = [];
+  const editor = {
+    dispatchEvent(event: {
+      type: string;
+      dataTransfer: { data: Record<string, string> };
+    }) {
+      dispatched.push({ type: event.type, data: event.dataTransfer.data });
+      return true;
+    }
+  };
+  const detail = { querySelector: () => editor };
+  const windowRef = {
+    addEventListener(type: string, listener: EventListener) {
+      if (type === "message") {
+        messageListener = listener as (event: MessageEvent) => void;
+      }
+    },
+    location: {
+      search: "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+    },
+    parent,
+    removeEventListener() {}
+  } as unknown as Window;
+  const documentRef = {
+    elementFromPoint: () => ({ closest: () => detail })
+  } as unknown as Document;
+  class FakeDataTransfer {
+    data: Record<string, string> = {};
+    effectAllowed = "none";
+    setData(type: string, value: string) {
+      this.data[type] = value;
+    }
+  }
+  class FakeDragEvent {
+    type: string;
+    dataTransfer: FakeDataTransfer;
+    constructor(type: string, input: { dataTransfer: FakeDataTransfer }) {
+      this.type = type;
+      this.dataTransfer = input.dataTransfer;
+    }
+  }
+
+  installHostFileDropBridge(
+    windowRef,
+    documentRef,
+    FakeDataTransfer as unknown as typeof DataTransfer,
+    FakeDragEvent as unknown as typeof DragEvent
+  );
+  const drop = (overrides: Record<string, unknown> = {}) => {
+    const { event, ...data } = overrides;
+    messageListener?.({
+      data: {
+        type: HOST_FILE_DROP_TYPE,
+        nonce: "nonce-1",
+        paths: ["/tmp/report.pdf", "/tmp/report.pdf"],
+        x: 30,
+        y: 40,
+        ...data
+      },
+      origin: "http://wails.localhost",
+      source: parent,
+      ...((event as Record<string, unknown> | undefined) ?? {})
+    } as MessageEvent);
+  };
+  drop({ nonce: "wrong" });
+  drop({ event: { origin: "https://evil.example" } });
+  drop({ event: { source: {} as WindowProxy } });
+  assert.equal(dispatched.length, 0);
+  drop();
+
+  assert.equal(dispatched.length, 1);
+  assert.equal(dispatched[0]?.type, "drop");
+  assert.deepEqual(
+    JSON.parse(
+      dispatched[0]?.data["application/x-tsh-workspace-file-paths+json"] ?? ""
+    ),
+    {
+      entries: [
+        { path: "/tmp/report.pdf", name: "report.pdf", kind: "unknown" }
+      ]
+    }
+  );
+});
 
 test("host focus recovery restores the last focused element", () => {
   const harness = createHarness();

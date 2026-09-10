@@ -217,6 +217,8 @@ export interface DesktopWorkspaceAppExternalHostApi {
 }
 
 export interface DesktopHostFilesApi {
+  /** False when a web shim only exposes the method to satisfy the desktop API shape. */
+  agentPromptFileArchiveSupported?: boolean;
   createUserDocumentsProjectDirectory(input: {
     name: string;
     allowExisting?: boolean;
