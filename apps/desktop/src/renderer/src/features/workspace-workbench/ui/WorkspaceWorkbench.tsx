@@ -126,6 +126,7 @@ import {
   openWorkspaceWorkbenchSameTypeWindowShortcut
 } from "../services/workspaceWorkbenchShortcutActions.ts";
 import {
+  applyEmbeddedDintalDockContributions,
   isEmbeddedDintalDock,
   reconcileEmbeddedDintalDock
 } from "./embeddedDintalDock.ts";
@@ -317,9 +318,11 @@ function ReadyWorkspaceWorkbenchWithSession({
   const contributions = useMemo(
     () =>
       embeddedDintalDock
-        ? hostInput.contributions?.filter((contribution) =>
-            contribution.nodes?.some(
-              (node) => node.typeId === workspaceAgentGuiNodeID
+        ? applyEmbeddedDintalDockContributions(
+            hostInput.contributions?.filter((contribution) =>
+              contribution.nodes?.some(
+                (node) => node.typeId === workspaceAgentGuiNodeID
+              )
             )
           )
         : hostInput.contributions,

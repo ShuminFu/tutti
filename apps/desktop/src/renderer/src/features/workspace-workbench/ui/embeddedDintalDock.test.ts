@@ -1,13 +1,155 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applyEmbeddedDintalDockContributions,
   isEmbeddedDintalDock,
-  reconcileEmbeddedDintalDock
+  reconcileEmbeddedDintalDock,
+  renderEmbeddedDintalDockBody
 } from "./embeddedDintalDock.ts";
 
 test("detects only the protected host bootstrap query", () => {
   assert.equal(isEmbeddedDintalDock("?tuttiBootstrap=nonce-1"), true);
   assert.equal(isEmbeddedDintalDock("?workspace=one"), false);
+});
+
+test("projects the embedded Agent frame for its body and header", () => {
+  const rawFrame = { height: 192, width: 320, x: 13, y: 52 };
+  const projectedFrame = { height: 825, width: 759, x: 0, y: 0 };
+  const bodyFrames: typeof rawFrame[] = [];
+  const headerFrames: typeof rawFrame[] = [];
+  const keyFrames: typeof rawFrame[] = [];
+  const renderBody = (context: { node: { frame: typeof rawFrame } }) => {
+    bodyFrames.push(context.node.frame);
+    return null;
+  };
+  const contributions = applyEmbeddedDintalDockContributions([
+    {
+      id: "agent",
+      nodes: [
+        {
+          frame: rawFrame,
+          getHeaderFrameRenderKey: (context) => {
+            keyFrames.push(context.node.frame);
+            return context.node.frame.width >= 630 ? "expanded" : "collapsed";
+          },
+          renderBody: renderBody as never,
+          renderHeader: (context) => {
+            headerFrames.push(context.node.frame);
+            assert.equal(context.dragHandleProps.onDoubleClick, undefined);
+            assert.equal(context.dragHandleProps.onPointerDown, undefined);
+            return null;
+          },
+          title: "Agent",
+          typeId: "agent-gui"
+        }
+      ]
+    }
+  ]);
+  const definition = contributions?.[0]?.nodes?.[0];
+  const getHeaderFrameRenderKey = definition?.getHeaderFrameRenderKey;
+  const renderHeader = definition?.renderHeader;
+  assert.ok(getHeaderFrameRenderKey);
+  assert.ok(renderHeader);
+
+  renderHeader({
+    dragHandleProps: {
+      "data-workbench-drag-handle": "true",
+      onDoubleClick: () => undefined,
+      onPointerDown: () => undefined
+    },
+    node: { frame: rawFrame },
+    surfaceSize: { height: 825, width: 759 }
+  } as never);
+  assert.equal(
+    getHeaderFrameRenderKey({
+      node: { frame: rawFrame },
+      surfaceSize: { height: 825, width: 759 }
+    } as never),
+    "expanded"
+  );
+  renderEmbeddedDintalDockBody(
+    {
+      host: {
+        getSnapshot: () => ({
+          surfaceSize: { height: 825, width: 759 }
+        })
+      },
+      node: { frame: rawFrame }
+    } as never,
+    renderBody as never
+  );
+
+  assert.deepEqual(headerFrames, [projectedFrame]);
+  assert.deepEqual(keyFrames, [projectedFrame]);
+  assert.deepEqual(bodyFrames, [projectedFrame]);
+});
+
+test("waits for a positive body surface and keeps narrow auto-collapse", () => {
+  const rawFrame = { height: 192, width: 320, x: 13, y: 52 };
+  let surfaceSize = { height: 0, width: 0 };
+  const bodyFrames: (typeof rawFrame)[] = [];
+  const renderBody = (context: { node: { frame: typeof rawFrame } }) => {
+    bodyFrames.push(context.node.frame);
+    return null;
+  };
+  const bodyContext = {
+    host: { getSnapshot: () => ({ surfaceSize }) },
+    node: { frame: rawFrame }
+  } as never;
+
+  renderEmbeddedDintalDockBody(bodyContext, renderBody as never);
+  surfaceSize = { height: 825, width: Number.NaN };
+  renderEmbeddedDintalDockBody(bodyContext, renderBody as never);
+  surfaceSize = { height: 825, width: 759 };
+  renderEmbeddedDintalDockBody(bodyContext, renderBody as never);
+  assert.deepEqual(bodyFrames, [
+    rawFrame,
+    rawFrame,
+    { height: 825, width: 759, x: 0, y: 0 }
+  ]);
+
+  const getHeaderFrameRenderKey = applyEmbeddedDintalDockContributions([
+    {
+      id: "agent",
+      nodes: [
+        {
+          frame: rawFrame,
+          getHeaderFrameRenderKey: (context) =>
+            context.node.frame.width >= 630 ? "expanded" : "collapsed",
+          renderBody: () => null,
+          title: "Agent",
+          typeId: "agent-gui"
+        }
+      ]
+    }
+  ])?.[0]?.nodes?.[0]?.getHeaderFrameRenderKey;
+  assert.equal(
+    getHeaderFrameRenderKey?.({
+      node: { frame: rawFrame },
+      surfaceSize: { height: 825, width: 600 }
+    } as never),
+    "collapsed"
+  );
+  assert.equal(
+    getHeaderFrameRenderKey?.({
+      node: { frame: rawFrame },
+      surfaceSize: { height: Number.POSITIVE_INFINITY, width: 759 }
+    } as never),
+    "collapsed"
+  );
+});
+
+test("leaves non-Agent contributions unchanged", () => {
+  const node = {
+    frame: { height: 600, width: 800, x: 0, y: 0 },
+    renderBody: () => null,
+    title: "Files",
+    typeId: "files"
+  };
+  const contributions = applyEmbeddedDintalDockContributions([
+    { id: "files", nodes: [node] }
+  ]);
+  assert.equal(contributions?.[0]?.nodes?.[0], node);
 });
 
 test("keeps the frontmost agent and removes the rest of the desktop", async () => {

@@ -36,3 +36,8 @@
 .rndmaster-dintaldock-embedded .workbench-window__resize-handle {
   display: none !important;
 }
+
+.rndmaster-dintaldock-embedded [data-workbench-drag-handle="true"] {
+  cursor: default;
+  user-select: auto;
+}
