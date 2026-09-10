@@ -439,10 +439,17 @@ function createConversationRailToggleButton({
       variant: "ghost",
       onClick: (event) => {
         event.stopPropagation();
-        onToggleConversationRail(!isCollapsed);
+        if (event.detail === 0) {
+          onToggleConversationRail(!isCollapsed);
+        }
       },
       onDoubleClick: (event) => event.stopPropagation(),
-      onPointerDown: (event) => event.stopPropagation()
+      onPointerDown: (event) => {
+        event.stopPropagation();
+        if (event.button === 0) {
+          onToggleConversationRail(!isCollapsed);
+        }
+      }
     },
     createElement(PanelIcon, { className: headerChromeIconClassName })
   );

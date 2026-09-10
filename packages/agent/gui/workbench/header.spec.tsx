@@ -6,6 +6,43 @@ import { AgentGuiWorkbenchHeader } from "./header";
 afterEach(cleanup);
 
 describe("AgentGuiWorkbenchHeader conversation identity", () => {
+  it("toggles the conversation rail on primary pointer down without double firing", () => {
+    const onHeaderPointerDown = vi.fn();
+    const onToggleConversationRail = vi.fn();
+
+    render(
+      <AgentGuiWorkbenchHeader
+        copy={{
+          collapseConversationRail: "Collapse",
+          expandConversationRail: "Expand",
+          fallbackAgentLabel: "Agent",
+          newConversation: "New conversation"
+        }}
+        isConversationRailAutoCollapsed={false}
+        isConversationRailCollapsed={false}
+        nodeId="pointer-reliable-agent-gui"
+        showWindowControls={false}
+        onPointerDown={onHeaderPointerDown}
+        onToggleConversationRail={onToggleConversationRail}
+      />
+    );
+
+    const toggle = screen.getByTestId("agent-gui-toggle-conversation-rail");
+    fireEvent.pointerDown(toggle, { button: 0, pointerType: "mouse" });
+    fireEvent.click(toggle, { detail: 1 });
+
+    expect(onHeaderPointerDown).not.toHaveBeenCalled();
+    expect(onToggleConversationRail).toHaveBeenCalledTimes(1);
+    expect(onToggleConversationRail).toHaveBeenLastCalledWith(true);
+
+    fireEvent.pointerDown(toggle, { button: 2, pointerType: "mouse" });
+    expect(onToggleConversationRail).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(toggle, { detail: 0 });
+    expect(onToggleConversationRail).toHaveBeenCalledTimes(2);
+    expect(onToggleConversationRail).toHaveBeenLastCalledWith(true);
+  });
+
   it.each([false, true])(
     "hides conversation identity without a conversation when collapsed is %s",
     (isConversationRailCollapsed) => {
