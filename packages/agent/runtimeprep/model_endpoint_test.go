@@ -1,6 +1,9 @@
 package runtimeprep
 
 import (
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -65,6 +68,48 @@ func TestCodexConfigWithModelPlanEndpointPreservesWebSearch(t *testing.T) {
 	}
 	if !strings.Contains(next, "web_search = \"live\"") {
 		t.Fatalf("web_search should be preserved:\n%s", next)
+	}
+}
+
+func TestCodexConfigWithModelPlanEndpointPinsHostCatalog(t *testing.T) {
+	t.Parallel()
+
+	catalogPath := filepath.Join(t.TempDir(), "model_catalog.json")
+	if err := os.WriteFile(catalogPath, []byte(`{"models":[]}`), 0o600); err != nil {
+		t.Fatalf("write catalog: %v", err)
+	}
+	endpoint := &ModelEndpointConfig{
+		Protocol:         "openai",
+		BaseURL:          "https://relay.example/v1",
+		APIKey:           "sk-secret",
+		Model:            "seed-code",
+		ModelCatalogPath: catalogPath,
+	}
+	next, changed := codexConfigWithModelPlanEndpoint("model = \"gpt-5\"\n", endpoint)
+	if !changed {
+		t.Fatalf("codexConfigWithModelPlanEndpoint() changed = false")
+	}
+	want := "model_catalog_json = " + strconv.Quote(catalogPath)
+	if !strings.Contains(next, want) {
+		t.Fatalf("host catalog not pinned (%s):\n%s", want, next)
+	}
+	if strings.Index(next, "model_catalog_json") > strings.Index(next, "[model_providers.") {
+		t.Fatalf("model_catalog_json must stay a top-level key:\n%s", next)
+	}
+
+	// A path Codex cannot read is fatal at startup and it does not fall back to
+	// the bundled list, so the key must be omitted rather than written.
+	for name, candidate := range map[string]string{
+		"missing":   filepath.Join(t.TempDir(), "absent.json"),
+		"relative":  "model_catalog.json",
+		"directory": t.TempDir(),
+	} {
+		unusable := *endpoint
+		unusable.ModelCatalogPath = candidate
+		plain, _ := codexConfigWithModelPlanEndpoint("model = \"gpt-5\"\n", &unusable)
+		if strings.Contains(plain, "model_catalog_json") {
+			t.Fatalf("%s catalog path must be omitted from config:\n%s", name, plain)
+		}
 	}
 }
 

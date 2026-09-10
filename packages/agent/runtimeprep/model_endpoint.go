@@ -2,6 +2,8 @@ package runtimeprep
 
 import (
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -27,8 +29,14 @@ type ModelEndpointConfig struct {
 	// Models lists every model the plan authorizes (redaction-safe ids and
 	// display names). Providers that materialize a session-scoped catalog
 	// (OpenCode's provider block) need the full list, not just the default.
-	Models              []ModelEndpointModel `json:"models,omitempty"`
-	PlanUpdatedAtUnixMS int64                `json:"planUpdatedAtUnixMs,omitempty"`
+	Models []ModelEndpointModel `json:"models,omitempty"`
+	// ModelCatalogPath is an absolute path to a complete Codex model catalog
+	// the host already materialized for this plan. Codex replaces its bundled
+	// list wholesale with `model_catalog_json`, but it exits 1 when the path
+	// points at nothing (no fallback), so this is only ever applied to an
+	// existing regular file — see codexConfigWithModelPlanEndpoint.
+	ModelCatalogPath    string `json:"modelCatalogPath,omitempty"`
+	PlanUpdatedAtUnixMS int64  `json:"planUpdatedAtUnixMs,omitempty"`
 }
 
 // ModelEndpointModel is one selectable model exposed by the bound plan.
@@ -139,6 +147,9 @@ func codexConfigWithModelPlanEndpoint(content string, endpoint *ModelEndpointCon
 	if model := strings.TrimSpace(endpoint.Model); model != "" {
 		next = codexConfigWithTopLevelAssignment(next, "model", strconv.Quote(model))
 	}
+	if catalog := codexModelCatalogPath(endpoint); catalog != "" {
+		next = codexConfigWithTopLevelAssignment(next, "model_catalog_json", strconv.Quote(catalog))
+	}
 	table := "[model_providers." + codexModelPlanProviderID + "]\n" +
 		"name = " + strconv.Quote(planProviderDisplayName(endpoint)) + "\n" +
 		"base_url = " + strconv.Quote(strings.TrimSpace(endpoint.BaseURL)) + "\n" +
@@ -152,6 +163,32 @@ func codexConfigWithModelPlanEndpoint(content string, endpoint *ModelEndpointCon
 		}
 	}
 	return next, next != content
+}
+
+// codexModelCatalogPath returns the host-supplied catalog path, but only while
+// it still resolves to a regular file. `model_catalog_json` replaces Codex's
+// bundled model list outright and a path it cannot read is fatal — it exits 1
+// with no fallback to the bundled list — so a path we cannot vouch for right
+// now is strictly worse than leaving the key out: the session then keeps
+// Codex's own list and merely loses the plan's model metadata. The check is
+// also why a relative path is rejected: it would resolve against whichever
+// directory the agent happens to run in, which is not the directory this stat
+// would have used.
+//
+// RNDMASTER_CODEX_MODEL_CATALOG is the managed-source marker for this patch.
+func codexModelCatalogPath(endpoint *ModelEndpointConfig) string {
+	if endpoint == nil {
+		return ""
+	}
+	path := strings.TrimSpace(endpoint.ModelCatalogPath)
+	if path == "" || !filepath.IsAbs(path) || strings.ContainsAny(path, "\x00\r\n") {
+		return ""
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return ""
+	}
+	return path
 }
 
 func codexModelEndpointWireAPI(endpoint *ModelEndpointConfig) string {
