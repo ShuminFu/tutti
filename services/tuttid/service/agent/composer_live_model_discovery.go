@@ -312,14 +312,11 @@ func (s *Service) discoverLiveComposerModelsUncachedForScope(
 				"provider":      scope.provider,
 			})
 		}
-		cleanupCtx := ctx
-		cancelCleanup := func() {}
 		if isExtension {
-			cleanupCtx, cancelCleanup = context.WithTimeout(context.Background(), liveModelDiscoveryLifecycleTimeout)
+			go s.cleanupLiveModelDiscoverySession(scope.workspaceID, startInput.AgentSessionID)
+			return nil, err
 		}
-		cleanupErr := s.cleanupRuntime(cleanupCtx, scope.workspaceID, startInput.AgentSessionID)
-		cancelCleanup()
-		if cleanupErr != nil {
+		if cleanupErr := s.cleanupRuntime(ctx, scope.workspaceID, startInput.AgentSessionID); cleanupErr != nil {
 			return nil, errors.Join(err, cleanupErr)
 		}
 		return nil, err
@@ -348,21 +345,8 @@ func (s *Service) discoverLiveComposerModelsUncachedForScope(
 		if len(runtimeContext) > 0 {
 			s.setComposerRuntimeContextForScope(scope, time.Now().UTC(), runtimeContext)
 		}
-		cleanupCtx, cancelCleanup := context.WithTimeout(context.Background(), liveModelDiscoveryLifecycleTimeout)
-		_, cleanupErr := s.Delete(cleanupCtx, scope.workspaceID, session.ID)
-		cancelCleanup()
-		if errors.Is(cleanupErr, ErrSessionNotFound) {
-			cleanupErr = nil
-		}
-		if cleanupErr == nil {
-			s.untrackLiveModelDiscoverySession(scope.workspaceID, session.ID)
-		} else {
-			s.scheduleLiveModelDiscoveryDelete(scope.workspaceID, session.ID)
-		}
-		if pollErr != nil || cleanupErr != nil {
-			return nil, errors.Join(pollErr, cleanupErr)
-		}
-		return options, nil
+		go s.cleanupLiveModelDiscoverySession(scope.workspaceID, session.ID)
+		return options, pollErr
 	}
 	s.scheduleLiveModelDiscoveryDelete(scope.workspaceID, session.ID)
 	return options, pollErr
@@ -381,6 +365,21 @@ func (s *Service) discoverLiveComposerModelsUncached(
 		nil,
 		settings,
 	)
+}
+
+func (s *Service) cleanupLiveModelDiscoverySession(workspaceID string, agentSessionID string) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	agentSessionID = strings.TrimSpace(agentSessionID)
+	if workspaceID == "" || agentSessionID == "" {
+		return
+	}
+	cleanupCtx, cancelCleanup := context.WithTimeout(context.Background(), liveModelDiscoveryTimeout)
+	defer cancelCleanup()
+	if _, err := s.Delete(cleanupCtx, workspaceID, agentSessionID); err == nil || errors.Is(err, ErrSessionNotFound) {
+		s.untrackLiveModelDiscoverySession(workspaceID, agentSessionID)
+		return
+	}
+	s.scheduleLiveModelDiscoveryDelete(workspaceID, agentSessionID)
 }
 
 func (s *Service) scheduleLiveModelDiscoveryDelete(workspaceID string, agentSessionID string) {

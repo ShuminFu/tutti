@@ -3178,6 +3178,16 @@ func TestRegistrySelectNormalizesAndDeduplicatesProviders(t *testing.T) {
 	}
 }
 
+func TestRegistrySelectSkipsExtensionOwnedACPProviders(t *testing.T) {
+	specs, err := DefaultRegistry().Select([]string{"acp:deepseek-harness", "codex"})
+	if err != nil {
+		t.Fatalf("Select() error = %v", err)
+	}
+	if len(specs) != 1 || specs[0].Provider != "codex" {
+		t.Fatalf("Select() = %#v, want only codex", specs)
+	}
+}
+
 func TestServiceSelectInstallDirPrefersUserLocalBin(t *testing.T) {
 	home := t.TempDir()
 	// A writable directory on PATH must NOT be preferred over the stable

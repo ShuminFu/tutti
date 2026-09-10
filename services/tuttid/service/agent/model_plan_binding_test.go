@@ -197,6 +197,40 @@ func TestResolveCreateSessionModelUsesExtensionDeclaredHostEndpoint(t *testing.T
 	}
 }
 
+func TestResolveCreateSessionModelKeepsRequestedHostCatalogModel(t *testing.T) {
+	setHostModelEndpointContract(t, "acp:deepseek-harness", "openai", "chat")
+	service := &Service{
+		ExtensionComposerProfiles: extensionComposerProfileResolverStub{profile: ExtensionComposerProfile{
+			RuntimePrep: &runtimeprep.ExtensionRuntimePrep{
+				ModelEndpoint: &runtimeprep.ExtensionModelEndpoint{Protocol: "openai", WireAPI: "chat"},
+			},
+		}},
+	}
+	input := CreateSessionInput{
+		AgentTargetID: "extension:deepseek-harness",
+		ProviderTargetRef: map[string]any{
+			"kind":                    "agent_extension",
+			"extensionInstallationId": "deepseek-harness@0.1.0",
+		},
+	}
+	resolution, err := service.resolveCreateSessionModelForPlanOrProvider(
+		context.Background(),
+		"workspace",
+		"acp:deepseek-harness",
+		"gateway-alt",
+		&input,
+	)
+	if err != nil {
+		t.Fatalf("resolveCreateSessionModelForPlanOrProvider() error = %v", err)
+	}
+	if resolution.Endpoint == nil || resolution.Endpoint.Model != "gateway-alt" {
+		t.Fatalf("resolution = %#v, want requested host catalog model", resolution)
+	}
+	if value(input.Model) != "gateway-alt" {
+		t.Fatalf("input model = %q", value(input.Model))
+	}
+}
+
 func TestResolveModelPlanReportsAuthoritativeConfiguration(t *testing.T) {
 	t.Parallel()
 

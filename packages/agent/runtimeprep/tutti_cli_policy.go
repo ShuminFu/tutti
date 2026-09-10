@@ -6,8 +6,18 @@ import (
 )
 
 func tuttiCLIPolicy(input PrepareInput) (string, error) {
+	return tuttiCLIPolicyWithContext(context.Background(), input)
+}
+
+func tuttiCLIPolicyWithContext(ctx context.Context, input PrepareInput) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if input.resolved == nil {
-		if resolved, err := resolveCapabilities(context.Background(), input, StandardProfile(), nil); err == nil {
+		if resolved, err := resolveCapabilities(ctx, input, StandardProfile(), nil); err == nil {
 			input.resolved = resolved
 		} else {
 			return "", err

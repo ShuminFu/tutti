@@ -1,6 +1,8 @@
 package runtimeprep
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -97,6 +99,16 @@ func TestProviderSkillsRenderFromCommandSnapshot(t *testing.T) {
 		if strings.Contains(content, "{{") {
 			t.Fatalf("%s contains unresolved template syntax: %s", label, content)
 		}
+	}
+}
+
+func TestTuttiCLIPolicyWithContextHonorsCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := tuttiCLIPolicyWithContext(ctx, PrepareInput{AgentSessionID: "session-1", Provider: "codex"}); err == nil {
+		t.Fatal("canceled context returned nil error")
+	} else if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
 	}
 }
 

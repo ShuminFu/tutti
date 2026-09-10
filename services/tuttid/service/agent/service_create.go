@@ -17,6 +17,8 @@ import (
 	modelgatewayservice "github.com/tutti-os/tutti/services/tuttid/service/modelgateway"
 )
 
+const sessionCreatePreparationTimeout = 15 * time.Second
+
 func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSessionInput) (Session, error) {
 	result, err := s.CreateWithResult(ctx, workspaceID, input)
 	return result.Session, err
@@ -91,6 +93,7 @@ func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, inpu
 		// agentSessionIDOrNew 同构。
 		input.ClientSubmitID = uuid.NewString()
 	}
+	input.Metadata = sessionCreateTraceMetadata(input.Metadata, input.ClientSubmitID)
 	logAgentSubmitTrace("service.create.entered", workspaceID, input.AgentSessionID, input.ClientSubmitID, input.Metadata, map[string]any{"provider": provider})
 	var normalizedContent []PromptContentBlock
 	if len(input.InitialContent) > 0 {
@@ -107,10 +110,13 @@ func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, inpu
 		s.reportAgentServiceNodeSuccess(ctx, input.AgentSessionID, "session_create", "content_normalized", provider, nodeStartedAt)
 	}
 	logAgentSubmitTrace("service.create.content_normalized", workspaceID, input.AgentSessionID, input.ClientSubmitID, input.Metadata, map[string]any{"content_block_count": len(normalizedContent)})
+	prepCtx, cancelPrep := context.WithTimeout(ctx, sessionCreatePreparationTimeout)
+	defer cancelPrep()
 	requestedModel := value(input.Model)
 	nodeStartedAt := time.Now()
-	planResolution, err := s.resolveCreateSessionModelForPlanOrProvider(ctx, workspaceID, provider, requestedModel, &input)
+	planResolution, err := s.resolveCreateSessionModelForPlanOrProvider(prepCtx, workspaceID, provider, requestedModel, &input)
 	if err != nil {
+		err = sessionCreatePreparationError(err)
 		s.reportAgentServiceNodeFailure(ctx, input.AgentSessionID, "session_create", "model_validated", provider, nodeStartedAt, err)
 		return createSessionFailureResult(input, err)
 	}
@@ -119,8 +125,8 @@ func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, inpu
 	logAgentSubmitTrace("service.create.model_validated", workspaceID, input.AgentSessionID, input.ClientSubmitID, input.Metadata, map[string]any{
 		"model": value(input.Model),
 	})
-	if err := s.applyCreateSessionReasoningIntensity(ctx, provider, value(input.Model), &input); err != nil {
-		return createSessionFailureResult(input, err)
+	if err := s.applyCreateSessionReasoningIntensity(prepCtx, provider, value(input.Model), &input); err != nil {
+		return createSessionFailureResult(input, sessionCreatePreparationError(err))
 	}
 	input.ReasoningEffort = s.clampReasoningEffortPointerForLaunch(
 		ctx,
@@ -138,8 +144,9 @@ func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, inpu
 		s.reportAgentServiceNodeFailure(ctx, input.AgentSessionID, "session_create", "cwd_resolved", provider, nodeStartedAt, err)
 		return createSessionFailureResult(input, err)
 	}
-	cwd, err := s.resolveCwd(ctx, input.Cwd)
+	cwd, err := s.resolveCwd(prepCtx, input.Cwd)
 	if err != nil {
+		err = sessionCreatePreparationError(err)
 		s.reportAgentServiceNodeFailure(ctx, input.AgentSessionID, "session_create", "cwd_resolved", provider, nodeStartedAt, err)
 		return createSessionFailureResult(input, err)
 	}
@@ -151,9 +158,9 @@ func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, inpu
 	var isolationWarnings []SessionWarning
 	keepWorktree := false
 	if isolationMode == WorktreeIsolationMode {
-		launch, createErr := s.createSessionWorktree(ctx, workspaceID, cwd, input.AgentSessionID)
+		launch, createErr := s.createSessionWorktree(prepCtx, workspaceID, cwd, input.AgentSessionID)
 		if createErr != nil {
-			return createSessionFailureResult(input, createErr)
+			return createSessionFailureResult(input, sessionCreatePreparationError(createErr))
 		}
 		isolation = &launch.Isolation
 		isolationWarnings = launch.Warnings
@@ -171,7 +178,7 @@ func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, inpu
 	if providerTargetRefKind(input.ProviderTargetRef) == "agent_extension" {
 		nodeStartedAt = time.Now()
 		if err := s.validateExtensionComposerSettingsForCreate(
-			ctx,
+			prepCtx,
 			workspaceID,
 			cwd,
 			&input,
@@ -179,15 +186,23 @@ func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, inpu
 			permissionModeExplicit,
 			reasoningEffortExplicit,
 		); err != nil {
+			err = sessionCreatePreparationError(err)
 			s.reportAgentServiceNodeFailure(ctx, input.AgentSessionID, "session_create", "settings_validated", provider, nodeStartedAt, err)
+			logAgentSubmitTrace("service.create.settings_validated", workspaceID, input.AgentSessionID, input.ClientSubmitID, input.Metadata, map[string]any{
+				"error": err.Error(),
+			})
 			return createSessionFailureResult(input, err)
 		}
 		input.RuntimeContext = runtimeContextWithSessionRuntimeSnapshot(input.RuntimeContext, input, provider, planResolution)
 		s.reportAgentServiceNodeSuccess(ctx, input.AgentSessionID, "session_create", "settings_validated", provider, nodeStartedAt)
+		logAgentSubmitTrace("service.create.settings_validated", workspaceID, input.AgentSessionID, input.ClientSubmitID, input.Metadata, map[string]any{
+			"model": value(input.Model),
+		})
 	}
 	nodeStartedAt = time.Now()
-	prepared, err := s.prepareRuntime(ctx, workspaceID, cwd, input, planResolution.Endpoint)
+	prepared, err := s.prepareRuntime(prepCtx, workspaceID, cwd, input, planResolution.Endpoint)
 	if err != nil {
+		err = sessionCreatePreparationError(err)
 		s.reportAgentServiceNodeFailure(ctx, input.AgentSessionID, "session_create", "runtime_prepared", provider, nodeStartedAt, err)
 		return createSessionFailureResult(input, err)
 	}
@@ -400,6 +415,32 @@ func createSessionFailureResult(input CreateSessionInput, err error) (CreateSess
 		SessionStatus:     sessionStatus,
 		InitialGoalStatus: initialGoalStatus,
 	}, err
+}
+
+func sessionCreateTraceMetadata(metadata map[string]any, clientSubmitID string) map[string]any {
+	if strings.TrimSpace(clientSubmitID) == "" {
+		return metadata
+	}
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	if strings.TrimSpace(fmt.Sprint(metadata["clientSubmitId"])) == "" {
+		metadata["clientSubmitId"] = clientSubmitID
+	}
+	return metadata
+}
+
+func sessionCreatePreparationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("session preparation timed out after %s: %w", sessionCreatePreparationTimeout, err)
+	}
+	if errors.Is(err, context.Canceled) {
+		return fmt.Errorf("session preparation canceled: %w", err)
+	}
+	return err
 }
 
 func decorateIsolatedSession(session Session, isolation *SessionIsolation, warnings []SessionWarning) Session {

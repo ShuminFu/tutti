@@ -100,6 +100,9 @@ func (r Registry) Select(providers []string) ([]ProviderSpec, error) {
 		normalized := agentprovider.Normalize(provider)
 		spec, ok := byProvider[normalized]
 		if !ok {
+			if agentprovider.NormalizeOpen(provider) != "" {
+				continue
+			}
 			return nil, ErrInvalidProvider
 		}
 		if seen[normalized] {

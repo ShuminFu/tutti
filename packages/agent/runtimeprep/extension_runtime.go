@@ -47,7 +47,7 @@ func (ExtensionRuntimePreparer) Prepare(ctx context.Context, input ProviderPrepa
 	if err != nil {
 		return ProviderPrepareResult{}, err
 	}
-	if err := writeExtensionSessionInstructions(input, *input.ExtensionRuntimePrep.Home); err != nil {
+	if err := writeExtensionSessionInstructions(ctx, input, *input.ExtensionRuntimePrep.Home); err != nil {
 		return ProviderPrepareResult{}, err
 	}
 	envs := []string{env}
@@ -60,12 +60,12 @@ func (ExtensionRuntimePreparer) Prepare(ctx context.Context, input ProviderPrepa
 	}, nil
 }
 
-func writeExtensionSessionInstructions(input ProviderPrepareInput, home ExtensionRuntimeHome) error {
+func writeExtensionSessionInstructions(ctx context.Context, input ProviderPrepareInput, home ExtensionRuntimeHome) error {
 	fileName := strings.TrimSpace(input.ExtensionRuntimePrep.SessionInstructionsFile)
 	if fileName == "" {
 		return nil
 	}
-	policy, err := tuttiCLIPolicy(input.PrepareInput)
+	policy, err := tuttiCLIPolicyWithContext(ctx, input.PrepareInput)
 	if err != nil {
 		return err
 	}

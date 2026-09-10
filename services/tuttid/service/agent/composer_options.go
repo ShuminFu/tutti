@@ -453,6 +453,8 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 	}
 	if planEndpoint == nil && !s.ReplayMode && (composerProfileFor(provider).LiveModelDiscovery ||
 		providerTargetRefKind(input.providerTargetRef) == "agent_extension") {
+		// Host-backed extension catalogs already resolved above. Hidden ACP
+		// discovery is only for first-run composers that still have no endpoint.
 		var err error
 		options, err = s.mergeLiveComposerModelsForComposerOptions(ctx, input, effectiveSettings, options)
 		if err != nil {

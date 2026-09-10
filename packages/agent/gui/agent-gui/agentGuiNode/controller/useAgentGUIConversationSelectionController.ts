@@ -20,7 +20,10 @@ import {
   forgetAgentGUISessionMemories,
   rememberAgentGUIActiveConversation
 } from "../model/agentGuiSessionNavigationMemory";
-import { AGENT_SESSION_NOT_FOUND_ERROR } from "./agentGuiController.errors";
+import {
+  AGENT_SESSION_NOT_FOUND_ERROR,
+  formatSessionActivationFailed
+} from "./agentGuiController.errors";
 import {
   reportAgentGUIActiveConversationCleared,
   reportAgentGUIConversationListProjectionSkipped
@@ -230,8 +233,7 @@ export function useAgentGUIConversationSelectionController(
       rollbackSelection(
         activePendingActivation.agentSessionId,
         activePendingActivation.status === "failed"
-          ? activePendingActivation.errorMessage ||
-              translate("agentHost.agentGui.sessionActivationFailed")
+          ? formatSessionActivationFailed(activePendingActivation.errorMessage)
           : null
       );
       return;

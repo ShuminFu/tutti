@@ -19,6 +19,14 @@ export const AGENT_PROVIDER_SESSION_NOT_FOUND_FALLBACK_MESSAGE =
 export const AGENT_RESUME_SESSION_NOT_LOCAL_FALLBACK_MESSAGE =
   "The previous agent session is not available on this machine.";
 export const AGENT_GUI_CAUGHT_ERROR_STACK_LIMIT = 4000;
+const SESSION_ACTIVATION_DETAIL_LIMIT = 180;
+
+export function formatSessionActivationFailed(detail?: string | null): string {
+  const base = translate("agentHost.agentGui.sessionActivationFailed");
+  const oneLine = (detail ?? "").replace(/\s+/g, " ").trim();
+  if (!oneLine || oneLine === base) return base;
+  return `${base.replace(/[。.]$/, "")}. ${oneLine.slice(0, SESSION_ACTIVATION_DETAIL_LIMIT)}`;
+}
 
 export function normalizeAgentGUIDiagnosticError(
   error: unknown
