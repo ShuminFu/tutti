@@ -177,6 +177,17 @@ type ExtensionRuntimeHome struct {
 	UserHomeSkillDir   string                        `json:"userHomeSkillDir,omitempty"`
 	IncludeSkillRoots  bool                          `json:"includeSkillRoots,omitempty"`
 	IncludeUserHomeDir bool                          `json:"includeUserHomeDir,omitempty"`
+	// ConfigValues seeds non-secret defaults into a TOML session config
+	// (nested tables of string, bool, and integer values) before the
+	// model-endpoint overlay. JSON and YAML runtimes ignore this field.
+	ConfigValues map[string]any `json:"configValues,omitempty"`
+	// PassthroughSourceWithoutEndpoint hands the user's own source home
+	// (SourceEnvVar / SourceDefaultRel) to the runtime untouched when no host
+	// model endpoint applies, instead of preparing an isolated session home.
+	// RNDMASTER_EXTENSION_TOML_PREP: mirrors the direct-path override
+	// semantics (no gateway → personal credentials); with a matching endpoint
+	// the session home is still isolated and the personal home is never read.
+	PassthroughSourceWithoutEndpoint bool `json:"passthroughSourceWithoutEndpoint,omitempty"`
 }
 
 type ExtensionRuntimeManagedFile struct {

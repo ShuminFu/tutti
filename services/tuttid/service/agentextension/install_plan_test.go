@@ -300,6 +300,56 @@ func TestValidateRuntimeContractAcceptsBundledRuntimeWithoutInstaller(t *testing
 	}
 }
 
+func TestBundledRuntimeChannelEnvDerivesFromAgentKey(t *testing.T) {
+	if got := bundledRuntimeChannelEnv("deepseek-harness"); got != deepSeekHarnessRuntimeChannelEnv {
+		t.Fatalf("deepseek-harness channel env = %q, want %q", got, deepSeekHarnessRuntimeChannelEnv)
+	}
+	if got := bundledRuntimeChannelEnv("grok"); got != "TUTTI_AGENT_EXTENSION_GROK_RUNTIME_CHANNEL" {
+		t.Fatalf("grok channel env = %q", got)
+	}
+}
+
+func TestValidateRuntimeContractSelectsGrokPreviousBundledChannel(t *testing.T) {
+	manifest := testManifest()
+	manifest.AgentKey = "grok"
+	manifest.Runtime.Install.Runner = "bundled"
+	manifest.Runtime.Install.Args = nil
+	manifest.Runtime.Install.Artifacts = nil
+	manifest.Runtime.Launch.Executable = "${installRoot}/bin/grok"
+	publish := false
+	manifest.Runtime.Launch.PublishUserCommand = &publish
+	if err := validateRuntimeContract(manifest); err != nil {
+		t.Fatalf("validateRuntimeContract(grok bundled) error = %v", err)
+	}
+	packageDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(packageDir, "profiles"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "profiles", "discovery.json"), []byte(`{"schemaVersion":"tutti.agent.discovery.v1","candidates":[{"binaryNames":["grok"],"version":{"args":["--version"],"constraint":">=0.2.0 <1.0.0"},"launchArgs":[],"probe":{"kind":"acp-initialize","timeoutMs":5000}}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest.Version += "+local.fixture"
+	installation := Installation{
+		ID: "grok@" + manifest.Version, AgentKey: manifest.AgentKey,
+		Version: manifest.Version, Manifest: manifest, PackageDir: packageDir,
+	}
+	plan, err := buildInstallPlan("extension:grok", testResolvedTempDir(t), installation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.PackageName != "bundled-runtime" {
+		t.Fatalf("current grok bundled plan = %#v", plan)
+	}
+	t.Setenv("TUTTI_AGENT_EXTENSION_GROK_RUNTIME_CHANNEL", "previous")
+	previous, err := buildInstallPlan("extension:grok", testResolvedTempDir(t), installation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previous.PackageName != "bundled-runtime-previous" || previous.RuntimeIdentity == plan.RuntimeIdentity || previous.PlanDigest == plan.PlanDigest {
+		t.Fatalf("previous grok bundled plan = %#v, current = %#v", previous, plan)
+	}
+}
+
 func TestRuntimeLaunchEnvironmentIsDeclarativeAndHostScoped(t *testing.T) {
 	manifest := testManifest()
 	manifest.Runtime.Launch.Env = map[string]string{

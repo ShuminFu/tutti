@@ -104,6 +104,9 @@ func writeExtensionRuntimeInstructions(input ProviderPrepareInput) error {
 }
 
 func prepareExtensionRuntimeHome(input ProviderPrepareInput, home ExtensionRuntimeHome) (string, error) {
+	if passthrough := extensionRuntimePassthroughHome(input, home); passthrough != "" {
+		return strings.TrimSpace(home.EnvVar) + "=" + passthrough, nil
+	}
 	sessionHome := filepath.Join(input.RuntimeRoot, filepath.FromSlash(strings.TrimSpace(home.DirName)))
 	if err := os.MkdirAll(sessionHome, 0o700); err != nil {
 		return "", fmt.Errorf("create extension runtime home: %w", err)
@@ -135,6 +138,29 @@ func prepareExtensionRuntimeHome(input ProviderPrepareInput, home ExtensionRunti
 		input.Manifest.RecordManagedFile(sessionHome, "provider-extension-home", true)
 	}
 	return strings.TrimSpace(home.EnvVar) + "=" + sessionHome, nil
+}
+
+// extensionRuntimePassthroughHome returns the user's own home directory when
+// the declaration opts into passthrough and no host model endpoint applies to
+// this session. Without a gateway there is nothing to inject, so the runtime
+// keeps its personal credentials exactly like the direct-path override keys.
+// Any matching endpoint (or a missing source directory) keeps the isolated
+// session-home path.
+func extensionRuntimePassthroughHome(input ProviderPrepareInput, home ExtensionRuntimeHome) string {
+	if !home.PassthroughSourceWithoutEndpoint {
+		return ""
+	}
+	if input.ExtensionRuntimePrep != nil && ExtensionModelEndpointApplies(input.ModelEndpoint, input.ExtensionRuntimePrep.ModelEndpoint) {
+		return ""
+	}
+	sourceHome := resolveExtensionRuntimeSourceHome(home)
+	if sourceHome == "" {
+		return ""
+	}
+	if info, err := os.Stat(sourceHome); err != nil || !info.IsDir() {
+		return ""
+	}
+	return sourceHome
 }
 
 func resolveExtensionRuntimeSourceHome(home ExtensionRuntimeHome) string {
@@ -287,7 +313,21 @@ func writeExtensionRuntimeConfig(
 		return nil
 	}
 	config := string(userConfig)
-	if strings.TrimSpace(home.ConfigFormat) == "json" {
+	configFormat := strings.TrimSpace(home.ConfigFormat)
+	if configFormat == "toml" {
+		encoded, err := mergeTOMLExtensionRuntimeConfig(config, home.ConfigValues, endpoint, declaration)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(encoded) == "" {
+			return nil
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return fmt.Errorf("create extension runtime config dir: %w", err)
+		}
+		return os.WriteFile(path, []byte(encoded), 0o600)
+	}
+	if configFormat == "json" {
 		if len(externalDirs) > 0 {
 			return errors.New("extension runtime JSON config does not support external skill dirs")
 		}
@@ -393,8 +433,16 @@ func ValidateExtensionRuntimePrep(prep ExtensionRuntimePrep) error {
 		}
 	}
 	configFormat := strings.TrimSpace(home.ConfigFormat)
-	if configFormat != "" && configFormat != "yaml" && configFormat != "json" {
+	if configFormat != "" && configFormat != "yaml" && configFormat != "json" && configFormat != "toml" {
 		return errors.New("extension runtime config format is unsupported")
+	}
+	if len(home.ConfigValues) > 0 {
+		if configFormat != "toml" {
+			return errors.New("extension runtime config values require TOML")
+		}
+		if err := validateTOMLConfigValues(home.ConfigValues); err != nil {
+			return err
+		}
 	}
 	for _, file := range home.CopyFiles {
 		if err := validateExtensionRuntimeRelPath(file, "extension runtime copy file"); err != nil {
@@ -421,8 +469,8 @@ func ValidateExtensionRuntimePrep(prep ExtensionRuntimePrep) error {
 	}
 	if prep.ModelEndpoint != nil {
 		endpoint := *prep.ModelEndpoint
-		if strings.TrimSpace(home.ConfigFile) == "" || (configFormat != "yaml" && configFormat != "json") {
-			return errors.New("extension model endpoint requires a YAML or JSON config file")
+		if strings.TrimSpace(home.ConfigFile) == "" || (configFormat != "yaml" && configFormat != "json" && configFormat != "toml") {
+			return errors.New("extension model endpoint requires a YAML, JSON, or TOML config file")
 		}
 		if strings.TrimSpace(endpoint.Protocol) != "openai" || strings.TrimSpace(endpoint.WireAPI) != "chat" {
 			return errors.New("extension model endpoint protocol is unsupported")
@@ -430,10 +478,19 @@ func ValidateExtensionRuntimePrep(prep ExtensionRuntimePrep) error {
 		if !extensionRuntimeEnvName.MatchString(strings.TrimSpace(endpoint.APIKeyEnv)) {
 			return errors.New("extension model endpoint API key env is unsupported")
 		}
-		if strings.TrimSpace(endpoint.ProviderValue) == "" {
+		if len(endpoint.ConfigKeys.Provider) > 0 && strings.TrimSpace(endpoint.ProviderValue) == "" {
 			return errors.New("extension model endpoint provider value is required")
 		}
-		paths := [][]string{endpoint.ConfigKeys.Provider, endpoint.ConfigKeys.Model, endpoint.ConfigKeys.BaseURL}
+		if configFormat != "toml" && (len(endpoint.ConfigKeys.Provider) == 0 || strings.TrimSpace(endpoint.ProviderValue) == "") {
+			return errors.New("extension model endpoint provider value is required")
+		}
+		if len(endpoint.ConfigKeys.Model) == 0 || len(endpoint.ConfigKeys.BaseURL) == 0 {
+			return errors.New("extension model endpoint config key path is unsupported")
+		}
+		paths := [][]string{endpoint.ConfigKeys.Model, endpoint.ConfigKeys.BaseURL}
+		if len(endpoint.ConfigKeys.Provider) > 0 {
+			paths = append(paths, endpoint.ConfigKeys.Provider)
+		}
 		for _, optionalPath := range [][]string{endpoint.ConfigKeys.APIKeyEnv, endpoint.ConfigKeys.WireAPI, endpoint.ConfigKeys.Models} {
 			if len(optionalPath) > 0 {
 				paths = append(paths, optionalPath)

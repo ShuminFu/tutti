@@ -250,9 +250,17 @@ func runtimeInstallIdentity(manifest Manifest, platform string) (string, string,
 	return name, artifact.Version, &artifact, nil
 }
 
+func bundledRuntimeChannelEnv(agentKey string) string {
+	key := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(agentKey), "-", "_"))
+	if key == "" {
+		return ""
+	}
+	return "TUTTI_AGENT_EXTENSION_" + key + "_RUNTIME_CHANNEL"
+}
+
 func selectedBundledRuntimePackageName(installation Installation) string {
-	if installation.AgentKey == "deepseek-harness" &&
-		strings.EqualFold(strings.TrimSpace(os.Getenv(deepSeekHarnessRuntimeChannelEnv)), "previous") {
+	envName := bundledRuntimeChannelEnv(installation.AgentKey)
+	if envName != "" && strings.EqualFold(strings.TrimSpace(os.Getenv(envName)), "previous") {
 		return "bundled-runtime-previous"
 	}
 	return "bundled-runtime"
