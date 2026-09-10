@@ -2,10 +2,38 @@ package agentstatus
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestExternalAdapterProbeExecutesCommandNotPackageDirectory(t *testing.T) {
+	root := t.TempDir()
+	command := filepath.Join(root, "adapter")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\nsleep 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	packageDir := filepath.Join(root, "node_modules", "adapter-package")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	service := Service{ProbeReadyAfter: 10 * time.Millisecond, ProbeTimeout: time.Second}
+	result := service.probeAdapterRuntimeCommand(context.Background(), ProviderSpec{
+		Provider: "claude-code",
+	}, providerRuntimeResolution{
+		AdapterPath:    packageDir,
+		AdapterCommand: []string{command},
+		Env:            os.Environ(),
+	}, time.Now())
+	if result.Status != ProbeReady {
+		t.Fatalf("result = %#v, want command probe ready", result)
+	}
+	if result.Command[0] != command {
+		t.Fatalf("command = %#v, package directory must not replace launcher", result.Command)
+	}
+}
 
 func TestCodexProbeUsesDetectionCommandLimiter(t *testing.T) {
 	limiter := NewDetectionCommandLimiter(1)

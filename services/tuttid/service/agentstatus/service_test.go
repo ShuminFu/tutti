@@ -484,11 +484,13 @@ func TestServiceListReportsCodexAPIKeyAsAuthenticatedWithoutLogin(t *testing.T) 
 	service.Environ = func() []string {
 		return []string{"OPENAI_API_KEY=sk-test"}
 	}
+	authCalls := 0
 	service.RunAuthStatusCommand = func(
 		context.Context,
 		ProviderSpec,
 		string,
 	) (AuthInfo, bool) {
+		authCalls++
 		return AuthInfo{Status: AuthRequired}, true
 	}
 
@@ -504,6 +506,9 @@ func TestServiceListReportsCodexAPIKeyAsAuthenticatedWithoutLogin(t *testing.T) 
 		status.Auth.AuthMethod != "apiKey" ||
 		status.Auth.AccountLabel != "API Usage Billing" {
 		t.Fatalf("auth = %#v, want API billing authentication", status.Auth)
+	}
+	if authCalls != 0 {
+		t.Fatalf("auth status command calls = %d, want 0 with a runtime API credential", authCalls)
 	}
 }
 
@@ -2925,8 +2930,12 @@ func TestServiceListReportsClaudeAuthentication(t *testing.T) {
 				tt.authMethod,
 				tt.accountLabel,
 			)
-			if harness.calls != 1 {
-				t.Fatalf("auth status command calls = %d, want 1", harness.calls)
+			wantCalls := 1
+			if tt.authMethod == "apiKey" {
+				wantCalls = 0
+			}
+			if harness.calls != wantCalls {
+				t.Fatalf("auth status command calls = %d, want %d", harness.calls, wantCalls)
 			}
 		})
 	}

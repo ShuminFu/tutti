@@ -36,6 +36,7 @@ func TestResolveAuthOverriddenByRuntimeAuthFailure(t *testing.T) {
 	svc := Service{
 		RunOutcomes: store,
 		HomeDir:     func() (string, error) { return t.TempDir(), nil },
+		Environ:     func() []string { return nil },
 	}
 	// No marker paths / command → baseline is unknown.
 	spec := ProviderSpec{Provider: agentprovider.ClaudeCode}

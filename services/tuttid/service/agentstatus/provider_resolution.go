@@ -23,6 +23,8 @@ const ReasonExternalAgentRegistryUnavailable = "external_agent_registry_unavaila
 const ReasonManagedRuntimeUnavailable = "managed_runtime_unavailable"
 const ReasonClaudeSDKSidecarUnavailable = "claude_sdk_sidecar_unavailable"
 
+const claudeCodeRuntimeEnv = "TUTTI_CLAUDE_CODE_RUNTIME"
+const claudeCodeRuntimeACP = "acp"
 const claudeSDKSidecarCommandEnv = "TUTTI_CLAUDE_SDK_SIDECAR_COMMAND"
 const claudeSDKSidecarEntryPathEnv = "TUTTI_CLAUDE_SDK_SIDECAR_ENTRY_PATH"
 const claudeSDKSidecarDefaultNodeArg = "--experimental-strip-types"
@@ -134,6 +136,10 @@ func (s Service) resolveProviderSpec(ctx context.Context, spec ProviderSpec, req
 }
 
 func (s Service) resolveClaudeCodeProviderSpec(ctx context.Context, spec ProviderSpec, requireManagedRuntime bool) ProviderSpec {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv(claudeCodeRuntimeEnv)), claudeCodeRuntimeACP) {
+		return s.resolveClaudeCodeACPProviderSpec(spec)
+	}
+
 	spec.ExternalRegistryID = ""
 	spec.AdapterPackage = AdapterPackageRequirement{}
 	spec.AdapterInstall = InstallerSpec{}
@@ -165,6 +171,14 @@ func (s Service) resolveClaudeCodeProviderSpec(ctx context.Context, spec Provide
 	}
 	spec.AdapterCommand = []string{nodeCommand, claudeSDKSidecarDefaultNodeArg, entry}
 	spec.AdapterBinaryNames = []string{nodeBinary}
+	return spec
+}
+
+func (s Service) resolveClaudeCodeACPProviderSpec(spec ProviderSpec) ProviderSpec {
+	spec.ExternalRegistryID = "claude-acp"
+	if len(spec.AdapterBinaryNames) == 0 {
+		spec.AdapterBinaryNames = []string{"claude-agent-acp"}
+	}
 	return spec
 }
 

@@ -213,8 +213,7 @@ func (s Service) statusForSpec(
 		// status commands report stored login sessions and may not reflect an API
 		// key, auth token, apiKeyHelper, or OpenCode provider apiKey, so explicit API billing credentials
 		// override the command result. A bare custom endpoint is not a credential.
-		if (isCodexStatusSpec(spec) || isClaudeStatusSpec(spec) || isOpenCodeStatusSpec(spec)) &&
-			s.providerHasAPICredential(spec.Provider) {
+		if providerSupportsAPIUsageBilling(spec) && s.providerHasAPICredential(spec.Provider) {
 			auth.Status = AuthAuthenticated
 			auth.AccountLabel = "API Usage Billing"
 			auth.AuthMethod = "apiKey"

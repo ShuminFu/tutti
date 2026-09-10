@@ -45,3 +45,53 @@ func TestAuthStatusTimeoutDefaultsToShortProbeWindow(t *testing.T) {
 		t.Fatalf("default auth status timeout = %s, want 5s", got)
 	}
 }
+
+func TestAPIUsageBillingCredentialsSkipOfficialAuthStatusCommands(t *testing.T) {
+	tests := []struct {
+		provider string
+		env      string
+	}{
+		{provider: agentprovider.ClaudeCode, env: "ANTHROPIC_AUTH_TOKEN=runtime-token"},
+		{provider: agentprovider.Codex, env: "OPENAI_API_KEY=runtime-key"},
+		{provider: agentprovider.OpenCode, env: `OPENCODE_CONFIG_CONTENT={"provider":{"internal":{"options":{"apiKey":"runtime-key"}}}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			specs, err := DefaultRegistry().Select([]string{tt.provider})
+			if err != nil || len(specs) != 1 {
+				t.Fatalf("Select(%q) = %#v, %v", tt.provider, specs, err)
+			}
+			calls := 0
+			service := Service{
+				Environ: func() []string { return []string{tt.env} },
+				RunAuthStatusCommand: func(context.Context, ProviderSpec, string) (AuthInfo, bool) {
+					calls++
+					return AuthInfo{Status: AuthRequired}, true
+				},
+			}
+			auth, _ := service.resolveAuthAndCLIVersion(context.Background(), specs[0], true, "/provider")
+			if calls != 0 {
+				t.Fatalf("auth status command calls = %d, want 0", calls)
+			}
+			if auth.Status != AuthAuthenticated || auth.AuthMethod != "apiKey" {
+				t.Fatalf("auth = %#v, want API billing authentication", auth)
+			}
+		})
+	}
+}
+
+func TestClaudeACPRuntimeDoesNotRequireSDKSidecar(t *testing.T) {
+	t.Setenv(claudeCodeRuntimeEnv, claudeCodeRuntimeACP)
+	service := Service{}
+	specs, err := DefaultRegistry().Select([]string{agentprovider.ClaudeCode})
+	if err != nil || len(specs) != 1 {
+		t.Fatalf("Select(claude-code) = %#v, %v", specs, err)
+	}
+	resolved := service.resolveClaudeCodeProviderSpec(context.Background(), specs[0], true)
+	if resolved.ExternalRegistryID != "claude-acp" {
+		t.Fatalf("ExternalRegistryID = %q, want claude-acp", resolved.ExternalRegistryID)
+	}
+	if resolved.AdapterUnavailableReasonCode == ReasonClaudeSDKSidecarUnavailable {
+		t.Fatalf("ACP runtime was gated by SDK sidecar: %#v", resolved)
+	}
+}

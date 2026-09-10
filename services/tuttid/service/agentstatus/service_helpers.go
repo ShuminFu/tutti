@@ -215,6 +215,13 @@ func (s Service) resolveAuthAndCLIVersion(
 		}
 		s.RunOutcomes.ClearAuthInvalidated(spec.Provider)
 	}
+	if providerSupportsAPIUsageBilling(spec) && s.providerHasAPICredential(spec.Provider) {
+		return AuthInfo{
+			Status:       AuthAuthenticated,
+			AccountLabel: "API Usage Billing",
+			AuthMethod:   "apiKey",
+		}, ""
+	}
 	// RunAuthStatusCommand is an explicit test seam. Keep it authoritative so
 	// status-cache tests can observe detection without depending on a real home
 	// directory or provider credential file.
@@ -253,6 +260,10 @@ func (s Service) resolveAuthAndCLIVersion(
 		return s.resolveAuthFromMarkers(spec), ""
 	}
 	return s.resolveAuthFromMarkers(spec), ""
+}
+
+func providerSupportsAPIUsageBilling(spec ProviderSpec) bool {
+	return isCodexStatusSpec(spec) || isClaudeStatusSpec(spec) || isOpenCodeStatusSpec(spec)
 }
 
 func (s Service) cursorAuthStatus(

@@ -39,7 +39,8 @@ func (s Service) probeAdapterRuntimeCommand(
 		env = s.commandResolver().Env(s.adapterCommandEnv(ctx, spec))
 	}
 	command[0] = s.commandResolver().Resolve(command[0], env)
-	if strings.TrimSpace(runtimeResolution.AdapterPath) != "" {
+	if strings.TrimSpace(runtimeResolution.AdapterPath) != "" &&
+		s.executableFile(runtimeResolution.AdapterPath) {
 		command[0] = runtimeResolution.AdapterPath
 	}
 	result.Command = cloneStrings(command)
