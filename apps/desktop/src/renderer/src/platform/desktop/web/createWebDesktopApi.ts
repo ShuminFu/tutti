@@ -20,6 +20,7 @@ import { desktopErrorCodes } from "@shared/errors/desktopErrors";
 import { resolveWebBackendConfigFrom } from "./resolveWebBackendConfig";
 import {
   HostBridgeUnavailableError,
+  installHostFocusRecovery,
   requestHostCapability
 } from "./webHostBridgeClient";
 
@@ -41,6 +42,7 @@ const webAppUpdateState: AppUpdateState = {
 
 export function createWebDesktopApi(): DesktopApi {
   const backendConfig = resolveWebBackendConfig();
+  installHostFocusRecovery();
 
   return {
     computerUse: createWebComputerUseApi(),

@@ -15,6 +15,9 @@
 
 const REQUEST_TYPE = "tutti-host-request";
 const RESPONSE_TYPE = "tutti-host-response";
+export const HOST_FOCUS_TYPE = "tutti-host-focus";
+const TERMINAL_FOCUS_SELECTOR =
+  '.workbench-window-shell[data-focused="true"] [data-terminal-xterm] .xterm-helper-textarea';
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 // Signals that the host cannot serve the request (not embedded, capability
@@ -35,11 +38,96 @@ export function isHostBridgeAvailable(): boolean {
   );
 }
 
-function bridgeCoordinates(): { nonce: string; hostOrigin: string } | null {
-  const params = new URLSearchParams(window.location.search);
+function bridgeCoordinates(
+  search: string = window.location.search
+): { nonce: string; hostOrigin: string } | null {
+  const params = new URLSearchParams(search);
   const nonce = params.get("tuttiBootstrap")?.trim();
   const hostOrigin = params.get("tuttiHostOrigin")?.trim();
   return nonce && hostOrigin ? { nonce, hostOrigin } : null;
+}
+
+// WKWebView can reactivate the iframe browsing context without restoring the
+// element that actually owns keyboard input. Keep the last inner focus target
+// and accept a secured one-way notification from the embedding host. The
+// focused terminal textarea is a fallback for reloads that happen before the
+// first focusin event is observed.
+export function installHostFocusRecovery(
+  windowRef: Window = window,
+  documentRef: Document = document
+): () => void {
+  const coordinates = bridgeCoordinates(windowRef.location.search);
+  if (
+    !coordinates ||
+    !windowRef.parent ||
+    windowRef.parent === windowRef
+  ) {
+    return () => undefined;
+  }
+
+  let lastFocusedElement: HTMLElement | null = null;
+  const parent = windowRef.parent;
+
+  const onFocusIn = (event: Event): void => {
+    if (
+      isFocusTarget(event.target) &&
+      event.target !== documentRef.body
+    ) {
+      lastFocusedElement = event.target;
+    }
+  };
+  const onMessage = (event: MessageEvent): void => {
+    const data = event.data as
+      | { type?: unknown; nonce?: unknown }
+      | null
+      | undefined;
+    if (
+      !data ||
+      typeof data !== "object" ||
+      data.type !== HOST_FOCUS_TYPE ||
+      data.nonce !== coordinates.nonce ||
+      event.source !== parent ||
+      event.origin !== coordinates.hostOrigin
+    ) {
+      return;
+    }
+
+    const target =
+      (isConnectedFocusTarget(lastFocusedElement)
+        ? lastFocusedElement
+        : null) ??
+      documentRef.querySelector<HTMLElement>(TERMINAL_FOCUS_SELECTOR);
+    if (!target) {
+      return;
+    }
+    try {
+      target.focus({ preventScroll: true });
+    } catch {
+      // Older embedded WebKit versions do not accept FocusOptions.
+      target.focus();
+    }
+  };
+
+  documentRef.addEventListener("focusin", onFocusIn);
+  windowRef.addEventListener("message", onMessage);
+  return () => {
+    documentRef.removeEventListener("focusin", onFocusIn);
+    windowRef.removeEventListener("message", onMessage);
+  };
+}
+
+function isFocusTarget(value: unknown): value is HTMLElement {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { focus?: unknown }).focus === "function"
+  );
+}
+
+function isConnectedFocusTarget(
+  value: HTMLElement | null
+): value is HTMLElement {
+  return Boolean(value?.isConnected);
 }
 
 let requestCounter = 0;
