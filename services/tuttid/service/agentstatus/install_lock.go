@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -110,6 +111,20 @@ func (l installCommandLock) Acquire(ctx context.Context) (func(), error) {
 		if !errors.Is(err, os.ErrExist) {
 			return nil, fmt.Errorf("acquire install lock: %w", err)
 		}
+		recovery, recoverErr := l.Recover()
+		if recoverErr != nil {
+			return nil, fmt.Errorf("recover existing install lock: %w", recoverErr)
+		}
+		if recovery.Removed {
+			slog.Info(
+				"recovered stale install lock while acquiring",
+				"event", "tutti.agentstatus.install_lock.recovered",
+				"lock_path", recovery.LockPath,
+				"pid", recovery.PID,
+				"reason", recovery.Reason,
+			)
+			continue
+		}
 
 		timer := time.NewTimer(pollInterval)
 		select {
@@ -117,6 +132,12 @@ func (l installCommandLock) Acquire(ctx context.Context) (func(), error) {
 			if !timer.Stop() {
 				<-timer.C
 			}
+			slog.Warn(
+				"install lock wait canceled",
+				"event", "tutti.agentstatus.install_lock.wait_canceled",
+				"lock_path", lockPath,
+				"error", ctx.Err(),
+			)
 			return nil, ctx.Err()
 		case <-timer.C:
 		}
