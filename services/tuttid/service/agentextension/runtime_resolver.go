@@ -39,6 +39,7 @@ type RuntimeBinding struct {
 	ExecutableIdentity           *agentruntime.ExecutableIdentity
 	Env                          []string
 	DeclaredHTTPMCP              bool
+	DeclaredStdioMCP             *bool
 	RuntimePrep                  *runtimeprep.ExtensionRuntimePrep
 }
 
@@ -89,6 +90,7 @@ func runtimeAdapterConfig(binding RuntimeBinding, agentTargetID string) agentrun
 		SetModelReasoningEffortMeta:  binding.SetModelReasoningEffortMeta,
 		Capabilities:                 binding.Capabilities,
 		DeclaredHTTPMCP:              binding.DeclaredHTTPMCP,
+		DeclaredStdioMCP:             binding.DeclaredStdioMCP,
 		AgentTargetID:                strings.TrimSpace(agentTargetID),
 		InstallationID:               binding.Installation.ID,
 		ExecutableIdentity:           binding.ExecutableIdentity,

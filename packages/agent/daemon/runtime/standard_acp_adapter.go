@@ -105,6 +105,7 @@ type standardACPConfig struct {
 	localToolBridge                standardACPLocalToolBridge
 	capabilities                   []string
 	declaredHTTPMCP                bool
+	declaredStdioMCP               *bool
 	agentTargetID                  string
 	installationID                 string
 	executableIdentity             *ExecutableIdentity

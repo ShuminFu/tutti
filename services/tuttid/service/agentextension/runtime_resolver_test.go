@@ -27,6 +27,14 @@ func TestRuntimeAdapterConfigCopiesRuntimePrepIsolationEnvNames(t *testing.T) {
 	if got := strings.Join(config.IsolatedRuntimeEnvNames, ","); got != "TEST_AGENT_HOME,OPENAI_API_KEY" {
 		t.Fatalf("IsolatedRuntimeEnvNames = %#v", config.IsolatedRuntimeEnvNames)
 	}
+	stdioFalse := false
+	withStdio := binding
+	withStdio.DeclaredHTTPMCP = true
+	withStdio.DeclaredStdioMCP = &stdioFalse
+	copied := runtimeAdapterConfig(withStdio, "extension:deepseek-harness")
+	if !copied.DeclaredHTTPMCP || copied.DeclaredStdioMCP == nil || *copied.DeclaredStdioMCP {
+		t.Fatalf("stdio/http declarations not copied: http=%v stdio=%v", copied.DeclaredHTTPMCP, copied.DeclaredStdioMCP)
+	}
 
 	empty := runtimeAdapterConfig(RuntimeBinding{
 		Installation: binding.Installation,

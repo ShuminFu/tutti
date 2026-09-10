@@ -177,7 +177,10 @@ type StandardACPAdapterConfig struct {
 	// DeclaredHTTPMCP is a trusted extension compatibility declaration for
 	// runtimes that accept McpServer::Http in session/new but omit the
 	// corresponding initialize.agentCapabilities flag.
-	DeclaredHTTPMCP    bool
+	DeclaredHTTPMCP bool
+	// DeclaredStdioMCP is the composer acp.mcpCapabilities.stdio flag.
+	// nil means undeclared (keep stdio); false drops stdio contract entries.
+	DeclaredStdioMCP   *bool
 	AgentTargetID      string
 	InstallationID     string
 	ExecutableIdentity *ExecutableIdentity
@@ -235,6 +238,7 @@ func NewStandardACPAdapter(config StandardACPAdapterConfig, transport ProcessTra
 			restrictConfigOptions:        config.RestrictConfigOptions,
 			capabilities:                 append([]string(nil), config.Capabilities...),
 			declaredHTTPMCP:              config.DeclaredHTTPMCP,
+			declaredStdioMCP:             config.DeclaredStdioMCP,
 			agentTargetID:                strings.TrimSpace(config.AgentTargetID),
 			installationID:               strings.TrimSpace(config.InstallationID),
 			executableIdentity:           cloneExecutableIdentity(config.ExecutableIdentity),

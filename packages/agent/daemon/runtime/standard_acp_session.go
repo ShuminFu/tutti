@@ -56,14 +56,12 @@ func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]acti
 		})
 		return nil, err
 	}
-	mcpServers := acpMCPServers(session.MCPServers)
-	contractMCPServers, contractHasHTTP, err := rndmasterACPMCPServers(contract)
+	mcpServers, httpUnsupported, err := a.mergeFilteredContractMCP(session, contract, initializeResult)
 	if err != nil {
 		_ = client.Close()
 		return nil, err
 	}
-	mcpServers = rndmasterMergeACPMCPServers(mcpServers, contractMCPServers)
-	if (len(acpMCPServers(session.MCPServers)) > 0 || contractHasHTTP) && !a.supportsHTTPMCP(initializeResult) {
+	if httpUnsupported {
 		_ = client.Close()
 		return nil, ErrMCPHTTPUnsupported
 	}
@@ -269,14 +267,12 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 	if err != nil {
 		return err
 	}
-	mcpServers := acpMCPServers(session.MCPServers)
-	contractMCPServers, contractHasHTTP, err := rndmasterACPMCPServers(contract)
+	mcpServers, httpUnsupported, err := a.mergeFilteredContractMCP(session, contract, initializeResult)
 	if err != nil {
 		_ = client.Close()
 		return err
 	}
-	mcpServers = rndmasterMergeACPMCPServers(mcpServers, contractMCPServers)
-	if !attachedCheckpoint && (len(acpMCPServers(session.MCPServers)) > 0 || contractHasHTTP) && !a.supportsHTTPMCP(initializeResult) {
+	if !attachedCheckpoint && httpUnsupported {
 		_ = client.Close()
 		return ErrMCPHTTPUnsupported
 	}
@@ -429,6 +425,28 @@ func standardACPHTTPMCPSupported(raw json.RawMessage) bool {
 
 func (a *standardACPAdapter) supportsHTTPMCP(raw json.RawMessage) bool {
 	return standardACPHTTPMCPSupported(raw) || (a != nil && a.config.declaredHTTPMCP)
+}
+
+func (a *standardACPAdapter) mergeFilteredContractMCP(session Session, contract rndmasterRuntimeContract, initializeResult json.RawMessage) ([]any, bool, error) {
+	mcpServers := acpMCPServers(session.MCPServers)
+	contractMCPServers, _, err := rndmasterACPMCPServers(contract)
+	if err != nil {
+		return nil, false, err
+	}
+	httpOK := a.supportsHTTPMCP(initializeResult)
+	targetID := ""
+	var stdioDeclared *bool
+	if a != nil {
+		targetID = strings.TrimSpace(a.config.agentTargetID)
+		stdioDeclared = a.config.declaredStdioMCP
+	}
+	if targetID == "" {
+		targetID = strings.TrimSpace(session.AgentTargetID)
+	}
+	contractMCPServers = rndmasterFilterACPMCPServers(contractMCPServers, stdioDeclared, httpOK, targetID)
+	mcpServers = rndmasterMergeACPMCPServers(mcpServers, contractMCPServers)
+	needsHTTP := len(acpMCPServers(session.MCPServers)) > 0 || rndmasterACPHasHTTP(contractMCPServers)
+	return mcpServers, needsHTTP && !httpOK, nil
 }
 
 func (*standardACPAdapter) CanResume(session Session) bool {

@@ -21,7 +21,8 @@ type ComposerProfile struct {
 	Permission    json.RawMessage `json:"permission"`
 	ACP           *struct {
 		MCPCapabilities *struct {
-			HTTP bool `json:"http"`
+			HTTP  bool  `json:"http"`
+			Stdio *bool `json:"stdio,omitempty"`
 		} `json:"mcpCapabilities,omitempty"`
 	} `json:"acp,omitempty"`
 	ConfigOptions *struct {
@@ -67,6 +68,13 @@ type ComposerProfile struct {
 
 func (profile ComposerProfile) DeclaresHTTPMCP() bool {
 	return profile.ACP != nil && profile.ACP.MCPCapabilities != nil && profile.ACP.MCPCapabilities.HTTP
+}
+
+func (profile ComposerProfile) DeclaredStdioMCP() *bool {
+	if profile.ACP == nil || profile.ACP.MCPCapabilities == nil {
+		return nil
+	}
+	return profile.ACP.MCPCapabilities.Stdio
 }
 
 type ComposerPermissionMode struct {

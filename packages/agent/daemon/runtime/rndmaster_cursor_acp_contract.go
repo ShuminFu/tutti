@@ -85,7 +85,7 @@ func rndmasterACPMCPServers(contract rndmasterRuntimeContract) ([]any, bool, err
 				return nil, false, fmt.Errorf("RnDMaster MCP server %q requires url", name)
 			}
 			out = append(out, map[string]any{"name": name, "type": "http", "url": url,
-				"headers": rndmasterACPNameValueList(payloadObject(body["headers"]))})
+				"headers": rndmasterACPHeaders(body["headers"])})
 			hasHTTP = true
 			continue
 		}
@@ -101,6 +101,22 @@ func rndmasterACPMCPServers(contract rndmasterRuntimeContract) ([]any, bool, err
 			"env": rndmasterACPNameValueList(payloadObject(body["env"]))})
 	}
 	return out, hasHTTP, nil
+}
+
+func rndmasterACPHeaders(value any) []any {
+	if items, ok := value.([]any); ok {
+		out := make([]any, 0, len(items))
+		for _, item := range items {
+			obj := payloadObject(item)
+			name := strings.TrimSpace(asString(obj["name"]))
+			if name == "" {
+				continue
+			}
+			out = append(out, map[string]any{"name": name, "value": fmt.Sprint(obj["value"])})
+		}
+		return out
+	}
+	return rndmasterACPNameValueList(payloadObject(value))
 }
 
 func rndmasterACPNameValueList(values map[string]any) []any {
