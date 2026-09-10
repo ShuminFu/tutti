@@ -363,20 +363,18 @@ func exposeUserCodexConfig(codexHome string, userCodexHome string, fastStart boo
 	target := filepath.Join(codexHome, "config.toml")
 	if targetInfo, err := os.Lstat(target); err == nil {
 		if targetInfo.Mode()&os.ModeSymlink == 0 {
-			if !fastStart {
+			if fastStart {
+				content, err := os.ReadFile(target)
+				if err != nil {
+					return fmt.Errorf("read existing codex config: %w", err)
+				}
+				fastConfig := codexConfigWithFastStartFeatures(codexConfigWithoutPersonalExtensions(string(content)))
+				if err := os.WriteFile(target, []byte(fastConfig), 0o600); err != nil {
+					return fmt.Errorf("sanitize existing codex config: %w", err)
+				}
 				return nil
 			}
-			content, err := os.ReadFile(target)
-			if err != nil {
-				return fmt.Errorf("read existing codex config: %w", err)
-			}
-			fastConfig := codexConfigWithFastStartFeatures(codexConfigWithoutPersonalExtensions(string(content)))
-			if err := os.WriteFile(target, []byte(fastConfig), 0o600); err != nil {
-				return fmt.Errorf("sanitize existing codex config: %w", err)
-			}
-			return nil
-		}
-		if err := os.Remove(target); err != nil {
+		} else if err := os.Remove(target); err != nil {
 			return fmt.Errorf("replace codex config symlink: %w", err)
 		}
 	} else if !os.IsNotExist(err) {

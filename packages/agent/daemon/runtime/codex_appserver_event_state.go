@@ -60,7 +60,18 @@ func appServerTokenUsageState(params map[string]any) (acpUsageState, bool) {
 		contextUsedTokens:   used,
 		contextWindowTokens: window,
 		contextKnown:        true,
+		lastTurn: map[string]any{"models": map[string]any{"default": map[string]any{
+			"inputTokens":           firstInt64ValueOrZero(last, "inputTokens"),
+			"cachedInputTokens":     firstInt64ValueOrZero(last, "cachedInputTokens"),
+			"outputTokens":          firstInt64ValueOrZero(last, "outputTokens"),
+			"reasoningOutputTokens": firstInt64ValueOrZero(last, "reasoningOutputTokens"),
+		}}},
 	}, true
+}
+
+func firstInt64ValueOrZero(value map[string]any, key string) int64 {
+	parsed, _ := firstInt64Value(value, key)
+	return parsed
 }
 
 func (a *CodexAppServerAdapter) applyRateLimits(agentSessionID string, snapshot map[string]any) bool {

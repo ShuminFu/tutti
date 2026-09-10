@@ -33,6 +33,11 @@ func appServerThreadStartParams(session Session, cwd string) map[string]any {
 	if serviceTier := codexServiceTierValue(settings.Speed); serviceTier != "" {
 		config["service_tier"] = serviceTier
 	}
+	if contract, err := rndmasterContractFromSession(session); err == nil {
+		if servers, configured := rndmasterMCPServers(contract); configured {
+			config["mcp_servers"] = servers
+		}
+	}
 	if len(config) > 0 {
 		params["config"] = config
 	}
@@ -63,6 +68,15 @@ func appServerTurnStartParams(
 	params := map[string]any{
 		"threadId": threadID,
 		"input":    userInput,
+	}
+	if contract, err := rndmasterContractFromSession(session); err == nil {
+		if prompt := strings.TrimSpace(contract.SystemPrompt); prompt != "" {
+			if tuttiModeHostContext = strings.TrimSpace(tuttiModeHostContext); tuttiModeHostContext != "" {
+				tuttiModeHostContext += "\n\n" + prompt
+			} else {
+				tuttiModeHostContext = prompt
+			}
+		}
 	}
 	if collaborationMode := appServerCollaborationMode(settings, planModeMask, defaultModeMask, defaultModel, tuttiModeHostContext); collaborationMode != nil {
 		params["collaborationMode"] = collaborationMode

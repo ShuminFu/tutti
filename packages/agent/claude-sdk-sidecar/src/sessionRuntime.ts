@@ -1077,23 +1077,81 @@ export class SessionRuntime {
     }
   }
 
-  private handleToolPermission(
+  private async handleToolPermission(
     generation: QueryGeneration,
     toolName: string,
     toolInput: Record<string, unknown>,
     callbackOptions: ToolPermissionOptions
   ): Promise<PermissionResult> {
     if (!this.isQueryGenerationActive(generation)) {
-      return Promise.resolve({
+      return {
         behavior: "deny",
         message: "Tool use aborted"
-      });
+      };
+    }
+    const gateDecision = await this.rndmasterGateDecision(toolName, toolInput);
+    if (gateDecision) {
+      return gateDecision;
+    }
+    if (!this.isQueryGenerationActive(generation)) {
+      return {
+        behavior: "deny",
+        message: "Tool use aborted"
+      };
     }
     return this.interactions.handleToolPermission(
       toolName,
       toolInput,
       callbackOptions
     );
+  }
+
+  private async rndmasterGateDecision(
+    toolName: string,
+    toolInput: Record<string, unknown>
+  ): Promise<PermissionResult | undefined> {
+    const rawEndpoint = this.claudeOptions.gateHookUrl;
+    if (!rawEndpoint) {
+      return undefined;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3_000);
+    try {
+      const endpoint = new URL(rawEndpoint);
+      if (
+        endpoint.protocol !== "http:" ||
+        !["127.0.0.1", "[::1]", "::1"].includes(endpoint.hostname) ||
+        !endpoint.port ||
+        endpoint.username ||
+        endpoint.password
+      ) {
+        return undefined;
+      }
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tool_name: toolName, tool_input: toolInput }),
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        return undefined;
+      }
+      const payload = recordValue(await response.json());
+      const hook = recordValue(payload?.hookSpecificOutput);
+      if (stringValue(hook?.permissionDecision) !== "deny") {
+        return undefined;
+      }
+      return {
+        behavior: "deny",
+        message:
+          stringValue(hook?.permissionDecisionReason) ||
+          "RnDMaster action gate denied this tool call"
+      };
+    } catch {
+      return undefined;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private ensureProviderTurnAcceptance(

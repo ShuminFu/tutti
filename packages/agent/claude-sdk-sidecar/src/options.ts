@@ -18,6 +18,8 @@ export type SidecarClaudeOptions = {
   extraArgs: Record<string, string | null>;
   tools: ClaudeToolsOption;
   mcpServers: NonNullable<ClaudeQueryOptions["mcpServers"]>;
+  mcpServersConfigured: boolean;
+  gateHookUrl: string;
 };
 
 export function sidecarClaudeOptionsFromPayload(
@@ -45,9 +47,12 @@ export function sidecarClaudeOptionsFromPayload(
   }
 
   return {
-    systemPromptAppend:
-      explicitSystemPrompt ||
+    systemPromptAppend: [
       claudeSystemPromptAppend(env[claudeSystemPromptFileEnv]),
+      explicitSystemPrompt
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     planModeInstructions: stringValue(payload.planModeInstructions),
     allowedTools: stringArrayValue(payload.allowedTools),
     disallowedTools: stringArrayValue(payload.disallowedTools),
@@ -62,7 +67,9 @@ export function sidecarClaudeOptionsFromPayload(
       type: "preset",
       preset: "claude_code"
     },
-    mcpServers: mcpServersValue(payload.mcpServers)
+    mcpServers: mcpServersValue(payload.mcpServers),
+    mcpServersConfigured: payload.mcpServers !== undefined,
+    gateHookUrl: stringValue(payload.gateHookUrl)
   };
 }
 
@@ -116,7 +123,7 @@ export function claudeQueryOptionOverrides(
     ...(Object.keys(options.extraArgs).length > 0
       ? { extraArgs: options.extraArgs }
       : {}),
-    ...(Object.keys(options.mcpServers).length > 0
+    ...(options.mcpServersConfigured
       ? { mcpServers: options.mcpServers }
       : {})
   };

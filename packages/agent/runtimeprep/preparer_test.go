@@ -404,7 +404,7 @@ func TestDefaultPreparerManagedCodexDoesNotReadPersonalHome(t *testing.T) {
 	t.Setenv(managedCodexRuntimeEnv, "1")
 	t.Setenv(managedCodexConfigTemplateEnv, template)
 
-	prepared, err := NewDefaultPreparer(t.TempDir()).Prepare(t.Context(), PrepareInput{
+	prepared, err := newTestPreparer(t.TempDir()).Prepare(t.Context(), PrepareInput{
 		WorkspaceID: "workspace-managed", AgentSessionID: "session-managed",
 		Provider: "codex", Cwd: t.TempDir(),
 	})
@@ -459,7 +459,7 @@ func TestDefaultPreparerFastCodexSkipsPersonalExtensions(t *testing.T) {
 	}, "\n")
 	writeSidecarTestFile(t, filepath.Join(userCodexHome, "config.toml"), config)
 
-	prepared, err := NewDefaultPreparer(t.TempDir()).Prepare(t.Context(), PrepareInput{
+	prepared, err := newTestPreparer(t.TempDir()).Prepare(t.Context(), PrepareInput{
 		WorkspaceID: "workspace-fast", AgentSessionID: "session-fast",
 		Provider: "codex", Cwd: t.TempDir(),
 	})
@@ -524,7 +524,7 @@ func TestDefaultPreparerFastCodexSanitizesExistingRunConfig(t *testing.T) {
 	}, "\n")
 	writeSidecarTestFile(t, existingConfigPath, existingConfig)
 
-	prepared, err := NewDefaultPreparer(stateDir).Prepare(t.Context(), PrepareInput{
+	prepared, err := newTestPreparer(stateDir).Prepare(t.Context(), PrepareInput{
 		WorkspaceID: "workspace-existing", AgentSessionID: "session-existing",
 		Provider: "codex", Cwd: t.TempDir(), BrowserUse: true,
 	})
@@ -2012,7 +2012,7 @@ func TestDefaultPreparerManagedClaudeCodeDoesNotUsePATH(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_EXECUTABLE", "")
 	t.Setenv(managedProvidersRuntimeEnv, "1")
 
-	prepared, err := NewDefaultPreparer(t.TempDir()).Prepare(t.Context(), PrepareInput{
+	prepared, err := newTestPreparer(t.TempDir()).Prepare(t.Context(), PrepareInput{
 		WorkspaceID: "workspace-1", AgentSessionID: "session-1",
 		Provider: "claude-code", Cwd: t.TempDir(),
 	})

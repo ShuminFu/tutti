@@ -15,6 +15,11 @@ func (a *ClaudeCodeSDKAdapter) Start(ctx context.Context, session Session) ([]ac
 	if a == nil || a.transport == nil {
 		return nil, ErrSessionDisconnected
 	}
+	contract, err := rndmasterContractFromSession(session)
+	if err != nil {
+		return nil, err
+	}
+	session.Env = rndmasterEnvList(session.Env, contract.Env)
 	restore := strings.TrimSpace(session.ProviderSessionID) != ""
 	providerSessionID := firstNonEmpty(strings.TrimSpace(session.ProviderSessionID), newID())
 	session.ProviderSessionID = providerSessionID
@@ -87,7 +92,7 @@ func (a *ClaudeCodeSDKAdapter) Start(ctx context.Context, session Session) ([]ac
 		"resumeCursor":      claudeSDKResumeCursorFromSession(session),
 		"mcpServers":        claudeSDKMCPServers(session.MCPServers),
 	}
-	for key, value := range claudeCodeSDKStartOptions(session) {
+	for key, value := range claudeCodeSDKStartOptions(session, contract) {
 		startPayload[key] = value
 	}
 	if err := adapterSession.send(claudeSDKSidecarRequest{

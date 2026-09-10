@@ -86,6 +86,29 @@ test("sidecarClaudeOptionsFromPayload defaults to Claude Code tool preset", () =
   assert.equal(overrides.mcpServers, undefined);
 });
 
+test("sidecarClaudeOptionsFromPayload appends managed prompt and preserves an empty MCP override", (t) => {
+  const runtimeRoot = mkdtempSync(join(tmpdir(), "tutti-claude-contract-"));
+  t.after(() => rmSync(runtimeRoot, { recursive: true, force: true }));
+  const systemPromptPath = join(runtimeRoot, "claude-system-prompt.md");
+  writeFileSync(systemPromptPath, "Prepared host context.\n", "utf8");
+
+  const options = sidecarClaudeOptionsFromPayload({
+    env: { TUTTI_CLAUDE_SYSTEM_PROMPT_FILE: systemPromptPath },
+    systemPromptAppend: "Managed runtime contract.",
+    mcpServers: {},
+    gateHookUrl: "http://127.0.0.1:1234/gate"
+  });
+  const overrides = claudeQueryOptionOverrides(options);
+
+  assert.deepEqual(overrides.systemPrompt, {
+    type: "preset",
+    preset: "claude_code",
+    append: "Prepared host context.\n\nManaged runtime contract."
+  });
+  assert.deepEqual(overrides.mcpServers, {});
+  assert.equal(options.gateHookUrl, "http://127.0.0.1:1234/gate");
+});
+
 test("sidecarClaudeOptionsFromPayload resolves prepared metadata in the sidecar filesystem", (t) => {
   const runtimeRoot = mkdtempSync(join(tmpdir(), "tutti-claude-meta-"));
   t.after(() => rmSync(runtimeRoot, { recursive: true, force: true }));

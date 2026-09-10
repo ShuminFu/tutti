@@ -454,8 +454,15 @@ func (a *CodexAppServerAdapter) prepareInitializedClientLaunch(
 			"app-server process transport is unavailable",
 		)
 	}
+	contract, err := rndmasterContractFromSession(session)
+	if err != nil {
+		return ProcessSpec{}, nil, err
+	}
 	command := append([]string(nil), a.config.command...)
-	spawnEnv := append(codexACPEnv(session, a.host), session.Env...)
+	spawnEnv := append(
+		codexACPEnv(session, a.host),
+		rndmasterEnvList(session.Env, contract.Env)...,
+	)
 	if a.commandResolver != nil {
 		resolved, err := a.commandResolver(ctx, a.config.provider)
 		if err != nil {

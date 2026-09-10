@@ -34,6 +34,7 @@ type acpUsageState struct {
 	contextKnown        bool
 	contextModel        string
 	quotas              []map[string]any
+	lastTurn            map[string]any
 }
 
 func newACPLiveState() acpLiveState {
@@ -58,7 +59,7 @@ func cloneACPLiveState(state acpLiveState) acpLiveState {
 		commandsKnown:           state.commandsKnown,
 		configOptionDescriptors: cloneConfigOptionDescriptors(state.configOptionDescriptors),
 		modelsAPI:               state.modelsAPI,
-		usage:                   state.usage,
+		usage:                   cloneACPUsageState(state.usage),
 		goal:                    clonePayload(state.goal),
 	}
 	if len(state.configOptions) > 0 {
@@ -76,13 +77,13 @@ func snapshotACPLiveState(state acpLiveState) acpLiveStateSnapshot {
 		configOptions:           clonePayload(state.configOptions),
 		configOptionDescriptors: cloneConfigOptionDescriptors(state.configOptionDescriptors),
 		modelsAPI:               state.modelsAPI,
-		usage:                   state.usage,
+		usage:                   cloneACPUsageState(state.usage),
 		goal:                    clonePayload(state.goal),
 	}
 }
 
 func acpUsageRuntimeContext(usage acpUsageState) map[string]any {
-	if !usage.contextKnown && len(usage.quotas) == 0 {
+	if !usage.contextKnown && len(usage.quotas) == 0 && len(usage.lastTurn) == 0 {
 		return nil
 	}
 	result := map[string]any{}
@@ -95,7 +96,16 @@ func acpUsageRuntimeContext(usage acpUsageState) map[string]any {
 	if len(usage.quotas) > 0 {
 		result["quotas"] = cloneUsageQuotas(usage.quotas)
 	}
+	if len(usage.lastTurn) > 0 {
+		result["lastTurn"] = clonePayload(usage.lastTurn)
+	}
 	return result
+}
+
+func cloneACPUsageState(usage acpUsageState) acpUsageState {
+	usage.lastTurn = clonePayload(usage.lastTurn)
+	usage.quotas = cloneUsageQuotas(usage.quotas)
+	return usage
 }
 
 func commandSnapshotFromACPLiveState(
@@ -179,6 +189,9 @@ func mergeACPUsageState(previous acpUsageState, next acpUsageState) acpUsageStat
 	if len(merged.quotas) == 0 && len(previous.quotas) > 0 {
 		merged.quotas = cloneUsageQuotas(previous.quotas)
 	}
+	if len(merged.lastTurn) == 0 && len(previous.lastTurn) > 0 {
+		merged.lastTurn = clonePayload(previous.lastTurn)
+	}
 	return merged
 }
 
@@ -216,8 +229,14 @@ func acpUsageValue(update map[string]any) (acpUsageState, bool) {
 		"limit",
 		"max",
 	)
+	lastTurn := payloadObject(update["lastTurn"])
 	if !usedOK || !totalOK {
-		return acpUsageState{}, false
+		if len(lastTurn) == 0 {
+			return acpUsageState{}, false
+		}
+		return acpUsageState{
+			lastTurn: clonePayload(lastTurn),
+		}, true
 	}
 	if used < 0 {
 		used = 0
@@ -229,6 +248,7 @@ func acpUsageValue(update map[string]any) (acpUsageState, bool) {
 		contextUsedTokens:   used,
 		contextWindowTokens: total,
 		contextKnown:        true,
+		lastTurn:            clonePayload(lastTurn),
 	}, true
 }
 

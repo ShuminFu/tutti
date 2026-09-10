@@ -38,6 +38,7 @@ type claudeSDKUsageState struct {
 	contextKnown        bool
 	contextModel        string
 	quotas              []map[string]any
+	lastTurn            map[string]any
 }
 
 func newClaudeSDKLiveState() claudeSDKLiveState {
@@ -96,8 +97,12 @@ func claudeSDKUsageStateFromPayload(update map[string]any) (claudeSDKUsageState,
 	}
 	used, usedOK := firstInt64Value(context, "usedTokens", "used_tokens", "tokensUsed", "tokens_used", "currentTokens", "current_tokens", "used", "current")
 	total, totalOK := firstInt64Value(context, "totalTokens", "total_tokens", "windowTokens", "window_tokens", "contextWindowTokens", "context_window_tokens", "modelContextWindow", "model_context_window", "size", "limit", "max")
+	lastTurn := payloadObject(update["lastTurn"])
 	if !usedOK || !totalOK {
-		return claudeSDKUsageState{}, false
+		if len(lastTurn) == 0 {
+			return claudeSDKUsageState{}, false
+		}
+		return claudeSDKUsageState{lastTurn: clonePayload(lastTurn)}, true
 	}
 	if used < 0 {
 		used = 0
@@ -109,6 +114,7 @@ func claudeSDKUsageStateFromPayload(update map[string]any) (claudeSDKUsageState,
 		contextUsedTokens:   used,
 		contextWindowTokens: total,
 		contextKnown:        true,
+		lastTurn:            clonePayload(lastTurn),
 	}, true
 }
 
@@ -127,11 +133,14 @@ func mergeClaudeSDKUsageState(previous claudeSDKUsageState, next claudeSDKUsageS
 	if len(merged.quotas) == 0 && len(previous.quotas) > 0 {
 		merged.quotas = cloneUsageQuotas(previous.quotas)
 	}
+	if len(merged.lastTurn) == 0 && len(previous.lastTurn) > 0 {
+		merged.lastTurn = clonePayload(previous.lastTurn)
+	}
 	return merged
 }
 
 func claudeSDKUsageRuntimeContext(usage claudeSDKUsageState) map[string]any {
-	if !usage.contextKnown && len(usage.quotas) == 0 {
+	if !usage.contextKnown && len(usage.quotas) == 0 && len(usage.lastTurn) == 0 {
 		return nil
 	}
 	result := map[string]any{}
@@ -143,6 +152,9 @@ func claudeSDKUsageRuntimeContext(usage claudeSDKUsageState) map[string]any {
 	}
 	if len(usage.quotas) > 0 {
 		result["quotas"] = cloneUsageQuotas(usage.quotas)
+	}
+	if len(usage.lastTurn) > 0 {
+		result["lastTurn"] = clonePayload(usage.lastTurn)
 	}
 	return result
 }
@@ -453,10 +465,14 @@ func claudeSDKUsageUpdate(payload map[string]any, previous claudeSDKUsageState, 
 			contextWindow = clonePayload(contextWindow)
 			contextWindow["totalTokens"] = previous.contextWindowTokens
 		}
-		return map[string]any{
+		update := map[string]any{
 			"sessionUpdate": "usage_update",
 			"contextWindow": contextWindow,
 		}
+		if lastTurn := claudeSDKLastTurnUsage(payload, contextModel); len(lastTurn) > 0 {
+			update["lastTurn"] = lastTurn
+		}
+		return update
 	}
 	usage := payloadMap(payload, "usage")
 	if len(usage) == 0 {
@@ -479,13 +495,61 @@ func claudeSDKUsageUpdate(payload map[string]any, previous claudeSDKUsageState, 
 	if total <= 0 {
 		return nil
 	}
-	return map[string]any{
+	update := map[string]any{
 		"sessionUpdate": "usage_update",
 		"contextWindow": map[string]any{
 			"usedTokens":  used,
 			"totalTokens": total,
 		},
 	}
+	if lastTurn := claudeSDKLastTurnUsage(payload, contextModel); len(lastTurn) > 0 {
+		update["lastTurn"] = lastTurn
+	}
+	return update
+}
+
+func claudeSDKLastTurnUsage(payload map[string]any, contextModel string) map[string]any {
+	models := map[string]any{}
+	if rawModels := payloadMap(payload, "modelUsage"); len(rawModels) > 0 {
+		for model, raw := range rawModels {
+			item := payloadObject(raw)
+			canonical := map[string]any{}
+			for _, key := range []string{"inputTokens", "outputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"} {
+				if value, ok := firstInt64Value(item, key); ok {
+					canonical[key] = value
+				}
+			}
+			if len(canonical) > 0 {
+				models[model] = canonical
+			}
+		}
+	}
+	if len(models) == 0 {
+		usage := payloadMap(payload, "usage")
+		if len(usage) == 0 {
+			return nil
+		}
+		canonical := map[string]any{}
+		for _, pair := range []struct{ source, target string }{
+			{"input_tokens", "inputTokens"},
+			{"output_tokens", "outputTokens"},
+			{"cache_read_input_tokens", "cacheReadInputTokens"},
+			{"cache_creation_input_tokens", "cacheCreationInputTokens"},
+		} {
+			if value, ok := firstInt64Value(usage, pair.source); ok {
+				canonical[pair.target] = value
+			}
+		}
+		if len(canonical) == 0 {
+			return nil
+		}
+		model := strings.TrimSpace(contextModel)
+		if model == "" {
+			model = "default"
+		}
+		models[model] = canonical
+	}
+	return map[string]any{"models": models}
 }
 
 func claudeSDKCanReusePreviousContextWindow(previous claudeSDKUsageState, contextModel string) bool {

@@ -29,7 +29,10 @@ func claudeCodeCustomModel(session Session) string {
 	return model
 }
 
-func claudeCodeSDKStartOptions(session Session) map[string]any {
+func claudeCodeSDKStartOptions(
+	session Session,
+	contract rndmasterRuntimeContract,
+) map[string]any {
 	options := map[string]any{
 		"planModeInstructions": claudePlanModeInstructions,
 		"allowedTools":         []string{"Grep", "Glob"},
@@ -45,6 +48,15 @@ func claudeCodeSDKStartOptions(session Session) map[string]any {
 	}
 	if len(extraArgs) > 0 {
 		options["extraArgs"] = extraArgs
+	}
+	if prompt := strings.TrimSpace(contract.SystemPrompt); prompt != "" {
+		options["systemPromptAppend"] = prompt
+	}
+	if servers, configured := rndmasterMCPServers(contract); configured {
+		options["mcpServers"] = servers
+	}
+	if gateHookURL := strings.TrimSpace(contract.GateHookURL); gateHookURL != "" {
+		options["gateHookUrl"] = gateHookURL
 	}
 	return options
 }
