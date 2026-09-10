@@ -617,6 +617,7 @@ export const en = {
           enabledColumn: "Enabled",
           environmentColumn: "Readiness",
           extensionCodeBuddy: "CodeBuddy Code",
+          extensionDeepSeekHarness: "DeepSeek Harness",
           extensionEnableToSetUp: "Enable to set up",
           extensionGemini: "Gemini CLI",
           extensionGrok: "Grok Build",

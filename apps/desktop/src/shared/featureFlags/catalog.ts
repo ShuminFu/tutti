@@ -47,6 +47,11 @@ export const STABLE_AGENT_EXTENSION_INTEGRATIONS = [
     targetId: "extension:hermes"
   },
   {
+    key: "deepseek-harness",
+    labelKey: "workspace.settings.agent.agents.extensionDeepSeekHarness",
+    targetId: "extension:deepseek-harness"
+  },
+  {
     key: "kimi-code",
     labelKey: "workspace.settings.agent.agents.extensionKimiCode",
     targetId: "extension:kimi-code"

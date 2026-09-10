@@ -346,6 +346,24 @@ test("desktop agents service keeps stable extensions visible without Early Acces
       createdAtUnixMs: 1780272000000,
       enabled: true,
       heroImageUrl: null,
+      iconKey: "extension:deepseek-harness",
+      iconUrl: "data:image/svg+xml;base64,deepseek-harness",
+      maskIconUrl: null,
+      id: "extension:deepseek-harness",
+      launchRef: {
+        extensionInstallationId: "deepseek-harness@0.1.0",
+        type: "agent_extension"
+      },
+      name: "DeepSeek Harness",
+      provider: "acp:deepseek-harness",
+      sortOrder: 700,
+      source: "system",
+      updatedAtUnixMs: 1780272000000
+    },
+    {
+      createdAtUnixMs: 1780272000000,
+      enabled: true,
+      heroImageUrl: null,
       iconKey: "extension:hermes",
       iconUrl: "data:image/svg+xml;base64,hermes",
       maskIconUrl: null,
@@ -386,20 +404,33 @@ test("desktop agents service keeps stable extensions visible without Early Acces
     mapAgentTargetPresentationsToAgents(presentations).map(
       (agent) => agent.agentTargetId
     ),
-    ["extension:hermes", "extension:kimi-code"]
+    [
+      "extension:deepseek-harness",
+      "extension:hermes",
+      "extension:kimi-code"
+    ]
   );
   assert.deepEqual(
     mapAgentTargetPresentationsToAgents(presentations, {
       earlyAccessEnabled: false
     }).map((agent) => agent.agentTargetId),
-    ["extension:hermes", "extension:kimi-code"]
+    [
+      "extension:deepseek-harness",
+      "extension:hermes",
+      "extension:kimi-code"
+    ]
   );
   // Early Access on: the remaining extension also becomes launchable.
   assert.deepEqual(
     mapAgentTargetPresentationsToAgents(presentations, {
       earlyAccessEnabled: true
     }).map((agent) => agent.agentTargetId),
-    ["extension:gemini", "extension:hermes", "extension:kimi-code"]
+    [
+      "extension:deepseek-harness",
+      "extension:gemini",
+      "extension:hermes",
+      "extension:kimi-code"
+    ]
   );
 });
 

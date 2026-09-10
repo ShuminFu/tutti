@@ -591,6 +591,7 @@ export const zhCN = {
           enabledColumn: "启用状态",
           environmentColumn: "就绪状态",
           extensionCodeBuddy: "CodeBuddy Code",
+          extensionDeepSeekHarness: "DeepSeek Harness",
           extensionEnableToSetUp: "启用后进行设置",
           extensionGemini: "Gemini CLI",
           extensionGrok: "Grok Build",

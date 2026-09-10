@@ -27,6 +27,12 @@ test("stable extension rows remain visible without Early Access", () => {
       },
       {
         activationFlag: null,
+        agentTargetId: "extension:deepseek-harness",
+        earlyAccess: false,
+        toggleDisabled: true
+      },
+      {
+        activationFlag: null,
         agentTargetId: "extension:kimi-code",
         earlyAccess: false,
         toggleDisabled: true
@@ -46,7 +52,7 @@ test("stable targets and early-access activation project independently", () => {
     featureFlags: { "agent.extension.gemini": true }
   });
 
-  assert.equal(rows.length, 8);
+  assert.equal(rows.length, 9);
   assert.deepEqual(rows[0], {
     activationFlag: null,
     agentTargetId: "extension:hermes",
@@ -58,7 +64,7 @@ test("stable targets and early-access activation project independently", () => {
     status: "connected",
     toggleDisabled: false
   });
-  assert.deepEqual(rows[2], {
+  assert.deepEqual(rows[3], {
     activationFlag: "agent.extension.gemini",
     agentTargetId: "extension:gemini",
     earlyAccess: true,
@@ -69,8 +75,8 @@ test("stable targets and early-access activation project independently", () => {
     status: "auth_required",
     toggleDisabled: false
   });
-  assert.equal(rows[3]?.enabled, false);
-  assert.equal(rows[3]?.status, "unknown");
+  assert.equal(rows[4]?.enabled, false);
+  assert.equal(rows[4]?.status, "unknown");
 });
 
 function extensionTarget(
