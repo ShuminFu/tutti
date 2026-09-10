@@ -137,7 +137,7 @@ func (m *Manager) RestoreActive(ctx context.Context) (bool, []error) {
 			continue
 		}
 
-		installation, err := m.loadActive(source.Key)
+		installation, err := m.loadActiveForStartup(source.Key, deferLocalReconcile)
 		if err != nil {
 			requiresSynchronousReconcile = requiresSynchronousReconcile || !deferLocalReconcile
 			if !errors.Is(err, os.ErrNotExist) {
@@ -547,6 +547,10 @@ func (m *Manager) registerTarget(ctx context.Context, installation Installation)
 }
 
 func (m *Manager) loadActive(key string) (Installation, error) {
+	return m.loadActiveForStartup(key, false)
+}
+
+func (m *Manager) loadActiveForStartup(key string, trustLocalSnapshot bool) (Installation, error) {
 	if m.Installations == nil {
 		return Installation{}, errors.New("agent extension installation store is not configured")
 	}
@@ -558,7 +562,7 @@ func (m *Manager) loadActive(key string) (Installation, error) {
 		return Installation{}, errors.New("active installation identity is invalid")
 	}
 	legacy := legacyRemoteInstallationRecord(value)
-	validated, err := m.validateInstallation(value)
+	validated, err := m.validateInstallationWithLocalContent(value, !trustLocalSnapshot)
 	if err != nil {
 		return Installation{}, err
 	}
@@ -589,6 +593,10 @@ func (m *Manager) loadInstallationByID(id string) (Installation, error) {
 }
 
 func (m *Manager) validateInstallation(value Installation) (Installation, error) {
+	return m.validateInstallationWithLocalContent(value, true)
+}
+
+func (m *Manager) validateInstallationWithLocalContent(value Installation, verifyLocalContent bool) (Installation, error) {
 	if m.Installations == nil {
 		return Installation{}, errors.New("agent extension installation store is not configured")
 	}
@@ -604,12 +612,14 @@ func (m *Manager) validateInstallation(value Installation) (Installation, error)
 		if !validPackageContentSHA256(value.PackageContentSHA256) {
 			return Installation{}, errors.New("local extension installation content identity is missing or invalid")
 		}
-		contentDigest, err := packageContentSHA256(expectedDir)
-		if err != nil {
-			return Installation{}, fmt.Errorf("fingerprint local extension package: %w", err)
-		}
-		if contentDigest != value.PackageContentSHA256 {
-			return Installation{}, errors.New("local extension installation content does not match snapshot")
+		if verifyLocalContent {
+			contentDigest, err := packageContentSHA256(expectedDir)
+			if err != nil {
+				return Installation{}, fmt.Errorf("fingerprint local extension package: %w", err)
+			}
+			if contentDigest != value.PackageContentSHA256 {
+				return Installation{}, errors.New("local extension installation content does not match snapshot")
+			}
 		}
 		manifest, err = validateInstalledPackage(expectedDir, value.AgentKey, value.Version)
 		if err != nil {

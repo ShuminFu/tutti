@@ -470,6 +470,50 @@ func TestManagerRestoreActiveDefersEmbeddedLocalPackageReconcile(t *testing.T) {
 	}
 }
 
+func TestManagerRestoreActiveTrustsEmbeddedLocalSnapshotWithoutRehash(t *testing.T) {
+	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "1")
+	sourceDir := t.TempDir()
+	if err := extractPackage(testPackageZIP(t), sourceDir); err != nil {
+		t.Fatal(err)
+	}
+	runtimeDir := filepath.Join(sourceDir, "runtime")
+	if err := os.MkdirAll(runtimeDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runtimeDir, "payload.bin"), []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	installationStore := agentextensiondata.NewFileInstallationStore(t.TempDir())
+	targets := &targetStoreStub{targets: map[string]agenttargetbiz.Target{}}
+	source := tuttitypes.AgentExtensionSource{
+		Key: "gemini", LocalPackageDir: sourceDir, Enabled: true,
+	}
+	manager := Manager{Installations: installationStore, Store: targets, Sources: []tuttitypes.AgentExtensionSource{source}}
+	if errs := manager.Reconcile(context.Background()); len(errs) != 0 {
+		t.Fatalf("seed Reconcile() errors = %v", errs)
+	}
+	installation, err := installationStore.ReadActive("gemini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(installation.PackageDir, "runtime", "payload.bin"), []byte("changed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	targets.targets = map[string]agenttargetbiz.Target{}
+
+	requiresSynchronousReconcile, errs := manager.RestoreActive(context.Background())
+	if len(errs) != 0 || requiresSynchronousReconcile {
+		t.Fatalf("RestoreActive() synchronous = %v, errors = %v", requiresSynchronousReconcile, errs)
+	}
+	if target := targets.targets["extension:gemini"]; target.Provider != "acp:gemini" {
+		t.Fatalf("RestoreActive() target = %#v, want cached local snapshot", target)
+	}
+	if _, err := manager.loadInstallationByID(installation.ID); err == nil || !strings.Contains(err.Error(), "content does not match snapshot") {
+		t.Fatalf("strict local snapshot validation error = %v", err)
+	}
+}
+
 func TestManagerReconcileRemovesStaleLocalPackageStaging(t *testing.T) {
 	sourceDir := t.TempDir()
 	if err := extractPackage(testPackageZIP(t), sourceDir); err != nil {
