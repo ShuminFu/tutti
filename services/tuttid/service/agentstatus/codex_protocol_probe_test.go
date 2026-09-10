@@ -1,9 +1,12 @@
 package agentstatus
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -44,6 +47,11 @@ func TestProbeCodexAppServerClassifiesUnsupportedSubcommandFromStderr(t *testing
 	if runtime.GOOS == "windows" {
 		t.Skip("shell fixture is Unix-only")
 	}
+	var output bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
 	command := filepath.Join(t.TempDir(), "codex")
 	writeExecutable(t, command, "#!/bin/sh\n"+
 		"echo \"error: unrecognized subcommand 'app-server'\" >&2\n"+
@@ -61,5 +69,20 @@ func TestProbeCodexAppServerClassifiesUnsupportedSubcommandFromStderr(t *testing
 
 	if evidence.Category != "app_server_unsupported" {
 		t.Fatalf("evidence = %#v, want app_server_unsupported classified from stderr", evidence)
+	}
+	logOutput := output.String()
+	for _, field := range []string{
+		"event=tutti.agent_provider.codex.app_server_probe.failed",
+		"launcherPath=" + command,
+		"failureStage=protocol",
+		"commandStarted=true",
+		"protocolReady=false",
+		"category=app_server_unsupported",
+		"durationMs=",
+		"unrecognized subcommand",
+	} {
+		if !strings.Contains(logOutput, field) {
+			t.Fatalf("Codex probe failure log missing %q:\n%s", field, logOutput)
+		}
 	}
 }

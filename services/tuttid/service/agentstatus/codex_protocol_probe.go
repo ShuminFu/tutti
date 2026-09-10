@@ -2,6 +2,7 @@ package agentstatus
 
 import (
 	"context"
+	"log/slog"
 	"runtime"
 	"strings"
 	"unicode/utf8"
@@ -31,13 +32,37 @@ func (s Service) probeCodexAppServer(ctx context.Context, command, env []string)
 	if category == "" {
 		category, platformPackage = codexProbeClassification(result.Category, diagnosticMessage)
 	}
-	return CodexProbeEvidence{
+	evidence := CodexProbeEvidence{
 		CommandStarted:      result.CommandStarted,
 		ProtocolReady:       result.ProtocolReady,
 		Category:            category,
 		PlatformPackageName: platformPackage,
 		Message:             truncateCodexProbeMessage(diagnosticMessage),
 	}
+	if !evidence.ProtocolReady {
+		failureStage := "protocol"
+		if !evidence.CommandStarted {
+			failureStage = "command"
+		}
+		launcherPath := ""
+		if len(command) > 0 {
+			launcherPath = command[0]
+		}
+		slog.WarnContext(ctx,
+			"codex app-server probe failed",
+			"event", "tutti.agent_provider.codex.app_server_probe.failed",
+			"launcherPath", launcherPath,
+			"failureStage", failureStage,
+			"commandStarted", evidence.CommandStarted,
+			"protocolReady", evidence.ProtocolReady,
+			"commandCategory", result.CommandCategory,
+			"protocolCategory", result.ProtocolCategory,
+			"category", evidence.Category,
+			"durationMs", result.Duration.Milliseconds(),
+			"diagnostic", evidence.Message,
+		)
+	}
+	return evidence
 }
 
 func codexProbeClassification(category, message string) (string, string) {
