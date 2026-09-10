@@ -6,10 +6,12 @@ import {
   HOST_FOCUS_TYPE,
   HOST_OPEN_AGENT_SESSION_ACK_TYPE,
   HOST_OPEN_AGENT_SESSION_TYPE,
+  HOST_THEME_TYPE,
   HOST_WORKBENCH_LAYOUT_TYPE,
   installHostAgentSessionBridge,
   installHostFileDropBridge,
   installHostFocusRecovery,
+  installHostThemeBridge,
   installHostWorkbenchLayoutNotifications,
   requestHostCapability,
   requestHostCreateAgentSession
@@ -406,6 +408,77 @@ test("embedded workbench reports fullscreen layout changes to its host", () => {
 
   dispose();
   assert.equal(disconnected, true);
+});
+
+test("embedded theme follows only secured host appearance pushes", () => {
+  let messageListener: ((event: MessageEvent) => void) | null = null;
+  const parent = {} as WindowProxy;
+  const applied: string[] = [];
+  const windowRef = {
+    addEventListener(type: string, listener: EventListener) {
+      if (type === "message") {
+        messageListener = listener as (event: MessageEvent) => void;
+      }
+    },
+    location: {
+      search:
+        "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+    },
+    parent,
+    removeEventListener(type: string) {
+      if (type === "message") {
+        messageListener = null;
+      }
+    }
+  } as unknown as Window;
+
+  const dispose = installHostThemeBridge(
+    (appearance) => applied.push(appearance),
+    windowRef
+  );
+  const send = (overrides: Record<string, unknown> = {}) => {
+    const { data, ...event } = overrides;
+    messageListener?.({
+      data: {
+        type: HOST_THEME_TYPE,
+        nonce: "nonce-1",
+        appearance: "light",
+        ...(data as object | undefined)
+      },
+      origin: "http://wails.localhost",
+      source: parent,
+      ...event
+    } as MessageEvent);
+  };
+
+  send({ data: { nonce: "wrong" } });
+  send({ origin: "https://evil.example" });
+  send({ source: {} as WindowProxy });
+  send({ data: { appearance: "sepia" } });
+  assert.deepEqual(applied, []);
+
+  send();
+  send({ data: { appearance: "dark" } });
+  assert.deepEqual(applied, ["light", "dark"]);
+
+  dispose();
+  send();
+  assert.deepEqual(applied, ["light", "dark"]);
+});
+
+test("host theme bridge stays inert outside the embedded host", () => {
+  const windowRef = {
+    addEventListener() {
+      throw new Error("must not listen outside the embedded host");
+    },
+    location: { search: "" },
+    parent: undefined,
+    removeEventListener() {}
+  } as unknown as Window;
+
+  installHostThemeBridge(() => {
+    throw new Error("must not apply a theme outside the embedded host");
+  }, windowRef)();
 });
 
 interface FakeFocusTarget {

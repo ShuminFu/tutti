@@ -26,6 +26,7 @@ export const HOST_OPEN_AGENT_SESSION_TYPE = "tutti-host-open-agent-session";
 export const HOST_AGENT_SESSION_READY_TYPE = "tutti-host-agent-session-ready";
 export const HOST_OPEN_AGENT_SESSION_ACK_TYPE = "tutti-host-open-agent-session-ack";
 export const HOST_WORKBENCH_LAYOUT_TYPE = "tutti-host-workbench-layout";
+export const HOST_THEME_TYPE = "tutti-host-theme";
 const FULLSCREEN_WORKBENCH_WINDOW_SELECTOR =
   '.workbench-window-shell[data-display-mode="fullscreen"]';
 const TERMINAL_FOCUS_SELECTOR =
@@ -182,6 +183,43 @@ export function installHostAgentSessionBridge(
     { type: HOST_AGENT_SESSION_READY_TYPE, nonce: coordinates.nonce },
     coordinates.hostOrigin
   );
+  return () => windowRef.removeEventListener("message", onMessage);
+}
+
+// The embedding host owns dark/light for the embedded build. The initial
+// appearance already arrives on the iframe URL (see theme/runtime.ts); this
+// bridge keeps it in sync when the host switches theme afterwards, using the
+// same source/origin/nonce triple as every other host-to-iframe notification.
+export function installHostThemeBridge(
+  applyHostThemeAppearance: (appearance: "light" | "dark") => void,
+  windowRef: Window = window
+): () => void {
+  const coordinates = bridgeCoordinates(windowRef.location.search);
+  if (!coordinates || !windowRef.parent || windowRef.parent === windowRef) {
+    return () => undefined;
+  }
+
+  const parent = windowRef.parent;
+  const onMessage = (event: MessageEvent): void => {
+    const data = event.data as
+      | { type?: unknown; nonce?: unknown; appearance?: unknown }
+      | null
+      | undefined;
+    if (
+      !data ||
+      typeof data !== "object" ||
+      data.type !== HOST_THEME_TYPE ||
+      data.nonce !== coordinates.nonce ||
+      event.source !== parent ||
+      event.origin !== coordinates.hostOrigin ||
+      (data.appearance !== "light" && data.appearance !== "dark")
+    ) {
+      return;
+    }
+    applyHostThemeAppearance(data.appearance);
+  };
+
+  windowRef.addEventListener("message", onMessage);
   return () => windowRef.removeEventListener("message", onMessage);
 }
 

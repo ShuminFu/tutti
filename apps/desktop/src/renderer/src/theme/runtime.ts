@@ -21,10 +21,25 @@ function resolveWindowThemeAppearance(): DesktopThemeAppearance {
   return "light";
 }
 
-let activeTheme: DesktopThemeState = {
+// Embedded host theme pin.
+//
+// When the web build runs inside the RnDMaster shell the appearance is owned by
+// the host: the embedded settings hide the Appearance section, so nothing in
+// this renderer should be able to move it. The host passes the resolved
+// appearance as `tuttiHostTheme` on the iframe URL (applied here at module load
+// so the very first paint already matches) and pushes later changes over the
+// secured host bridge. While the pin is set every theme write — the daemon
+// preference hydration included — keeps its source but renders the host's
+// appearance.
+let hostThemeAppearance: DesktopThemeAppearance | null =
+  readHostThemeAppearanceFromLocation();
+
+let requestedTheme: DesktopThemeState = {
   appearance: readInitialThemeAppearanceFromLocation(),
   source: readInitialThemeSourceFromLocation()
 };
+
+let activeTheme: DesktopThemeState = effectiveTheme(requestedTheme);
 
 syncDocumentTheme(activeTheme);
 
@@ -60,7 +75,13 @@ export function syncDocumentTheme(theme: DesktopThemeState): void {
   document.documentElement.style.colorScheme = theme.appearance;
 }
 
-function setActiveTheme(theme: DesktopThemeState): void {
+function effectiveTheme(theme: DesktopThemeState): DesktopThemeState {
+  return hostThemeAppearance
+    ? { appearance: hostThemeAppearance, source: theme.source }
+    : theme;
+}
+
+function commitTheme(theme: DesktopThemeState): void {
   if (
     activeTheme.source === theme.source &&
     activeTheme.appearance === theme.appearance
@@ -70,6 +91,24 @@ function setActiveTheme(theme: DesktopThemeState): void {
 
   activeTheme = theme;
   syncDocumentTheme(theme);
+}
+
+function setActiveTheme(theme: DesktopThemeState): void {
+  requestedTheme = theme;
+  commitTheme(effectiveTheme(theme));
+}
+
+// Pins the appearance to the embedding host. `null` releases the pin and falls
+// back to the last theme this renderer requested.
+export function setHostThemeAppearance(
+  appearance: DesktopThemeAppearance | null
+): void {
+  if (hostThemeAppearance === appearance) {
+    return;
+  }
+
+  hostThemeAppearance = appearance;
+  commitTheme(effectiveTheme(requestedTheme));
 }
 
 export function getActiveTheme(): DesktopThemeState {
@@ -88,6 +127,22 @@ export function resolveDesktopThemeState(
           : resolveWindowThemeAppearance(),
     source
   };
+}
+
+function readHostThemeAppearanceFromLocation(): DesktopThemeAppearance | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  // The pin only exists for the secured embedded bridge; without its
+  // coordinates the parameter is ignored.
+  if (!params.get("tuttiBootstrap") || !params.get("tuttiHostOrigin")) {
+    return null;
+  }
+
+  const appearance = params.get("tuttiHostTheme");
+  return isThemeAppearance(appearance) ? appearance : null;
 }
 
 function readInitialThemeSourceFromLocation(): DesktopThemeSource {
