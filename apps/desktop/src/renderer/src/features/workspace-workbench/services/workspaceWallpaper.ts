@@ -110,7 +110,7 @@ export const workspaceWallpaperOptions: WorkspaceWallpaperOption[] = [
     id: "tutti",
     titleKey: "workspace.wallpaper.options.tutti",
     url: new URL(
-      "../../../assets/workspace-wallpaper/tutti.png",
+      "../../../assets/workspace-wallpaper/tutti.jpg",
       import.meta.url
     ).href
   },
