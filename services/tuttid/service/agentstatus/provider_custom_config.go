@@ -9,6 +9,7 @@ import (
 
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerstatus"
+	"github.com/tutti-os/tutti/packages/agent/runtimeprep"
 )
 
 // A provider CLI can diverge from its default Console/OAuth login in two
@@ -39,6 +40,9 @@ import (
 // what the CLI actually talks to, so the service-API reachability probe is
 // skipped.
 func (s Service) providerUsesCustomConfig(provider string) bool {
+	if runtimeprep.HostModelEndpoint(provider) != nil {
+		return true
+	}
 	for _, key := range providerCustomConfigEnvVars(provider) {
 		if strings.TrimSpace(s.lookupEnv(key)) != "" {
 			return true
@@ -64,6 +68,9 @@ func (s Service) providerUsesCustomConfig(provider string) bool {
 // whatever `claude auth status` reports (which only reflects the stored OAuth
 // session, not env/settings credentials).
 func (s Service) providerHasAPICredential(provider string) bool {
+	if runtimeprep.HostModelEndpoint(provider) != nil {
+		return true
+	}
 	for _, key := range providerCredentialEnvVars(provider) {
 		if strings.TrimSpace(s.lookupEnv(key)) != "" {
 			return true
