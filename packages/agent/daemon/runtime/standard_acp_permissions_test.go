@@ -3,6 +3,8 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -426,5 +428,185 @@ func TestResolveACPPermissionDecisionOptionID(t *testing.T) {
 	}
 	if _, ok := resolveACPPermissionDecisionOptionID(nil, "approved"); ok {
 		t.Fatal("no options must not resolve")
+	}
+}
+
+func writeAutomaticPermissionContract(t *testing.T, provider, automaticDecision string) string {
+	t.Helper()
+	body := map[string]any{"version": 1}
+	if provider != "" {
+		body["provider"] = provider
+	}
+	if automaticDecision != "" {
+		body["permission"] = map[string]any{"automaticDecision": automaticDecision}
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "runtime-contract.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func sessionWithAutomaticPermissionContract(t *testing.T, provider, automaticDecision string) Session {
+	t.Helper()
+	session := standardTestSession(provider)
+	session.ProviderSessionID = ""
+	if automaticDecision == "absent" {
+		return session
+	}
+	path := writeAutomaticPermissionContract(t, provider, automaticDecision)
+	session.RuntimeContext = map[string]any{"rndmaster": map[string]any{"contractFile": path}}
+	return session
+}
+
+func rejectFirstPermissionOptions() []map[string]any {
+	return []map[string]any{
+		{"optionId": "reject-once", "kind": "reject-once", "name": "Reject"},
+		{"optionId": "allow-once", "kind": "allow-once", "name": "Allow"},
+	}
+}
+
+func TestStandardACPContractAutomaticPermissionDecision(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no-tier contract approved", func(t *testing.T) {
+		adapter := newExtensionRuntimeContractTestAdapter(newStandardACPTransport("DeepSeek Harness", "dsh-auto-approve"))
+		session := sessionWithAutomaticPermissionContract(t, extensionRuntimeContractTestProvider, "approved")
+		if got := adapter.automaticPermissionDecisionFor(session); got != "approved" {
+			t.Fatalf("decision = %q, want approved", got)
+		}
+	})
+	t.Run("no-tier contract approved planMode denied", func(t *testing.T) {
+		adapter := newExtensionRuntimeContractTestAdapter(newStandardACPTransport("DeepSeek Harness", "dsh-auto-plan"))
+		session := sessionWithAutomaticPermissionContract(t, extensionRuntimeContractTestProvider, "approved")
+		session.Settings = &SessionSettings{PlanMode: true}
+		if got := adapter.automaticPermissionDecisionFor(session); got != "denied" {
+			t.Fatalf("decision = %q, want denied", got)
+		}
+	})
+	t.Run("no-tier no contract prompts", func(t *testing.T) {
+		adapter := newExtensionRuntimeContractTestAdapter(newStandardACPTransport("DeepSeek Harness", "dsh-auto-none"))
+		session := sessionWithAutomaticPermissionContract(t, extensionRuntimeContractTestProvider, "absent")
+		if got := adapter.automaticPermissionDecisionFor(session); got != "" {
+			t.Fatalf("decision = %q, want prompt", got)
+		}
+	})
+	t.Run("no-tier old contract without permission prompts", func(t *testing.T) {
+		adapter := newExtensionRuntimeContractTestAdapter(newStandardACPTransport("DeepSeek Harness", "dsh-auto-old"))
+		session := sessionWithAutomaticPermissionContract(t, extensionRuntimeContractTestProvider, "")
+		if got := adapter.automaticPermissionDecisionFor(session); got != "" {
+			t.Fatalf("decision = %q, want prompt", got)
+		}
+	})
+	t.Run("cursor with contract still uses tier", func(t *testing.T) {
+		adapter := newCursorAdapterWithHostMetadata(newStandardACPTransport("Cursor Agent", "cursor-contract-tier"), LegacyHostMetadata(), nil)
+		session := sessionWithAutomaticPermissionContract(t, ProviderCursor, "approved")
+		session.PermissionModeID = "agent"
+		if got := adapter.automaticPermissionDecisionFor(session); got != "" {
+			t.Fatalf("cursor agent-tier with contract = %q, want prompt from tier not contract", got)
+		}
+		session.PermissionModeID = "full-access"
+		if _, err := adapter.Start(context.Background(), session); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		if got := adapter.automaticPermissionDecisionFor(session); got != "approved" {
+			t.Fatalf("cursor full-access with contract = %q, want approved from tier", got)
+		}
+	})
+}
+
+func TestStandardACPContractAutoApprovesFirstAllowOption(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("DeepSeek Harness", "dsh-session-reject-first")
+	transport.conn.promptPermission = true
+	transport.conn.permissionOptions = rejectFirstPermissionOptions()
+	adapter := newExtensionRuntimeContractTestAdapter(transport)
+	session := sessionWithAutomaticPermissionContract(t, extensionRuntimeContractTestProvider, "approved")
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	session.ProviderSessionID = "dsh-session-reject-first"
+
+	execDone := make(chan error, 1)
+	go func() {
+		_, err := adapter.Exec(context.Background(), session, textPrompt("grep PING-LINE"), "", "turn-1", nil, nil)
+		execDone <- err
+	}()
+	select {
+	case err := <-execDone:
+		if err != nil {
+			t.Fatalf("Exec: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Exec did not finish; contract approved must auto-select an allow option")
+	}
+	if got := transport.conn.permissionOptionID(); got != "allow-once" {
+		t.Fatalf("permission option id = %q, want first allow-kind option not reject-once", got)
+	}
+}
+
+func TestStandardACPContractApprovedWithoutAllowOptionPrompts(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("DeepSeek Harness", "dsh-session-no-allow")
+	transport.conn.promptPermission = true
+	transport.conn.permissionOptions = []map[string]any{
+		{"optionId": "reject-once", "kind": "reject-once", "name": "Reject"},
+	}
+	adapter := newExtensionRuntimeContractTestAdapter(transport)
+	session := sessionWithAutomaticPermissionContract(t, extensionRuntimeContractTestProvider, "approved")
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	session.ProviderSessionID = "dsh-session-no-allow"
+
+	var mu sync.Mutex
+	var emittedActivity []activityshared.Event
+	execDone := make(chan error, 1)
+	go func() {
+		_, err := adapter.Exec(context.Background(), session, textPrompt("grep PING-LINE"), "", "turn-1", func(events []activityshared.Event) {
+			mu.Lock()
+			emittedActivity = append(emittedActivity, events...)
+			mu.Unlock()
+		}, nil)
+		execDone <- err
+	}()
+
+	waitForCondition(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		events := ProjectActivityEventsToStreamEvents(session, emittedActivity)
+		return hasStreamCallEvent(events, "approval", "waiting_approval")
+	})
+	select {
+	case err := <-execDone:
+		t.Fatalf("Exec finished without a user response: %v", err)
+	case <-time.After(150 * time.Millisecond):
+	}
+	if got := transport.conn.permissionOptionID(); got != "" {
+		t.Fatalf("permission option id = %q, want no invented option", got)
+	}
+	if _, err := adapter.SubmitInteractive(context.Background(), session, SubmitInteractiveInput{
+		TurnID:    "turn-1",
+		RequestID: "permission-1",
+		OptionID:  "reject-once",
+	}); err != nil {
+		t.Fatalf("SubmitInteractive: %v", err)
+	}
+	select {
+	case err := <-execDone:
+		if err != nil {
+			t.Fatalf("Exec: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Exec did not finish after permission response")
+	}
+	if got := transport.conn.permissionOptionID(); got != "reject-once" {
+		t.Fatalf("permission option id = %q, want the user's reject-once", got)
 	}
 }

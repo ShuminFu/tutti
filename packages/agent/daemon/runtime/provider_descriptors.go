@@ -244,6 +244,7 @@ func NewStandardACPAdapter(config StandardACPAdapterConfig, transport ProcessTra
 			executableIdentity:           cloneExecutableIdentity(config.ExecutableIdentity),
 			startupTimeout:               startupTimeout,
 			isolatedRuntimeEnvNames:      append([]string(nil), config.IsolatedRuntimeEnvNames...),
+			permissionModes:              permissionModes,
 			permissionModeID:             func(input string) string { return permissionModes[strings.ToLower(strings.TrimSpace(input))] },
 			planModeRuntimeID:            strings.TrimSpace(config.PlanModeRuntimeID),
 			planModeDisabledRuntimeID:    strings.TrimSpace(config.PlanModeDisabledRuntimeID),

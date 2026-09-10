@@ -27,6 +27,7 @@ type standardACPConfig struct {
 	defaultTitleAliases []string
 	authRequiredMessage string
 	permissionModeID    func(string) string
+	permissionModes     map[string]string
 	// initializeParams returns the initialize request params for this ACP provider.
 	// Some providers, such as Claude Agent, require richer terminal/auth capability
 	// declarations than the generic ACP defaults.
@@ -74,6 +75,9 @@ type standardACPConfig struct {
 	// permission tier. It returns a decision
 	// token ("approved" / "denied") to apply automatically, or "" to prompt
 	// the user as usual. Nil (the default) always prompts.
+	// Targets with no permission tier (empty PermissionModes / no callback)
+	// may instead use permission.automaticDecision from the RnDMaster
+	// runtime contract; providers that have a tier keep this callback.
 	automaticPermissionDecision func(permissionModeID string) string
 	// providerPermissionRequestDecision resolves a narrowly recognized
 	// provider request before the permission tier is consulted. It is used only

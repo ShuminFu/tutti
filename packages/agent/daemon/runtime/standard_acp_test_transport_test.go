@@ -81,6 +81,7 @@ type standardACPConnection struct {
 	commandUpdateOnLoadSession    bool
 	availableCommands             []AgentSessionCommand
 	promptPermission              bool
+	permissionOptions             []map[string]any
 	promptKind                    string
 	pauseBeforePromptResult       chan struct{}
 	pauseBeforeToolCallCompletion chan struct{}

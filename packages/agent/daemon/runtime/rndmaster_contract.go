@@ -10,14 +10,34 @@ import (
 )
 
 type rndmasterRuntimeContract struct {
-	Version      int               `json:"version"`
-	Provider     string            `json:"provider"`
-	SystemPrompt string            `json:"systemPrompt"`
-	CWD          string            `json:"cwd"`
-	Model        string            `json:"model"`
-	MCPConfig    map[string]any    `json:"mcpConfig"`
-	Env          map[string]string `json:"env"`
-	GateHookURL  string            `json:"gateHookUrl"`
+	Version      int                          `json:"version"`
+	Provider     string                       `json:"provider"`
+	SystemPrompt string                       `json:"systemPrompt"`
+	CWD          string                       `json:"cwd"`
+	Model        string                       `json:"model"`
+	MCPConfig    map[string]any               `json:"mcpConfig"`
+	Env          map[string]string            `json:"env"`
+	GateHookURL  string                       `json:"gateHookUrl"`
+	Permission   *rndmasterContractPermission `json:"permission"`
+}
+
+type rndmasterContractPermission struct {
+	AutomaticDecision string `json:"automaticDecision"`
+}
+
+func rndmasterContractAutomaticDecision(session Session) string {
+	contract, err := rndmasterContractFromSession(session)
+	if err != nil {
+		return ""
+	}
+	if contract.Permission == nil {
+		return ""
+	}
+	decision := strings.TrimSpace(contract.Permission.AutomaticDecision)
+	if decision == "approved" || decision == "denied" {
+		return decision
+	}
+	return ""
 }
 
 func rndmasterContractFromSession(session Session) (rndmasterRuntimeContract, error) {

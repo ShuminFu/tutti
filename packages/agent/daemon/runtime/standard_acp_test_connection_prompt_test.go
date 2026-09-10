@@ -179,13 +179,17 @@ func (c *standardACPConnection) promptRequest() (map[string]any, []map[string]an
 			},
 		}, nil
 	default:
-		return map[string]any{
-				"toolCallId": "approval-1",
-				"title":      "Allow Bash",
-			}, []map[string]any{
+		options := c.permissionOptions
+		if len(options) == 0 {
+			options = []map[string]any{
 				{"optionId": "allow", "label": "Allow", "kind": "allow_once"},
 				{"optionId": "reject", "label": "Reject", "kind": "reject_once"},
 			}
+		}
+		return map[string]any{
+			"toolCallId": "approval-1",
+			"title":      "Allow Bash",
+		}, options
 	}
 }
 

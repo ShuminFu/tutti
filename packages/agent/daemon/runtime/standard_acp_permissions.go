@@ -2,8 +2,18 @@ package agentruntime
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 )
+
+// RNDMASTER_ACP_AUTO_PERMISSION is the managed Tutti source marker for
+// resolving session/request_permission from the RnDMaster runtime contract
+// when the target has no permission tier.
+const RNDMASTER_ACP_AUTO_PERMISSION = "RNDMASTER_ACP_AUTO_PERMISSION"
+
+func rndmasterACPAutoPermissionEnabled() bool {
+	return RNDMASTER_ACP_AUTO_PERMISSION != ""
+}
 
 func (a *standardACPAdapter) ApplyPermissionMode(ctx context.Context, session Session) error {
 	if a != nil && a.config.launchPermission != nil {
@@ -60,25 +70,60 @@ func (a *standardACPAdapter) setSessionPlanMode(agentSessionID string, enabled b
 // automaticPermissionDecision resolves the decision the provider's live
 // permission tier applies to a permission request, or "" to prompt the user.
 func (a *standardACPAdapter) automaticPermissionDecision(agentSessionID string) string {
+	return a.automaticPermissionDecisionFor(Session{AgentSessionID: agentSessionID})
+}
+
+func (a *standardACPAdapter) automaticPermissionDecisionFor(session Session) string {
 	if a == nil {
 		return ""
 	}
 	a.mu.Lock()
-	session := a.sessions[strings.TrimSpace(agentSessionID)]
+	acpSession := a.sessions[strings.TrimSpace(session.AgentSessionID)]
 	permissionModeID := ""
 	planMode := false
-	if session != nil {
-		permissionModeID = session.permissionModeID
-		planMode = session.planMode
+	if acpSession != nil {
+		permissionModeID = acpSession.permissionModeID
+		planMode = acpSession.planMode
 	}
 	a.mu.Unlock()
-	if planMode {
+	if planMode || session.SettingsValue().PlanMode {
 		return "denied"
+	}
+	if decision := a.contractPermissionDecision(session); decision != "" {
+		return decision
 	}
 	if a.config.automaticPermissionDecision == nil {
 		return ""
 	}
 	return a.config.automaticPermissionDecision(permissionModeID)
+}
+
+func (a *standardACPAdapter) hasPermissionTier() bool {
+	if a == nil {
+		return false
+	}
+	if a.config.automaticPermissionDecision != nil {
+		return true
+	}
+	return len(a.config.permissionModes) > 0
+}
+
+func (a *standardACPAdapter) contractPermissionDecision(session Session) string {
+	if !rndmasterACPAutoPermissionEnabled() || a.hasPermissionTier() {
+		return ""
+	}
+	decision := rndmasterContractAutomaticDecision(session)
+	if decision == "" {
+		return ""
+	}
+	slog.Info("auto-resolving permission request from RnDMaster contract",
+		"event", "agent_session.acp.permission.contract_auto_resolve",
+		"provider", a.config.provider,
+		"adapter", a.config.adapterName,
+		"agent_session_id", session.AgentSessionID,
+		"decision", decision,
+	)
+	return decision
 }
 
 func (a *standardACPAdapter) effectiveModeID(session Session) string {

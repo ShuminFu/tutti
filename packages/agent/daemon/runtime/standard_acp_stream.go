@@ -114,7 +114,7 @@ func (a *standardACPAdapter) handleACPMessage(
 			decision = strings.TrimSpace(a.config.providerPermissionRequestDecision(message.Params))
 		}
 		if decision == "" {
-			decision = a.automaticPermissionDecision(session.AgentSessionID)
+			decision = a.automaticPermissionDecisionFor(session)
 		}
 		if decision != "" {
 			if optionID, ok := acpPermissionRequestDecisionOptionID(

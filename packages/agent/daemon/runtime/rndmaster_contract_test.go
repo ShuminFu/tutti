@@ -97,6 +97,31 @@ func TestRnDMasterEnvListDeduplicatesWindowsNamesCaseInsensitively(t *testing.T)
 	}
 }
 
+func TestRnDMasterContractPermissionFieldIsOptional(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "contract.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"provider":"deepseek-harness"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	session := Session{RuntimeContext: map[string]any{"rndmaster": map[string]any{"contractFile": path}}}
+	contract, err := rndmasterContractFromSession(session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contract.Permission != nil {
+		t.Fatalf("old contract permission = %#v, want omitted", contract.Permission)
+	}
+	if got := rndmasterContractAutomaticDecision(session); got != "" {
+		t.Fatalf("old contract decision = %q, want empty", got)
+	}
+
+	if err := os.WriteFile(path, []byte(`{"version":1,"permission":{"automaticDecision":"approved"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := rndmasterContractAutomaticDecision(session); got != "approved" {
+		t.Fatalf("decision = %q, want approved", got)
+	}
+}
+
 func TestRnDMasterEnvListExceptKeepsReservedHomeAndAPIKey(t *testing.T) {
 	got := rndmasterEnvListExceptForOS(
 		[]string{"TEST_AGENT_HOME=/runtime/home", "OPENAI_API_KEY=runtime-key", "KEEP=session"},
