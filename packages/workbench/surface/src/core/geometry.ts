@@ -173,7 +173,8 @@ export function getWorkbenchFullscreenRect(
   const fullscreenSafeArea = {
     ...normalized.safeArea,
     bottom: 0,
-    left: 0
+    left: 0,
+    top: 0
   };
   return {
     x: fullscreenSafeArea.left + normalized.surfacePadding,

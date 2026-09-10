@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   HOST_FOCUS_TYPE,
-  installHostFocusRecovery
+  HOST_WORKBENCH_LAYOUT_TYPE,
+  installHostFocusRecovery,
+  installHostWorkbenchLayoutNotifications
 } from "./webHostBridgeClient.ts";
 
 test("host focus recovery restores the last focused element", () => {
@@ -67,6 +69,71 @@ test("host focus recovery stops after dispose", () => {
   harness.hostFocus();
 
   assert.equal(harness.terminalFallback.focusCalls.length, 0);
+});
+
+test("embedded workbench reports fullscreen layout changes to its host", () => {
+  const parentPosts: Array<{ message: unknown; origin: string }> = [];
+  let fullscreen = false;
+  const mutationListeners: Array<() => void> = [];
+  let disconnected = false;
+  const parent = {
+    postMessage(message: unknown, origin: string) {
+      parentPosts.push({ message, origin });
+    }
+  } as WindowProxy;
+  const windowRef = {
+    location: {
+      search:
+        "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+    },
+    parent
+  } as unknown as Window;
+  const documentRef = {
+    documentElement: {},
+    querySelector() {
+      return fullscreen ? {} : null;
+    }
+  } as unknown as Document;
+  class FakeMutationObserver {
+    constructor(listener: () => void) {
+      mutationListeners.push(listener);
+    }
+    disconnect() {
+      disconnected = true;
+    }
+    observe() {}
+  }
+
+  const dispose = installHostWorkbenchLayoutNotifications(
+    windowRef,
+    documentRef,
+    FakeMutationObserver as unknown as typeof MutationObserver
+  );
+  fullscreen = true;
+  mutationListeners[0]?.();
+  mutationListeners[0]?.();
+
+  assert.deepEqual(parentPosts, [
+    {
+      message: {
+        fullscreen: false,
+        nonce: "nonce-1",
+        type: HOST_WORKBENCH_LAYOUT_TYPE
+      },
+      origin: "http://wails.localhost"
+    },
+    {
+      message: {
+        fullscreen: true,
+        nonce: "nonce-1",
+        type: HOST_WORKBENCH_LAYOUT_TYPE
+      },
+      origin: "http://wails.localhost"
+    }
+  ]);
+
+  dispose();
+  assert.equal(disconnected, true);
 });
 
 interface FakeFocusTarget {

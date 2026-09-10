@@ -31,9 +31,9 @@ test("computes fullscreen and snap rects", () => {
   const size = { width: 1000, height: 700 };
   assert.deepEqual(getWorkbenchFullscreenRect(size), {
     x: 0,
-    y: 52,
+    y: 0,
     width: 1000,
-    height: 648
+    height: 700
   });
   assert.deepEqual(getWorkbenchSnapRect("left", size), {
     x: 0,
@@ -98,9 +98,9 @@ test("respects safe areas for layout, fullscreen, snap, and clamping", () => {
   });
   assert.deepEqual(getWorkbenchFullscreenRect(size, constraints), {
     x: 0,
-    y: 52,
+    y: 0,
     width: 1000,
-    height: 648
+    height: 700
   });
   assert.deepEqual(getWorkbenchSnapRect("right", size, constraints), {
     x: 500,
@@ -168,9 +168,9 @@ test("keeps top snap inside the normal safe layout while fullscreen ignores dock
   });
   assert.deepEqual(getWorkbenchFullscreenRect(size, constraints), {
     x: 0,
-    y: 52,
+    y: 0,
     width: 1000,
-    height: 648
+    height: 700
   });
 });
 

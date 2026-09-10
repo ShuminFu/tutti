@@ -139,9 +139,9 @@ test("enters and exits fullscreen with restore frame", () => {
   assert.deepEqual(state.nodes[0]?.restoreFrame, originalFrame);
   assert.deepEqual(state.nodes[0]?.frame, {
     x: 0,
-    y: 52,
+    y: 0,
     width: 900,
-    height: 548
+    height: 600
   });
 
   state = reduceWorkbenchState(state, { type: "exitFullscreen", nodeID: "a" });
@@ -427,9 +427,9 @@ test("updates fullscreen and floating nodes when layout constraints change", () 
     state.nodes.find((node) => node.id === "fullscreen")?.frame,
     {
       x: 0,
-      y: 52,
+      y: 0,
       width: 900,
-      height: 548
+      height: 600
     }
   );
 });
@@ -458,9 +458,9 @@ test("recomputes fullscreen nodes against the bottom edge when surface size chan
 
   assert.deepEqual(state.nodes[0]?.frame, {
     x: 0,
-    y: 52,
+    y: 0,
     width: 960,
-    height: 588
+    height: 640
   });
 });
 

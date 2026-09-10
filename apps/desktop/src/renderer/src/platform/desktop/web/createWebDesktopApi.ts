@@ -21,6 +21,7 @@ import { resolveWebBackendConfigFrom } from "./resolveWebBackendConfig";
 import {
   HostBridgeUnavailableError,
   installHostFocusRecovery,
+  installHostWorkbenchLayoutNotifications,
   requestHostCapability
 } from "./webHostBridgeClient";
 
@@ -43,6 +44,7 @@ const webAppUpdateState: AppUpdateState = {
 export function createWebDesktopApi(): DesktopApi {
   const backendConfig = resolveWebBackendConfig();
   installHostFocusRecovery();
+  installHostWorkbenchLayoutNotifications();
 
   return {
     computerUse: createWebComputerUseApi(),

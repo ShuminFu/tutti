@@ -16,6 +16,9 @@
 const REQUEST_TYPE = "tutti-host-request";
 const RESPONSE_TYPE = "tutti-host-response";
 export const HOST_FOCUS_TYPE = "tutti-host-focus";
+export const HOST_WORKBENCH_LAYOUT_TYPE = "tutti-host-workbench-layout";
+const FULLSCREEN_WORKBENCH_WINDOW_SELECTOR =
+  '.workbench-window-shell[data-display-mode="fullscreen"]';
 const TERMINAL_FOCUS_SELECTOR =
   '.workbench-window-shell[data-focused="true"] [data-terminal-xterm] .xterm-helper-textarea';
 const DEFAULT_TIMEOUT_MS = 5_000;
@@ -114,6 +117,52 @@ export function installHostFocusRecovery(
     documentRef.removeEventListener("focusin", onFocusIn);
     windowRef.removeEventListener("message", onMessage);
   };
+}
+
+export function installHostWorkbenchLayoutNotifications(
+  windowRef: Window = window,
+  documentRef: Document = document,
+  MutationObserverRef: typeof MutationObserver = globalThis.MutationObserver
+): () => void {
+  const coordinates = bridgeCoordinates(windowRef.location.search);
+  if (
+    !coordinates ||
+    !windowRef.parent ||
+    windowRef.parent === windowRef ||
+    !MutationObserverRef
+  ) {
+    return () => undefined;
+  }
+
+  const parent = windowRef.parent;
+  let lastFullscreen: boolean | null = null;
+  const publish = (): void => {
+    const fullscreen = Boolean(
+      documentRef.querySelector(FULLSCREEN_WORKBENCH_WINDOW_SELECTOR)
+    );
+    if (fullscreen === lastFullscreen) {
+      return;
+    }
+    lastFullscreen = fullscreen;
+    parent.postMessage(
+      {
+        fullscreen,
+        nonce: coordinates.nonce,
+        type: HOST_WORKBENCH_LAYOUT_TYPE
+      },
+      coordinates.hostOrigin === "null" ? "*" : coordinates.hostOrigin
+    );
+  };
+  const observer = new MutationObserverRef(publish);
+  observer.observe(documentRef.documentElement, {
+    attributeFilter: ["data-display-mode"],
+    attributes: true,
+    childList: true,
+    subtree: true
+  });
+  publish();
+
+  return () => observer.disconnect();
 }
 
 function isFocusTarget(value: unknown): value is HTMLElement {

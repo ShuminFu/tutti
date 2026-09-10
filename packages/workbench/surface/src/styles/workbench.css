@@ -2620,6 +2620,12 @@ body[data-desktop-dock-minimized-stack-open="true"] .desktop-dock {
   pointer-events: auto;
 }
 
+.workbench-surface:has(.workbench-window-shell[data-display-mode="fullscreen"])
+  .workbench-surface__top-chrome {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .workbench-genie-layer {
   position: fixed;
   inset: 0;
