@@ -8,10 +8,13 @@
 // original web behaviour.
 //
 // Wire protocol (mirrors the host side):
-//   request  (iframe -> host): { type: "tutti-host-request", capability, id, args? }
+//   request  (iframe -> host): { type: "tutti-host-request", capability, id, args?, nonce }
 //   response (host -> iframe): { type: "tutti-host-response", id, result }
 //                              { type: "tutti-host-response", id, error: "unsupported" }
-//                              { type: "tutti-host-response", id, error: "<message>" }
+//                              { type: "tutti-host-response", id, error: "<message>", code? }
+//
+// createAgentSession args[0] = { provider, cwd, prompt, model?, thinkingLevel? }
+// createAgentSession result  = { taskId, agentSessionId }
 
 import { writeWorkspaceFileDropData } from "@tutti-os/agent-gui/workspace-file-drop";
 
@@ -407,5 +410,41 @@ export function requestHostCapability<T>(
       { type: REQUEST_TYPE, capability, id, args, nonce: coordinates.nonce },
       coordinates.hostOrigin === "null" ? "*" : coordinates.hostOrigin
     );
+  });
+}
+
+export interface HostCreateAgentSessionArgs {
+  provider: string;
+  cwd: string;
+  prompt: string;
+  model?: string;
+  thinkingLevel?: string;
+}
+
+export interface HostCreateAgentSessionResult {
+  taskId: string;
+  agentSessionId: string;
+}
+
+// 复用既有 requestHostCapability（5s / nonce / 同源校验），不新造 postMessage 通道。
+export function requestHostCreateAgentSession(
+  args: HostCreateAgentSessionArgs
+): Promise<HostCreateAgentSessionResult> {
+  return requestHostCapability<HostCreateAgentSessionResult>(
+    "createAgentSession",
+    [args]
+  ).then((result) => {
+    const taskId =
+      typeof result?.taskId === "string" ? result.taskId.trim() : "";
+    const agentSessionId =
+      typeof result?.agentSessionId === "string"
+        ? result.agentSessionId.trim()
+        : "";
+    if (!taskId || !agentSessionId) {
+      throw new Error(
+        "tutti host bridge: createAgentSession result missing taskId or agentSessionId"
+      );
+    }
+    return { taskId, agentSessionId };
   });
 }

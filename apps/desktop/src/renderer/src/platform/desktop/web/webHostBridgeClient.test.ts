@@ -11,8 +11,74 @@ import {
   installHostFileDropBridge,
   installHostFocusRecovery,
   installHostWorkbenchLayoutNotifications,
-  requestHostCapability
+  requestHostCapability,
+  requestHostCreateAgentSession
 } from "./webHostBridgeClient.ts";
+
+test("createAgentSession reuses the host capability channel and frozen args shape", async () => {
+  const previousWindow = globalThis.window;
+  let messageListener: ((event: MessageEvent) => void) | null = null;
+  const posted: Array<{ message: Record<string, unknown>; origin: string }> = [];
+  const parent = {
+    postMessage(message: Record<string, unknown>, origin: string) {
+      posted.push({ message, origin });
+      queueMicrotask(() => messageListener?.({
+        data: {
+          type: "tutti-host-response",
+          id: message.id,
+          nonce: "nonce-1",
+          result: { taskId: "task-1", agentSessionId: "host-session-1" }
+        },
+        origin: "http://wails.localhost",
+        source: parent
+      } as MessageEvent));
+    }
+  } as unknown as WindowProxy;
+  const windowRef = {
+    addEventListener(type: string, listener: EventListener) {
+      if (type === "message") messageListener = listener as (event: MessageEvent) => void;
+    },
+    clearTimeout,
+    location: {
+      search: "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+    },
+    parent,
+    removeEventListener() {},
+    setTimeout
+  } as unknown as Window;
+  Object.defineProperty(globalThis, "window", { configurable: true, value: windowRef });
+
+  try {
+    const result = await requestHostCreateAgentSession({
+      provider: "codex",
+      cwd: "/workspace/project",
+      prompt: "Build the feature",
+      model: "gpt-5",
+      thinkingLevel: "high"
+    });
+    assert.deepEqual(result, {
+      taskId: "task-1",
+      agentSessionId: "host-session-1"
+    });
+    assert.equal(posted.length, 1);
+    assert.equal(posted[0]?.origin, "http://wails.localhost");
+    assert.equal(posted[0]?.message.type, "tutti-host-request");
+    assert.equal(posted[0]?.message.capability, "createAgentSession");
+    assert.equal(posted[0]?.message.nonce, "nonce-1");
+    assert.deepEqual(posted[0]?.message.args, [
+      {
+        provider: "codex",
+        cwd: "/workspace/project",
+        prompt: "Build the feature",
+        model: "gpt-5",
+        thinkingLevel: "high"
+      }
+    ]);
+    assert.equal(typeof posted[0]?.message.id, "string");
+  } finally {
+    Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+  }
+});
 
 test("host capability errors preserve stable error codes", async () => {
   const previousWindow = globalThis.window;

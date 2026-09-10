@@ -9,6 +9,7 @@ import {
   useSyncExternalStore
 } from "react";
 import { installHostAgentSessionBridge } from "../../../platform/desktop/web/webHostBridgeClient.ts";
+import { registerEmbeddedHostCreatedSessionOpener } from "../../workspace-agent/services/internal/embeddedHostCreatedSessionOpener.ts";
 import {
   agentGuiWorkbenchOpenSessionActivationType,
   workspaceAgentGuiNodeID
@@ -103,10 +104,14 @@ export function installEmbeddedDintalDockSessionBridge(
   host: EmbeddedDintalDockHost,
   windowRef: Window = window
 ): () => void {
-  return installHostAgentSessionBridge(
-    (agentSessionId) => activateEmbeddedDintalDockSession(host, agentSessionId),
-    windowRef
-  );
+  const openSession = (agentSessionId: string): boolean =>
+    activateEmbeddedDintalDockSession(host, agentSessionId);
+  const unregisterOpener = registerEmbeddedHostCreatedSessionOpener(openSession);
+  const uninstallBridge = installHostAgentSessionBridge(openSession, windowRef);
+  return () => {
+    uninstallBridge();
+    unregisterOpener();
+  };
 }
 
 export function activateEmbeddedDintalDockSession(

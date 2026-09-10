@@ -44,6 +44,11 @@ import { wrapLocalizedTuttidErrorIfSpecific } from "../../../lib/desktopErrors.t
 import { agentActivityComposerOptionsFromTuttidResult } from "../../../lib/agentComposerOptionsProjection.ts";
 import { reportAgentSubmitTraceDiagnostic as reportDesktopAgentSubmitTrace } from "./desktopAgentRuntimeSubmitDiagnostics.ts";
 import { DESKTOP_AGENT_GUI_CURRENT_USER_ID } from "./desktopAgentGuiIdentity.ts";
+import {
+  requestEmbeddedHostCreateAgentSession,
+  shouldAskHostCreateAgentSession
+} from "./internal/embeddedHostCreateAgentSession.ts";
+import { openEmbeddedHostCreatedAgentSession } from "./internal/embeddedHostCreatedSessionOpener.ts";
 
 export interface CreateDesktopAgentActivityAdapterInput {
   composerOptionsRequestTimeoutMs?: number;
@@ -258,6 +263,42 @@ export function createDesktopAgentActivityAdapter({
       });
       let recordingId: string | null = null;
       try {
+        // 钩子放在这里：调用链上已经有 provider/cwd/prompt（及可选 model /
+        // thinkingLevel），且还没 POST tuttid。仅嵌入态先问宿主
+        // createAgentSession；成功则走 0076 打开返回的 agentSessionId，
+        // 不再 create、也不把首句 prompt 再发一遍（后端已当 initialContent）。
+        if (shouldAskHostCreateAgentSession()) {
+          const hosted = await requestEmbeddedHostCreateAgentSession(input);
+          if (hosted) {
+            openEmbeddedHostCreatedAgentSession(hosted.agentSessionId);
+            const detail = await tuttidClient.getWorkspaceAgentSession(
+              input.workspaceId,
+              hosted.agentSessionId,
+              undefined,
+              agentCommandRequestOptions(options, input.signal)
+            );
+            reportDesktopAgentSubmitTrace(runtimeApi, {
+              agentSessionId: detail.session.id,
+              clientSubmitId: input.clientSubmitId,
+              event: "renderer_adapter.create.resolved",
+              provider: detail.session.provider,
+              submitDiagnostics: input.submitDiagnostics,
+              workspaceId: input.workspaceId,
+              fields: {
+                hostCreated: true,
+                sessionStatus: workspaceAgentSessionStatus(detail.session)
+              }
+            });
+            return agentActivitySessionFromTuttidSession(
+              input.workspaceId,
+              detail.session,
+              {
+                lifecycleCapabilitiesProjected:
+                  detail.lifecycleCapabilitiesProjected
+              }
+            );
+          }
+        }
         const agentSessionId =
           input.agentSessionId?.trim() || createDesktopAgentActivitySessionId();
         reportDesktopAgentSubmitTrace(runtimeApi, {
