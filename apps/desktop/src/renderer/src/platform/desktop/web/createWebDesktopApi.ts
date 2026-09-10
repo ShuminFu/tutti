@@ -18,7 +18,10 @@ import type {
   ExportDeveloperLogsResult
 } from "@shared/contracts/ipc";
 import { desktopErrorCodes } from "@shared/errors/desktopErrors";
-import { setHostThemeAppearance } from "@renderer/theme/runtime";
+import {
+  setHostThemeAppearance,
+  setHostThemeTokens
+} from "@renderer/theme/runtime";
 import { resolveWebBackendConfigFrom } from "./resolveWebBackendConfig";
 import {
   HostBridgeUnavailableError,
@@ -50,7 +53,7 @@ export function createWebDesktopApi(): DesktopApi {
   const backendConfig = resolveWebBackendConfig();
   installHostFileDropBridge();
   installHostFocusRecovery();
-  installHostThemeBridge(setHostThemeAppearance);
+  installHostThemeBridge(setHostThemeAppearance, window, setHostThemeTokens);
   installHostWorkbenchLayoutNotifications();
 
   return {

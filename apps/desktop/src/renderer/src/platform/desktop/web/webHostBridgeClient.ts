@@ -200,9 +200,13 @@ export function installHostAgentSessionBridge(
 // appearance already arrives on the iframe URL (see theme/runtime.ts); this
 // bridge keeps it in sync when the host switches theme afterwards, using the
 // same source/origin/nonce triple as every other host-to-iframe notification.
+// `applyHostThemeTokens` is optional so an appearance-only message — the shape
+// this bridge shipped with — keeps working unchanged. Tokens that are not a
+// plain record of strings are dropped silently; the appearance still applies.
 export function installHostThemeBridge(
   applyHostThemeAppearance: (appearance: "light" | "dark") => void,
-  windowRef: Window = window
+  windowRef: Window = window,
+  applyHostThemeTokens?: (tokens: unknown, themeId: unknown) => void
 ): () => void {
   const coordinates = bridgeCoordinates(windowRef.location.search);
   if (!coordinates || !windowRef.parent || windowRef.parent === windowRef) {
@@ -212,7 +216,13 @@ export function installHostThemeBridge(
   const parent = windowRef.parent;
   const onMessage = (event: MessageEvent): void => {
     const data = event.data as
-      | { type?: unknown; nonce?: unknown; appearance?: unknown }
+      | {
+          type?: unknown;
+          nonce?: unknown;
+          appearance?: unknown;
+          themeId?: unknown;
+          tokens?: unknown;
+        }
       | null
       | undefined;
     if (
@@ -227,6 +237,12 @@ export function installHostThemeBridge(
       return;
     }
     applyHostThemeAppearance(data.appearance);
+    if (applyHostThemeTokens && "tokens" in data) {
+      const tokens = data.tokens;
+      if (tokens && typeof tokens === "object" && !Array.isArray(tokens)) {
+        applyHostThemeTokens(tokens, data.themeId);
+      }
+    }
   };
 
   windowRef.addEventListener("message", onMessage);

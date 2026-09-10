@@ -466,6 +466,62 @@ test("embedded theme follows only secured host appearance pushes", () => {
   assert.deepEqual(applied, ["light", "dark"]);
 });
 
+test("embedded theme bridge forwards host role tokens and drops bad payloads", () => {
+  let messageListener: ((event: MessageEvent) => void) | null = null;
+  const parent = {} as WindowProxy;
+  const applied: string[] = [];
+  const tokenPushes: Array<{ tokens: unknown; themeId: unknown }> = [];
+  const windowRef = {
+    addEventListener(type: string, listener: EventListener) {
+      if (type === "message") {
+        messageListener = listener as (event: MessageEvent) => void;
+      }
+    },
+    location: {
+      search:
+        "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+    },
+    parent,
+    removeEventListener(type: string) {
+      if (type === "message") {
+        messageListener = null;
+      }
+    }
+  } as unknown as Window;
+
+  installHostThemeBridge(
+    (appearance) => applied.push(appearance),
+    windowRef,
+    (tokens, themeId) => tokenPushes.push({ tokens, themeId })
+  );
+  const send = (data: Record<string, unknown>) => {
+    messageListener?.({
+      data: {
+        type: HOST_THEME_TYPE,
+        nonce: "nonce-1",
+        appearance: "light",
+        ...data
+      },
+      origin: "http://wails.localhost",
+      source: parent
+    } as MessageEvent);
+  };
+
+  send({ themeId: "rnd-ocean", tokens: { accent: "#74ADE8" } });
+  assert.deepEqual(tokenPushes, [
+    { tokens: { accent: "#74ADE8" }, themeId: "rnd-ocean" }
+  ]);
+
+  // An appearance-only message stays valid, and a tokens field that is not a
+  // plain record is dropped without touching the palette.
+  send({});
+  send({ tokens: ["#74ADE8"] });
+  send({ tokens: "accent:#74ADE8" });
+  send({ tokens: null });
+  assert.equal(tokenPushes.length, 1);
+  assert.deepEqual(applied, ["light", "light", "light", "light", "light"]);
+});
+
 test("host theme bridge stays inert outside the embedded host", () => {
   const windowRef = {
     addEventListener() {

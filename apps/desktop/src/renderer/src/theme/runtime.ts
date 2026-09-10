@@ -1,4 +1,12 @@
 import {
+  applyHostThemeId,
+  applyHostThemeTokens,
+  normalizeHostThemeId,
+  normalizeHostThemeTokens,
+  readHostThemeFromLocation,
+  type HostThemeTokens
+} from "./hostThemeTokens.ts";
+import {
   defaultDesktopThemeSource,
   type DesktopThemeSource,
   type DesktopThemeAppearance,
@@ -33,6 +41,13 @@ function resolveWindowThemeAppearance(): DesktopThemeAppearance {
 // appearance.
 let hostThemeAppearance: DesktopThemeAppearance | null =
   readHostThemeAppearanceFromLocation();
+
+// The host also owns the palette (issue 01): its stable role tokens arrive as
+// resolved colours, first on the iframe URL — applied here at module load, so
+// the very first paint is already the host's theme and not a stale one — then
+// over the same secured bridge. `EmbeddedHostTheme.css` maps them onto this
+// renderer's variables; provider brand colours are deliberately not mapped.
+applyHostThemeFromLocation();
 
 let requestedTheme: DesktopThemeState = {
   appearance: readInitialThemeAppearanceFromLocation(),
@@ -109,6 +124,31 @@ export function setHostThemeAppearance(
 
   hostThemeAppearance = appearance;
   commitTheme(effectiveTheme(requestedTheme));
+}
+
+// Replaces the host role tokens pushed over the bridge. An empty/invalid set
+// clears them and the renderer falls back to its own palette.
+export function setHostThemeTokens(
+  tokens: unknown,
+  themeId?: unknown
+): void {
+  const normalized: HostThemeTokens = normalizeHostThemeTokens(tokens);
+  applyHostThemeTokens(normalized);
+  if (themeId !== undefined) {
+    applyHostThemeId(normalizeHostThemeId(themeId));
+  }
+}
+
+function applyHostThemeFromLocation(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  // Same gate as the appearance pin: readHostThemeFromLocation returns nothing
+  // without the secured bridge coordinates, so the standalone build is inert.
+  const { themeId, tokens } = readHostThemeFromLocation(window.location.search);
+  applyHostThemeTokens(tokens);
+  applyHostThemeId(themeId);
 }
 
 export function getActiveTheme(): DesktopThemeState {

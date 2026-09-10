@@ -1,0 +1,141 @@
+/* RnDMaster embedded palette bridge (issue 01).
+ *
+ * The host publishes its stable role tokens as resolved colours on the document
+ * root (`--rndmaster-host-<role>`, painted by theme/hostThemeTokens.ts) and
+ * marks the root with `data-rndmaster-host-theme`. This sheet is the only place
+ * that turns those roles into this renderer's own variables.
+ *
+ * Scope: the root attribute is set only when the secured embedded bridge handed
+ * over tokens, so the standalone desktop build never matches a selector here.
+ * `.rndmaster-dintaldock-embedded` is listed alongside it so the workbench
+ * subtree keeps the mapping even if a future host drops the root marker.
+ *
+ * Every declaration falls back to the upstream source variable, so a role the
+ * host could not resolve degrades to DinTalDock's own colour instead of
+ * blanking the property.
+ *
+ * Provider brand colours (`--accent-claude`, `--accent-codex` and everything
+ * derived from them) are deliberately NOT mapped: those identify the agent, not
+ * the theme, and must stay put across every master palette.
+ */
+
+:root[data-rndmaster-host-theme],
+.rndmaster-dintaldock-embedded {
+  /* canvas — the page ground the master shell paints behind its canvas. */
+  --background: var(--rndmaster-host-canvas, var(--renderer-background));
+  --background-1: var(--rndmaster-host-canvas, var(--renderer-background));
+  --background-session-flow: var(
+    --rndmaster-host-canvas,
+    var(--renderer-background)
+  );
+  --workbench-canvas-bg: var(
+    --rndmaster-host-canvas,
+    var(--renderer-background)
+  );
+
+  /* sidebar — rails and side panels. */
+  --background-panel: var(
+    --rndmaster-host-sidebar,
+    var(--renderer-background-panel)
+  );
+  --background-session-sidepanel: var(
+    --rndmaster-host-sidebar,
+    var(--renderer-background-panel)
+  );
+  --panel: var(--rndmaster-host-sidebar, var(--renderer-panel));
+
+  /* surface — raised sheets: cards, popovers, workbench windows. */
+  --background-fronted: var(
+    --rndmaster-host-surface,
+    var(--renderer-background-fronted)
+  );
+  --background-board-card: var(
+    --rndmaster-host-surface,
+    var(--renderer-background-fronted)
+  );
+  --card: var(--rndmaster-host-surface, var(--renderer-background-fronted));
+  --popover: var(--rndmaster-host-surface, var(--renderer-background-fronted));
+  --workbench-panel: var(
+    --rndmaster-host-surface,
+    var(--renderer-background-fronted)
+  );
+  --workbench-window-bg: var(
+    --rndmaster-host-surface,
+    var(--renderer-background-fronted)
+  );
+  --workbench-node-surface: var(
+    --rndmaster-host-surface,
+    var(--renderer-background-fronted)
+  );
+  --workbench-window-header-bg: var(
+    --rndmaster-host-surface,
+    var(--renderer-background-fronted)
+  );
+
+  /* surface-muted — inputs and quiet fills. */
+  --muted: var(--rndmaster-host-surface-muted, var(--renderer-background-panel));
+  --secondary: var(
+    --rndmaster-host-surface-muted,
+    var(--renderer-background-panel)
+  );
+  --input: var(--rndmaster-host-surface-muted, var(--renderer-background-panel));
+  --background-soft: var(
+    --rndmaster-host-surface-muted,
+    var(--renderer-background-panel)
+  );
+
+  /* border — every hairline. --line-1/--line-2 follow --border-1/--border-2. */
+  --border: var(--rndmaster-host-border, var(--renderer-border));
+  --border-1: var(--rndmaster-host-border, var(--renderer-border));
+  --border-2: var(--rndmaster-host-border, var(--renderer-border));
+  --line-focus-window: var(--rndmaster-host-border, var(--renderer-border));
+  --workbench-border: var(--rndmaster-host-border, var(--renderer-border));
+
+  /* text / text-muted — body copy and secondary copy. --card-foreground,
+     --popover-foreground, --panel-foreground and --workbench-foreground all
+     resolve through --foreground upstream, so they follow along. */
+  --foreground: var(--rndmaster-host-text, var(--renderer-foreground));
+  --text-primary: var(--rndmaster-host-text, var(--renderer-text-primary));
+  --accent-foreground: var(--rndmaster-host-text, var(--renderer-foreground));
+  --text-secondary: var(
+    --rndmaster-host-text-muted,
+    var(--renderer-text-secondary)
+  );
+  --text-tertiary: var(--rndmaster-host-text-muted, var(--renderer-muted));
+  --muted-foreground: var(
+    --rndmaster-host-text-muted,
+    var(--renderer-text-secondary)
+  );
+
+  /* accent — the master's theme colour. --workbench-accent follows --primary. */
+  --primary: var(--rndmaster-host-accent, var(--renderer-accent));
+  --accent: var(--rndmaster-host-accent, var(--accent-codex));
+  --ring: var(--rndmaster-host-accent, var(--renderer-accent));
+  --status-running: var(--rndmaster-host-accent, var(--renderer-accent));
+  --primary-foreground: var(
+    --rndmaster-host-on-accent,
+    var(--renderer-background)
+  );
+
+  /* accent-surface / accent-soft — accent tints, never the provider brands. */
+  --accent-bg: var(
+    --rndmaster-host-accent-surface,
+    color-mix(in srgb, var(--background-fronted) 88%, var(--accent-codex) 12%)
+  );
+  --border-focus: var(
+    --rndmaster-host-accent-soft,
+    color-mix(in srgb, var(--renderer-accent) 24%, transparent)
+  );
+}
+
+/* Text entry uses its existing border/caret for focus. Keep non-text controls'
+   keyboard rings, including checkbox, switch, select and toolbar buttons. */
+:is(:root[data-rndmaster-host-theme], .rndmaster-dintaldock-embedded) :is(
+  input:not([type]),
+  input[type="text"], input[type="search"], input[type="number"],
+  input[type="email"], input[type="url"], input[type="tel"], input[type="password"],
+  textarea, [contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"]
+):focus {
+  outline: none !important;
+  box-shadow: none !important;
+}

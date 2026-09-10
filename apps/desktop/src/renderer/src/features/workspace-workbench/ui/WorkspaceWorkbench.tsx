@@ -133,6 +133,7 @@ import {
   reconcileEmbeddedDintalDock
 } from "./embeddedDintalDock.ts";
 import "./EmbeddedDintalDock.css";
+import "./EmbeddedHostTheme.css";
 
 const workspaceDockRetentionActionPrefix = "workspace-dock-retention:";
 
