@@ -141,6 +141,7 @@ const (
 	AgentProviderActionIDInstall AgentProviderActionID = "install"
 	AgentProviderActionIDLogin   AgentProviderActionID = "login"
 	AgentProviderActionIDRefresh AgentProviderActionID = "refresh"
+	AgentProviderActionIDRepair  AgentProviderActionID = "repair"
 	AgentProviderActionIDUpdate  AgentProviderActionID = "update"
 )
 
@@ -152,6 +153,8 @@ func (e AgentProviderActionID) Valid() bool {
 	case AgentProviderActionIDLogin:
 		return true
 	case AgentProviderActionIDRefresh:
+		return true
+	case AgentProviderActionIDRepair:
 		return true
 	case AgentProviderActionIDUpdate:
 		return true
@@ -285,6 +288,7 @@ const (
 	AgentProviderAvailabilityStatusAuthRequired AgentProviderAvailabilityStatus = "auth_required"
 	AgentProviderAvailabilityStatusNotInstalled AgentProviderAvailabilityStatus = "not_installed"
 	AgentProviderAvailabilityStatusReady        AgentProviderAvailabilityStatus = "ready"
+	AgentProviderAvailabilityStatusRepairable   AgentProviderAvailabilityStatus = "repairable"
 	AgentProviderAvailabilityStatusUnknown      AgentProviderAvailabilityStatus = "unknown"
 	AgentProviderAvailabilityStatusUnsupported  AgentProviderAvailabilityStatus = "unsupported"
 )
@@ -297,6 +301,8 @@ func (e AgentProviderAvailabilityStatus) Valid() bool {
 	case AgentProviderAvailabilityStatusNotInstalled:
 		return true
 	case AgentProviderAvailabilityStatusReady:
+		return true
+	case AgentProviderAvailabilityStatusRepairable:
 		return true
 	case AgentProviderAvailabilityStatusUnknown:
 		return true

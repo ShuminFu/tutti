@@ -2037,6 +2037,7 @@ export type AgentProviderCapabilityOption = {
 export type AgentProviderAvailabilityStatus =
   | "ready"
   | "not_installed"
+  | "repairable"
   | "auth_required"
   | "unsupported"
   | "unknown";
@@ -2048,7 +2049,12 @@ export type AgentProviderActionKind =
   | "terminal_command"
   | "refresh";
 
-export type AgentProviderActionId = "install" | "update" | "login" | "refresh";
+export type AgentProviderActionId =
+  | "install"
+  | "repair"
+  | "update"
+  | "login"
+  | "refresh";
 
 export type AgentProviderUpdateCapability = "supported" | "unsupported";
 

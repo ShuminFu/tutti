@@ -72,6 +72,9 @@ func setActiveAction(ctx context.Context, provider string, action ActiveAction) 
 		activeActions.Unlock()
 		return
 	}
+	if owned.action.ID == ActionRepair && action.ID == ActionInstall {
+		action.ID = ActionRepair
+	}
 	activeActions.byProvider[provider] = ownedActiveAction{action: action, token: token}
 	activeActions.Unlock()
 	logActiveActionSet(provider, action)
@@ -166,7 +169,7 @@ func activeActionForProvider(provider string) *ActiveAction {
 // install-progress poll re-probes (and flickers) a flaky proxy on every tick.
 func providerInstallInFlight(provider string) bool {
 	action := activeActionForProvider(provider)
-	return action != nil && action.ID == ActionInstall && action.Status == "running"
+	return action != nil && (action.ID == ActionInstall || action.ID == ActionRepair) && action.Status == "running"
 }
 
 func activeActionOutputStats(output string) (int, int) {

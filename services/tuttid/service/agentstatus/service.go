@@ -24,6 +24,7 @@ type AvailabilityStatus string
 const (
 	AvailabilityReady        AvailabilityStatus = "ready"
 	AvailabilityNotInstalled AvailabilityStatus = "not_installed"
+	AvailabilityRepairable   AvailabilityStatus = "repairable"
 	AvailabilityAuthRequired AvailabilityStatus = "auth_required"
 	AvailabilityUnsupported  AvailabilityStatus = "unsupported"
 	AvailabilityUnknown      AvailabilityStatus = "unknown"
@@ -49,6 +50,7 @@ type ActionID string
 
 const (
 	ActionInstall ActionID = "install"
+	ActionRepair  ActionID = "repair"
 	ActionUpdate  ActionID = "update"
 	ActionLogin   ActionID = "login"
 	ActionRefresh ActionID = "refresh"
@@ -587,7 +589,7 @@ func (s Service) RunAction(ctx context.Context, input RunActionInput) (RunAction
 	}
 
 	switch input.ActionID {
-	case ActionInstall:
+	case ActionInstall, ActionRepair:
 		return s.runInstallAction(ctx, spec, result)
 	case ActionUpdate:
 		return s.runUpdateAction(ctx, spec, result)
@@ -641,7 +643,7 @@ func (s Service) runInstallActionOnce(ctx context.Context, spec ProviderSpec, re
 		return result, nil
 	}
 	claimActiveAction(installCtx, spec.Provider, ActiveAction{
-		ID:     ActionInstall,
+		ID:     result.ActionID,
 		Status: "running",
 	})
 	runtimeResolution := s.resolveProviderRuntime(ctx, spec)

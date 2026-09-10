@@ -1407,11 +1407,11 @@ func TestServiceStatusOffersRepairWhenManagedAdapterLaunchFails(t *testing.T) {
 	}
 
 	status := service.statusForSpec(context.Background(), spec, service.Now(), statusDetectionOptions{})
-	if status.Availability.Status != AvailabilityUnknown || status.Availability.ReasonCode != "acp_adapter_launch_failed" {
+	if status.Availability.Status != AvailabilityRepairable || status.Availability.ReasonCode != "acp_adapter_launch_failed" {
 		t.Fatalf("Availability = %#v, want repairable adapter launch failure", status.Availability)
 	}
-	if !hasProviderAction(status.Actions, ActionRefresh) || !hasProviderAction(status.Actions, ActionInstall) {
-		t.Fatalf("Actions = %#v, want refresh and install repair actions", status.Actions)
+	if !hasProviderAction(status.Actions, ActionRefresh) || !hasProviderAction(status.Actions, ActionRepair) || hasProviderAction(status.Actions, ActionInstall) {
+		t.Fatalf("Actions = %#v, want repair and refresh actions", status.Actions)
 	}
 }
 
@@ -1635,7 +1635,7 @@ func TestServiceProbeTreatsTemporarilyUnsupportedProviderAsUnsupported(t *testin
 	}
 }
 
-func TestServiceRunActionInstallsThenProbesProvider(t *testing.T) {
+func TestServiceRunRepairActionInstallsThenProbesProvider(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell-script fixture and POSIX adapter probe are not a native Windows test")
 	}
@@ -1695,7 +1695,7 @@ func TestServiceRunActionInstallsThenProbesProvider(t *testing.T) {
 
 	result, err := service.RunAction(context.Background(), RunActionInput{
 		Provider: "nexight",
-		ActionID: ActionInstall,
+		ActionID: ActionRepair,
 	})
 	if err != nil {
 		t.Fatalf("RunAction() error = %v", err)

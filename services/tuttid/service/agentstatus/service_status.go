@@ -176,20 +176,27 @@ func (s Service) statusForSpec(
 		availability.ReasonCode = providerCLIVersionUnsupportedReasonCode(spec)
 		actions = append(actions, daemonAction(ActionInstall))
 	} else if !adapterInstalled {
-		availability.Status = AvailabilityNotInstalled
 		availability.ReasonCode = firstNonBlank(runtimeResolution.ReasonCode, spec.AdapterUnavailableReasonCode, "acp_adapter_not_found")
-		actions = append(actions, daemonAction(ActionInstall))
+		if strings.TrimSpace(spec.ExternalRegistryID) != "" {
+			availability.Status = AvailabilityRepairable
+			actions = append(actions, daemonAction(ActionRepair), Action{ID: ActionRefresh, Kind: ActionKindRefresh})
+		} else {
+			availability.Status = AvailabilityNotInstalled
+			actions = append(actions, daemonAction(ActionInstall))
+		}
 	} else if adapterLaunchFailed {
 		if installed && adapterInstalled {
 			// The CLI and adapter are present, but the runtime probe failed. This
 			// is normally a transient provider/runtime problem (for example an
 			// orphaned Windows child holding OpenCode's database), not an install
 			// problem. Do not send the UI into an install loop.
-			availability.Status = AvailabilityUnknown
 			availability.ReasonCode = adapterLaunchFailureReasonCode(adapterProbe)
-			actions = append(actions, Action{ID: ActionRefresh, Kind: ActionKindRefresh})
 			if strings.TrimSpace(spec.ExternalRegistryID) != "" {
-				actions = append(actions, daemonAction(ActionInstall))
+				availability.Status = AvailabilityRepairable
+				actions = append(actions, daemonAction(ActionRepair), Action{ID: ActionRefresh, Kind: ActionKindRefresh})
+			} else {
+				availability.Status = AvailabilityUnknown
+				actions = append(actions, Action{ID: ActionRefresh, Kind: ActionKindRefresh})
 			}
 		} else {
 			availability.Status = AvailabilityNotInstalled
@@ -203,9 +210,14 @@ func (s Service) statusForSpec(
 			actions = append(actions, daemonAction(ActionInstall))
 		}
 	} else if !adapterReady {
-		availability.Status = AvailabilityNotInstalled
 		availability.ReasonCode = "acp_adapter_version_mismatch"
-		actions = append(actions, daemonAction(ActionInstall))
+		if strings.TrimSpace(spec.ExternalRegistryID) != "" {
+			availability.Status = AvailabilityRepairable
+			actions = append(actions, daemonAction(ActionRepair), Action{ID: ActionRefresh, Kind: ActionKindRefresh})
+		} else {
+			availability.Status = AvailabilityNotInstalled
+			actions = append(actions, daemonAction(ActionInstall))
+		}
 	} else if cliBelowFloor {
 		availability.Status = AvailabilityNotInstalled
 		availability.ReasonCode = providerCLIVersionUnsupportedReasonCode(spec)
@@ -314,10 +326,11 @@ func (s Service) statusForSpec(
 			status.Availability = Availability{Status: AvailabilityUnsupported, ReasonCode: assessment.ReasonCode, CheckedAt: &now}
 			status.Actions = []Action{daemonAction(ActionUpdate)}
 		default:
-			status.Availability = Availability{Status: AvailabilityNotInstalled, ReasonCode: assessment.ReasonCode, CheckedAt: &now}
 			if assessment.RepairPlan.Allowed {
-				status.Actions = []Action{daemonAction(ActionInstall)}
+				status.Availability = Availability{Status: AvailabilityRepairable, ReasonCode: assessment.ReasonCode, CheckedAt: &now}
+				status.Actions = []Action{daemonAction(ActionRepair), {ID: ActionRefresh, Kind: ActionKindRefresh}}
 			} else {
+				status.Availability = Availability{Status: AvailabilityNotInstalled, ReasonCode: assessment.ReasonCode, CheckedAt: &now}
 				status.Actions = []Action{{ID: ActionRefresh, Kind: ActionKindRefresh}}
 			}
 		}

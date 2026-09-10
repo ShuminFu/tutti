@@ -11699,6 +11699,7 @@ components:
       enum:
         - ready
         - not_installed
+        - repairable
         - auth_required
         - unsupported
         - unknown
@@ -11718,6 +11719,7 @@ components:
       type: string
       enum:
         - install
+        - repair
         - update
         - login
         - refresh

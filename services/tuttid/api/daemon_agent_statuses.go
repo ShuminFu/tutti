@@ -397,6 +397,9 @@ func activeActionPhase(actionID agentstatusservice.ActionID, step string) tuttig
 	if actionID == agentstatusservice.ActionUpdate {
 		return tuttigenerated.AgentProviderActiveActionPhaseUpdate
 	}
+	if actionID == agentstatusservice.ActionRepair {
+		return tuttigenerated.AgentProviderActiveActionPhaseRepair
+	}
 	switch strings.TrimSpace(step) {
 	case "verify":
 		return tuttigenerated.AgentProviderActiveActionPhaseVerify
