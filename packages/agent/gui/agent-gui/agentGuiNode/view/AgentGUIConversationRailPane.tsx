@@ -31,6 +31,10 @@ import { AgentGUIConversationActivityView } from "./AgentGUIConversationActivity
 import { AgentGUIConversationRailToolbar } from "./AgentGUIConversationRailToolbar";
 import { AgentGUIConversationRailContentState } from "./AgentGUIConversationRailContentState";
 import { AgentGUIConversationRailSectionPresentationProvider } from "./agentGUIConversationRailSectionPresentationContext";
+import {
+  AgentGUIConversationRailPeerPairingProvider,
+  useAgentGUIConversationRailPeerPairingState
+} from "./agentGUIConversationRailPeerPairingContext";
 import { AgentGUIProjectActionConfirmationDialog } from "./AgentGUIProjectActionConfirmationDialog";
 import { AgentGUIProjectRailHeader } from "./AgentGUIConversationRailItem";
 import {
@@ -463,6 +467,11 @@ export const AgentGUIConversationRailPane = memo(
       !backendSearchActive &&
       !activityViewVisible;
     const hostToast = agentHostApi?.toast;
+    // 配对状态机挂在侧栏这一层：挂载与当前会话变化时刷新配对表。
+    const peerPairing = useAgentGUIConversationRailPeerPairingState({
+      activeConversationId,
+      labels
+    });
     const railViewState = useAgentGUIConversationRailViewState({
       activeConversationId,
       contentReady:
@@ -511,6 +520,7 @@ export const AgentGUIConversationRailPane = memo(
     ]);
 
     return (
+      <AgentGUIConversationRailPeerPairingProvider value={peerPairing}>
       <aside
         ref={railElementRef}
         className={styles.rail}
@@ -791,6 +801,7 @@ export const AgentGUIConversationRailPane = memo(
           setAction={setPendingProjectAction}
         />
       </aside>
+      </AgentGUIConversationRailPeerPairingProvider>
     );
   }
 );

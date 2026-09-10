@@ -319,6 +319,17 @@ export interface AgentGUIViewLabels extends AgentGUIProviderReadinessLabels {
   renameSessionSave: string;
   unpinSession: string;
   markSessionUnread: string;
+  peerPairFailed: string;
+  peerPairMark: string;
+  peerPairPaired: (from: string, to: string) => string;
+  peerPairPending: string;
+  peerPairUnmanaged: string;
+  peerPairUnmark: string;
+  peerPairUnpair: (count: number) => string;
+  peerPairWith: (title: string) => string;
+  peerPairWithRelaunch: (title: string) => string;
+  peerUnpaired: (title: string) => string;
+  peerUnpairFailed: string;
   deleteSessionTitle: string;
   deleteSessionBody: string;
   deleteSessionConfirm: string;
@@ -522,6 +533,17 @@ export type AgentGUIConversationRailLabels = Pick<
   | "newConversation"
   | "noConversations"
   | "openConversationWindow"
+  | "peerPairFailed"
+  | "peerPairMark"
+  | "peerPairPaired"
+  | "peerPairPending"
+  | "peerPairUnmanaged"
+  | "peerPairUnmark"
+  | "peerPairUnpair"
+  | "peerPairWith"
+  | "peerPairWithRelaunch"
+  | "peerUnpaired"
+  | "peerUnpairFailed"
   | "pinProject"
   | "pinSession"
   | "pinnedProjectAccessibleName"

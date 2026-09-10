@@ -95,6 +95,8 @@ const styles = {
     "agent-gui-node__conversation-provider-mask-icon",
   conversationOpenWindowButton:
     "agent-gui-node__conversation-open-window-button",
+  conversationPeerPairBadge: "agent-gui-node__conversation-peer-pair-badge",
+  conversationPeerPairChip: "agent-gui-node__conversation-peer-pair-chip",
   conversationPinButton: "agent-gui-node__conversation-pin-button",
   conversationSection: "agent-gui-node__conversation-section",
   conversationSectionActionTooltip:

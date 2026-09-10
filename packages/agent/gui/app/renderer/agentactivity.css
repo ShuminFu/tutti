@@ -6932,6 +6932,145 @@ button.agent-gui-node__conversation-section-toggle:hover
     border-color 140ms ease;
 }
 
+/* 会话配对（补丁 0103）：徽标 / 「待配对」chip / 吸附分组的左侧竖线。 */
+
+/* 徽标与 chip 共用条目右侧的同一个槽位。用 flex 而不是绝对定位：绝对定位会
+   直接压在相对时间（「25 min」）上，真机上读成「25 min⇔2」（T1）。只有带徽标
+   或被标记的条目才切 flex，其余条目的既有 block 布局逐字不变。 */
+.agent-gui-node__conversation-item[data-peer-pair-slot] {
+  display: flex;
+  align-items: center;
+}
+
+.agent-gui-node__conversation-item[data-peer-pair-slot]
+  > .agent-gui-node__conversation-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.agent-gui-node__conversation-peer-pair-badge,
+.agent-gui-node__conversation-peer-pair-chip {
+  flex: 0 0 auto;
+  /* 与相对时间之间留 6px，两者永不重叠。 */
+  margin-left: 6px;
+  margin-right: 8px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.agent-gui-node__conversation-peer-pair-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 999px;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--agent-gui-text-secondary, currentColor);
+}
+
+.agent-gui-node__conversation-peer-pair-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* 「待配对」chip：与 pin/删除按钮一样，悬停时一起退场，不跟它们抢位置。 */
+.agent-gui-node__conversation-peer-pair-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--agent-gui-accent, currentColor);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+  line-height: 15px;
+  color: var(--agent-gui-accent, currentColor);
+}
+
+/* 悬停时行内按钮会占住右侧，让徽标/chip 退场避免叠字（保留槽位，不抖动）。 */
+.agent-gui-node__conversation-item:hover
+  .agent-gui-node__conversation-peer-pair-badge,
+.agent-gui-node__conversation-item:focus-within
+  .agent-gui-node__conversation-peer-pair-badge,
+.agent-gui-node__conversation-item:hover
+  .agent-gui-node__conversation-peer-pair-chip,
+.agent-gui-node__conversation-item:focus-within
+  .agent-gui-node__conversation-peer-pair-chip {
+  opacity: 0;
+}
+
+/* 待配对标记：1.5px 虚线描边（accent）。用 outline 而不是 border-color：
+   条目的 border-color 被 [data-active] 等既有规则改写，描边会被吃掉（T2）。 */
+.agent-gui-node__conversation-item[data-peer-pair-marked="true"] {
+  outline: 1.5px dashed var(--agent-gui-accent, currentColor);
+  outline-offset: -2px;
+}
+
+/* 吸附分组的竖线用伪元素画，不用 border-left：后者的颜色会被
+   `[data-active="true"] { border-color: … }` 覆盖，当前会话那一行的线就没了，
+   看上去只括住了被提上来的对端（T5）。伪元素画在条目自己的底色之上，
+   选中底色与竖线互不遮挡；中间行的线延伸满高，与下一行接成连续一条。 */
+.agent-gui-node__conversation-item[data-peer-pair-group]::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background-color: var(--agent-gui-accent, currentColor);
+  pointer-events: none;
+}
+
+.agent-gui-node__conversation-item[data-peer-pair-group="end"]::before {
+  border-bottom-left-radius: 2px;
+}
+
+.agent-gui-node__conversation-peer-menu-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.agent-gui-node__conversation-action-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-gui-node__conversation-action-description {
+  margin-left: 8px;
+  font-size: 11px;
+  /* 0.66 在暗色主题下几乎读不出来；副标题（provider · 别名）是「点之前确认
+     是它」的唯一依据，必须真的可见（T3）。 */
+  color: var(--agent-gui-text-secondary, currentColor);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* 解除配对子菜单条目末尾的 ✕：悬停时整条变 danger 色（T6）。 */
+.agent-gui-node__conversation-peer-menu-remove {
+  width: 12px;
+  height: 12px;
+  margin-left: 8px;
+  opacity: 0.6;
+}
+
+[data-radix-menu-content] [role="menuitem"]:hover
+  .agent-gui-node__conversation-peer-menu-remove,
+[data-radix-menu-content] [role="menuitem"][data-highlighted]
+  .agent-gui-node__conversation-peer-menu-remove {
+  color: var(--status-error, #e5484d);
+  opacity: 1;
+}
+
 .agent-gui-node__conversation-item[data-presentation="activity"] {
   height: auto;
   min-height: 56px;

@@ -7,6 +7,8 @@ import type { AgentGUIProjectActionDialog } from "./agentGUIConversationRailType
 import { AgentGUIConversationRailItem } from "./AgentGUIConversationRailItem";
 import { AgentGUIConversationRailSectionHeader } from "./AgentGUIConversationRailSectionHeader";
 import { insertConversationRailSectionOverlay } from "../model/agentGuiConversationRail";
+import { applyConversationRailPeerPairAdjacency } from "../model/conversationRailPeerPairing";
+import { useAgentGUIConversationRailPeerPairing } from "./agentGUIConversationRailPeerPairingContext";
 import { AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE } from "../model/agentGuiConversationRailViewState";
 import {
   useOptionalStableEventCallback,
@@ -71,6 +73,21 @@ interface AgentGUIConversationRailSectionProps {
   onProjectMenuOpenChange: (sectionId: string, open: boolean) => void;
 }
 
+const EMPTY_PEER_PAIR_GROUP: ReadonlySet<string> = new Set<string>();
+
+// 竖线要从当前会话行的顶部一直连到最后一个对端行的底部：中间行的线延伸到下一行，
+// 只有最后一行收口。分组集合本身已经含当前行（模型层保证），这里只判「谁是末行」。
+function peerPairGroupKind(
+  groupedIds: ReadonlySet<string>,
+  items: readonly { id: string }[],
+  index: number
+): false | "member" | "end" {
+  const item = items[index];
+  if (!item || !groupedIds.has(item.id)) return false;
+  const next = items[index + 1];
+  return next && groupedIds.has(next.id) ? "member" : "end";
+}
+
 export const AgentGUIConversationRailSection = memo(
   function AgentGUIConversationRailSection({
     section,
@@ -117,6 +134,7 @@ export const AgentGUIConversationRailSection = memo(
     onProjectMenuOpenChange
   }: AgentGUIConversationRailSectionProps): React.JSX.Element {
     "use memo";
+    const peerPairing = useAgentGUIConversationRailPeerPairing();
     const projectPinned = (section.project?.pinnedAtUnixMs ?? 0) > 0;
     const projectId = section.project?.id?.trim() ?? "";
     const hasProjectPath = Boolean(projectPath);
@@ -151,6 +169,18 @@ export const AgentGUIConversationRailSection = memo(
         visibleItems,
         activeConversation
       );
+    }
+    // 吸附：在既有排序（置顶/时间/分页/overlay）**之后**再跑一次，把当前打开
+    // 会话的对端提到它正下方，其余条目相对顺序不动。切换当前会话就整体重算。
+    let peerPairGroupedIds: ReadonlySet<string> = EMPTY_PEER_PAIR_GROUP;
+    if (peerPairing.supported) {
+      const adjacency = applyConversationRailPeerPairAdjacency({
+        activeConversationId,
+        index: peerPairing.index,
+        items: visibleItems
+      });
+      visibleItems = adjacency.items;
+      peerPairGroupedIds = adjacency.groupedSessionIds;
     }
     const visiblePageableIds = new Set(
       pageableItems.slice(0, visibleItemCount).map((item) => item.id)
@@ -327,7 +357,7 @@ export const AgentGUIConversationRailSection = memo(
                 {labels.emptyProjectConversations}
               </div>
             ) : null}
-            {visibleItems.map((item) => (
+            {visibleItems.map((item, index) => (
               <AgentGUIConversationRailItem
                 key={item.id}
                 active={item.id === activeConversationId}
@@ -338,6 +368,11 @@ export const AgentGUIConversationRailSection = memo(
                 isRailInteractionLocked={isRailInteractionLocked}
                 item={item}
                 labels={labels}
+                peerPairGrouped={peerPairGroupKind(
+                  peerPairGroupedIds,
+                  visibleItems,
+                  index
+                )}
                 registerItemElement={registerItemElement}
                 uiLanguage={uiLanguage}
                 workspaceId={workspaceId}

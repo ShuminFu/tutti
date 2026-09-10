@@ -80,6 +80,22 @@ export function agentGUIConversationRailLabels(
     newConversation: t("agentHost.agentGui.newConversation"),
     noConversations: t("agentHost.agentGui.noConversations"),
     openConversationWindow: t("agentHost.agentGui.openConversationWindow"),
+    peerPairFailed: t("agentHost.agentGui.peerPairFailed"),
+    peerPairMark: t("agentHost.agentGui.peerPairMark"),
+    peerPairPending: t("agentHost.agentGui.peerPairPending"),
+    peerPairPaired: (from: string, to: string) =>
+      t("agentHost.agentGui.peerPairPaired", { from, to }),
+    peerPairUnmanaged: t("agentHost.agentGui.peerPairUnmanaged"),
+    peerPairUnmark: t("agentHost.agentGui.peerPairUnmark"),
+    peerPairUnpair: (count: number) =>
+      t("agentHost.agentGui.peerPairUnpair", { count }),
+    peerPairWith: (title: string) =>
+      t("agentHost.agentGui.peerPairWith", { title }),
+    peerPairWithRelaunch: (title: string) =>
+      t("agentHost.agentGui.peerPairWithRelaunch", { title }),
+    peerUnpaired: (title: string) =>
+      t("agentHost.agentGui.peerUnpaired", { title }),
+    peerUnpairFailed: t("agentHost.agentGui.peerUnpairFailed"),
     pinProject: t("agentHost.agentGui.pinProject"),
     pinSession: t("agentHost.agentGui.pinSession"),
     pinnedProjectAccessibleName: (projectLabel: string) =>

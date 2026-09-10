@@ -15,6 +15,16 @@
 //
 // createAgentSession args[0] = { provider, cwd, prompt, model?, thinkingLevel? }
 // createAgentSession result  = { taskId, agentSessionId }
+//
+// 会话配对（补丁 0103，宿主票 03 实现）：
+// listPeerPairs   args[] = []
+//                 result = { pairs: [{ pairId, a: Endpoint, b: Endpoint }] }
+//                 Endpoint = { taskId, sessionId, provider, alias, title, cwd, status }
+// createPeerPair  args[0] = { from, to, aliasForFrom, aliasForTo, relaunchClosed }
+//                 result  = { pairId, relaunchedTaskId?, relaunchedSessionId? }
+// deletePeerPair  args[0] = { taskId, pairId }
+//                 result  = { ok: true }
+// 别名由宿主算，iframe 传空串；后端拒绝时回 { error: <中文文案>, code }。
 
 import { writeWorkspaceFileDropData } from "@tutti-os/agent-gui/workspace-file-drop";
 
@@ -485,4 +495,73 @@ export function requestHostCreateAgentSession(
     }
     return { taskId, agentSessionId };
   });
+}
+
+export interface HostPeerPairEndpoint {
+  alias: string;
+  cwd: string;
+  provider: string;
+  sessionId: string;
+  status: string;
+  taskId: string;
+  title: string;
+}
+
+export interface HostPeerPair {
+  a: HostPeerPairEndpoint;
+  b: HostPeerPairEndpoint;
+  pairId: string;
+}
+
+export interface HostCreatePeerPairArgs {
+  aliasForFrom: string;
+  aliasForTo: string;
+  from: string;
+  relaunchClosed: boolean;
+  to: string;
+}
+
+export interface HostCreatePeerPairResult {
+  pairId: string;
+  relaunchedSessionId?: string;
+  relaunchedTaskId?: string;
+}
+
+// 三个配对能力都复用 requestHostCapability（5s / nonce / 同源校验）。
+export function requestHostListPeerPairs(): Promise<{ pairs: HostPeerPair[] }> {
+  return requestHostCapability<{ pairs?: HostPeerPair[] }>(
+    "listPeerPairs",
+    []
+  ).then((result) => ({
+    pairs: Array.isArray(result?.pairs) ? result.pairs : []
+  }));
+}
+
+export function requestHostCreatePeerPair(
+  args: HostCreatePeerPairArgs
+): Promise<HostCreatePeerPairResult> {
+  return requestHostCapability<HostCreatePeerPairResult>("createPeerPair", [
+    args
+  ]).then((result) => {
+    const pairId = typeof result?.pairId === "string" ? result.pairId.trim() : "";
+    if (!pairId) {
+      throw new Error("tutti host bridge: createPeerPair result missing pairId");
+    }
+    return {
+      pairId,
+      ...(typeof result?.relaunchedSessionId === "string"
+        ? { relaunchedSessionId: result.relaunchedSessionId }
+        : {}),
+      ...(typeof result?.relaunchedTaskId === "string"
+        ? { relaunchedTaskId: result.relaunchedTaskId }
+        : {})
+    };
+  });
+}
+
+export function requestHostDeletePeerPair(args: {
+  pairId: string;
+  taskId: string;
+}): Promise<unknown> {
+  return requestHostCapability<unknown>("deletePeerPair", [args]);
 }

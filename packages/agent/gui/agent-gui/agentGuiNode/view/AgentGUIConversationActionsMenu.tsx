@@ -19,11 +19,17 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from "@tutti-os/ui-system";
 import { BareIconButton } from "@tutti-os/ui-system/components";
@@ -47,6 +53,8 @@ import { renderAgentConversationCopyHtml } from "../model/agentConversationCopyH
 import type { AgentGUINodeViewModel } from "../model/agentGuiNodeTypes";
 import type { AgentGUIViewLabels } from "./AgentGUINodeView.types";
 import { conversationPlainTitle } from "./agentGUIViewUtils";
+import { buildConversationRailPeerPairingMenuEntries } from "./conversationRailPeerPairingMenu";
+import { useAgentGUIConversationRailPeerPairing } from "./agentGUIConversationRailPeerPairingContext";
 
 const menuContentClassName =
   "w-max min-w-44 nodrag [-webkit-app-region:no-drag]";
@@ -300,10 +308,16 @@ export function useAgentGUIConversationCopyAction(
 }
 
 type ConversationActionEntry = {
+  /** 副标题（配对项的 `<provider> · <别名预览>`）。 */
+  description?: string;
   disabled?: boolean;
   icon: ReactNode;
   id: string;
   label: string;
+  /** 有子项时渲染成子菜单（解除配对 N ▸）。 */
+  submenu?: ConversationActionEntry[];
+  /** 条目末尾的图标（解除配对子菜单的 ✕）。 */
+  trailingIcon?: ReactNode;
   onSelect: () => void;
 };
 
@@ -322,6 +336,12 @@ type ConversationActionsMenuLabels = Pick<
   | "markSessionUnread"
   | "moreSessionActions"
   | "openConversationWindow"
+  | "peerPairMark"
+  | "peerPairUnmanaged"
+  | "peerPairUnmark"
+  | "peerPairUnpair"
+  | "peerPairWith"
+  | "peerPairWithRelaunch"
   | "renameSession"
   | "untitledConversationTitle"
 >;
@@ -357,6 +377,7 @@ export function useConversationActionGroups({
   const agentHostApi = useOptionalAgentHostApi();
   const agentActivityRuntime = useOptionalAgentGUIRuntime();
   const copyConversationValue = useAgentGUIConversationCopyAction(labels);
+  const peerPairing = useAgentGUIConversationRailPeerPairing();
   const [resetKey, setResetKey] = useState(0);
   const pendingActionRef = useRef(false);
   // The pending ref dedups the select/click/pointerup handlers a single
@@ -426,6 +447,14 @@ export function useConversationActionGroups({
           labels.copyAsReference
         )
       ],
+      // 配对组夹在「重命名/复制」与「打开窗口/标记未读」之间；
+      // 宿主没注册这组能力时 entries 为空，整组连分隔线一起消失。
+      buildConversationRailPeerPairingMenuEntries({
+        conversation,
+        labels,
+        pairing: peerPairing,
+        run
+      }),
       [
         ...(onOpenConversationWindow
           ? [
@@ -446,7 +475,7 @@ export function useConversationActionGroups({
           onSelect: () => run(() => onMarkConversationUnread(conversation.id))
         }
       ]
-    ];
+    ].filter((group) => group.length > 0);
   }, [
     agentActivityRuntime,
     agentHostApi?.clipboard,
@@ -457,6 +486,7 @@ export function useConversationActionGroups({
     onMarkConversationUnread,
     onOpenConversationWindow,
     onRequestRenameConversation,
+    peerPairing,
     run,
     uiLanguage,
     workspaceId
@@ -536,30 +566,51 @@ function DropdownActionGroups({
       {groups.map((group, groupIndex) => (
         <Fragment key={groupIndex}>
           {groupIndex > 0 ? <DropdownMenuSeparator /> : null}
-          {group.map((entry) => (
-            // onClick/onPointerUp mirror onSelect so the action survives
-            // workbench dead clicks (pointerup arrives but the click event
-            // is swallowed); the shared runner's pending ref dedups the
-            // overlapping events of one gesture.
-            <DropdownMenuItem
-              key={entry.id}
-              disabled={entry.disabled}
-              onClick={() => {
-                if (!entry.disabled) {
-                  entry.onSelect();
-                }
-              }}
-              onPointerUp={(event) => {
-                if (event.button === 0 && !entry.disabled) {
-                  entry.onSelect();
-                }
-              }}
-              onSelect={entry.onSelect}
-            >
-              {entry.icon}
-              <span>{entry.label}</span>
-            </DropdownMenuItem>
-          ))}
+          {group.map((entry) =>
+            entry.submenu ? (
+              // 有子项的条目（解除配对 N ▸）只做容器，自己不触发动作。
+              <DropdownMenuSub key={entry.id}>
+                <DropdownMenuSubTrigger disabled={entry.disabled}>
+                  {entry.icon}
+                  <span>{entry.label}</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className={menuContentClassName}>
+                  <DropdownActionGroups groups={[entry.submenu]} />
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ) : (
+              // onClick/onPointerUp mirror onSelect so the action survives
+              // workbench dead clicks (pointerup arrives but the click event
+              // is swallowed); the shared runner's pending ref dedups the
+              // overlapping events of one gesture.
+              <DropdownMenuItem
+                key={entry.id}
+                disabled={entry.disabled}
+                onClick={() => {
+                  if (!entry.disabled) {
+                    entry.onSelect();
+                  }
+                }}
+                onPointerUp={(event) => {
+                  if (event.button === 0 && !entry.disabled) {
+                    entry.onSelect();
+                  }
+                }}
+                onSelect={entry.onSelect}
+              >
+                {entry.icon}
+                <span className="agent-gui-node__conversation-action-label">
+                  {entry.label}
+                </span>
+                {entry.description ? (
+                  <span className="agent-gui-node__conversation-action-description">
+                    {entry.description}
+                  </span>
+                ) : null}
+                {entry.trailingIcon}
+              </DropdownMenuItem>
+            )
+          )}
         </Fragment>
       ))}
     </>
@@ -576,27 +627,47 @@ function ContextActionGroups({
       {groups.map((group, groupIndex) => (
         <Fragment key={groupIndex}>
           {groupIndex > 0 ? <ContextMenuSeparator /> : null}
-          {group.map((entry) => (
-            // Same dead-click fallbacks as DropdownActionGroups.
-            <ContextMenuItem
-              key={entry.id}
-              disabled={entry.disabled}
-              onClick={() => {
-                if (!entry.disabled) {
-                  entry.onSelect();
-                }
-              }}
-              onPointerUp={(event) => {
-                if (event.button === 0 && !entry.disabled) {
-                  entry.onSelect();
-                }
-              }}
-              onSelect={entry.onSelect}
-            >
-              {entry.icon}
-              <span>{entry.label}</span>
-            </ContextMenuItem>
-          ))}
+          {group.map((entry) =>
+            entry.submenu ? (
+              <ContextMenuSub key={entry.id}>
+                <ContextMenuSubTrigger disabled={entry.disabled}>
+                  {entry.icon}
+                  <span>{entry.label}</span>
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent className={menuContentClassName}>
+                  <ContextActionGroups groups={[entry.submenu]} />
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            ) : (
+              // Same dead-click fallbacks as DropdownActionGroups.
+              <ContextMenuItem
+                key={entry.id}
+                disabled={entry.disabled}
+                onClick={() => {
+                  if (!entry.disabled) {
+                    entry.onSelect();
+                  }
+                }}
+                onPointerUp={(event) => {
+                  if (event.button === 0 && !entry.disabled) {
+                    entry.onSelect();
+                  }
+                }}
+                onSelect={entry.onSelect}
+              >
+                {entry.icon}
+                <span className="agent-gui-node__conversation-action-label">
+                  {entry.label}
+                </span>
+                {entry.description ? (
+                  <span className="agent-gui-node__conversation-action-description">
+                    {entry.description}
+                  </span>
+                ) : null}
+                {entry.trailingIcon}
+              </ContextMenuItem>
+            )
+          )}
         </Fragment>
       ))}
     </>

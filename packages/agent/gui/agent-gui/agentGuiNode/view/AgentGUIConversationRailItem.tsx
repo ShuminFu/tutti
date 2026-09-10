@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Link2 } from "lucide-react";
 import { FolderIcon, NewWorkspaceLinedIcon, cn } from "@tutti-os/ui-system";
 import { WorkspaceUserProjectSelect } from "@tutti-os/workspace-user-project/ui";
 import type { WorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
@@ -32,6 +32,8 @@ import {
   AgentGUIConversationActionsDropdown,
   useConversationActionGroups
 } from "./AgentGUIConversationActionsMenu";
+import { useAgentGUIConversationRailPeerPairing } from "./agentGUIConversationRailPeerPairingContext";
+import { conversationRailPeerPairCount } from "../model/conversationRailPeerPairing";
 
 type AgentGUIConversationIconPresentation =
   | { kind: "image"; url: string }
@@ -78,6 +80,12 @@ interface AgentGUIConversationRailItemProps {
   uiLanguage: UiLanguage;
   workspaceId: string;
   registerItemElement: (itemId: string, element: HTMLDivElement | null) => void;
+  /**
+   * 该条属于「当前会话 + 它的对端」这一组：左侧画一条竖线括起来。
+   * `"end"` = 这一组的最后一行，竖线到此为止（中间行的线要贴到下一行，
+   * 否则整组看上去是几段断线，而不是一条括号，T5）。
+   */
+  peerPairGrouped?: false | "member" | "end";
   onSelectConversation: (agentSessionId: string) => void;
   onToggleConversationPinned: (agentSessionId: string, pinned: boolean) => void;
   onMarkConversationUnread: (agentSessionId: string) => void;
@@ -109,6 +117,7 @@ export const AgentGUIConversationRailItem = memo(
     labels,
     uiLanguage,
     workspaceId,
+    peerPairGrouped,
     registerItemElement,
     onSelectConversation,
     onToggleConversationPinned,
@@ -122,6 +131,15 @@ export const AgentGUIConversationRailItem = memo(
   }: AgentGUIConversationRailItemProps): React.JSX.Element {
     "use memo";
     const pinned = (item.pinnedAtUnixMs ?? 0) > 0;
+    const peerPairing = useAgentGUIConversationRailPeerPairing();
+    // 徽标数 = 该会话未撤销的配对数；宿主不支持或为 0 时不画。
+    const peerPairCount = peerPairing.supported
+      ? conversationRailPeerPairCount(peerPairing.index, item.id)
+      : 0;
+    // 「待配对」标记：虚线描边 + 右槽的 chip，chip 优先于徽标显示（T2）。
+    const peerPairMarked =
+      peerPairing.supported && peerPairing.marked?.sessionId === item.id;
+    const peerPairSlot = peerPairMarked ? "chip" : peerPairCount > 0 ? "badge" : null;
     const [actionsActivated, setActionsActivated] = useState(false);
     const [targetInfoOpen, setTargetInfoOpen] = useState(false);
     const agentTargets = useAgentTargetPresentations();
@@ -354,6 +372,9 @@ export const AgentGUIConversationRailItem = memo(
         data-presentation={activityPresentation?.kind}
         data-pinned={pinned}
         data-pending-delete={isPendingDeleteConversation}
+        data-peer-pair-group={peerPairGrouped || undefined}
+        data-peer-pair-marked={peerPairMarked ? "true" : undefined}
+        data-peer-pair-slot={peerPairSlot ?? undefined}
         data-testid={`agent-gui-conversation-item-${item.id}`}
         onContextMenuCapture={(event) => {
           if (isRailInteractionLocked()) {
@@ -368,6 +389,26 @@ export const AgentGUIConversationRailItem = memo(
         onPointerEnter={() => setActionsActivated(true)}
       >
         {conversationSelectWithTargetInfo}
+        {/* 徽标与 chip 共用条目右侧的同一个槽位（flex 项，不再绝对定位压在
+            相对时间上，T1）；被标记时槽位让给 chip。 */}
+        {peerPairSlot === "chip" ? (
+          <span
+            className={styles.conversationPeerPairChip}
+            data-testid={`agent-gui-conversation-peer-pair-chip-${item.id}`}
+            title={labels.peerPairPending}
+          >
+            {labels.peerPairPending}
+          </span>
+        ) : peerPairSlot === "badge" ? (
+          <span
+            className={styles.conversationPeerPairBadge}
+            data-testid={`agent-gui-conversation-peer-pair-badge-${item.id}`}
+            title={labels.peerPairUnpair(peerPairCount)}
+          >
+            <Link2 aria-hidden="true" />
+            <span>{peerPairCount}</span>
+          </span>
+        ) : null}
         {actionsActivated || isPendingDeleteConversation ? (
           <div className={styles.conversationActions}>
             {isPendingDeleteConversation ? (

@@ -539,6 +539,22 @@ export function useAgentGUIViewLabels(input: {
       copyAsMarkdown: t("agentHost.agentGui.copyAsMarkdown"),
       copyAsReference: t("agentHost.agentGui.copyAsReference"),
       markSessionUnread: t("agentHost.agentGui.markSessionUnread"),
+      peerPairFailed: t("agentHost.agentGui.peerPairFailed"),
+      peerPairMark: t("agentHost.agentGui.peerPairMark"),
+      peerPairPending: t("agentHost.agentGui.peerPairPending"),
+      peerPairPaired: (from: string, to: string) =>
+        t("agentHost.agentGui.peerPairPaired", { from, to }),
+      peerPairUnmanaged: t("agentHost.agentGui.peerPairUnmanaged"),
+      peerPairUnmark: t("agentHost.agentGui.peerPairUnmark"),
+      peerPairUnpair: (count: number) =>
+        t("agentHost.agentGui.peerPairUnpair", { count }),
+      peerPairWith: (title: string) =>
+        t("agentHost.agentGui.peerPairWith", { title }),
+      peerPairWithRelaunch: (title: string) =>
+        t("agentHost.agentGui.peerPairWithRelaunch", { title }),
+      peerUnpaired: (title: string) =>
+        t("agentHost.agentGui.peerUnpaired", { title }),
+      peerUnpairFailed: t("agentHost.agentGui.peerUnpairFailed"),
       conversationCopyImage: t("agentHost.agentGui.conversationCopyImage"),
       conversationCopyMentionPrefix: t(
         "agentHost.agentGui.conversationCopyMentionPrefix"
