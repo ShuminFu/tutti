@@ -7,8 +7,10 @@ import (
 
 	agentdaemon "github.com/tutti-os/tutti/packages/agent/daemon"
 	sessionreplay "github.com/tutti-os/tutti/packages/agent/session-replay"
+	accountservice "github.com/tutti-os/tutti/services/tuttid/service/account"
 	agentservice "github.com/tutti-os/tutti/services/tuttid/service/agent"
 	agentstatusservice "github.com/tutti-os/tutti/services/tuttid/service/agentstatus"
+	agenttargetservice "github.com/tutti-os/tutti/services/tuttid/service/agenttarget"
 )
 
 type replayVerifierTransport struct {
@@ -20,6 +22,36 @@ type replayVerifierTransport struct {
 	fastForward       bool
 	setSpeed          float64
 	providerCursor    map[string]sessionreplay.ProviderUnitPosition
+}
+
+func TestEmbeddedTuttiDoesNotConfigureAgentReadiness(t *testing.T) {
+	t.Setenv(rndmasterTuttiEmbeddedEnv, "1")
+
+	loginCalls := 0
+	logoutCalls := 0
+	account := &accountservice.Service{
+		OnLoginCompleted:  func(context.Context) { loginCalls++ },
+		OnLogoutCompleted: func(context.Context) { logoutCalls++ },
+	}
+	readiness := configureReplayAwareTuttiAgentReadiness(
+		false,
+		account,
+		&agentstatusservice.Service{},
+		agenttargetservice.Service{},
+	)
+	if readiness != nil {
+		t.Fatal("embedded Tutti configured an agent readiness coordinator")
+	}
+
+	account.OnLoginCompleted(context.Background())
+	account.OnLogoutCompleted(context.Background())
+	if loginCalls != 1 || logoutCalls != 1 {
+		t.Fatalf(
+			"embedded Tutti replaced account callbacks: login=%d logout=%d",
+			loginCalls,
+			logoutCalls,
+		)
+	}
 }
 
 func (t *replayVerifierTransport) Finalize() error {

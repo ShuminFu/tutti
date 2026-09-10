@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -16,6 +17,8 @@ import (
 	agenttargetservice "github.com/tutti-os/tutti/services/tuttid/service/agenttarget"
 	tuttiagentservice "github.com/tutti-os/tutti/services/tuttid/service/tuttiagent"
 )
+
+const rndmasterTuttiEmbeddedEnv = "RNDMASTER_TUTTI_EMBEDDED"
 
 // replayProviderAvailabilityChecker is part of the isolated replay
 // composition. Cassette playback must not probe installed CLIs, adapters, or
@@ -256,6 +259,9 @@ func configureReplayAwareTuttiAgentReadiness(
 	status *agentstatusservice.Service,
 	targets agenttargetservice.Service,
 ) *tuttiagentservice.ReadinessCoordinator {
+	if os.Getenv(rndmasterTuttiEmbeddedEnv) == "1" {
+		return nil
+	}
 	readiness := tuttiagentservice.NewReadinessCoordinator(status, targets)
 	if replay {
 		return readiness
