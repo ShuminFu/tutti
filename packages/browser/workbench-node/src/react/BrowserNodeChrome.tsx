@@ -327,7 +327,9 @@ export function BrowserNodeHeader({
           onFocus={onFocusRequest}
         />
         {runtime.isLoading ? (
-          <LoadingIcon className="pointer-events-none absolute right-2 top-1/2 z-[1] size-4 -translate-y-1/2 animate-spin text-[var(--text-tertiary)]" />
+          <span className="pointer-events-none absolute right-2 top-1/2 z-[1] size-4 -translate-y-1/2">
+            <LoadingIcon className="block size-4 animate-spin text-[var(--text-tertiary)]" />
+          </span>
         ) : null}
       </form>
       {openExternalUrl ? (

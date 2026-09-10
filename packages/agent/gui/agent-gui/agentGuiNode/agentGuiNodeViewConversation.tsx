@@ -215,14 +215,18 @@ function formatConversationRelativeTime(
 function LoadingGlyph(): React.JSX.Element {
   "use memo";
   return (
-    <Spinner
+    <span
       className={styles.conversationStatusGlyph}
-      size={14}
-      style={{ color: "var(--text-secondary)" }}
-      strokeWidth={2.25}
-      trackColor="color-mix(in srgb, currentColor 24%, transparent)"
-      testId="agent-gui-conversation-spinner"
-    />
+      aria-hidden="true"
+      data-testid="agent-gui-conversation-spinner"
+    >
+      <Spinner
+        size={14}
+        style={{ color: "var(--text-secondary)", display: "block" }}
+        strokeWidth={2.25}
+        trackColor="color-mix(in srgb, currentColor 24%, transparent)"
+      />
+    </span>
   );
 }
 

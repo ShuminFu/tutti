@@ -51,6 +51,8 @@ describe("ConversationMeta", () => {
     );
 
     const spinner = screen.getByTestId("agent-gui-conversation-spinner");
+    expect(spinner).not.toHaveAttribute("data-slot", "spinner");
+    expect(spinner.querySelector('[data-slot="spinner"]')).toBeVisible();
     expect(
       spinner.querySelectorAll('circle[stroke-width="2.25"]')
     ).toHaveLength(2);
