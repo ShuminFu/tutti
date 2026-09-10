@@ -17,6 +17,7 @@ import type {
   ExportDeveloperLogsResult
 } from "@shared/contracts/ipc";
 import { desktopErrorCodes } from "@shared/errors/desktopErrors";
+import { resolveWebBackendConfigFrom } from "./resolveWebBackendConfig";
 
 const webAppUpdateState: AppUpdateState = {
   channel: "rc",
@@ -449,22 +450,15 @@ function createWebUpdateApi(): DesktopUpdateApi {
 }
 
 function resolveWebBackendConfig(): DesktopBackendConfig {
-  const baseUrl = readRequiredEnv("VITE_TUTTID_BASE_URL");
-  const accessToken = readRequiredEnv("VITE_TUTTID_ACCESS_TOKEN");
-  return {
-    accessToken,
-    baseUrl
-  };
-}
-
-function readRequiredEnv(
-  name: "VITE_TUTTID_ACCESS_TOKEN" | "VITE_TUTTID_BASE_URL"
-): string {
-  const value = import.meta.env[name]?.trim();
-  if (!value) {
-    throw new Error(`${name} is required for desktop web development.`);
-  }
-  return value;
+  // Runtime injection first (URL query), then build-time env fallback so a
+  // single static build can target any tuttid instance.
+  return resolveWebBackendConfigFrom({
+    env: {
+      VITE_TUTTID_ACCESS_TOKEN: import.meta.env.VITE_TUTTID_ACCESS_TOKEN,
+      VITE_TUTTID_BASE_URL: import.meta.env.VITE_TUTTID_BASE_URL
+    },
+    search: window.location.search
+  });
 }
 
 function resolveWebSocketUrl(
