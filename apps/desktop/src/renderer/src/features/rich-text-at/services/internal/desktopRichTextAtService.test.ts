@@ -7,12 +7,13 @@ import type {
   WorkspaceAgentProvider
 } from "@tutti-os/client-tuttid-ts";
 import type { RichTextTriggerProvider } from "@tutti-os/ui-rich-text/types";
+import { resolveProviderIconAsset } from "@tutti-os/agent-gui/provider-icons";
+import { tuttiAgentAssetUrls } from "../../../../../../shared/tuttiAssetProtocol.ts";
 import {
-  tuttiAgentAssetUrls,
-  tuttiFileAssetUrls,
-  tuttiFolderAssetUrls,
-  tuttiIssueAssetUrls
-} from "../../../../../../shared/tuttiAssetProtocol.ts";
+  workspaceFileMentionIconUrl,
+  workspaceFolderMentionIconUrl,
+  workspaceIssueMentionIconUrl
+} from "../../../../assets/desktopMentionIconAssets.ts";
 import { DesktopRichTextAtService } from "./desktopRichTextAtService.ts";
 import {
   mapAgentTargetsToPresentations,
@@ -144,7 +145,10 @@ test("desktop rich text @ service assembles workspace file providers by capabili
       path: "/Users/test/project/tutti/README.md"
     }
   ]);
-  assert.equal(provider.getItemIconUrl?.(items[0]), tuttiFileAssetUrls.default);
+  assert.equal(
+    provider.getItemIconUrl?.(items[0]),
+    workspaceFileMentionIconUrl
+  );
   assert.deepEqual(provider.toInsertResult(items[0]), {
     href: "/Users/test/project/tutti/README.md",
     kind: "markdown-link",
@@ -161,7 +165,7 @@ test("desktop rich text @ service assembles workspace file providers by capabili
   ]);
   assert.equal(
     provider.getItemIconUrl?.(folderItems[0]),
-    tuttiFolderAssetUrls.default
+    workspaceFolderMentionIconUrl
   );
   assert.deepEqual(provider.toInsertResult(folderItems[0]), {
     href: "/Users/test/project/tutti/docs/",
@@ -248,7 +252,7 @@ test("desktop rich text @ service assembles workspace issue providers by capabil
   ]);
   assert.equal(
     provider.getItemIconUrl?.(items[0]),
-    "tutti-asset://issue/default.png"
+    workspaceIssueMentionIconUrl
   );
   assert.deepEqual(provider.toInsertResult(items[0]), {
     kind: "mention",
@@ -257,7 +261,7 @@ test("desktop rich text @ service assembles workspace issue providers by capabil
       label: "Login polish",
       presentation: {
         description: "Handle flaky login captcha",
-        iconUrl: "tutti-asset://issue/default.png",
+        iconUrl: workspaceIssueMentionIconUrl,
         status: "running"
       },
       scope: {
@@ -280,7 +284,7 @@ test("desktop rich text @ service assembles workspace issue providers by capabil
       label: "Login polish",
       presentation: {
         description: "Handle flaky login captcha",
-        iconUrl: "tutti-asset://issue/default.png",
+        iconUrl: workspaceIssueMentionIconUrl,
         status: "running"
       }
     }
@@ -553,7 +557,7 @@ test("desktop rich text @ service resolves workspace issue query by issue id", a
   assert.equal(provider.getItemKey(items[0]), "issue-restore-1");
   assert.equal(
     provider.getItemIconUrl?.(items[0]),
-    "tutti-asset://issue/default.png"
+    workspaceIssueMentionIconUrl
   );
   assert.deepEqual(
     grouped.groups.map((group) => ({
@@ -1008,7 +1012,10 @@ test("desktop rich text @ service assembles agent target mentions", async () => 
     items.map((item) => provider.getItemKey(item)),
     ["local:codex", "local:claude-code"]
   );
-  assert.equal(provider.getItemIconUrl?.(items[0]), tuttiAgentAssetUrls.codex);
+  assert.equal(
+    provider.getItemIconUrl?.(items[0]),
+    resolveProviderIconAsset("codex", "rounded")
+  );
   assert.equal(provider.getItemSubtitle, undefined);
   assert.deepEqual(provider.toInsertResult(items[0]), {
     kind: "mention",
@@ -1017,7 +1024,7 @@ test("desktop rich text @ service assembles agent target mentions", async () => 
       label: "Codex",
       presentation: {
         agentProviderId: "codex",
-        iconUrl: tuttiAgentAssetUrls.codex
+        iconUrl: resolveProviderIconAsset("codex", "rounded")
       },
       scope: {
         workspaceId: "workspace-1"
@@ -1174,7 +1181,7 @@ test("desktop rich text @ service uses task icon fallback for issue manager app 
       description: "Manage workspace tasks and runs.",
       commandSummaries: ["List tasks"],
       displayName: "Task Manager",
-      iconUrl: tuttiIssueAssetUrls.default,
+      iconUrl: workspaceIssueMentionIconUrl,
       referencesListSupported: false,
       scopes: ["issue"],
       workspaceId: "workspace-1"
@@ -1182,7 +1189,7 @@ test("desktop rich text @ service uses task icon fallback for issue manager app 
   ]);
   assert.equal(
     provider.getItemIconUrl?.(items[0]),
-    tuttiIssueAssetUrls.default
+    workspaceIssueMentionIconUrl
   );
   assert.deepEqual(provider.toInsertResult(items[0]), {
     kind: "mention",
@@ -1191,7 +1198,7 @@ test("desktop rich text @ service uses task icon fallback for issue manager app 
       label: "Task Manager",
       presentation: {
         description: "Manage workspace tasks and runs.",
-        iconUrl: tuttiIssueAssetUrls.default,
+        iconUrl: workspaceIssueMentionIconUrl,
         subtitle: "Manage workspace tasks and runs."
       },
       scope: {
@@ -1315,7 +1322,10 @@ function createAgentTarget(input: {
 function createAgentsService(
   targets: readonly AgentTarget[]
 ): Pick<IAgentsService, "load"> {
-  const agentTargets = mapAgentTargetsToPresentations(targets);
+  const agentTargets = mapAgentTargetsToPresentations(targets, {
+    resolveAgentTargetIconUrl: ({ iconKey, provider }) =>
+      resolveProviderIconAsset(iconKey || provider, "rounded") ?? ""
+  });
   const snapshot: AgentsSnapshot = {
     agentTargets,
     capturedAtUnixMs: 1780272000000,

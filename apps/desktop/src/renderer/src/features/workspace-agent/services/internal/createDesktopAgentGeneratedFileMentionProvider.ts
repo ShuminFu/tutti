@@ -6,9 +6,9 @@ import {
 import { createRichTextMarkdownLinkInsertResult } from "@tutti-os/ui-rich-text/plugins";
 import type { ReferenceProvenanceFilter } from "@tutti-os/workspace-file-reference/contracts";
 import {
-  tuttiFileAssetUrls,
-  tuttiFolderAssetUrls
-} from "../../../../../../shared/tuttiAssetProtocol.ts";
+  workspaceFileMentionIconUrl,
+  workspaceFolderMentionIconUrl
+} from "../../../../assets/desktopMentionIconAssets.ts";
 
 const { agentGeneratedFile: AGENT_GENERATED_FILE_PROVIDER_ID } =
   AGENT_CONTEXT_MENTION_PROVIDER_IDS;
@@ -69,8 +69,8 @@ export function createDesktopAgentGeneratedFileMentionProvider(input: {
     getItemSubtitle: (item) => item.path,
     getItemIconUrl: (item) =>
       item.path.endsWith("/")
-        ? tuttiFolderAssetUrls.default
-        : tuttiFileAssetUrls.default,
+        ? workspaceFolderMentionIconUrl
+        : workspaceFileMentionIconUrl,
     toInsertResult(item) {
       return createRichTextMarkdownLinkInsertResult(
         item.displayName,

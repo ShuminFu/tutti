@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  tuttiAgentAssetUrls,
-  tuttiIssueAssetUrls
-} from "../../../../../../shared/tuttiAssetProtocol.ts";
+import { resolveRendererWorkspaceAppDefaultIconUrl } from "../../../../assets/desktopMentionIconAssets.ts";
 import { resolveDesktopWorkspaceAppIconEntries } from "./desktopWorkspaceAppIcons.ts";
 
 test("desktop workspace app icon entries use App Center icon fields", () => {
@@ -36,22 +33,22 @@ test("desktop workspace app icon entries use App Center icon fields", () => {
     },
     {
       appId: "agent-codex",
-      iconUrl: tuttiAgentAssetUrls.codex,
+      iconUrl: resolveRendererWorkspaceAppDefaultIconUrl("agent-codex"),
       workspaceId: "workspace-1"
     },
     {
       appId: "agent-claude-code",
-      iconUrl: tuttiAgentAssetUrls.claudeCode,
+      iconUrl: resolveRendererWorkspaceAppDefaultIconUrl("agent-claude-code"),
       workspaceId: "workspace-1"
     },
     {
       appId: "agent-tutti-agent",
-      iconUrl: tuttiAgentAssetUrls.tuttiAgent,
+      iconUrl: resolveRendererWorkspaceAppDefaultIconUrl("agent-tutti-agent"),
       workspaceId: "workspace-1"
     },
     {
       appId: "issue-manager",
-      iconUrl: tuttiIssueAssetUrls.default,
+      iconUrl: resolveRendererWorkspaceAppDefaultIconUrl("issue-manager"),
       workspaceId: "workspace-1"
     }
   ]);
@@ -66,22 +63,22 @@ test("desktop workspace app icon entries seed built-in agent app icons", () => {
   assert.deepEqual(entries, [
     {
       appId: "agent-codex",
-      iconUrl: tuttiAgentAssetUrls.codex,
+      iconUrl: resolveRendererWorkspaceAppDefaultIconUrl("agent-codex"),
       workspaceId: "workspace-1"
     },
     {
       appId: "agent-claude-code",
-      iconUrl: tuttiAgentAssetUrls.claudeCode,
+      iconUrl: resolveRendererWorkspaceAppDefaultIconUrl("agent-claude-code"),
       workspaceId: "workspace-1"
     },
     {
       appId: "agent-tutti-agent",
-      iconUrl: tuttiAgentAssetUrls.tuttiAgent,
+      iconUrl: resolveRendererWorkspaceAppDefaultIconUrl("agent-tutti-agent"),
       workspaceId: "workspace-1"
     },
     {
       appId: "issue-manager",
-      iconUrl: tuttiIssueAssetUrls.default,
+      iconUrl: resolveRendererWorkspaceAppDefaultIconUrl("issue-manager"),
       workspaceId: "workspace-1"
     }
   ]);
@@ -92,7 +89,7 @@ test("desktop workspace app icon entries keep App Center agent icons", () => {
     apps: [
       {
         appId: "agent-codex",
-        availableIconUrl: tuttiAgentAssetUrls.codex,
+        availableIconUrl: "tutti-asset://agent/codex.png",
         iconUrl: "stored-agent-codex.png"
       }
     ],
@@ -107,17 +104,17 @@ test("desktop workspace app icon entries keep App Center agent icons", () => {
     },
     {
       appId: "agent-claude-code",
-      iconUrl: tuttiAgentAssetUrls.claudeCode,
+      iconUrl: resolveRendererWorkspaceAppDefaultIconUrl("agent-claude-code"),
       workspaceId: "workspace-1"
     },
     {
       appId: "agent-tutti-agent",
-      iconUrl: tuttiAgentAssetUrls.tuttiAgent,
+      iconUrl: resolveRendererWorkspaceAppDefaultIconUrl("agent-tutti-agent"),
       workspaceId: "workspace-1"
     },
     {
       appId: "issue-manager",
-      iconUrl: tuttiIssueAssetUrls.default,
+      iconUrl: resolveRendererWorkspaceAppDefaultIconUrl("issue-manager"),
       workspaceId: "workspace-1"
     }
   ]);

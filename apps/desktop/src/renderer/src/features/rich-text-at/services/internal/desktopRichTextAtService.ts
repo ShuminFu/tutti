@@ -14,11 +14,11 @@ import {
 } from "@tutti-os/ui-rich-text/plugins";
 import type { RichTextTriggerProvider } from "@tutti-os/ui-rich-text/types";
 import {
-  tuttiFileAssetUrls,
-  tuttiFolderAssetUrls
-} from "../../../../../../shared/tuttiAssetProtocol.ts";
+  resolveRendererWorkspaceAppIconUrl,
+  workspaceFileMentionIconUrl,
+  workspaceFolderMentionIconUrl
+} from "../../../../assets/desktopMentionIconAssets.ts";
 import type { IAgentsService } from "../../../workspace-agent/services/agentsService.interface";
-import { resolveDesktopWorkspaceAppDefaultIconUrl } from "../../../../../../shared/workspaceAppIconDefaults.ts";
 import type {
   DesktopRichTextAtCapability,
   DesktopRichTextTriggerProviderRequest,
@@ -387,10 +387,9 @@ function workspaceAppIconUrl(
   >["apps"][number],
   appId: string
 ): string | null {
-  return (
-    candidate.iconUrl?.trim() ||
-    candidate.availableIconUrl?.trim() ||
-    resolveDesktopWorkspaceAppDefaultIconUrl(appId)
+  return resolveRendererWorkspaceAppIconUrl(
+    appId,
+    candidate.iconUrl?.trim() || candidate.availableIconUrl?.trim()
   );
 }
 
@@ -728,6 +727,6 @@ function workspaceFileReferenceHref(item: WorkspaceFileAtItem): string {
 
 function workspaceFileIconUrl(item: WorkspaceFileAtItem): string {
   return item.kind === "directory"
-    ? tuttiFolderAssetUrls.default
-    : tuttiFileAssetUrls.default;
+    ? workspaceFolderMentionIconUrl
+    : workspaceFileMentionIconUrl;
 }

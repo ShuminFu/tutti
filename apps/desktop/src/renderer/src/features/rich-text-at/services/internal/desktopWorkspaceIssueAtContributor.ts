@@ -5,7 +5,7 @@ import type {
   RichTextTriggerQueryGroup,
   RichTextTriggerQueryInput
 } from "@tutti-os/ui-rich-text/types";
-import { tuttiIssueAssetUrls } from "../../../../../../shared/tuttiAssetProtocol.ts";
+import { workspaceIssueMentionIconUrl } from "../../../../assets/desktopMentionIconAssets.ts";
 import {
   compactMentionPresentation,
   compactStringRecord,
@@ -98,7 +98,7 @@ export function createWorkspaceIssueAtContributor(
               .map((value) => value?.trim() ?? "")
               .filter(Boolean)
               .join(" · "),
-          getItemIconUrl: () => tuttiIssueAssetUrls.default,
+          getItemIconUrl: () => workspaceIssueMentionIconUrl,
           toInsertResult(item) {
             return createDesktopRichTextMentionInsertResult({
               entityId: item.issueId,
@@ -109,7 +109,7 @@ export function createWorkspaceIssueAtContributor(
               }),
               presentation: compactMentionPresentation({
                 description: item.content?.trim() ?? "",
-                iconUrl: tuttiIssueAssetUrls.default,
+                iconUrl: workspaceIssueMentionIconUrl,
                 status: item.status?.trim() ?? ""
               })
             });
@@ -129,7 +129,7 @@ export function createWorkspaceIssueAtContributor(
                 label: issue.title,
                 presentation: compactMentionPresentation({
                   description: issue.content,
-                  iconUrl: tuttiIssueAssetUrls.default,
+                  iconUrl: workspaceIssueMentionIconUrl,
                   status: issue.status
                 })
               };

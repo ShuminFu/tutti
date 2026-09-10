@@ -1,8 +1,9 @@
 import type { WorkspaceAppCenterApp } from "@tutti-os/workspace-app-center";
 import {
-  resolveDesktopWorkspaceAppDefaultIconUrl,
-  SEEDED_DESKTOP_WORKSPACE_APP_ICON_IDS
-} from "../../../../../../shared/workspaceAppIconDefaults.ts";
+  rendererSeededWorkspaceAppIconIds,
+  resolveRendererWorkspaceAppDefaultIconUrl,
+  resolveRendererWorkspaceAppIconUrl
+} from "../../../../assets/desktopMentionIconAssets.ts";
 
 export interface DesktopWorkspaceAppIconEntry {
   appId: string;
@@ -23,15 +24,18 @@ export function resolveDesktopWorkspaceAppIconEntries(input: {
   for (const app of input.apps) {
     addWorkspaceAppIconEntry(entriesByKey, {
       appId: app.appId,
-      iconUrl: app.iconUrl ?? app.availableIconUrl ?? null,
+      iconUrl: resolveRendererWorkspaceAppIconUrl(
+        app.appId,
+        app.iconUrl ?? app.availableIconUrl
+      ),
       workspaceId: input.workspaceId
     });
   }
-  for (const appId of SEEDED_DESKTOP_WORKSPACE_APP_ICON_IDS) {
+  for (const appId of rendererSeededWorkspaceAppIconIds) {
     if (entriesByKey.has(workspaceAppIconEntryKey(appId, input.workspaceId))) {
       continue;
     }
-    const iconUrl = resolveDesktopWorkspaceAppDefaultIconUrl(appId);
+    const iconUrl = resolveRendererWorkspaceAppDefaultIconUrl(appId);
     if (!iconUrl) {
       continue;
     }
