@@ -24,6 +24,7 @@ import { registerWorkspaceFilePreviewServices } from "@renderer/features/workspa
 import { registerWorkspaceUserProjectServices } from "@renderer/features/workspace-user-project/services/registerWorkspaceUserProjectServices.ts";
 import { createAgentProviderTerminalCommandRunner } from "@renderer/features/workspace-workbench/services/createAgentProviderTerminalCommandRunner";
 import { createWorkspaceAgentOutcomeNotificationController } from "@renderer/features/workspace-workbench/services/workspaceAgentOutcomeNotification";
+import { isWorkspaceAgentGuiSessionOpen } from "@renderer/features/workspace-workbench/services/workspaceAgentGuiOpenSessionCoordinator";
 import {
   registerWorkspaceAccountService,
   registerWorkspaceWorkbenchServices
@@ -273,6 +274,10 @@ export async function createWorkspaceWindowContainer(): Promise<WorkspaceWindowC
     createWorkspaceAgentOutcomeNotificationController({
       agentDirectory: workspaceAgentServices.agentsService,
       foreground: createWorkspaceAgentOutcomeForegroundNotificationPresenter(),
+      // 会话本身已经开着时不再弹完成提示：它只是让人去看这个会话，
+      // 而人已经在看了，弹层还会盖住会话本身。
+      isAgentGuiSessionOpen: (agentSessionId) =>
+        isWorkspaceAgentGuiSessionOpen(activeWorkspaceID, agentSessionId),
       notifications: notificationService,
       translate,
       workspaceAgentActivityService:

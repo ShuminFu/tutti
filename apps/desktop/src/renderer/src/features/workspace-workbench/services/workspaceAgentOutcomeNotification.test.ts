@@ -128,6 +128,46 @@ test("controller notifies once for a canonical running to settled transition", a
   harness.controller.dispose();
 });
 
+test("controller skips the outcome toast while that session's conversation is open", async () => {
+  const engine = createTestEngine();
+  dispatchSession(engine);
+  markWorkspaceReconcileReady(engine);
+  const harness = createOutcomeNotificationHarness(engine, {
+    openAgentSessionIds: ["session-1"]
+  });
+
+  dispatchTurn(engine, "running");
+  dispatchTurn(engine, "settled", "completed");
+  harness.events[0]?.(turnUpdateEvent("settled", "completed"));
+  await settleOutcomeNotifications();
+
+  // The user is already looking at this conversation: no toast over it, but
+  // the message center / background notification entry still lands.
+  assert.deepEqual(harness.foregroundNotifications, []);
+  assert.equal(harness.notifications.length, 1);
+
+  harness.controller.dispose();
+});
+
+test("controller still toasts when a different session's conversation is open", async () => {
+  const engine = createTestEngine();
+  dispatchSession(engine);
+  markWorkspaceReconcileReady(engine);
+  const harness = createOutcomeNotificationHarness(engine, {
+    openAgentSessionIds: ["session-other"]
+  });
+
+  dispatchTurn(engine, "running");
+  dispatchTurn(engine, "settled", "completed");
+  harness.events[0]?.(turnUpdateEvent("settled", "completed"));
+  await settleOutcomeNotifications();
+
+  assert.equal(harness.foregroundNotifications.length, 1);
+  assert.equal(harness.notifications.length, 1);
+
+  harness.controller.dispose();
+});
+
 test("controller uses the exact Agent Target name and icon for extension outcomes", async () => {
   const engine = createTestEngine();
   dispatchSession(engine, {
@@ -386,6 +426,7 @@ function createOutcomeNotificationHarness(
   engine: AgentSessionEngine,
   options: {
     directoryLoad?: Promise<void>;
+    openAgentSessionIds?: string[];
   } = {}
 ): {
   agentDirectoryLoadCalls: string[];
@@ -433,6 +474,9 @@ function createOutcomeNotificationHarness(
       show(notification) {
         foregroundNotifications.push(notification);
       }
+    },
+    isAgentGuiSessionOpen(agentSessionId) {
+      return (options.openAgentSessionIds ?? []).includes(agentSessionId);
     },
     notifications: {
       notify(message) {

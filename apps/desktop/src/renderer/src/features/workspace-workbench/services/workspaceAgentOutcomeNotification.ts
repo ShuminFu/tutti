@@ -50,6 +50,15 @@ export interface WorkspaceAgentOutcomeNotificationControllerInput {
     load(signal?: AbortSignal): Promise<unknown>;
   };
   foreground?: WorkspaceAgentOutcomeForegroundNotificationPresenter;
+  /**
+   * Whether this session's own AgentGUI conversation is already open (mounted
+   * and not minimized). The outcome toast only says "go look at this session";
+   * when the user is already looking at it the toast is a redundant
+   * interruption that also covers the conversation it points at, so skip it.
+   * The message center entry and the background OS notification are unaffected.
+   * Mirrors the waiting-decision toast's agentGuiSessionOpen condition.
+   */
+  isAgentGuiSessionOpen?(agentSessionId: string): boolean;
   notifications: Pick<NotificationService, "notify">;
   translate(key: DesktopI18nKey, params?: I18nParams): string;
   onNotificationEmitted?(notification: WorkspaceAgentOutcomeNotification): void;
@@ -86,13 +95,15 @@ export function createWorkspaceAgentOutcomeNotificationController(
       input.translate
     );
     input.onNotificationEmitted?.(notification);
-    input.foreground?.show(
-      workspaceAgentOutcomeForegroundNotification(
-        notification,
-        agentPresentation,
-        input.translate
-      )
-    );
+    if (!input.isAgentGuiSessionOpen?.(notification.agentSessionId)) {
+      input.foreground?.show(
+        workspaceAgentOutcomeForegroundNotification(
+          notification,
+          agentPresentation,
+          input.translate
+        )
+      );
+    }
     input.notifications.notify(
       workspaceAgentOutcomeNotificationMessage(
         notification,
