@@ -16,6 +16,7 @@ const (
 	codexProjectRootMarkersDisabledConfig = `project_root_markers = []`
 	managedCodexRuntimeEnv                = "TUTTI_CODEX_MANAGED"
 	managedCodexConfigTemplateEnv         = "TUTTI_CODEX_CONFIG_TEMPLATE"
+	codexFastStartEnv                     = "TUTTI_CODEX_FAST_START"
 )
 
 type CodexPreparer struct {
@@ -127,13 +128,14 @@ func prepareCodexHome(codexHome string, input PrepareInput) error {
 	}
 	logRuntimePrepareTrace("runtime_prepare.codex.home_dir_resolved", input, nil)
 	managed := os.Getenv(managedCodexRuntimeEnv) == "1"
+	fastStart := os.Getenv(codexFastStartEnv) == "1"
 	if managed {
 		if err := installManagedCodexConfig(codexHome); err != nil {
 			return err
 		}
 	} else {
 		logRuntimePrepareTrace("runtime_prepare.codex.user_files_requested", input, nil)
-		if err := exposeUserCodexFiles(codexHome); err != nil {
+		if err := exposeUserCodexFiles(codexHome, fastStart); err != nil {
 			return err
 		}
 		logRuntimePrepareTrace("runtime_prepare.codex.user_files_resolved", input, nil)
@@ -243,7 +245,7 @@ func codexApprovalRule(pattern []string) string {
 		"], decision=\"allow\")\n"
 }
 
-func exposeUserCodexFiles(codexHome string) error {
+func exposeUserCodexFiles(codexHome string, fastStart bool) error {
 	userHome, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(userHome) == "" {
 		return nil
@@ -267,10 +269,12 @@ func exposeUserCodexFiles(codexHome string) error {
 	if err := exposeUserCodexModelsCache(codexHome, userCodexHome); err != nil {
 		return err
 	}
-	if err := exposeUserCodexPluginState(codexHome, userCodexHome); err != nil {
-		return err
+	if !fastStart {
+		if err := exposeUserCodexPluginState(codexHome, userCodexHome); err != nil {
+			return err
+		}
 	}
-	if err := exposeUserCodexConfig(codexHome, userCodexHome); err != nil {
+	if err := exposeUserCodexConfig(codexHome, userCodexHome, fastStart); err != nil {
 		return err
 	}
 	if err := exposeUserCodexModelCatalog(codexHome, userCodexHome); err != nil {
@@ -355,7 +359,7 @@ func exposeUserCodexPluginState(codexHome string, userCodexHome string) error {
 	return nil
 }
 
-func exposeUserCodexConfig(codexHome string, userCodexHome string) error {
+func exposeUserCodexConfig(codexHome string, userCodexHome string, fastStart bool) error {
 	target := filepath.Join(codexHome, "config.toml")
 	if targetInfo, err := os.Lstat(target); err == nil {
 		if targetInfo.Mode()&os.ModeSymlink != 0 {
@@ -375,10 +379,75 @@ func exposeUserCodexConfig(codexHome string, userCodexHome string) error {
 	} else if err != nil {
 		return fmt.Errorf("inspect user codex config: %w", err)
 	}
-	if err := copyFile(source, target, 0o600); err != nil {
-		return fmt.Errorf("copy codex config: %w", err)
+	if !fastStart {
+		if err := copyFile(source, target, 0o600); err != nil {
+			return fmt.Errorf("copy codex config: %w", err)
+		}
+		return nil
+	}
+	content, err := os.ReadFile(source)
+	if err != nil {
+		return fmt.Errorf("read codex config: %w", err)
+	}
+	fastConfig := codexConfigWithFastStartFeatures(codexConfigWithoutPersonalExtensions(string(content)))
+	if err := os.WriteFile(target, []byte(fastConfig), 0o600); err != nil {
+		return fmt.Errorf("write codex config: %w", err)
 	}
 	return nil
+}
+
+func codexConfigWithoutPersonalExtensions(content string) string {
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+	kept := make([]string, 0, len(lines))
+	skip := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") {
+			if end := strings.LastIndex(trimmed, "]"); end > 0 {
+				section := strings.Trim(strings.TrimSpace(trimmed[:end+1]), "[] ")
+				skip = section == "mcp_servers" || strings.HasPrefix(section, "mcp_servers.") ||
+					section == "plugins" || strings.HasPrefix(section, "plugins.") ||
+					section == "marketplaces" || strings.HasPrefix(section, "marketplaces.")
+			}
+		}
+		if !skip {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
+func codexConfigWithFastStartFeatures(content string) string {
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+	for sectionStart, line := range lines {
+		if strings.TrimSpace(line) != "[features]" {
+			continue
+		}
+		sectionEnd := len(lines)
+		for index := sectionStart + 1; index < len(lines); index++ {
+			trimmed := strings.TrimSpace(lines[index])
+			if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+				sectionEnd = index
+				break
+			}
+		}
+		next := append([]string{}, lines[:sectionStart+1]...)
+		for _, featureLine := range lines[sectionStart+1 : sectionEnd] {
+			trimmed := strings.TrimSpace(featureLine)
+			if codexConfigLineHasKey(trimmed, "apps") || codexConfigLineHasKey(trimmed, "plugins") || codexConfigLineHasKey(trimmed, "remote_plugin") {
+				continue
+			}
+			next = append(next, featureLine)
+		}
+		next = append(next, "apps = false", "plugins = false", "remote_plugin = false")
+		next = append(next, lines[sectionEnd:]...)
+		return strings.Join(next, "\n")
+	}
+	block := "[features]\napps = false\nplugins = false\nremote_plugin = false\n"
+	if strings.TrimSpace(content) == "" {
+		return block
+	}
+	return strings.TrimRight(content, "\r\n") + "\n\n" + block
 }
 
 func ensureCodexSessionConfig(configPath string, input PrepareInput) error {

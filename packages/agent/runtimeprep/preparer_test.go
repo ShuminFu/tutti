@@ -424,6 +424,75 @@ func TestDefaultPreparerManagedCodexDoesNotReadPersonalHome(t *testing.T) {
 	}
 }
 
+func TestDefaultPreparerFastCodexSkipsPersonalExtensions(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv(codexFastStartEnv, "1")
+	userCodexHome := filepath.Join(home, ".codex")
+	writeSidecarTestFile(t, filepath.Join(userCodexHome, "auth.json"), `{"token":"personal"}`)
+	writeSidecarTestFile(t, filepath.Join(userCodexHome, "plugins", "cache", "sample", "plugin.txt"), "plugin")
+	config := strings.Join([]string{
+		`model_provider = "proxy"`,
+		"",
+		`[marketplaces.personal]`,
+		`source = "/personal/plugins"`,
+		"",
+		`[plugins."browser@openai-bundled"]`,
+		`enabled = true`,
+		"",
+		`[mcp_servers.node_repl]`,
+		`command = "node_repl"`,
+		"",
+		`[mcp_servers.node_repl.env]`,
+		`MODE = "personal"`,
+		"",
+		`[features]`,
+		`apps = true`,
+		`js_repl = false`,
+		`plugins = true`,
+		`remote_plugin = true`,
+		"",
+		`[model_providers.proxy]`,
+		`base_url = "https://openai.proxy.test/v1"`,
+		"",
+	}, "\n")
+	writeSidecarTestFile(t, filepath.Join(userCodexHome, "config.toml"), config)
+
+	prepared, err := NewDefaultPreparer(t.TempDir()).Prepare(t.Context(), PrepareInput{
+		WorkspaceID: "workspace-fast", AgentSessionID: "session-fast",
+		Provider: "codex", Cwd: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	codexHome := envValue(prepared.Env, "CODEX_HOME")
+	if _, err := os.Stat(filepath.Join(codexHome, "auth.json")); err != nil {
+		t.Fatalf("personal auth not exposed: %v", err)
+	}
+	content, err := os.ReadFile(filepath.Join(codexHome, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), `model_provider = "proxy"`) ||
+		!strings.Contains(string(content), `[model_providers.proxy]`) {
+		t.Fatalf("provider config removed: %q", content)
+	}
+	if strings.Contains(string(content), "mcp_servers") || strings.Contains(string(content), "[plugins.") ||
+		strings.Contains(string(content), "[marketplaces.") {
+		t.Fatalf("personal extensions leaked: %q", content)
+	}
+	if !strings.Contains(string(content), "apps = false") ||
+		!strings.Contains(string(content), "js_repl = false") ||
+		!strings.Contains(string(content), "plugins = false") ||
+		!strings.Contains(string(content), "remote_plugin = false") {
+		t.Fatalf("fast-start features not enforced: %q", content)
+	}
+	if _, err := os.Stat(filepath.Join(codexHome, "plugins")); !os.IsNotExist(err) {
+		t.Fatalf("personal plugin state exposed: %v", err)
+	}
+}
+
 func TestDefaultPreparerReturnsAuthoritativeMCPBindings(t *testing.T) {
 	setTestHome(t, t.TempDir())
 	input := PrepareInput{
