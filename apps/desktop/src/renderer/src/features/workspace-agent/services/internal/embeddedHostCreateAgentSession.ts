@@ -1,7 +1,6 @@
 import { resolveAgentGUIProviderCatalogIdentity } from "@tutti-os/agent-gui/provider-catalog";
 import type { AgentActivityCreateSessionInput } from "@tutti-os/agent-activity-core";
 import {
-  HostBridgeUnavailableError,
   requestHostCreateAgentSession,
   type HostCreateAgentSessionArgs,
   type HostCreateAgentSessionResult
@@ -39,19 +38,11 @@ export function hostCreateAgentSessionArgsFromCreateInput(
 
 export async function requestEmbeddedHostCreateAgentSession(
   input: AgentActivityCreateSessionInput
-): Promise<HostCreateAgentSessionResult | null> {
-  try {
-    return await requestHostCreateAgentSession(
-      hostCreateAgentSessionArgsFromCreateInput(input)
-    );
-  } catch (error) {
-    // unsupported / 超时 / 桥不可用：回退 iframe 原 createSession。
-    // 带 code 的宿主拒绝（例如 provider 未注册）原样抛出，不回退。
-    if (error instanceof HostBridgeUnavailableError) {
-      return null;
-    }
-    throw error;
-  }
+): Promise<HostCreateAgentSessionResult> {
+  // 宿主请求发出后结果可能尚未返回，不得另建一条绕过任务队列的会话。
+  return requestHostCreateAgentSession(
+    hostCreateAgentSessionArgsFromCreateInput(input)
+  );
 }
 
 function promptFromCreateInput(input: AgentActivityCreateSessionInput): string {

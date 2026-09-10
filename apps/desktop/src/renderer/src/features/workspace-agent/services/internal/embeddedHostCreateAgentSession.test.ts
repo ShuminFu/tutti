@@ -52,7 +52,7 @@ test("embedded host success opens the returned session and does not POST tuttid 
   });
 });
 
-test("embedded host unsupported falls back to original create once", async () => {
+test("embedded host unsupported does not create an unmanaged session", async () => {
   await withEmbeddedHost({
     reply: (request) => ({
       type: "tutti-host-response",
@@ -62,25 +62,21 @@ test("embedded host unsupported falls back to original create once", async () =>
     })
   }, async ({ createCalls, opened }) => {
     const adapter = createHostCreateAdapter({ createCalls });
-    const session = await adapter.createSession(createInput);
-
-    assert.equal(createCalls.length, 1);
+    await assert.rejects(adapter.createSession(createInput), /unsupported/);
+    assert.equal(createCalls.length, 0);
     assert.deepEqual(opened, []);
-    assert.equal(session.agentSessionId, createCalls[0]?.body.agentSessionId);
   });
 });
 
-test("embedded host timeout falls back to original create", async () => {
+test("embedded host timeout does not duplicate a possibly queued session", async () => {
   await withEmbeddedHost({
     reply: null,
     fireTimeout: true
   }, async ({ createCalls, opened }) => {
     const adapter = createHostCreateAdapter({ createCalls });
-    const session = await adapter.createSession(createInput);
-
-    assert.equal(createCalls.length, 1);
+    await assert.rejects(adapter.createSession(createInput), /timed out/);
+    assert.equal(createCalls.length, 0);
     assert.deepEqual(opened, []);
-    assert.equal(session.agentSessionId, createCalls[0]?.body.agentSessionId);
   });
 });
 

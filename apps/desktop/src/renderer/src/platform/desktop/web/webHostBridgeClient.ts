@@ -490,13 +490,14 @@ export interface HostCreateAgentSessionResult {
   agentSessionId: string;
 }
 
-// 复用既有 requestHostCapability（5s / nonce / 同源校验），不新造 postMessage 通道。
+// 创建会话需等待 runtime 就绪；超时预算覆盖宿主的 120s 等待和 HTTP 开销。
 export function requestHostCreateAgentSession(
   args: HostCreateAgentSessionArgs
 ): Promise<HostCreateAgentSessionResult> {
   return requestHostCapability<HostCreateAgentSessionResult>(
     "createAgentSession",
-    [args]
+    [args],
+    150_000
   ).then((result) => {
     const taskId =
       typeof result?.taskId === "string" ? result.taskId.trim() : "";
