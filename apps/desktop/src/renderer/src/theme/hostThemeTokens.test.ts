@@ -216,3 +216,32 @@ test("the embedded mapping table leaves provider brand colours alone", () => {
     false
   );
 });
+
+// Issue 02: the top 44px of the embedded renderer has to read as the same
+// chrome band as the master's canvas toolbar, so the Agent header row must take
+// its background from the host `tabbar` role instead of staying transparent.
+test("the embedded Agent header row paints the host toolbar band", () => {
+  const band = embeddedHostThemeCss.match(
+    /\n\.rndmaster-dintaldock-embedded \.agent-gui-workbench-header \{([^}]*)\}/
+  );
+  assert.notEqual(band, null);
+  const declarations = String(band?.[1] ?? "");
+  assert.match(
+    declarations,
+    /background:\s*var\(\s*--rndmaster-host-tabbar\b/,
+    "the header band must resolve through --rndmaster-host-tabbar"
+  );
+  // A seam is a border, a radius or a shadow; none may survive on the band.
+  assert.match(declarations, /\n\s*border:\s*0;/);
+  assert.match(declarations, /\n\s*border-radius:\s*0;/);
+  assert.match(declarations, /\n\s*box-shadow:\s*none;/);
+});
+
+test("the embedded Agent window keeps no focus ring at the iframe edge", () => {
+  const focused = embeddedHostThemeCss.match(
+    /\.workbench-window\[data-focused="true"\] \{([^}]*)\}/
+  );
+  assert.notEqual(focused, null);
+  assert.match(String(focused?.[1] ?? ""), /\n\s*border:\s*0;/);
+  assert.match(String(focused?.[1] ?? ""), /\n\s*outline:\s*none;/);
+});

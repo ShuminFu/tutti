@@ -139,3 +139,51 @@
   outline: none !important;
   box-shadow: none !important;
 }
+
+/* Seamless chrome band (issue 02).
+ *
+ * The master shell paints its canvas toolbar with a tinted track
+ * (`color-mix(in oklab, var(--theme) 12%|18%, canvas)`) and publishes the
+ * resolved colour as the `tabbar` role. Directly beneath that toolbar sits this
+ * renderer inside the host iframe, and its top 44px is the Agent window header.
+ *
+ * Upstream that header is transparent, so the top band is whatever the three
+ * columns underneath happen to paint (provider rail, conversation rail, detail
+ * panel) — two or three different colours meeting the host toolbar in a visible
+ * seam. Painting the header row with the host's own toolbar colour turns the
+ * whole strip into one continuous chrome band with the master shell above it.
+ *
+ * The columns already reserve the header height (`padding-top` under
+ * `[data-window-header-layout="overlay"]`), so an opaque header covers nothing.
+ * Hit testing is untouched: the header keeps its own `pointer-events`.
+ *
+ * The band is deliberately attached to the header row, not to a fixed-height
+ * strip on the window: when the embedded header collapses the band collapses
+ * with it and the content simply starts under the host toolbar.
+ */
+.rndmaster-dintaldock-embedded .agent-gui-workbench-header {
+  background: var(--rndmaster-host-tabbar, transparent);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* No hairline, radius or elevation may survive between the host toolbar and
+ * this band. 0024 already zeroes the Agent window's own border/radius/shadow;
+ * these two carry the same guarantee for the header wrapper and the shell so a
+ * focused window cannot reintroduce a ring at the iframe edge.
+ */
+.rndmaster-dintaldock-embedded
+  .workbench-window-shell[data-workbench-node-type-id="agent-gui"]
+  .workbench-window__header {
+  border-bottom: 0;
+  box-shadow: none;
+}
+
+.rndmaster-dintaldock-embedded
+  .workbench-window-shell[data-workbench-node-type-id="agent-gui"]
+  .workbench-window[data-focused="true"] {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
