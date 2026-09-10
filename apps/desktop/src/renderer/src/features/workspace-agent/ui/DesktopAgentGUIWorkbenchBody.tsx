@@ -122,7 +122,7 @@ function DesktopAgentGUISurfaceImpl({
   onStateChange,
   prefillPromptBootstrapRequest = null,
   providerStatusBootstrapSnapshot = null,
-  agentDirectory,
+  agentDirectory: rawAgentDirectory,
   allAgentsPresentation = null,
   renderAgentsEmpty,
   comingSoonAgentProviders,
@@ -144,7 +144,27 @@ function DesktopAgentGUISurfaceImpl({
   resolveWorkspaceReferenceInitialTarget,
   workspaceId
 }: DesktopAgentGUISurfaceProps): JSX.Element {
+  const embeddedDintalDock = new URLSearchParams(
+    globalThis.location?.search ?? ""
+  ).has("tuttiBootstrap");
+  const agentDirectory = useMemo(
+    () =>
+      embeddedDintalDock
+        ? {
+            ...rawAgentDirectory,
+            agents: rawAgentDirectory.agents.filter(
+              (agent) => agent.provider !== "tutti-agent"
+            )
+          }
+        : rawAgentDirectory,
+    [embeddedDintalDock, rawAgentDirectory]
+  );
   const agents = agentDirectory.agents;
+  const effectiveDefaultAgentTargetId =
+    agents.some((agent) => agent.agentTargetId === defaultAgentTargetId)
+      ? defaultAgentTargetId
+      : (agents.find((agent) => agent.availability.status === "ready")
+          ?.agentTargetId ?? null);
   const replayRuntimeActive =
     runtimeApi?.isAgentSessionReplayRuntime?.() === true;
   const { i18n, locale } = useTranslation();
@@ -173,11 +193,25 @@ function DesktopAgentGUISurfaceImpl({
       conversationActivityViewEnabled: activityViewEnabled
     };
   }, [desktopPreferencesState.featureFlags, hostAgentActivityRuntime]);
-  const rawWorkbenchState = normalizeDesktopAgentGUIWorkbenchState(
+  const persistedWorkbenchState = normalizeDesktopAgentGUIWorkbenchState(
     surface.state
   );
+  const persistedAgentTargetId =
+    persistedWorkbenchState.agentTargetId?.trim() || null;
+  const persistedAgentProvider = rawAgentDirectory.agents.find(
+    (agent) => agent.agentTargetId === persistedAgentTargetId
+  )?.provider;
+  const rawWorkbenchState =
+    embeddedDintalDock &&
+    persistedAgentProvider === "tutti-agent"
+      ? {
+          ...persistedWorkbenchState,
+          agentTargetId: effectiveDefaultAgentTargetId,
+          lastActiveAgentSessionId: null
+        }
+      : persistedWorkbenchState;
   const requestedAgentTargetId =
-    rawWorkbenchState.agentTargetId?.trim() || defaultAgentTargetId;
+    rawWorkbenchState.agentTargetId?.trim() || effectiveDefaultAgentTargetId;
   const readinessProvider =
     agents.find((agent) => agent.agentTargetId === requestedAgentTargetId)
       ?.provider ?? null;
@@ -674,7 +708,7 @@ function DesktopAgentGUISurfaceImpl({
       visibleErrorPresentationOverrides,
       comingSoonProviders: comingSoonAgentProviders,
       providerReadinessGates,
-      defaultAgentTargetId,
+      defaultAgentTargetId: effectiveDefaultAgentTargetId,
       providerAuthAccountLabels,
       mentionService,
       workspaceAppIcons
