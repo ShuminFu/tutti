@@ -31,6 +31,403 @@
   box-shadow: none;
 }
 
+/* ==========================================================================
+ * 分栏并列（补丁 0108）
+ *
+ * 两栏 = 两个完整的 agent-gui 窗口壳（见 embeddedSplitView.ts 顶部的取舍说明）。
+ * 壳的 left/width 由 `<main>` 上的 `--rndmaster-split-ratio` 决定，
+ * 而「这个壳是左栏还是右栏」由覆盖层 EmbeddedSplitChrome 按 controller 快照
+ * 直接把 `data-rndmaster-pane` / `data-rndmaster-pane-focus` 投影到壳元素上。
+ *
+ * 为什么不是 `.workbench-window-shell:has([data-rndmaster-pane="left"])`：
+ * 仓库策略把 `.workbench-window-shell` 列为「大动态主体」，禁止在它上面用
+ * `:has()`（tools/scripts/css-has-performance-policy.mjs），要求「把状态投影成
+ * 主体自己的 data 属性」——这里就是照它说的做。
+ * ========================================================================== */
+
+.rndmaster-dintaldock-embedded {
+  --rndmaster-split-ratio: 0.5;
+  /* 栏头高度：与上游窗口头部行同高（44px），正文的预留也直接引用它。 */
+  --rndmaster-split-header-height: 44px;
+}
+
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  .workbench-window-shell[data-rndmaster-pane="left"] {
+  left: 0 !important;
+  width: calc(var(--rndmaster-split-ratio) * 100%) !important;
+}
+
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  .workbench-window-shell[data-rndmaster-pane="right"] {
+  left: calc(var(--rndmaster-split-ratio) * 100%) !important;
+  width: calc((1 - var(--rndmaster-split-ratio)) * 100%) !important;
+}
+
+/* 新窗口的壳挂进 DOM 早于 `launchNode` 的 promise 落地，那一刻覆盖层还不知道它是
+   哪一栏，壳上没有 data-rndmaster-pane —— 上面两条几何规则都不命中，它就按工作台
+   自己的坐标铺满整个主区，把两栏一起盖在下面（真机：拖进去先白一片）。分栏态下
+   未认领的 agent-gui 壳先不画；认领到了属性一上，立刻显形。
+   用 visibility 不用 display：display:none 会让 ResizeObserver 量到 0 尺寸，
+   窗口里的节点高度会整片算错（同 EmbeddedSplitChrome 里那条注释的理由）。 */
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  .workbench-window-shell[data-workbench-node-type-id="agent-gui"]:not(
+    [data-rndmaster-pane]
+  ) {
+  visibility: hidden !important;
+}
+
+/* 折叠（主区 < 2 x 320px）纯粹是显示态：只藏起非焦点栏、把焦点栏摊满，
+   状态机里的两个槽一个不动，也不写本地记录（PRD 故事 33/36）——拉宽即恢复。 */
+.rndmaster-dintaldock-embedded[data-rndmaster-collapsed="true"]
+  .workbench-window-shell[data-rndmaster-pane] {
+  left: 0 !important;
+  width: 100% !important;
+}
+
+.rndmaster-dintaldock-embedded[data-rndmaster-collapsed="true"]
+  .workbench-window-shell[data-rndmaster-pane][data-rndmaster-pane-focus="false"] {
+  display: none !important;
+}
+
+/* 右栏是「只有详情」的那一栏：会话栏、provider 栏、拖宽把手、悬浮的收起按钮
+   全部不出现，三列网格也要一起收成 0 0 1fr（列宽是内联变量给的，得用 !important
+   压过去），否则栏位没了、空列还在。 */
+.rndmaster-dintaldock-embedded
+  [data-rndmaster-pane="right"]
+  .agent-gui-node__rail-panel,
+.rndmaster-dintaldock-embedded
+  [data-rndmaster-pane="right"]
+  .agent-gui-node__provider-rail-panel,
+.rndmaster-dintaldock-embedded
+  [data-rndmaster-pane="right"]
+  .agent-gui-node__rail-resize-handle,
+.rndmaster-dintaldock-embedded
+  [data-rndmaster-pane="right"]
+  .agent-gui-node__rail-toggle-button--floating {
+  display: none !important;
+}
+
+.rndmaster-dintaldock-embedded
+  [data-rndmaster-pane="right"]
+  .agent-gui-node__layout {
+  grid-template-columns: 0 0 minmax(0, 1fr) !important;
+}
+
+/* 上面那三个栏位是 `display: none`，于是它们**不再是网格项**——详情面板会被自动放到
+   第 1 条（宽 0）轨道上，第 3 条 1fr 反而空着。真机上表现为右栏内容被压成 96px 宽的
+   一条，文字一列一个字，整栏看着就是空白（票 03 第五轮实测：detail-panel 宽 0、
+   timeline 宽 96、transcript 高 1170）。所以要显式把它钉到最后一列。 */
+.rndmaster-dintaldock-embedded
+  [data-rndmaster-pane="right"]
+  .agent-gui-node__detail-panel {
+  grid-column: 3 !important;
+}
+
+/* 工作台按**几何遮挡**给窗口打 `data-agent-gui-visible="false"`，再用
+   `content-visibility: hidden` 把整棵子树的绘制、文本与命中测试全部跳过
+   （上游 agentactivity.css，静态检查 agent-gui-presentation-performance-policy
+   要求它存在，所以只能在这里覆盖，不能改上游那条）。
+   分栏是我们用 CSS 把两个壳摆到左右的，工作台自己的节点坐标仍然重叠 ——
+   下面那个窗口被判成「完全被盖住」，盒子和文本都在、屏幕上却是空白
+   （票 03 第六轮真机：右栏 detail-panel 720x851、timeline scrollHeight 1216、
+   textContent 1212 字，而 innerText 为空、elementFromPoint 打不到它；
+   焦点换一栏，空白也跟着换一栏）。两栏是真并排、谁都没盖住谁，故解除。 */
+.rndmaster-dintaldock-embedded
+  [data-rndmaster-pane]
+  .agent-gui-node__layout[data-agent-gui-visible="false"] {
+  content-visibility: visible !important;
+}
+
+/* 同一条遮挡判定还会把子树里的动画全部 `paused`。分栏的意义就是同时看两边，
+   非焦点栏的流式动效冻住等于半个窗口失效，所以一并解除。 */
+.rndmaster-dintaldock-embedded
+  [data-rndmaster-pane]
+  .agent-gui-node__layout[data-agent-gui-visible="false"]
+  :where(*, *::before, *::after) {
+  animation-play-state: running !important;
+}
+
+/* ---- 覆盖层（EmbeddedSplitChrome）------------------------------------- */
+
+/* 覆盖层本体不吃事件，只有它里面的分隔线/链条/✕ 才吃。 */
+.rndmaster-split-chrome {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-panel, 40);
+  pointer-events: none;
+}
+
+.rndmaster-split-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  max-width: 260px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--background-fronted);
+  box-shadow: 0 10px 28px var(--shadow-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  pointer-events: none;
+  translate: 10px 10px;
+}
+
+.rndmaster-split-ghost__icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.rndmaster-split-ghost__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 放下区只有一个图标 + 「配对」；已结束会话多一行小字「会先重开」。 */
+.rndmaster-split-dropzone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--brand-primary, var(--tutti-purple));
+  border-radius: 10px;
+  background: color-mix(
+    in srgb,
+    var(--brand-primary, var(--tutti-purple)) 8%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+.rndmaster-split-dropzone__badge {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  color: var(--brand-primary, var(--tutti-purple));
+  font-size: 13px;
+}
+
+.rndmaster-split-dropzone__hint {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.rndmaster-split-divider {
+  position: absolute;
+  /* 栏头（票 04）之后，分隔线必须从栏头**下方**起：`top: 0` 会让那条 1px 竖线
+     一直穿到栏头里，看着像把两个栏头也切开了（真机截图）。拖宽的命中带一起下移，
+     否则在栏头高度内拖会和栏头右侧的 Pair/⋯/✕ 抢事件。 */
+  top: var(--rndmaster-split-header-height);
+  bottom: 0;
+  width: 10px;
+  margin-left: -5px;
+  background: transparent;
+  cursor: col-resize;
+  pointer-events: auto;
+}
+
+.rndmaster-split-divider::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: var(--line-2);
+  content: "";
+}
+
+/* ---- 每栏栏头（票 04）--------------------------------------------------
+ *
+ * 原来的做法：焦点用 2px 蓝横线、链条浮在分隔线上、✕ 浮在正文右上角。真机上
+ * 三个毛病：横线孤零零；左栏 ✕ 和链条挨着容易误点；右栏藏了会话栏之后，我们的 ✕
+ * 正好压住 agent-gui 自己的浮动设置按钮。改成每栏一条 44px 栏头：左边写「这是谁」，
+ * 右边一排无边框纯图标（链条 / ⋯ / ✕），正文里一个浮动按钮都不留。
+ * 栏头由覆盖层按 controller 快照定位（left/width 用比例算），所以这里只管长相。
+ */
+.rndmaster-split-pane-header {
+  position: absolute;
+  top: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--rndmaster-split-header-height);
+  padding: 0 8px 0 12px;
+  pointer-events: auto;
+}
+
+.rndmaster-split-pane-header__identity {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  /* 对齐正文左边界：左栏要跳过 provider 栏 + 会话栏，右栏两栏都藏了所以是 0。
+     值由 EmbeddedSplitChrome 量出来写在栏头上（上游的栏宽变量继承不到覆盖层）。 */
+  padding-left: var(--rndmaster-split-pane-content-left, 0px);
+}
+
+.rndmaster-split-pane-header__icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+/* 焦点不靠横线、也不给栏头着色：只把焦点栏的标题写重、非焦点栏写淡（票 04）。 */
+.rndmaster-split-pane-header__title {
+  overflow: hidden;
+  /* 会话标题常常是一整段提示词。不封顶的话它会一路吃到胶囊前面，栏头看着就是
+     一行正文（真机截图）。封顶后超出的部分省略，全文交给 hover 气泡。 */
+  max-width: 320px;
+  color: var(--text-secondary);
+  font-weight: 400;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 不裁剪的外壳，只为给气泡一个不被省略号裁掉的落点。 */
+.rndmaster-split-pane-header__title-wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+/* 只有真被截断的标题才弹气泡（`data-truncated` 由覆盖层测量后写入）。 */
+.rndmaster-split-pane-header__title-wrap[data-truncated="true"]:hover::after {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: var(--z-popover, 60);
+  max-width: 420px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--background-fronted);
+  color: var(--text-primary);
+  font-weight: 400;
+  font-size: 12px;
+  white-space: normal;
+  content: attr(data-full-title);
+  pointer-events: none;
+}
+
+.rndmaster-split-pane-header[data-focused="true"]
+  .rndmaster-split-pane-header__title {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* 项目名胶囊：右栏藏了会话栏，这是它唯一能看出「在哪个项目里」的地方。 */
+.rndmaster-split-pane-header__project {
+  flex: none;
+  overflow: hidden;
+  max-width: 120px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--transparency-hover);
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rndmaster-split-pane-header__actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  align-items: center;
+}
+
+/* 无边框无底色的纯图标，hover 才有浅底（照 Claude 桌面版栏头）。 */
+.rndmaster-split-pane-header__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.rndmaster-split-pane-header__action:hover:not(:disabled) {
+  background: var(--transparency-hover);
+  color: var(--text-primary);
+}
+
+.rndmaster-split-pane-header__action:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* 链条：配对成功主色，未配对/进行中灰。 */
+.rndmaster-split-pane-header__action[data-state="paired"] {
+  color: var(--brand-primary, var(--tutti-purple));
+}
+
+.rndmaster-split-pane-header__menu {
+  position: absolute;
+  top: calc(var(--rndmaster-split-header-height) - 4px);
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  min-width: 132px;
+  padding: 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--background-fronted);
+  box-shadow: 0 10px 28px var(--shadow-elevated);
+}
+
+.rndmaster-split-pane-header__menu-item {
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rndmaster-split-pane-header__menu-item:hover {
+  background: var(--transparency-hover);
+}
+
+/* 栏头压在窗口壳上面，所以正文必须让出这 44px。上游在
+   `[data-window-header-layout="overlay"]` 下用 `--agent-gui-workbench-header-height`
+   给三列一起留头部空间（补丁 0106 把它清成了 0，因为嵌入模式没有头部行）——
+   分栏时把这份预留还回来即可，三列（provider 栏 / 会话栏 / 详情）一次到位，
+   右栏那种「只剩详情」的网格也照样对。 */
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  .workbench-window-shell[data-rndmaster-pane]
+  .workbench-window[data-window-header-layout="overlay"] {
+  --agent-gui-workbench-header-height: var(--rndmaster-split-header-height);
+}
+
+/* 非焦点栏：不画线、不着色，只把「能打字的地方」整体压暗，一眼看出焦点在哪一栏。
+   opacity 会造出新的 stacking context（坑43/73），所以只压输入区与底部控件这两块，
+   不压整栏——正文里的弹层还要正常浮上来。 */
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  [data-rndmaster-pane][data-rndmaster-pane-focus="false"]
+  .agent-gui-node__composer,
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  [data-rndmaster-pane][data-rndmaster-pane-focus="false"]
+  .agent-gui-node__bottom-dock {
+  opacity: 0.5;
+}
+
 .rndmaster-dintaldock-embedded .agent-gui-workbench-header__traffic-lights,
 .rndmaster-dintaldock-embedded .agent-gui-workbench-header__detached-window,
 .rndmaster-dintaldock-embedded .workbench-window__resize-handle {

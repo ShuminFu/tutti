@@ -28,3 +28,26 @@ export {
   type ConversationRailPeerPairIndex,
   type ConversationRailPeerPairLink
 } from "./agent-gui/agentGuiNode/model/conversationRailPeerPairing.ts";
+
+// 分栏配对（补丁 0108）：宿主端口注册口 + 状态机，同样挂在这个子路径上。
+export {
+  conversationRailSplitHost,
+  registerConversationRailSplitHost,
+  type ConversationRailSplitDragSession,
+  type ConversationRailSplitHost,
+  type ConversationRailSplitPoint
+} from "./agent-gui/agentGuiNode/model/conversationRailSplitHost.ts";
+export {
+  createEmptySplitLayout,
+  isSplitLayoutSplit,
+  loadSplitLayout,
+  parseSplitLayout,
+  reduceSplitLayout,
+  saveSplitLayout,
+  serializeSplitLayout,
+  splitLayoutActiveConversationId,
+  splitLayoutStorageKey,
+  type SplitLayoutEvent,
+  type SplitLayoutState,
+  type SplitSide
+} from "./agent-gui/agentGuiNode/model/agentGuiSplitLayout.ts";

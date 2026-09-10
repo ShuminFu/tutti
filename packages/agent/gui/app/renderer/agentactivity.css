@@ -7047,6 +7047,18 @@ button.agent-gui-node__conversation-section-toggle:hover
   border-bottom-left-radius: 2px;
 }
 
+/* 分栏配对（补丁 0108）：宿主注册后条目可拖。touch-action:none 让触屏长按拖动
+   时页面不跟着滚（PRD 故事 10）；只在 draggable 的行上加，普通 web 不受影响。 */
+.agent-gui-node__conversation-item[data-split-draggable="true"] {
+  touch-action: none;
+}
+
+/* 拖起后原位留虚影：半透明 + 虚线边，拖影本身由宿主画。 */
+.agent-gui-node__conversation-item[data-split-dragging="true"] {
+  opacity: 0.45;
+  border-style: dashed;
+}
+
 .agent-gui-node__conversation-peer-menu-icon {
   display: inline-block;
   width: 14px;

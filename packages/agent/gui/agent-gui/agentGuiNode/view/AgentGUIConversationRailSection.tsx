@@ -9,6 +9,7 @@ import { AgentGUIConversationRailSectionHeader } from "./AgentGUIConversationRai
 import { insertConversationRailSectionOverlay } from "../model/agentGuiConversationRail";
 import { applyConversationRailPeerPairAdjacency } from "../model/conversationRailPeerPairing";
 import { useAgentGUIConversationRailPeerPairing } from "./agentGUIConversationRailPeerPairingContext";
+import { useConversationRailSplitShownIds } from "./useConversationRailSplitShownIds";
 import { AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE } from "../model/agentGuiConversationRailViewState";
 import {
   useOptionalStableEventCallback,
@@ -135,6 +136,8 @@ export const AgentGUIConversationRailSection = memo(
   }: AgentGUIConversationRailSectionProps): React.JSX.Element {
     "use memo";
     const peerPairing = useAgentGUIConversationRailPeerPairing();
+    // 分栏配对（补丁 0108）：另一栏里显示的会话也算 active（宿主未注册时是空集）。
+    const splitShownIds = useConversationRailSplitShownIds();
     const projectPinned = (section.project?.pinnedAtUnixMs ?? 0) > 0;
     const projectId = section.project?.id?.trim() ?? "";
     const hasProjectPath = Boolean(projectPath);
@@ -360,7 +363,11 @@ export const AgentGUIConversationRailSection = memo(
             {visibleItems.map((item, index) => (
               <AgentGUIConversationRailItem
                 key={item.id}
-                active={item.id === activeConversationId}
+                // active = 本节点当前会话 ∪ 任一分栏里正在显示的会话：两栏时两条都亮
+                // （PRD 故事 18）。吸附分组仍只按本节点的 activeConversationId（焦点栏）。
+                active={
+                  item.id === activeConversationId || splitShownIds.has(item.id)
+                }
                 isDeletingConversation={isDeletingConversation}
                 isPendingDeleteConversation={
                   pendingDeleteConversationId === item.id

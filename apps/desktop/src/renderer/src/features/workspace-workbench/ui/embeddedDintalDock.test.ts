@@ -255,38 +255,105 @@ test("leaves non-Agent contributions unchanged", () => {
   assert.equal(contributions?.[0]?.nodes?.[0], node);
 });
 
-test("keeps the frontmost agent and removes the rest of the desktop", async () => {
+// Split view (patch 0108) keeps up to TWO Agent windows — one per pane — and
+// hands them to the split controller frontmost-first. Everything else on the
+// persisted desktop is still removed, and a third Agent window is still closed.
+test("keeps the two frontmost agents and removes the rest of the desktop", async () => {
   const closed: string[] = [];
   const exited: string[] = [];
   const focused: string[] = [];
-  const result = await reconcileEmbeddedDintalDock({
-    closeNode: (id) => closed.push(id),
-    exitFullscreenNode: (id) => exited.push(id),
-    focusNode: (id) => focused.push(id),
+  const adoptedCalls: string[][] = [];
+  const result = await reconcileEmbeddedDintalDock(
+    {
+      closeNode: (id: string) => closed.push(id),
+      exitFullscreenNode: (id: string) => exited.push(id),
+      focusNode: (id: string) => focused.push(id),
+      getSnapshot: () => ({
+        nodeStack: ["agent-stale", "agent-old", "files", "agent-current"],
+        nodes: [
+          {
+            data: { typeId: "agent-gui" },
+            displayMode: "floating",
+            id: "agent-stale"
+          },
+          {
+            data: { typeId: "agent-gui" },
+            displayMode: "floating",
+            id: "agent-old"
+          },
+          {
+            data: { typeId: "files" },
+            displayMode: "floating",
+            id: "files"
+          },
+          {
+            data: { typeId: "agent-gui" },
+            displayMode: "fullscreen",
+            id: "agent-current"
+          }
+        ]
+      }),
+      launchNode: async () => null,
+      load: async () => undefined
+    } as never,
+    {
+      adopt: async (ids: readonly string[]) => {
+        adoptedCalls.push([...ids]);
+      }
+    }
+  );
+
+  assert.equal(result, "agent-current");
+  assert.deepEqual(closed, ["agent-stale", "files"]);
+  assert.deepEqual(exited, ["agent-current"]);
+  assert.deepEqual(focused, ["agent-current"]);
+  assert.deepEqual(adoptedCalls, [["agent-current", "agent-old"]]);
+});
+
+// `onHandleReady` 会用**同一个 host** 反复回调（它的 effect 依赖回调身份，而回调是带
+// `contributions` 依赖的 useCallback，工作台一有窗口变化就换新身份）。reconcile 现在会
+// `split.adopt`，adopt 又会给空着的那一栏起窗口 —— 重入一次就多一个窗口，新窗口再触发
+// 下一次重入。真机上是窗口每秒新增一个、WebContent 涨到 33GB 后崩溃，所以同一个 host
+// 必须只 reconcile 一次。
+test("reconciles a host handle only once even if called again", async () => {
+  const closed: string[] = [];
+  const launched: unknown[] = [];
+  const adoptedCalls: string[][] = [];
+  const host = {
+    closeNode: (id: string) => closed.push(id),
+    exitFullscreenNode: () => undefined,
+    focusNode: () => undefined,
     getSnapshot: () => ({
-      nodeStack: ["agent-old", "files", "agent-current"],
+      nodeStack: ["agent-a", "files"],
       nodes: [
         {
           data: { typeId: "agent-gui" },
           displayMode: "floating",
-          id: "agent-old"
+          id: "agent-a"
         },
-        { data: { typeId: "files" }, displayMode: "floating", id: "files" },
-        {
-          data: { typeId: "agent-gui" },
-          displayMode: "fullscreen",
-          id: "agent-current"
-        }
+        { data: { typeId: "files" }, displayMode: "floating", id: "files" }
       ]
     }),
-    launchNode: async () => null,
+    launchNode: async (input: unknown) => {
+      launched.push(input);
+      return "agent-new";
+    },
     load: async () => undefined
-  });
+  } as never;
+  const split = {
+    adopt: async (ids: readonly string[]) => {
+      adoptedCalls.push([...ids]);
+    }
+  };
 
-  assert.equal(result, "agent-current");
-  assert.deepEqual(closed, ["agent-old", "files"]);
-  assert.deepEqual(exited, ["agent-current"]);
-  assert.deepEqual(focused, ["agent-current"]);
+  const first = await reconcileEmbeddedDintalDock(host, split);
+  const second = await reconcileEmbeddedDintalDock(host, split);
+
+  assert.equal(first, "agent-a");
+  assert.equal(second, null);
+  assert.deepEqual(closed, ["files"]);
+  assert.deepEqual(launched, []);
+  assert.deepEqual(adoptedCalls, [["agent-a"]]);
 });
 
 test("opens an agent when the persisted desktop has none", async () => {
@@ -364,4 +431,184 @@ test("the embedded surface reserves no height for the removed header row", () =>
     embeddedDintalDockCss,
     /\.workbench-window__header \{\n\s*display: none !important;/
   );
+});
+
+// 右栏用 `display: none` 藏掉会话栏/provider 栏/拖宽把手，那三个元素于是不再是网格项，
+// 详情面板会被**自动放到第 1 条 0 宽轨道**上，1fr 那条空着 —— 右栏内容被压成一条，
+// 看着就是空白（票 03 第五轮真机：detail-panel 宽 0、timeline 宽 96）。
+// 所以藏栏位和「把详情钉到最后一列」必须成对出现。
+test("the right pane pins its detail panel to the last grid column", () => {
+  assert.match(
+    embeddedDintalDockCss,
+    /\[data-rndmaster-pane="right"\]\s*\n\s*\.agent-gui-node__layout \{[^}]*grid-template-columns:\s*0 0 minmax\(0, 1fr\)/
+  );
+  const placement = embeddedDintalDockCss.match(
+    /\[data-rndmaster-pane="right"\]\s*\n\s*\.agent-gui-node__detail-panel \{([^}]*)\}/
+  );
+  assert.notEqual(placement, null);
+  assert.match(String(placement?.[1] ?? ""), /grid-column:\s*3/);
+});
+
+// 同一栏还会被工作台的遮挡优化判成「完全被盖住」：`data-agent-gui-visible="false"`
+// 带来的 `content-visibility: hidden` 会跳过整棵子树的绘制/文本/命中测试，
+// 盒子尺寸全对、屏幕上却是空白（票 03 第六轮真机）。并排的两栏谁也没盖住谁，
+// 所以嵌入层必须把这条性能规则解除，动画同理。
+test("split panes opt out of the workbench occlusion optimisation", () => {
+  const occlusion = embeddedDintalDockCss.match(
+    /\[data-rndmaster-pane\]\s*\n\s*\.agent-gui-node__layout\[data-agent-gui-visible="false"\] \{([^}]*)\}/
+  );
+  assert.notEqual(occlusion, null);
+  assert.match(String(occlusion?.[1] ?? ""), /content-visibility:\s*visible/);
+  assert.match(
+    embeddedDintalDockCss,
+    /\[data-agent-gui-visible="false"\]\s*\n\s*:where\(\*, \*::before, \*::after\) \{\s*animation-play-state:\s*running/
+  );
+});
+
+// 栏头（票 04）压在窗口壳顶上 44px，正文必须让出同样的高度：上游用
+// `--agent-gui-workbench-header-height` 给三列一起留空间（补丁 0106 清成了 0），
+// 分栏时把这份预留还回来。少了它，栏头会直接盖住会话栏第一行与详情顶部。
+test("split panes give the content back the 44px the pane header takes", () => {
+  const reservation = embeddedDintalDockCss.match(
+    /\.rndmaster-dintaldock-embedded\[data-rndmaster-split="split"\]\s*\n\s*\.workbench-window-shell\[data-rndmaster-pane\]\s*\n\s*\.workbench-window\[data-window-header-layout="overlay"\] \{([^}]*)\}/
+  );
+  assert.notEqual(reservation, null);
+  assert.match(
+    String(reservation?.[1] ?? ""),
+    /--agent-gui-workbench-header-height:\s*var\(--rndmaster-split-header-height\)/
+  );
+  assert.match(
+    embeddedDintalDockCss,
+    /--rndmaster-split-header-height:\s*44px;/
+  );
+  assert.match(
+    embeddedDintalDockCss,
+    /\.rndmaster-split-pane-header \{[^}]*height: var\(--rndmaster-split-header-height\)/
+  );
+});
+
+// 分隔线也要让出栏头：`top: 0` 时那条 1px 竖线会一直穿到栏头里，看着像连栏头
+// 都被切成两半（真机截图，票 04 回归）。命中带同样下移，否则栏头高度内的拖动会
+// 和右侧 Pair/⋯/✕ 抢事件。
+// 栏头的「这是谁」要对齐正文：左栏前面还有 provider 栏和会话栏，贴壳左边就浮在
+// 侧栏上方了。左边界量出来写进 `--rndmaster-split-pane-content-left`（票 04 回归）。
+test("the header identity is inset to the pane content, not the shell edge", () => {
+  const identity = embeddedDintalDockCss.match(
+    /\.rndmaster-split-pane-header__identity \{([^}]*)\}/
+  );
+  assert.notEqual(identity, null);
+  assert.match(
+    String(identity?.[1] ?? ""),
+    /padding-left:\s*var\(--rndmaster-split-pane-content-left/
+  );
+});
+
+// 超长标题封顶 + 省略号，全文只在 hover 时用气泡给出；气泡必须长在**不裁剪**的
+// 外壳上，长在标题本体上会被它自己的 `overflow: hidden` 裁掉（票 04 回归）。
+test("a long pane title is capped and reveals the rest on hover", () => {
+  const title = embeddedDintalDockCss.match(
+    /\.rndmaster-split-pane-header__title \{([^}]*)\}/
+  );
+  assert.notEqual(title, null);
+  assert.match(String(title?.[1] ?? ""), /max-width:\s*320px/);
+  assert.match(String(title?.[1] ?? ""), /text-overflow:\s*ellipsis/);
+  const bubble = embeddedDintalDockCss.match(
+    /\.rndmaster-split-pane-header__title-wrap\[data-truncated="true"\]:hover::after \{([^}]*)\}/
+  );
+  assert.notEqual(bubble, null);
+  assert.match(String(bubble?.[1] ?? ""), /content:\s*attr\(data-full-title\)/);
+  const wrap = embeddedDintalDockCss.match(
+    /\.rndmaster-split-pane-header__title-wrap \{([^}]*)\}/
+  );
+  assert.equal(/overflow:\s*hidden/.test(String(wrap?.[1] ?? "")), false);
+});
+
+test("the divider starts below the pane header instead of at the top", () => {
+  const divider = embeddedDintalDockCss.match(
+    /\.rndmaster-split-divider \{([^}]*)\}/
+  );
+  assert.notEqual(divider, null);
+  assert.match(
+    String(divider?.[1] ?? ""),
+    /top:\s*var\(--rndmaster-split-header-height\)/
+  );
+});
+
+// 焦点态（票 04）：不画横线、栏头不着色。焦点只体现在两处 —— 焦点栏标题加重、
+// 非焦点栏的输入区/底部控件压暗。原来那条 2px 蓝线连样式都不该留下。
+test("focus is expressed by the header title weight and a dimmed composer only", () => {
+  assert.equal(embeddedDintalDockCss.includes("rndmaster-split-focus-line"), false);
+  const focusedTitle = embeddedDintalDockCss.match(
+    /\.rndmaster-split-pane-header\[data-focused="true"\]\s*\n\s*\.rndmaster-split-pane-header__title \{([^}]*)\}/
+  );
+  assert.notEqual(focusedTitle, null);
+  assert.match(String(focusedTitle?.[1] ?? ""), /font-weight:\s*600/);
+  const dimmed = embeddedDintalDockCss.match(
+    /\[data-rndmaster-pane\]\[data-rndmaster-pane-focus="false"\]\s*\n\s*\.agent-gui-node__composer,[^{]*\{([^}]*)\}/
+  );
+  assert.notEqual(dimmed, null);
+  assert.match(String(dimmed?.[1] ?? ""), /opacity:\s*0\.5/);
+});
+
+// ✕ 与链条都进了栏头：正文上不能再叠任何浮动按钮（右栏藏了会话栏之后，
+// 原来那个浮动 ✕ 正好压住 agent-gui 自己的设置按钮）。
+test("the pane chrome keeps no floating buttons over the content", () => {
+  assert.equal(embeddedDintalDockCss.includes(".rndmaster-split-close"), false);
+  assert.equal(embeddedDintalDockCss.includes(".rndmaster-split-link"), false);
+  assert.match(
+    embeddedDintalDockCss,
+    /\.rndmaster-split-pane-header__action \{[^}]*background: transparent/
+  );
+});
+
+// 双栏时点「某会话完成了」提示的「打开」走 requestWorkspaceAgentGuiLaunch({agentSessionId})：
+// 工作台按 current-session 复用策略找不到已显示它的窗口就会开**第三个**窗口——分栏层不认领、
+// reconcile 只跑一次不会关，它按工作台原始坐标整块画在两栏之上。嵌入态一律进分栏漏斗。
+test("a session-scoped launch while embedded lands in a pane instead of a third window", async () => {
+  const { routeEmbeddedDintalDockSessionLaunch } = await import(
+    "./embeddedDintalDock.ts"
+  );
+  const activations: unknown[] = [];
+  const host = {
+    activateNode: (...args: unknown[]) => activations.push(args),
+    closeNode() {},
+    exitFullscreenNode() {},
+    focusNode() {},
+    getSnapshot: () => ({
+      nodeStack: ["agent-current"],
+      nodes: [{ data: { typeId: "agent-gui" }, id: "agent-current" }]
+    }),
+    launchNode: async () => null,
+    load: async () => undefined
+  } as never;
+
+  assert.equal(
+    routeEmbeddedDintalDockSessionLaunch(host, { agentSessionId: "s-1" }),
+    null
+  );
+  assert.equal(activations.length, 1);
+  // 新窗口 / 草稿 / 无会话号：不归漏斗管，照常 launchNode。
+  assert.equal(
+    routeEmbeddedDintalDockSessionLaunch(host, {
+      agentSessionId: "s-1",
+      openInNewWindow: true
+    }),
+    undefined
+  );
+  assert.equal(
+    routeEmbeddedDintalDockSessionLaunch(host, {
+      agentSessionId: "s-1",
+      forceNewInstance: true
+    }),
+    undefined
+  );
+  assert.equal(
+    routeEmbeddedDintalDockSessionLaunch(host, {
+      agentSessionId: "s-1",
+      draftPrompt: "hi"
+    }),
+    undefined
+  );
+  assert.equal(routeEmbeddedDintalDockSessionLaunch(host, {}), undefined);
+  assert.equal(activations.length, 1);
 });

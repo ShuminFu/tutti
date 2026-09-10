@@ -16,6 +16,20 @@ export const enAgentGuiSessionActions = {
   peerPairFailed: "Pairing failed",
   peerUnpaired: "Unpaired: “{{title}}”",
   peerUnpairFailed: "Unpairing failed",
+  // 分栏配对（补丁 0108）：放下区 / 链条 / 栏头文案，嵌入层按 agentHost.agentGui.* 读。
+  // 「未托管会话不能配对」复用上面的 peerPairUnmanaged，不另起一条。
+  splitDropPair: "Pair",
+  splitDropRelaunch: "Relaunches first",
+  splitPaired: "Paired",
+  splitRelaunchTimeout: "The relaunched session did not show up in time; open it from the rail later",
+  splitUnpair: "Unpair",
+  splitPair: "Pair",
+  splitClosePane: "Close pane",
+  // 票 04 的栏头：⋯ 菜单与「侧栏还没报过标题」时的兜底名。
+  splitPaneMenu: "Pane options",
+  splitResetRatio: "Reset split width",
+  splitSwapPanes: "Swap sides",
+  splitUntitledSession: "Untitled session",
   retryConversations: "Retry",
   conversationCopyImage: "Image",
   conversationCopyMentionPrefix: "@",

@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Link2 } from "lucide-react";
 import { FolderIcon, NewWorkspaceLinedIcon, cn } from "@tutti-os/ui-system";
 import { WorkspaceUserProjectSelect } from "@tutti-os/workspace-user-project/ui";
@@ -34,6 +34,8 @@ import {
 } from "./AgentGUIConversationActionsMenu";
 import { useAgentGUIConversationRailPeerPairing } from "./agentGUIConversationRailPeerPairingContext";
 import { conversationRailPeerPairCount } from "../model/conversationRailPeerPairing";
+import { useConversationRailItemDrag } from "./useConversationRailItemDrag";
+import { conversationRailSplitHost } from "../model/conversationRailSplitHost";
 
 type AgentGUIConversationIconPresentation =
   | { kind: "image"; url: string }
@@ -233,7 +235,48 @@ export const AgentGUIConversationRailItem = memo(
       isRailInteractionLocked,
       onCancelDeleteConversation
     ]);
+    // 分栏配对（补丁 0108）：条目可被指针拖进主区。宿主未注册时 draggable=false，
+    // 行为与今天完全一致。交互锁 / 待删除中的行不拖。
+    // 这一条的「摘要」：拖影、放下判据、以及分栏栏头（票 04）用的是同一份。
+    // 用 useMemo 钉住引用：下面那个上报 effect 靠引用相等判「没变」，
+    // 每渲染新建一个对象会变成每帧上报一次（宿主每次 emit → 侧栏重渲染 → 再上报）。
+    const splitSession = useMemo(
+      () => ({
+        iconUrl: conversationIcon?.url ?? null,
+        id: item.id,
+        isImported: item.isImported === true,
+        // 栏头的项目胶囊：会话所属项目的显示名，没有项目就不画。
+        projectLabel: item.project?.label ?? null,
+        provider: item.provider ?? null,
+        status: item.status ?? null,
+        // 与行上显示的是同一份（剥过 prompt 的短标题），宿主的拖影照抄即可。
+        title: agentGUIConversationRailTitle(item, labels, uiLanguage)
+      }),
+      [
+        conversationIcon?.url,
+        item.id,
+        item.isImported,
+        item.project?.label,
+        item.provider,
+        item.status,
+        item,
+        labels,
+        uiLanguage
+      ]
+    );
+    // 分栏栏头要写「这是谁」，而宿主原本只在拖动那一刻拿得到标题/图标（onDragStart）——
+    // 左栏那条从来没被拖过。所以侧栏每渲染一条就把摘要报给宿主一次；宿主未注册
+    // 或不认识这个方法时是空操作。
+    useEffect(() => {
+      conversationRailSplitHost()?.describeSession?.(splitSession);
+    }, [splitSession]);
+    const splitDrag = useConversationRailItemDrag({
+      enabled: !isPendingDeleteConversation && !isRailInteractionLocked(),
+      getSession: () => splitSession
+    });
     const handleSelect = (): void => {
+      // 刚放下的那次合成 click 不算选中：放下的语义已经交给宿主处理。
+      if (splitDrag.consumeSuppressedClick()) return;
       if (!isRailInteractionLocked()) {
         onSelectConversation(item.id);
       }
@@ -375,6 +418,8 @@ export const AgentGUIConversationRailItem = memo(
         data-peer-pair-group={peerPairGrouped || undefined}
         data-peer-pair-marked={peerPairMarked ? "true" : undefined}
         data-peer-pair-slot={peerPairSlot ?? undefined}
+        data-split-draggable={splitDrag.draggable ? "true" : undefined}
+        data-split-dragging={splitDrag.dragging ? "true" : undefined}
         data-testid={`agent-gui-conversation-item-${item.id}`}
         onContextMenuCapture={(event) => {
           if (isRailInteractionLocked()) {
@@ -385,8 +430,13 @@ export const AgentGUIConversationRailItem = memo(
           setActionsActivated(true);
         }}
         onFocusCapture={() => setActionsActivated(true)}
+        onLostPointerCapture={splitDrag.handlers.onLostPointerCapture}
         onMouseLeave={handleMouseLeave}
+        onPointerCancel={splitDrag.handlers.onPointerCancel}
+        onPointerDown={splitDrag.handlers.onPointerDown}
         onPointerEnter={() => setActionsActivated(true)}
+        onPointerMove={splitDrag.handlers.onPointerMove}
+        onPointerUp={splitDrag.handlers.onPointerUp}
       >
         {conversationSelectWithTargetInfo}
         {/* 徽标与 chip 共用条目右侧的同一个槽位（flex 项，不再绝对定位压在

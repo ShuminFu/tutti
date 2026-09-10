@@ -130,8 +130,21 @@ import {
   applyEmbeddedDintalDockContributions,
   installEmbeddedDintalDockSessionBridge,
   isEmbeddedDintalDock,
-  reconcileEmbeddedDintalDock
+  reconcileEmbeddedDintalDock,
+  routeEmbeddedDintalDockSessionLaunch
 } from "./embeddedDintalDock.ts";
+import { EmbeddedSplitChrome } from "./EmbeddedSplitChrome.tsx";
+import {
+  embeddedSplitPairingLabels,
+  embeddedSplitToast
+} from "./embeddedSplitFeedback.ts";
+import {
+  createAgentGuiNodeSessionSource,
+  createEmbeddedSplitViewController,
+  registerEmbeddedSplitViewController,
+  type EmbeddedSplitViewController,
+  type EmbeddedSplitViewHost
+} from "./embeddedSplitView.ts";
 import "./EmbeddedDintalDock.css";
 import "./EmbeddedHostTheme.css";
 
@@ -412,6 +425,22 @@ function ReadyWorkspaceWorkbenchWithSession({
   const unregisterWorkbenchNodeLaunchRef = useRef<(() => void) | null>(null);
   const unregisterTerminalLoginLaunchRef = useRef<(() => void) | null>(null);
   const releaseAgentEnvHostRef = useRef<(() => void) | null>(null);
+  // 分栏（补丁 0108）：controller 与工作台 host 同生命周期，必须在 reconcile 之前
+  // 建好并注册，reconcile 才能把留下的窗口交给它。
+  const splitControllerRef = useRef<EmbeddedSplitViewController | null>(null);
+  const unregisterSplitControllerRef = useRef<(() => void) | null>(null);
+  // 已经给哪个 host 句柄建过 controller。`onHandleReady` 会被**同一个 host** 反复回调
+  // （它的 effect 依赖回调身份，而回调是带 `contributions` 依赖的 useCallback），
+  // 每次都重建 controller 就等于把两栏已经认领的窗口全丢掉、再 adopt 一遍、再多起一个
+  // 窗口 —— 见 embeddedDintalDock.ts 里 reconcile 的同题注释。
+  const splitHostRef = useRef<unknown>(null);
+  const disposeSplitController = useCallback(() => {
+    splitHostRef.current = null;
+    unregisterSplitControllerRef.current?.();
+    unregisterSplitControllerRef.current = null;
+    splitControllerRef.current?.dispose();
+    splitControllerRef.current = null;
+  }, []);
   const closeLaunchpad = useCallback(() => {
     setLaunchpadOpen(false);
   }, []);
@@ -544,6 +573,16 @@ function ReadyWorkspaceWorkbenchWithSession({
           }) => {
             const normalizedDraftPrompt = draftPrompt?.trim() ?? "";
             const normalizedAgentSessionId = agentSessionId?.trim() ?? "";
+            if (embeddedDintalDock) {
+              // 分栏时带会话号的打开顶替焦点栏，绝不开第三个窗口（见 routeEmbeddedDintalDockSessionLaunch）。
+              const routed = routeEmbeddedDintalDockSessionLaunch(host, {
+                agentSessionId: normalizedAgentSessionId,
+                draftPrompt: normalizedDraftPrompt,
+                forceNewInstance,
+                openInNewWindow
+              });
+              if (routed !== undefined) return routed;
+            }
             return host.launchNode(
               normalizedAgentSessionId
                 ? createWorkspaceAgentGuiSessionLaunchRequest({
@@ -648,14 +687,38 @@ function ReadyWorkspaceWorkbenchWithSession({
             return nodeId !== null;
           }
         );
-      if (embeddedDintalDock) {
-        void reconcileEmbeddedDintalDock(host).catch(() => undefined);
+      if (embeddedDintalDock && splitHostRef.current !== host) {
+        disposeSplitController();
+        splitHostRef.current = host;
+        const splitController = createEmbeddedSplitViewController({
+          host: host as unknown as EmbeddedSplitViewHost,
+          labels: embeddedSplitPairingLabels,
+          // 「某个窗口正显示哪条会话」只有 agent-gui contribution 自己的
+          // externalStateSource 知道：workbench 的 getSnapshot() 不投影它。
+          sessions: createAgentGuiNodeSessionSource({
+            externalStateSource: contributions?.find((contribution) =>
+              contribution.nodes?.some(
+                (node) => node.typeId === workspaceAgentGuiNodeID
+              )
+            )?.externalStateSource as never,
+            workspaceId: state.workspace.id
+          }),
+          toast: embeddedSplitToast,
+          workspaceId: state.workspace.id
+        });
+        splitControllerRef.current = splitController;
+        unregisterSplitControllerRef.current =
+          registerEmbeddedSplitViewController(splitController);
+        void reconcileEmbeddedDintalDock(host, splitController).catch(
+          () => undefined
+        );
       }
     },
     [
       agentEnvService,
       appCenterService,
       contributions,
+      disposeSplitController,
       embeddedDintalDock,
       runtime,
       runtimeApi,
@@ -688,6 +751,7 @@ function ReadyWorkspaceWorkbenchWithSession({
       unregisterIssueManagerLaunchRef.current?.();
       releaseAgentEnvHostRef.current?.();
       releaseAgentEnvHostRef.current = null;
+      disposeSplitController();
       unregisterIssueManagerLaunchRef.current = null;
       unregisterGroupChatLaunchRef.current?.();
       unregisterGroupChatLaunchRef.current = null;
@@ -696,7 +760,7 @@ function ReadyWorkspaceWorkbenchWithSession({
       unregisterTerminalLoginLaunchRef.current?.();
       unregisterTerminalLoginLaunchRef.current = null;
     };
-  }, []);
+  }, [disposeSplitController]);
 
   useEffect(() => {
     setLaunchpadOpen(false);
@@ -999,6 +1063,10 @@ function ReadyWorkspaceWorkbenchWithSession({
           windowManagement={windowManagement}
           workspaceId={hostInput.workspaceId}
         />
+        {/* 分栏覆盖层（补丁 0108）只在嵌入 DinTalDock 时存在，且必须排在
+            WorkbenchHost 之后 —— 它要盖在两个窗口壳之上；没有 controller 时
+            它自己什么都不画。 */}
+        {embeddedDintalDock ? <EmbeddedSplitChrome /> : null}
         <WorkspaceAppExternalBridge
           api={workspaceAppExternalApi}
           openFile={openWorkspaceAppExternalFile}
