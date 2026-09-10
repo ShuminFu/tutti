@@ -19,7 +19,35 @@ const HostModelEndpointsFileEnv = "TUTTI_HOST_MODEL_ENDPOINTS_FILE"
 
 type hostModelEndpointsDocument struct {
 	Version   int                            `json:"version"`
+	Routes    map[string]HostProviderRoute   `json:"routes"`
 	Providers map[string]ModelEndpointConfig `json:"providers"`
+}
+
+// HostProviderRoute is the host-owned execution route for one provider. An
+// absent route keeps standalone/provider-native authentication behavior.
+type HostProviderRoute struct {
+	Mode   string `json:"mode"`
+	Status string `json:"status"`
+}
+
+// HostModelRoute returns the validated managed gateway route for provider.
+func HostModelRoute(provider string) *HostProviderRoute {
+	var document hostModelEndpointsDocument
+	if err := json.Unmarshal(hostModelEndpointsPayload(), &document); err != nil || document.Version != 1 {
+		return nil
+	}
+	route, ok := document.Routes[strings.TrimSpace(provider)]
+	if !ok || strings.TrimSpace(route.Mode) != "gateway" {
+		return nil
+	}
+	route.Mode = "gateway"
+	route.Status = strings.TrimSpace(route.Status)
+	switch route.Status {
+	case "ready", "gateway_config_missing", "gateway_auth_unavailable":
+		return &route
+	default:
+		return nil
+	}
 }
 
 // HostModelEndpoint returns a validated copy of the host default for provider.

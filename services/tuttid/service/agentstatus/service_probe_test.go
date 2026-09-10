@@ -48,6 +48,26 @@ func TestExternalClaudeRuntimeUsesHostSelectedCLIPath(t *testing.T) {
 	}
 }
 
+func TestClaudeACPProbeGetsColdStartBudget(t *testing.T) {
+	service := Service{ProbeTimeout: 3 * time.Second}
+	timeout := service.probeTimeoutForSpec(ProviderSpec{Provider: "claude-code", ExternalRegistryID: "claude-acp"})
+	if timeout != 15*time.Second {
+		t.Fatalf("timeout = %s, want 15s", timeout)
+	}
+}
+
+func TestGatewayFailureOverridesOnlySuccessfulACPProbe(t *testing.T) {
+	status := ProviderStatus{Availability: Availability{ReasonCode: "gateway_auth_unavailable"}}
+	failed := applyHostGatewayProbeStatus(ProbeResult{Status: ProbeReady}, status)
+	if failed.Status != ProbeFailed || failed.ReasonCode != "gateway_auth_unavailable" {
+		t.Fatalf("failed = %#v", failed)
+	}
+	original := ProbeResult{Status: ProbeFailed, ReasonCode: "acp_adapter_launch_failed"}
+	if got := applyHostGatewayProbeStatus(original, status); got.Status != original.Status || got.ReasonCode != original.ReasonCode {
+		t.Fatalf("runtime failure was overwritten: %#v", got)
+	}
+}
+
 func TestCodexProbeUsesDetectionCommandLimiter(t *testing.T) {
 	limiter := NewDetectionCommandLimiter(1)
 	release, acquired := limiter.acquire(context.Background())

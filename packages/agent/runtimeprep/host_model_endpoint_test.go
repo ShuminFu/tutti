@@ -24,6 +24,20 @@ func TestHostModelEndpointReadsProviderScopedContract(t *testing.T) {
 	}
 }
 
+func TestHostModelRouteSeparatesGatewayReadinessFromEndpoint(t *testing.T) {
+	t.Setenv(HostModelEndpointsEnv, `{"version":1,"routes":{"claude-code":{"mode":"gateway","status":"gateway_auth_unavailable"}},"providers":{}}`)
+	route := HostModelRoute("claude-code")
+	if route == nil || route.Mode != "gateway" || route.Status != "gateway_auth_unavailable" {
+		t.Fatalf("route = %#v", route)
+	}
+	if endpoint := HostModelEndpoint("claude-code"); endpoint != nil {
+		t.Fatalf("endpoint = %#v, want nil while configuration is missing", endpoint)
+	}
+	if route := HostModelRoute("codex"); route != nil {
+		t.Fatalf("unconfigured route = %#v", route)
+	}
+}
+
 func TestHostModelEndpointPrefersUpdatablePrivateFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "host-model-endpoints.json")
 	if err := os.WriteFile(path, []byte(`{"version":1,"providers":{"opencode":{"protocol":"openai","baseURL":"http://127.0.0.1:18799/llmproxy/opencode/v1","apiKey":"file-key","model":"gpt-5"}}}`), 0o600); err != nil {

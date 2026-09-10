@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -357,7 +358,41 @@ func (s Service) statusForSpec(
 			"repairReason", assessment.RepairPlan.ReasonCode,
 		)
 	}
+	status = applyHostGatewayStatus(status, spec, now)
 	postChecksDuration = time.Since(postChecksStartedAt)
+	return status
+}
+
+func applyHostGatewayStatus(status ProviderStatus, spec ProviderSpec, now time.Time) ProviderStatus {
+	route := runtimeprep.HostModelRoute(spec.Provider)
+	if route == nil || !status.CLI.Installed || !status.Adapter.Installed ||
+		(status.Availability.Status != AvailabilityReady && status.Availability.Status != AvailabilityAuthRequired) {
+		return status
+	}
+	actions := make([]Action, 0, len(status.Actions))
+	for _, action := range status.Actions {
+		if action.ID != ActionLogin {
+			actions = append(actions, action)
+		}
+	}
+	status.Actions = actions
+	if route.Status == "ready" {
+		status.Auth = AuthInfo{Status: AuthAuthenticated, AccountLabel: "DinTal Gateway", AuthMethod: "gateway"}
+		status.Availability = Availability{Status: AvailabilityReady, CheckedAt: &now}
+		return status
+	}
+	status.Auth = AuthInfo{Status: AuthUnknown}
+	status.Availability = Availability{Status: AvailabilityUnknown, ReasonCode: route.Status, CheckedAt: &now}
+	hasRefresh := false
+	for _, action := range status.Actions {
+		if action.ID == ActionRefresh {
+			hasRefresh = true
+			break
+		}
+	}
+	if !hasRefresh {
+		status.Actions = append(status.Actions, Action{ID: ActionRefresh, Kind: ActionKindRefresh})
+	}
 	return status
 }
 
@@ -414,6 +449,9 @@ func (s Service) probeReadyAfterForSpec(spec ProviderSpec) time.Duration {
 // into the real auth/runtime state.
 func (s Service) probeTimeoutForSpec(spec ProviderSpec) time.Duration {
 	timeout := s.probeTimeout()
+	if isClaudeStatusSpec(spec) && strings.TrimSpace(spec.ExternalRegistryID) == "claude-acp" && timeout < 15*time.Second {
+		return 15 * time.Second
+	}
 	if strings.EqualFold(strings.TrimSpace(spec.Provider), "cursor") && timeout < 35*time.Second {
 		return 35 * time.Second
 	}

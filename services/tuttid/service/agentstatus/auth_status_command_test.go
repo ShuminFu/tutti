@@ -82,7 +82,7 @@ func TestAPIUsageBillingCredentialsSkipOfficialAuthStatusCommands(t *testing.T) 
 
 func TestHostModelEndpointSkipsCodexOfficialAuthAndNetworkProbes(t *testing.T) {
 	t.Setenv("TUTTI_HOST_MODEL_ENDPOINTS_FILE", "")
-	t.Setenv("TUTTI_HOST_MODEL_ENDPOINTS", `{"version":1,"providers":{"codex":{"protocol":"openai","baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback","wireAPI":"responses"}}}`)
+	t.Setenv("TUTTI_HOST_MODEL_ENDPOINTS", `{"version":1,"routes":{"codex":{"mode":"gateway","status":"ready"}},"providers":{"codex":{"protocol":"openai","baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback","wireAPI":"responses"}}}`)
 	specs, err := DefaultRegistry().Select([]string{agentprovider.Codex})
 	if err != nil || len(specs) != 1 {
 		t.Fatalf("Select(codex) = %#v, %v", specs, err)
@@ -95,7 +95,7 @@ func TestHostModelEndpointSkipsCodexOfficialAuthAndNetworkProbes(t *testing.T) {
 		},
 	}
 	auth, _ := service.resolveAuthAndCLIVersion(context.Background(), specs[0], true, "/codex")
-	if calls != 0 || auth.Status != AuthAuthenticated || auth.AuthMethod != "apiKey" {
+	if calls != 0 || auth.Status != AuthAuthenticated || auth.AuthMethod != "gateway" {
 		t.Fatalf("auth = %#v, calls = %d; want host API credential without official auth probe", auth, calls)
 	}
 	if !service.providerUsesCustomConfig(agentprovider.Codex) {

@@ -68,9 +68,6 @@ func (s Service) providerUsesCustomConfig(provider string) bool {
 // whatever `claude auth status` reports (which only reflects the stored OAuth
 // session, not env/settings credentials).
 func (s Service) providerHasAPICredential(provider string) bool {
-	if runtimeprep.HostModelEndpoint(provider) != nil {
-		return true
-	}
 	for _, key := range providerCredentialEnvVars(provider) {
 		if strings.TrimSpace(s.lookupEnv(key)) != "" {
 			return true

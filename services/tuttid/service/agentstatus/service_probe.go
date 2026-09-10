@@ -56,7 +56,7 @@ func (s Service) Probe(ctx context.Context, input ProbeInput) (ProbeResult, erro
 			probed.ReasonCode = assessment.RepairPlan.ReasonCode
 			probed.LastError = &ProviderLastError{Code: string(CodexErrPlatformPkgIncomplete), Message: probed.Message}
 		}
-		return probed, nil
+		return applyHostGatewayProbeStatus(probed, status), nil
 	}
 	if !providerCLIVersionMeetsMinimum(spec, status.CLI.Version) {
 		result.Status = ProbeFailed
@@ -67,5 +67,16 @@ func (s Service) Probe(ctx context.Context, input ProbeInput) (ProbeResult, erro
 
 	probed := s.probeAdapterRuntimeCommand(ctx, spec, runtimeResolution, now)
 	probed.Checks = cloneProviderChecks(status.Checks)
-	return probed, nil
+	return applyHostGatewayProbeStatus(probed, status), nil
+}
+
+func applyHostGatewayProbeStatus(probe ProbeResult, status ProviderStatus) ProbeResult {
+	if probe.Status != ProbeReady ||
+		(status.Availability.ReasonCode != "gateway_config_missing" && status.Availability.ReasonCode != "gateway_auth_unavailable") {
+		return probe
+	}
+	probe.Status = ProbeFailed
+	probe.ReasonCode = status.Availability.ReasonCode
+	probe.Message = "Managed gateway is not ready"
+	return probe
 }

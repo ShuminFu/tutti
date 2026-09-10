@@ -731,7 +731,7 @@ func (s Service) runInstallActionOnce(ctx context.Context, spec ProviderSpec, re
 				}
 			}
 			result.Status = RunActionFailed
-			result.ReasonCode = "post_install_probe_failed"
+			result.ReasonCode = postInstallProbeFailureReason(probe)
 			result.Message = firstNonBlank(probe.Message, probe.ReasonCode, "Agent provider runtime probe failed")
 			s.reportProviderSetupNodeResult(ctx, providerSetupNodeResultInput{
 				Node:      "install_post_probe",
@@ -779,7 +779,7 @@ postInstallProbe:
 	result.Probe = &probe
 	if probe.Status == ProbeFailed {
 		result.Status = RunActionFailed
-		result.ReasonCode = "post_install_probe_failed"
+		result.ReasonCode = postInstallProbeFailureReason(probe)
 		result.Message = firstNonBlank(probe.Message, probe.ReasonCode, "Agent provider runtime probe failed")
 		s.reportProviderSetupNodeResult(ctx, providerSetupNodeResultInput{
 			Node:      "install_post_probe",
@@ -806,6 +806,15 @@ postInstallProbe:
 	}
 	result.Status = RunActionCompleted
 	return result, nil
+}
+
+func postInstallProbeFailureReason(probe ProbeResult) string {
+	switch probe.ReasonCode {
+	case "gateway_config_missing", "gateway_auth_unavailable":
+		return probe.ReasonCode
+	default:
+		return "post_install_probe_failed"
+	}
 }
 
 func applyInstallerExecutionSummary(result RunActionResult, summary installerExecutionSummary) RunActionResult {

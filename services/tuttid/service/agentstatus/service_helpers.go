@@ -17,6 +17,7 @@ import (
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerstatus"
 	"github.com/tutti-os/tutti/packages/agent/daemon/runtimecmd"
+	"github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	claudecodeservice "github.com/tutti-os/tutti/services/tuttid/service/claudecode"
 )
 
@@ -209,6 +210,12 @@ func (s Service) resolveAuthAndCLIVersion(
 	}
 	if isClaudeStatusSpec(spec) && strings.TrimSpace(os.Getenv("TUTTI_MOCK_AGENT_UNBOUND")) == "1" {
 		return AuthInfo{Status: AuthRequired}, ""
+	}
+	if route := runtimeprep.HostModelRoute(spec.Provider); route != nil {
+		if route.Status == "ready" {
+			return AuthInfo{Status: AuthAuthenticated, AccountLabel: "DinTal Gateway", AuthMethod: "gateway"}, ""
+		}
+		return AuthInfo{Status: AuthUnknown}, ""
 	}
 	// A runtime authentication failure (e.g. a 401 sending a message) invalidates
 	// the stale "logged in" marker/command result until the user re-authenticates
