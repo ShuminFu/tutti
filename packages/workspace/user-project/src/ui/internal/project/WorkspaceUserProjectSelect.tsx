@@ -367,13 +367,13 @@ export function WorkspaceUserProjectSelect({
         setApiProjects(prepared.projects);
       }
       setIsSelectedPathMissing(prepared.isSelectedPathMissing);
-      if (!shouldApplyPreparedSelection) {
-        return;
-      }
       if (prepared.selection.kind === "clear") {
         setHasPinnedNoProjectSelection(true);
         setSuppressedSelectedPath(prepared.selection.suppressedPath);
         onProjectPathChange(null);
+        return;
+      }
+      if (!shouldApplyPreparedSelection) {
         return;
       }
       if (prepared.selection.kind === "select") {

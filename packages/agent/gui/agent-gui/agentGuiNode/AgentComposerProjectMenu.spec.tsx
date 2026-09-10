@@ -206,6 +206,7 @@ describe("WorkspaceUserProjectSelect render budget", () => {
         <WorkspaceUserProjectSelect
           api={api}
           selectedProjectPath={path}
+          shouldApplyPreparedSelection={false}
           onProjectPathChange={setPath}
         />
       );
