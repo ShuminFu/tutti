@@ -142,7 +142,68 @@ func TestResolveAgentExtensionSourcesDoesNotAddDeepSeekHarnessOutsideEmbeddedHos
 	}
 }
 
+func TestResolveAgentExtensionSourcesReplacesEmbeddedGrokLocalPackage(t *testing.T) {
+	packageDir := filepath.Join(t.TempDir(), "grok-extension")
+	t.Setenv("TUTTI_ENV", "production")
+	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "1")
+	t.Setenv("TUTTI_AGENT_EXTENSION_GROK_PACKAGE_DIR", packageDir)
+
+	sources := ResolveAgentExtensionSources()
+	if got := countAgentExtensionSourcesByKey(sources, "grok"); got != 1 {
+		t.Fatalf("embedded grok source count = %d, want 1: %#v", got, sources)
+	}
+	source := agentExtensionSourceByKey(t, sources, "grok")
+	if !source.Enabled || source.LocalPackageDir != packageDir {
+		t.Fatalf("embedded grok source = %#v", source)
+	}
+	if source.ReleaseIndexURL != "" || len(source.FallbackReleaseIndexURLs) != 0 {
+		t.Fatalf("embedded grok still declared a remote index: %#v", source)
+	}
+	if source.SigningKeyID != "tutti-grok-release-v2" || source.SigningPublicKey == "" {
+		t.Fatalf("embedded grok dropped signing identity: %#v", source)
+	}
+}
+
+func TestResolveAgentExtensionSourcesKeepsCatalogGrokWithoutPackageDir(t *testing.T) {
+	t.Setenv("TUTTI_ENV", "production")
+	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "1")
+	t.Setenv("TUTTI_AGENT_EXTENSION_GROK_PACKAGE_DIR", "")
+
+	sources := ResolveAgentExtensionSources()
+	if got := countAgentExtensionSourcesByKey(sources, "grok"); got != 1 {
+		t.Fatalf("embedded grok source count = %d, want 1: %#v", got, sources)
+	}
+	source := agentExtensionSourceByKey(t, sources, "grok")
+	if source.Enabled || source.LocalPackageDir != "" {
+		t.Fatalf("embedded grok without package dir = %#v", source)
+	}
+	if source.ReleaseIndexURL != "https://d1x7gb6wqsqmnm.cloudfront.net/tutti-agent-releases/agents/grok/versions.json" {
+		t.Fatalf("embedded grok remote index = %#v", source)
+	}
+}
+
+func TestResolveAgentExtensionSourcesIgnoresGrokPackageDirOutsideEmbeddedHost(t *testing.T) {
+	packageDir := filepath.Join(t.TempDir(), "grok-extension")
+	t.Setenv("TUTTI_ENV", "production")
+	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "")
+	t.Setenv("TUTTI_AGENT_EXTENSION_GROK_PACKAGE_DIR", packageDir)
+
+	sources := ResolveAgentExtensionSources()
+	if got := countAgentExtensionSourcesByKey(sources, "grok"); got != 1 {
+		t.Fatalf("standalone grok source count = %d, want 1: %#v", got, sources)
+	}
+	source := agentExtensionSourceByKey(t, sources, "grok")
+	if source.Enabled || source.LocalPackageDir != "" {
+		t.Fatalf("standalone grok with package dir = %#v", source)
+	}
+	if source.ReleaseIndexURL != "https://d1x7gb6wqsqmnm.cloudfront.net/tutti-agent-releases/agents/grok/versions.json" {
+		t.Fatalf("standalone grok remote index = %#v", source)
+	}
+}
+
 func TestGrokAgentExtensionSourcePinsApprovedSigningIdentity(t *testing.T) {
+	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "")
+	t.Setenv("TUTTI_AGENT_EXTENSION_GROK_PACKAGE_DIR", "")
 	source := agentExtensionSourceByKey(t, ResolveAgentExtensionSources(), "grok")
 	if source.Enabled || source.SigningKeyID != "tutti-grok-release-v2" ||
 		source.ReleaseIndexURL != "https://d1x7gb6wqsqmnm.cloudfront.net/tutti-agent-releases/agents/grok/versions.json" {
@@ -182,6 +243,16 @@ func agentExtensionSourceByKey(t *testing.T, sources []AgentExtensionSource, key
 	}
 	t.Fatalf("agent extension source %q not found", key)
 	return AgentExtensionSource{}
+}
+
+func countAgentExtensionSourcesByKey(sources []AgentExtensionSource, key string) int {
+	count := 0
+	for _, source := range sources {
+		if source.Key == key {
+			count++
+		}
+	}
+	return count
 }
 
 func TestResolveUVToolArtifactSelectsPlatform(t *testing.T) {

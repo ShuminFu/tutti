@@ -226,6 +226,20 @@ func ResolveAgentExtensionSources() []AgentExtensionSource {
 				Enabled:         true,
 			})
 		}
+		if packageDir := strings.TrimSpace(os.Getenv("TUTTI_AGENT_EXTENSION_GROK_PACKAGE_DIR")); packageDir != "" {
+			// RNDMASTER_GROK_LOCAL_EXTENSION replaces the catalog grok row.
+			// Catalog already has Key=="grok"; appending would create two sources.
+			for i := range result {
+				if result[i].Key != "grok" {
+					continue
+				}
+				result[i].Enabled = true
+				result[i].LocalPackageDir = packageDir
+				result[i].ReleaseIndexURL = ""
+				result[i].FallbackReleaseIndexURLs = nil
+				break
+			}
+		}
 	}
 	return result
 }
