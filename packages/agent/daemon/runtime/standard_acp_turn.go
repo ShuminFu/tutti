@@ -472,6 +472,9 @@ func (a *standardACPAdapter) SubmitInteractive(ctx context.Context, session Sess
 	action := strings.TrimSpace(input.Action)
 	payload := clonePayload(input.Payload)
 	result := acpInteractiveResponseResult(action, optionID, payload)
+	if a.config.provider == ProviderCursor && pending.toolName == "CreatePlan" {
+		result, optionID = cursorACPCreatePlanResult(action, optionID, payload)
+	}
 	if err := ctx.Err(); err != nil {
 		return SubmitInteractiveResult{}, err
 	}

@@ -153,6 +153,12 @@ func (a *standardACPAdapter) handleACPMessage(
 		// completing the canonical Interaction shown by AgentGUI.
 		go a.respondACPPermissionRequest(ctx, client, session, turnID, message.ID, pending, emit)
 		return nil, nil
+	case cursorACPMethodCreatePlan:
+		if a.config.provider != ProviderCursor {
+			_ = client.Respond(ctx, message.ID, nil, &acpError{Code: -32601, Message: "method not supported"})
+			return nil, nil
+		}
+		return a.handleCursorCreatePlan(ctx, client, session, turnID, message, normalizer, emit)
 	default:
 		slog.Warn("agent session ACP ignored unsupported message",
 			"event", "agent_session.acp.handle_message.unsupported",
