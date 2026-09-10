@@ -33,9 +33,12 @@ func (p CodexPreparer) Prepare(ctx context.Context, input ProviderPrepareInput) 
 	if err := prepareCodexHome(codexHome, input.PrepareInput); err != nil {
 		return ProviderPrepareResult{}, err
 	}
-	cleanup, err := projectCodexAuth(ctx, codexHome, p.AuthProjector)
-	if err != nil {
-		return ProviderPrepareResult{}, err
+	var cleanup func(context.Context) error
+	if !codexRuntimeIsolated(input.PrepareInput) {
+		cleanup, err = projectCodexAuth(ctx, codexHome, p.AuthProjector)
+		if err != nil {
+			return ProviderPrepareResult{}, err
+		}
 	}
 	defer func() {
 		if err != nil && cleanup != nil {
@@ -128,12 +131,18 @@ func prepareCodexHome(codexHome string, input PrepareInput) error {
 	}
 	logRuntimePrepareTrace("runtime_prepare.codex.home_dir_resolved", input, nil)
 	managed := os.Getenv(managedCodexRuntimeEnv) == "1"
+	isolated := codexRuntimeIsolated(input)
 	fastStart := os.Getenv(codexFastStartEnv) == "1"
+	if isolated {
+		if err := removePersonalCodexRuntimeState(codexHome); err != nil {
+			return err
+		}
+	}
 	if managed {
 		if err := installManagedCodexConfig(codexHome); err != nil {
 			return err
 		}
-	} else {
+	} else if !isolated {
 		logRuntimePrepareTrace("runtime_prepare.codex.user_files_requested", input, nil)
 		if err := exposeUserCodexFiles(codexHome, fastStart); err != nil {
 			return err
@@ -150,7 +159,7 @@ func prepareCodexHome(codexHome string, input PrepareInput) error {
 		return err
 	}
 	logRuntimePrepareTrace("runtime_prepare.codex.session_config_resolved", input, nil)
-	if !managed {
+	if !isolated {
 		logRuntimePrepareTrace("runtime_prepare.codex.user_skills_requested", input, nil)
 		if err := exposeUserCodexSkillFolders(filepath.Join(codexHome, "skills"), input); err != nil {
 			return err
@@ -170,6 +179,23 @@ func prepareCodexHome(codexHome string, input PrepareInput) error {
 		return err
 	}
 	logRuntimePrepareTrace("runtime_prepare.codex.approval_rules_resolved", input, nil)
+	return nil
+}
+
+func codexRuntimeIsolated(input PrepareInput) bool {
+	return os.Getenv(managedCodexRuntimeEnv) == "1" || input.ModelEndpoint.supportsCodex()
+}
+
+func removePersonalCodexRuntimeState(codexHome string) error {
+	for _, relative := range []string{
+		"auth.json", "config.toml", "models_cache.json", codexModelsCacheAuthorityFile,
+		"model_catalog.json", "model_instructions.md",
+		"plugins", "apps", "skills",
+	} {
+		if err := os.RemoveAll(filepath.Join(codexHome, relative)); err != nil {
+			return fmt.Errorf("remove personal codex runtime state %s: %w", relative, err)
+		}
+	}
 	return nil
 }
 

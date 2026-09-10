@@ -3,12 +3,25 @@ package agent
 import (
 	"context"
 	"crypto/sha256"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	modelbindingbiz "github.com/tutti-os/tutti/services/tuttid/biz/modelbinding"
 	modelplanbiz "github.com/tutti-os/tutti/services/tuttid/biz/modelplan"
 )
+
+func setHostModelEndpointContract(t *testing.T, provider string, protocol string) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "host-model-endpoints.json")
+	payload := `{"version":1,"providers":{"` + provider + `":{"planName":"DinTal Runtime LLM Proxy","protocol":"` + protocol + `","baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback","wireAPI":"responses","model":"gateway-default","models":[{"id":"gateway-default","name":"Gateway Default"},{"id":"gateway-alt","name":"Gateway Alt"}]}}}`
+	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(runtimeprep.HostModelEndpointsFileEnv, path)
+}
 
 type staticBindingSource struct {
 	binding modelbindingbiz.Binding
@@ -463,6 +476,41 @@ func TestGetComposerOptionsAlwaysReportsProviderNativeModelConfiguration(t *test
 	}
 	if configuration["defaultModel"] != nil || configuration["fingerprint"] == "" {
 		t.Fatalf("runtime model configuration = %#v, want null default and fingerprint", configuration)
+	}
+}
+
+func TestHostDefaultModelEndpointPrecedesProviderNativeFallback(t *testing.T) {
+	setHostModelEndpointContract(t, "codex", "openai")
+	service := &Service{}
+	resolution := service.resolveModelPlan(context.Background(), "ws", "local:codex", "codex", "gateway-alt")
+	if resolution.Endpoint == nil || resolution.Endpoint.Model != "gateway-alt" {
+		t.Fatalf("host resolution = %#v", resolution)
+	}
+	if resolution.ModelConfiguration.Source != modelConfigurationSourceHostDefault || resolution.ModelConfiguration.ModelPlanID != "" {
+		t.Fatalf("host model configuration = %#v", resolution.ModelConfiguration)
+	}
+	options := applyResolvedModelPlanComposerOverlay(ComposerOptions{Provider: "codex"}, resolution)
+	if options.ModelConfig.CurrentValue != "gateway-alt" || len(options.ModelConfig.Options) != 2 {
+		t.Fatalf("host model overlay = %#v", options.ModelConfig)
+	}
+	if _, ok := options.RuntimeContext["modelPlan"]; ok {
+		t.Fatalf("host endpoint reported as workspace model plan: %#v", options.RuntimeContext)
+	}
+	endpointContext, ok := options.RuntimeContext["modelEndpoint"].(map[string]any)
+	if !ok || endpointContext["source"] != modelConfigurationSourceHostDefault {
+		t.Fatalf("host endpoint context = %#v", options.RuntimeContext["modelEndpoint"])
+	}
+}
+
+func TestExplicitModelPlanPrecedesHostDefaultEndpoint(t *testing.T) {
+	setHostModelEndpointContract(t, "codex", "openai")
+	service := newPlanBoundService(modelplanbiz.ProtocolOpenAI, true)
+	resolution := service.resolveModelPlan(context.Background(), "ws", "local:codex", "codex", "plan-alt")
+	if resolution.Endpoint == nil || resolution.Endpoint.PlanID != "mp-1" || resolution.Endpoint.Model != "plan-alt" {
+		t.Fatalf("explicit plan resolution = %#v", resolution)
+	}
+	if resolution.ModelConfiguration.Source != modelConfigurationSourceModelPlan {
+		t.Fatalf("model configuration = %#v", resolution.ModelConfiguration)
 	}
 }
 

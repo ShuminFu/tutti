@@ -257,6 +257,10 @@ func sessionRuntimeSnapshotFromContext(
 		if snapshot.ModelPlanID == "" || snapshot.ModelPlanRevision == 0 || snapshot.ModelFingerprint == "" {
 			return sessionRuntimeSnapshot{}, true, fmt.Errorf("%w: model plan revision is incomplete", ErrSessionRuntimeSnapshotUnavailable)
 		}
+	case modelConfigurationSourceHostDefault:
+		if snapshot.ModelPlanID != "" || snapshot.ModelPlanRevision != 0 || snapshot.ModelFingerprint == "" {
+			return sessionRuntimeSnapshot{}, true, fmt.Errorf("%w: host-default snapshot references a plan", ErrSessionRuntimeSnapshotUnavailable)
+		}
 	default:
 		return sessionRuntimeSnapshot{}, true, fmt.Errorf("%w: model configuration source is invalid", ErrSessionRuntimeSnapshotUnavailable)
 	}
@@ -295,6 +299,25 @@ func (s *Service) modelEndpointFromSessionRuntimeSnapshot(
 			return nil, fmt.Errorf("%w: provider-native fingerprint does not match", ErrSessionRuntimeSnapshotUnavailable)
 		}
 		return nil, nil
+	}
+	if snapshot.ModelConfigurationSource == modelConfigurationSourceHostDefault {
+		resolution, ok := hostDefaultModelResolution(snapshot.Provider, snapshot.AgentTargetID, effectiveModel)
+		if !ok || resolution.Endpoint == nil {
+			return nil, fmt.Errorf("%w: host model endpoint is unavailable", ErrSessionRuntimeAccessRevoked)
+		}
+		if resolution.ModelConfiguration.Fingerprint != snapshot.ModelFingerprint {
+			return nil, fmt.Errorf("%w: host model endpoint fingerprint does not match", ErrSessionRuntimeSnapshotUnavailable)
+		}
+		if effectiveModel = strings.TrimSpace(effectiveModel); effectiveModel == "" {
+			effectiveModel = snapshot.Model
+		}
+		if len(resolution.Models) > 0 {
+			if err := validateModelAgainstPlan(snapshot.Provider, effectiveModel, resolution.Models); err != nil {
+				return nil, err
+			}
+		}
+		resolution.Endpoint.Model = planModelComposerValue(snapshot.Provider, planModelIDFromComposerValue(snapshot.Provider, effectiveModel))
+		return resolution.Endpoint, nil
 	}
 	runtime := s.modelPlanRuntime()
 	if runtime.Plans == nil {

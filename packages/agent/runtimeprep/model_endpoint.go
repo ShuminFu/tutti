@@ -11,30 +11,30 @@ import (
 // session process environment or the session-scoped provider config; it must
 // never be logged, recorded in manifests, or echoed into instructions.
 type ModelEndpointConfig struct {
-	PlanID   string
-	PlanName string
+	PlanID   string `json:"planId,omitempty"`
+	PlanName string `json:"planName,omitempty"`
 	// Protocol is the plan wire protocol family: "openai" or "anthropic".
-	Protocol string
-	BaseURL  string
-	APIKey   string
+	Protocol string `json:"protocol"`
+	BaseURL  string `json:"baseURL"`
+	APIKey   string `json:"apiKey"`
 	// WireAPI is the provider-facing endpoint shape. Codex accepts "chat" or
 	// "responses"; daemon gateways set "responses" while legacy/direct
 	// callers retain "chat" when this field is empty.
-	WireAPI string
+	WireAPI string `json:"wireAPI,omitempty"`
 	// Model is the default model id for the session; providers may still
 	// switch models within the plan on later calls.
-	Model string
+	Model string `json:"model,omitempty"`
 	// Models lists every model the plan authorizes (redaction-safe ids and
 	// display names). Providers that materialize a session-scoped catalog
 	// (OpenCode's provider block) need the full list, not just the default.
-	Models              []ModelEndpointModel
-	PlanUpdatedAtUnixMS int64
+	Models              []ModelEndpointModel `json:"models,omitempty"`
+	PlanUpdatedAtUnixMS int64                `json:"planUpdatedAtUnixMs,omitempty"`
 }
 
 // ModelEndpointModel is one selectable model exposed by the bound plan.
 type ModelEndpointModel struct {
-	ID   string
-	Name string
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
 }
 
 // ModelPlanProviderID names the provider entry injected into a session-scoped

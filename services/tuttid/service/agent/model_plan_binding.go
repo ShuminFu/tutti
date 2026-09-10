@@ -43,6 +43,7 @@ type modelPlanBindingRuntime struct {
 
 const (
 	modelConfigurationSourceModelPlan      = "model-plan"
+	modelConfigurationSourceHostDefault    = "host-default"
 	modelConfigurationSourceProviderNative = "provider-native"
 )
 
@@ -167,6 +168,21 @@ func newModelPlanModelConfiguration(provider string, agentTargetID string, bindi
 	}
 }
 
+func newHostDefaultModelConfiguration(provider string, agentTargetID string, protocol string, defaultModel string) modelConfigurationRuntimeContext {
+	payload := modelConfigurationFingerprintPayload{
+		Provider:      agentprovider.NormalizeOpen(provider),
+		AgentTargetID: strings.TrimSpace(agentTargetID),
+		Source:        modelConfigurationSourceHostDefault,
+		Protocol:      strings.TrimSpace(protocol),
+	}
+	return modelConfigurationRuntimeContext{
+		AgentTargetID: payload.AgentTargetID,
+		Source:        payload.Source,
+		Fingerprint:   fingerprintModelConfiguration(payload),
+		DefaultModel:  strings.TrimSpace(defaultModel),
+	}
+}
+
 func fingerprintModelConfiguration(payload modelConfigurationFingerprintPayload) string {
 	// A struct (rather than a map) makes the serialized field order stable. All
 	// fields are already redaction-safe; notably BaseURL and APIKey are absent.
@@ -232,6 +248,40 @@ func modelEndpointModels(models []modelplanbiz.Model) []runtimeprep.ModelEndpoin
 	return endpointModels
 }
 
+func modelPlanModels(models []runtimeprep.ModelEndpointModel) []modelplanbiz.Model {
+	result := make([]modelplanbiz.Model, 0, len(models))
+	for _, model := range models {
+		if id := strings.TrimSpace(model.ID); id != "" {
+			result = append(result, modelplanbiz.Model{ID: id, Name: strings.TrimSpace(model.Name)})
+		}
+	}
+	return result
+}
+
+func hostDefaultModelResolution(provider string, agentTargetID string, requestedModel string) (modelPlanResolution, bool) {
+	endpoint := runtimeprep.HostModelEndpoint(provider)
+	requiredProtocol, supported := modelPlanProtocolForProvider(provider)
+	if endpoint == nil || !supported || string(requiredProtocol) != endpoint.Protocol {
+		return modelPlanResolution{}, false
+	}
+	models := modelPlanModels(endpoint.Models)
+	requestedModel = planModelIDFromComposerValue(provider, requestedModel)
+	defaultModel := planModelIDFromComposerValue(provider, endpoint.Model)
+	model := requestedModel
+	if model == "" || (len(models) > 0 && !modelplanbiz.ModelsContain(models, model)) {
+		model = defaultModel
+	}
+	if model == "" && len(models) > 0 {
+		model = strings.TrimSpace(models[0].ID)
+	}
+	endpoint.Model = planModelComposerValue(provider, model)
+	return modelPlanResolution{
+		Endpoint:           endpoint,
+		Models:             models,
+		ModelConfiguration: newHostDefaultModelConfiguration(provider, agentTargetID, endpoint.Protocol, defaultModel),
+	}, true
+}
+
 // resolveModelPlanEndpoint resolves the injected endpoint for one session
 // launch plus the plan's model list for validation. It returns nil when the
 // target has no usable plan binding.
@@ -243,28 +293,32 @@ func (s *Service) resolveModelPlanEndpoint(ctx context.Context, workspaceID stri
 // resolveModelPlan returns both the secret-bearing runtime endpoint (when a
 // usable plan is bound) and a redaction-safe model configuration fingerprint
 // for composer reconciliation. Unsupported, missing, disabled, and
-// protocol-mismatched bindings all resolve to provider-native configuration.
+// protocol-mismatched bindings fall through to the host default endpoint when
+// configured, then to provider-native credentials.
 func (s *Service) resolveModelPlan(ctx context.Context, workspaceID string, agentTargetID string, provider string, requestedModel string) modelPlanResolution {
 	provider = agentprovider.NormalizeOpen(provider)
 	agentTargetID = strings.TrimSpace(agentTargetID)
-	providerNative := modelPlanResolution{
+	fallback := modelPlanResolution{
 		ModelConfiguration: newProviderNativeModelConfiguration(provider, agentTargetID),
+	}
+	if hostDefault, ok := hostDefaultModelResolution(provider, agentTargetID, requestedModel); ok {
+		fallback = hostDefault
 	}
 	runtime := s.modelPlanRuntime()
 	if runtime.Bindings == nil || runtime.Plans == nil {
-		return providerNative
+		return fallback
 	}
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" || agentTargetID == "" {
-		return providerNative
+		return fallback
 	}
 	requiredProtocol, supported := modelPlanProtocolForProvider(provider)
 	if !supported {
-		return providerNative
+		return fallback
 	}
 	binding, err := runtime.Bindings.GetAgentModelBinding(ctx, workspaceID, agentTargetID)
 	if err != nil || strings.TrimSpace(binding.ModelPlanID) == "" {
-		return providerNative
+		return fallback
 	}
 	plan, err := runtime.Plans.GetModelPlan(ctx, workspaceID, binding.ModelPlanID)
 	if err != nil {
@@ -274,7 +328,7 @@ func (s *Service) resolveModelPlan(ctx context.Context, workspaceID string, agen
 			"agent_target_id", agentTargetID,
 			"model_plan_id", binding.ModelPlanID,
 		)
-		return providerNative
+		return fallback
 	}
 	if !plan.Enabled {
 		slog.Info("agent model binding plan is disabled; using provider-native credentials",
@@ -283,7 +337,7 @@ func (s *Service) resolveModelPlan(ctx context.Context, workspaceID string, agen
 			"agent_target_id", agentTargetID,
 			"model_plan_id", plan.ID,
 		)
-		return providerNative
+		return fallback
 	}
 	if plan.Protocol != requiredProtocol {
 		slog.Warn("agent model binding plan protocol does not match provider",
@@ -294,7 +348,7 @@ func (s *Service) resolveModelPlan(ctx context.Context, workspaceID string, agen
 			"plan_protocol", string(plan.Protocol),
 			"provider", provider,
 		)
-		return providerNative
+		return fallback
 	}
 	model := resolvePlanSessionModel(plan, binding, planModelIDFromComposerValue(provider, requestedModel))
 	return modelPlanResolution{
@@ -405,10 +459,18 @@ func applyResolvedModelPlanComposerOverlay(options ComposerOptions, resolution m
 		options.ReasoningConfig.Options,
 		nil,
 	)
-	options.RuntimeContext["modelPlan"] = map[string]any{
-		"id":       resolution.ModelConfiguration.ModelPlanID,
-		"name":     endpoint.PlanName,
-		"protocol": endpoint.Protocol,
+	if resolution.ModelConfiguration.Source == modelConfigurationSourceModelPlan {
+		options.RuntimeContext["modelPlan"] = map[string]any{
+			"id":       resolution.ModelConfiguration.ModelPlanID,
+			"name":     endpoint.PlanName,
+			"protocol": endpoint.Protocol,
+		}
+	} else {
+		options.RuntimeContext["modelEndpoint"] = map[string]any{
+			"source":   resolution.ModelConfiguration.Source,
+			"name":     endpoint.PlanName,
+			"protocol": endpoint.Protocol,
+		}
 	}
 	return options
 }
@@ -443,8 +505,10 @@ func (s *Service) resolveCreateSessionModelForPlanOrProvider(ctx context.Context
 		resolution = s.resolveModelPlan(ctx, workspaceID, input.AgentTargetID, provider, requestedModel)
 	}
 	if resolution.Endpoint != nil {
-		if err := validateModelAgainstPlan(provider, requestedModel, resolution.Models); err != nil {
-			return modelPlanResolution{}, err
+		if !(resolution.ModelConfiguration.Source == modelConfigurationSourceHostDefault && len(resolution.Models) == 0) {
+			if err := validateModelAgainstPlan(provider, requestedModel, resolution.Models); err != nil {
+				return modelPlanResolution{}, err
+			}
 		}
 		if strings.TrimSpace(resolution.Endpoint.Model) != "" {
 			resolvedModel := resolution.Endpoint.Model

@@ -170,6 +170,32 @@ func TestSessionRuntimeSnapshotIsVersionedAndRedactionSafe(t *testing.T) {
 	}
 }
 
+func TestHostDefaultRuntimeSnapshotResumesWithCurrentHostCredential(t *testing.T) {
+	setHostModelEndpointContract(t, "codex", "openai")
+	resolution, ok := hostDefaultModelResolution("codex", "local:codex", "gateway-alt")
+	if !ok {
+		t.Fatal("host default did not resolve")
+	}
+	model := "gateway-alt"
+	runtimeContext := runtimeContextWithSessionRuntimeSnapshot(nil, CreateSessionInput{
+		AgentTargetID: "local:codex", HarnessAgentTargetID: "local:codex", Model: &model,
+	}, "codex", resolution)
+	snapshot, exists, err := sessionRuntimeSnapshotFromContext(runtimeContext, "codex")
+	if err != nil || !exists {
+		t.Fatalf("snapshot = %#v, exists=%v, err=%v", snapshot, exists, err)
+	}
+	if snapshot.ModelConfigurationSource != modelConfigurationSourceHostDefault || snapshot.ModelPlanID != "" {
+		t.Fatalf("snapshot = %#v", snapshot)
+	}
+	endpoint, err := (&Service{}).modelEndpointFromSessionRuntimeSnapshot(context.Background(), "workspace", snapshot, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if endpoint == nil || endpoint.APIKey != "loopback" || endpoint.Model != "gateway-alt" {
+		t.Fatalf("resumed endpoint = %#v", endpoint)
+	}
+}
+
 func TestSessionRuntimeSnapshotPreservesOpenProviderIdentity(t *testing.T) {
 	t.Parallel()
 
