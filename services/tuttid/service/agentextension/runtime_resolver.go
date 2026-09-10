@@ -93,7 +93,26 @@ func runtimeAdapterConfig(binding RuntimeBinding, agentTargetID string) agentrun
 		InstallationID:               binding.Installation.ID,
 		ExecutableIdentity:           binding.ExecutableIdentity,
 		Env:                          append([]string(nil), binding.Env...),
+		IsolatedRuntimeEnvNames:      extensionRuntimeIsolationEnvNames(binding.RuntimePrep),
 	}
+}
+
+func extensionRuntimeIsolationEnvNames(prep *runtimeprep.ExtensionRuntimePrep) []string {
+	if prep == nil {
+		return nil
+	}
+	names := make([]string, 0, 2)
+	if prep.Home != nil {
+		if name := strings.TrimSpace(prep.Home.EnvVar); name != "" {
+			names = append(names, name)
+		}
+	}
+	if prep.ModelEndpoint != nil {
+		if name := strings.TrimSpace(prep.ModelEndpoint.APIKeyEnv); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func resolveRuntimeLaunchEnv(declarations map[string]string) []string {

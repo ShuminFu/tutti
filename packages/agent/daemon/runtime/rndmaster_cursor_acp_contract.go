@@ -13,26 +13,29 @@ const (
 )
 
 func (a *standardACPAdapter) prepareRnDMasterACPSession(session Session) (Session, rndmasterRuntimeContract, error) {
-	if a == nil || strings.TrimSpace(a.config.provider) != ProviderCursor {
-		return session, rndmasterRuntimeContract{}, nil
+	if a != nil && strings.TrimSpace(a.config.provider) == ProviderCursor {
+		contract, err := rndmasterContractFromSession(session)
+		if err != nil {
+			return Session{}, rndmasterRuntimeContract{}, err
+		}
+		if provider := strings.TrimSpace(contract.Provider); provider != "" && !strings.EqualFold(provider, ProviderCursor) {
+			return Session{}, rndmasterRuntimeContract{}, fmt.Errorf("RnDMaster runtime contract provider %q does not match Cursor", provider)
+		}
+		session.Env = rndmasterEnvList(session.Env, contract.Env)
+		if cwd := strings.TrimSpace(contract.CWD); cwd != "" {
+			session.CWD = cwd
+		}
+		if model := strings.TrimSpace(contract.Model); model != "" {
+			settings := session.SettingsValue()
+			settings.Model = model
+			session.Settings = &settings
+		}
+		return session, contract, nil
 	}
-	contract, err := rndmasterContractFromSession(session)
-	if err != nil {
-		return Session{}, rndmasterRuntimeContract{}, err
+	if a.appliesExtensionRuntimeContract(session) {
+		return a.mergeExtensionRnDMasterACPSession(session)
 	}
-	if provider := strings.TrimSpace(contract.Provider); provider != "" && !strings.EqualFold(provider, ProviderCursor) {
-		return Session{}, rndmasterRuntimeContract{}, fmt.Errorf("RnDMaster runtime contract provider %q does not match Cursor", provider)
-	}
-	session.Env = rndmasterEnvList(session.Env, contract.Env)
-	if cwd := strings.TrimSpace(contract.CWD); cwd != "" {
-		session.CWD = cwd
-	}
-	if model := strings.TrimSpace(contract.Model); model != "" {
-		settings := session.SettingsValue()
-		settings.Model = model
-		session.Settings = &settings
-	}
-	return session, contract, nil
+	return session, rndmasterRuntimeContract{}, nil
 }
 
 func rndmasterResumeProviderSessionID(session Session) string {
@@ -41,7 +44,7 @@ func rndmasterResumeProviderSessionID(session Session) string {
 
 func rndmasterLegacySessionUnavailable(session Session, reason string, cause error) error {
 	return &AppError{
-		Code: AppErrorLegacySessionUnavailable,
+		Code:    AppErrorLegacySessionUnavailable,
 		Message: "legacy_session_unavailable: Cursor history could not be imported.",
 		DebugMessage: fmt.Sprintf("Cursor ACP session/load unavailable: room_id=%s agent_session_id=%s provider_session_id=%s reason=%s",
 			strings.TrimSpace(session.RoomID), strings.TrimSpace(session.AgentSessionID),

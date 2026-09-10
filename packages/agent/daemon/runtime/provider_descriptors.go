@@ -182,6 +182,10 @@ type StandardACPAdapterConfig struct {
 	InstallationID     string
 	ExecutableIdentity *ExecutableIdentity
 	Env                []string
+	// IsolatedRuntimeEnvNames are runtimePrep home and api-key env names.
+	// The RnDMaster runtime contract may overlay other session env, but it
+	// must not replace these isolation keys.
+	IsolatedRuntimeEnvNames []string
 	// StartupTimeout bounds initialize/session-new calls for setup probes.
 	// Zero keeps the normal ACP timeout.
 	StartupTimeout time.Duration
@@ -235,6 +239,7 @@ func NewStandardACPAdapter(config StandardACPAdapterConfig, transport ProcessTra
 			installationID:               strings.TrimSpace(config.InstallationID),
 			executableIdentity:           cloneExecutableIdentity(config.ExecutableIdentity),
 			startupTimeout:               startupTimeout,
+			isolatedRuntimeEnvNames:      append([]string(nil), config.IsolatedRuntimeEnvNames...),
 			permissionModeID:             func(input string) string { return permissionModes[strings.ToLower(strings.TrimSpace(input))] },
 			planModeRuntimeID:            strings.TrimSpace(config.PlanModeRuntimeID),
 			planModeDisabledRuntimeID:    strings.TrimSpace(config.PlanModeDisabledRuntimeID),
@@ -252,6 +257,9 @@ func NewStandardACPAdapter(config StandardACPAdapterConfig, transport ProcessTra
 	}
 	if decisions := automaticPermissionDecisionFromMap(config.AutomaticPermissionDecisions); decisions != nil {
 		adapter.config.automaticPermissionDecision = decisions
+	}
+	if strings.HasPrefix(strings.TrimSpace(config.AgentTargetID), "extension:") {
+		adapter.config.initialPromptContext = extensionACPInitialPromptContext
 	}
 	return adapter, nil
 }

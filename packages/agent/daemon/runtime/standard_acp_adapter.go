@@ -109,6 +109,7 @@ type standardACPConfig struct {
 	installationID                 string
 	executableIdentity             *ExecutableIdentity
 	startupTimeout                 time.Duration
+	isolatedRuntimeEnvNames        []string
 }
 
 type standardACPMessageDiagnostics struct {

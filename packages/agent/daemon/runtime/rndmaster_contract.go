@@ -44,6 +44,38 @@ func rndmasterEnvList(base []string, extra map[string]string) []string {
 	return rndmasterEnvListForOS(base, extra, runtime.GOOS)
 }
 
+func rndmasterEnvListExcept(base []string, extra map[string]string, reserved []string) []string {
+	return rndmasterEnvListExceptForOS(base, extra, reserved, runtime.GOOS)
+}
+
+func rndmasterEnvListExceptForOS(base []string, extra map[string]string, reserved []string, goos string) []string {
+	if len(extra) == 0 {
+		return rndmasterEnvListForOS(base, extra, goos)
+	}
+	keyFor := func(name string) string {
+		if goos == "windows" {
+			return strings.ToUpper(name)
+		}
+		return name
+	}
+	skip := map[string]struct{}{}
+	for _, name := range reserved {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		skip[keyFor(name)] = struct{}{}
+	}
+	filtered := make(map[string]string, len(extra))
+	for name, value := range extra {
+		if _, reservedName := skip[keyFor(name)]; reservedName {
+			continue
+		}
+		filtered[name] = value
+	}
+	return rndmasterEnvListForOS(base, filtered, goos)
+}
+
 func rndmasterEnvListForOS(base []string, extra map[string]string, goos string) []string {
 	if len(extra) == 0 && goos != "windows" {
 		return append([]string(nil), base...)

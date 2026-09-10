@@ -96,3 +96,30 @@ func TestRnDMasterEnvListDeduplicatesWindowsNamesCaseInsensitively(t *testing.T)
 		}
 	}
 }
+
+func TestRnDMasterEnvListExceptKeepsReservedHomeAndAPIKey(t *testing.T) {
+	got := rndmasterEnvListExceptForOS(
+		[]string{"TEST_AGENT_HOME=/runtime/home", "OPENAI_API_KEY=runtime-key", "KEEP=session"},
+		map[string]string{
+			"TEST_AGENT_HOME": "contract-must-not-win",
+			"OPENAI_API_KEY":  "contract-key-must-not-win",
+			"TASK_ISSUE_ID":   "issue-42",
+		},
+		[]string{"TEST_AGENT_HOME", "OPENAI_API_KEY"},
+		"linux",
+	)
+	want := []string{
+		"TEST_AGENT_HOME=/runtime/home",
+		"OPENAI_API_KEY=runtime-key",
+		"KEEP=session",
+		"TASK_ISSUE_ID=issue-42",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("env = %#v, want %#v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("env = %#v, want %#v", got, want)
+		}
+	}
+}
