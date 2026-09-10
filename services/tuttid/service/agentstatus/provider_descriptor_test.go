@@ -143,7 +143,8 @@ func TestClaudeCodeStatusSpecComesFromProviderDescriptor(t *testing.T) {
 	if spec.Install.Kind != InstallerKindOfficialScript ||
 		spec.Install.ScriptURL != "https://claude.ai/install.sh" ||
 		spec.Install.ScriptShell != "bash" ||
-		spec.Install.WindowsFallback != providerregistry.InstallerWindowsFallbackManagedRuntime ||
+		spec.Install.WindowsFallback != providerregistry.InstallerWindowsFallbackPowerShell ||
+		spec.Install.WindowsPowerShellCommand != `& ([scriptblock]::Create((irm https://claude.ai/install.ps1))) stable` ||
 		spec.Install.ManagedNPM == nil ||
 		spec.Install.ManagedNPM.PackageName != "@anthropic-ai/claude-code" ||
 		spec.Install.ManagedNPM.BinaryName != "claude" ||
