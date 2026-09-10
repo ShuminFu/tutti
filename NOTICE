@@ -1,3 +1,14 @@
+DinTalDock
+Copyright 2026 DinTal
+
+This product is a modified version of Tutti (https://github.com/tutti-os/tutti),
+forked at upstream commit 87d456238fc65e0597e2e383cb2cffa5f306b0dd and licensed
+under the Apache License, Version 2.0. Changes were made to the original files;
+see this repository's revision history for the complete list. The original
+Tutti NOTICE follows.
+
+----------------------------------------------------------------------
+
 Tutti
 Copyright 2025-2026 The Tutti Authors
 
