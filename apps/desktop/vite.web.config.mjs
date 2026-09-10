@@ -56,6 +56,15 @@ function envFlagEnabled(value) {
 const perfMonitorEnabled = envFlagEnabled(
   process.env.TUTTI_ENABLE_PERF_MONITOR
 );
+const rndmasterEmbedded = envFlagEnabled(
+  process.env.VITE_RNDMASTER_EMBEDDED
+);
+
+if (rndmasterEmbedded) {
+  aliases["./tuttiWorkbenchProductProfile.ts"] = resolve(
+    "src/renderer/src/features/workspace-workbench/services/internal/embeddedTuttiWorkbenchProductProfile.ts"
+  );
+}
 
 export default defineConfig({
   root: rendererRoot,

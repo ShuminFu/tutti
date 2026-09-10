@@ -50,6 +50,7 @@ import type { IAgentQuickPromptService as AgentQuickPromptService } from "@rende
 import type { DesktopAgentGUIWorkbenchBodyProps } from "@renderer/features/workspace-agent/ui/desktopAgentGUIWorkbenchModel.ts";
 import { DesktopAgentGUIWorkbenchBody } from "@renderer/features/workspace-agent/ui/DesktopAgentGUIWorkbenchBody.tsx";
 import { runDesktopAgentGUILinkAction } from "@renderer/features/workspace-agent/services/desktopAgentGUILinkActions.ts";
+import { requestHostCapability } from "@renderer/platform/desktop/web/webHostBridgeClient.ts";
 import {
   workspaceWorkbenchDesktopI18nKeys,
   type WorkspaceWorkbenchDesktopI18nRuntime
@@ -136,6 +137,16 @@ export function createWorkspaceAgentGuiContribution(input: {
   const handleLinkAction: NonNullable<
     DesktopAgentGUIWorkbenchBodyProps["onLinkAction"]
   > = (action) => {
+    if (
+      action.type === "open-workspace-file" &&
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("tuttiBootstrap")
+    ) {
+      void requestHostCapability("openWorkspaceFile", [
+        { path: action.path, workspaceRoot: action.workspaceRoot }
+      ]).catch(() => undefined);
+      return;
+    }
     void runDesktopAgentGUILinkAction(action, {
       getAgentSession: ({ agentSessionId, workspaceId }) =>
         input.workspaceAgentActivityService.getSession(
