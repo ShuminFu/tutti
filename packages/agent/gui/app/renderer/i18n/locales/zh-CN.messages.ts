@@ -16,6 +16,7 @@ export const zhCNMessages = {
   agentSessionTitleTooLongWithoutLimit: "会话标题过长。",
   agentPermissionModeAppliesNextTurn: "权限模式将从你的下一条消息开始生效。",
   agentFastModeFallbackToStandard: "当前模型不支持快速模式，已使用标准模式。",
+  agentModelFallback: "原模型已下架，已切换到 {{model}}。",
   agentThisSessionMentionLabel: "本 session",
   terminalLaunchFailed: "终端启动失败：{{message}}",
   fallbackTerminalFailed: "兜底终端启动也失败了：{{message}}",

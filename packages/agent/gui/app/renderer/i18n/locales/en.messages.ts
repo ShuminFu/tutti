@@ -21,6 +21,8 @@ export const enMessages = {
     "Permission mode will apply starting with your next message.",
   agentFastModeFallbackToStandard:
     "Fast mode is not supported by the current model. Standard mode is now in use.",
+  agentModelFallback:
+    "The selected model is no longer available. Switched to {{model}}.",
   agentThisSessionMentionLabel: "this session",
   terminalLaunchFailed: "Terminal launch failed: {{message}}",
   fallbackTerminalFailed: "Fallback terminal launch also failed: {{message}}",

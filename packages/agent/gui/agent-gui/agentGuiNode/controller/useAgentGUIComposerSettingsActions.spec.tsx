@@ -51,6 +51,7 @@ describe("useAgentGUIComposerSettingsActions", () => {
       }
     );
     const setDraftSettingsBySessionId = vi.fn();
+    const onShowMessage = vi.fn();
     renderHook(() =>
       useAgentGUIComposerSettingsActions({
         activation: {
@@ -71,7 +72,7 @@ describe("useAgentGUIComposerSettingsActions", () => {
         onComposerDefaultsAuthorityReloadedRef,
         onDataChangeRef: { current: onDataChange },
         onRememberComposerDefaultsRef: { current: undefined },
-        onShowMessageRef: { current: vi.fn() },
+        onShowMessageRef: { current: onShowMessage },
         reloadComposerOptionsForTarget: vi.fn(async () => {}),
         selectedComposerTargetDataRef: { current: target },
         sessionEngine,
@@ -114,12 +115,16 @@ describe("useAgentGUIComposerSettingsActions", () => {
       );
     });
 
-    expect(draftSettingsBySessionIdRef.current[draftKey]?.model).toBeNull();
+    expect(draftSettingsBySessionIdRef.current[draftKey]?.model).toBe("glm-5");
     expect(setDraftSettingsBySessionId).toHaveBeenCalledOnce();
     expect(
       persistedData.composerOverridesByAgentTargetId?.["local:codex"]?.model
-    ).toBeNull();
+    ).toBe("glm-5");
     expect(onDataChange).toHaveBeenCalledOnce();
+    expect(onShowMessage).toHaveBeenCalledWith(
+      "The selected model is no longer available. Switched to glm-5.",
+      "warning"
+    );
   });
 
   it("preserves all explicit home defaults across stale options, transient empty selects, and unrelated patches", () => {

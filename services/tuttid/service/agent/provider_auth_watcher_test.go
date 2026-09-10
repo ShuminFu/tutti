@@ -164,6 +164,7 @@ func TestDefaultProviderAuthWatchEntriesCoverCredentialBackedCatalogs(t *testing
 	t.Setenv("OPENCODE_CONFIG", configPath)
 	t.Setenv("OPENCODE_CONFIG_DIR", configDir)
 	t.Setenv("XDG_DATA_HOME", dataDir)
+	t.Setenv("TUTTI_HOST_MODEL_ENDPOINTS_FILE", "")
 
 	entries := DefaultProviderAuthWatchEntries()
 	byProvider := make(map[string][]string, len(entries))
@@ -202,6 +203,35 @@ func TestDefaultProviderAuthWatchEntriesCoverCredentialBackedCatalogs(t *testing
 	tuttiAgentPaths := byProvider[agentprovider.TuttiAgent]
 	if !containsString(tuttiAgentPaths, filepath.Join(home, ".tutti-agent", "auth.json")) {
 		t.Fatalf("tutti-agent paths = %v, want auth file", tuttiAgentPaths)
+	}
+}
+
+func TestDefaultProviderAuthWatchEntriesCoverHostModelCatalogs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "host-model-endpoints.json")
+	t.Setenv("TUTTI_HOST_MODEL_ENDPOINTS_FILE", path)
+	want := map[string]bool{}
+	for _, descriptor := range providerregistry.Migrated() {
+		if descriptor.ComposerProfile.ModelSelection {
+			want[descriptor.Identity.ID] = true
+		}
+	}
+	got := map[string]bool{}
+	for _, entry := range DefaultProviderAuthWatchEntries() {
+		if len(entry.Paths) != 1 || entry.Paths[0] != path {
+			continue
+		}
+		if entry.ContentFingerprint == nil {
+			t.Fatalf("host catalog entry for %q must use content fingerprinting", entry.Provider)
+		}
+		got[entry.Provider] = true
+	}
+	for provider := range want {
+		if !got[provider] {
+			t.Errorf("missing host model catalog watcher for %q", provider)
+		}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("host catalog providers = %v, want %v", got, want)
 	}
 }
 

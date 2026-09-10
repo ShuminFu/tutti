@@ -139,6 +139,7 @@ export function AgentModelReasoningDropdown({
   }, [modelHistoryTargetId]);
   const handleMenuOpenChange = (open: boolean): void => {
     if (open) {
+      refreshEmbeddedModelCatalog();
       // Pick up writes from other windows and clear the previous filter.
       reloadModelHistory();
       setModelSearchQuery("");
@@ -530,6 +531,22 @@ export function AgentModelReasoningDropdown({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+function refreshEmbeddedModelCatalog(): void {
+  if (typeof window === "undefined" || typeof fetch !== "function") return;
+  const bootstrapUrl = new URLSearchParams(window.location.search)
+    .get("tuttiBootstrapUrl")
+    ?.trim();
+  if (!bootstrapUrl) return;
+  try {
+    const bootstrapEndpoint = new URL(bootstrapUrl, window.location.href);
+    if (bootstrapEndpoint.origin !== window.location.origin) return;
+    const endpoint = new URL("/tutti/model-catalog/refresh", bootstrapEndpoint);
+    void fetch(endpoint, { method: "POST" }).catch(() => undefined);
+  } catch {
+    // Non-embedded/invalid bootstrap URLs keep the current catalog untouched.
+  }
 }
 
 function readComposerLocalStorage(key: string): string | null {

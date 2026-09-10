@@ -135,6 +135,7 @@ export function useAgentGUIComposerSettingsActions(
     createAgentGUIComposerDefaultsLedger()
   );
   const pendingFastFallbackCommandRef = useRef<string | null>(null);
+  const lastModelFallbackNoticeRef = useRef("");
   useEffect(() => {
     return sessionEngine.subscribe((state) => {
       const commandId = pendingFastFallbackCommandRef.current;
@@ -210,9 +211,40 @@ export function useAgentGUIComposerSettingsActions(
   onComposerDefaultsAuthorityReloadedRef.current = {
     prepareRead: prepareComposerDefaultsAuthorityRead,
     reconcileHomeDefaults: (target, options) => {
+      if (!isMountedRef.current) return;
+      const fallbackModel = normalizeOptionalText(
+        effectiveComposerSettingsFromOptions(options)?.model
+      );
+      const notifyFallback = (previousModel: string, nextModel: string) => {
+        const noticeKey = `${previousModel}\u0000${nextModel}`;
+        if (lastModelFallbackNoticeRef.current === noticeKey) return;
+        lastModelFallbackNoticeRef.current = noticeKey;
+        onShowMessageRef.current?.(
+          translate("messages.agentModelFallback", { model: nextModel }),
+          "warning"
+        );
+      };
+      if (activeConversationIdRef.current !== null) {
+        const currentModel = normalizeOptionalText(
+          activeCanonicalComposerSettings.model
+        );
+        if (
+          currentModel &&
+          fallbackModel &&
+          fallbackModel !== currentModel &&
+          normalizeOptionalText(
+            enforceComposerModelBindingForHomeDefaults(
+              activeCanonicalComposerSettings,
+              options
+            ).model
+          ) === null
+        ) {
+          updateComposerSettingsRef.current({ model: fallbackModel });
+          notifyFallback(currentModel, fallbackModel);
+        }
+        return;
+      }
       if (
-        !isMountedRef.current ||
-        activeConversationIdRef.current !== null ||
         !nodeDataMatchesComposerTarget(
           selectedComposerTargetDataRef.current.data,
           target
@@ -228,19 +260,26 @@ export function useAgentGUIComposerSettingsActions(
       if (!currentDraft) {
         return;
       }
+      const enforcedDraft = enforceComposerModelBindingForHomeDefaults(
+        sanitizeComposerSettingsForTarget({
+          settings: currentDraft,
+          target,
+          options
+        }),
+        options
+      );
+      const previousModel = normalizeOptionalText(currentDraft.model);
+      const fellBack =
+        previousModel !== null &&
+        fallbackModel !== null &&
+        fallbackModel !== previousModel &&
+        normalizeOptionalText(enforcedDraft.model) === null;
       const reconciledDraft =
         preserveAcknowledgedComposerDefaultsForReconciliation(
           composerDefaultsLedgerRef.current,
           draftKey,
           currentDraft,
-          enforceComposerModelBindingForHomeDefaults(
-            sanitizeComposerSettingsForTarget({
-              settings: currentDraft,
-              target,
-              options
-            }),
-            options
-          )
+          fellBack ? { ...enforcedDraft, model: fallbackModel } : enforcedDraft
         );
       if (sameComposerSettings(currentDraft, reconciledDraft)) {
         return;
@@ -263,6 +302,9 @@ export function useAgentGUIComposerSettingsActions(
           reconciledDraft
         )
       );
+      if (fellBack && previousModel) {
+        notifyFallback(previousModel, fallbackModel);
+      }
     },
     reloaded: retireAcknowledgedDefaultsForRead
   };

@@ -1,7 +1,15 @@
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from "vitest";
 import {
   AgentModelReasoningDropdown,
   AgentPermissionModeDropdown
@@ -23,9 +31,42 @@ beforeAll(() => {
 
 beforeEach(() => {
   globalThis.localStorage.clear();
+  window.history.replaceState({}, "", "/");
 });
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe("AgentModelReasoningDropdown", () => {
+  it("refreshes the embedded host catalog when the menu opens", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?tuttiBootstrapUrl=%2Ftutti%2Fbootstrap"
+    );
+    const fetchMock = vi.fn((..._args: Parameters<typeof fetch>) =>
+      Promise.resolve(new Response(null))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <AgentModelReasoningDropdown
+        composerSettings={composerModelSettings()}
+        labels={modelSettingsLabels}
+        onSettingsChange={vi.fn()}
+      />
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Model / Reasoning" }),
+      { button: 0, ctrlKey: false, pointerType: "mouse" }
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      `${window.location.origin}/tutti/model-catalog/refresh`
+    );
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual({ method: "POST" });
+  });
+
   it("favorites a model without selecting the parent menu item", async () => {
     const onSettingsChange = vi.fn();
     render(

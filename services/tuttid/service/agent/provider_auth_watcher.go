@@ -48,10 +48,18 @@ func DefaultProviderAuthWatchEntries() []ProviderAuthWatchEntry {
 	if err != nil {
 		home = ""
 	}
-	entries := make([]ProviderAuthWatchEntry, 0, len(providerregistry.Migrated()))
+	hostModelEndpointsPath := strings.TrimSpace(os.Getenv("TUTTI_HOST_MODEL_ENDPOINTS_FILE"))
+	entries := make([]ProviderAuthWatchEntry, 0, len(providerregistry.Migrated())*2)
 	for _, descriptor := range providerregistry.Migrated() {
 		if entry, ok := providerAuthWatchEntryFromDescriptor(descriptor, home); ok {
 			entries = append(entries, entry)
+		}
+		if hostModelEndpointsPath != "" && descriptor.ComposerProfile.ModelSelection {
+			entries = append(entries, ProviderAuthWatchEntry{
+				Provider:           descriptor.Identity.ID,
+				Paths:              []string{filepath.Clean(hostModelEndpointsPath)},
+				ContentFingerprint: hashProviderAuthFileContent,
+			})
 		}
 	}
 	return entries
