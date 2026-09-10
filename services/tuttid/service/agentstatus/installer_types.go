@@ -32,6 +32,7 @@ type InstallerSpec struct {
 	CodexCLI                 *CodexCLILatestInstallerSpec
 	ManagedNPM               *ManagedNPMPackageInstallerSpec
 	FailureReasonMarkers     map[string][]string
+	HomebrewFormula          string
 }
 
 type ExternalAgentRegistryNPMInstallerSpec struct {

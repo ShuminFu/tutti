@@ -145,17 +145,18 @@ type RunActionResult struct {
 }
 
 type ProviderStatus struct {
-	Provider     string
-	Availability Availability
-	CLI          CLIStatus
-	Adapter      AdapterStatus
-	Auth         AuthInfo
-	Update       UpdateStatus
-	Actions      []Action
-	Network      *NetworkStatus
-	Checks       []ProviderCheck
-	LastError    *ProviderLastError
-	ActiveAction *ActiveAction
+	Provider      string
+	Availability  Availability
+	CLI           CLIStatus
+	Adapter       AdapterStatus
+	Auth          AuthInfo
+	Update        UpdateStatus
+	Actions       []Action
+	Network       *NetworkStatus
+	Checks        []ProviderCheck
+	LastError     *ProviderLastError
+	ActiveAction  *ActiveAction
+	LastOperation *RunActionResult
 }
 
 type UpdateStatus struct {
@@ -275,7 +276,8 @@ type Service struct {
 	AnalyticsReporter reporterservice.Reporter
 	// RunOutcomes lets a runtime auth failure override a stale "logged in" marker
 	// so the dock/wizard surface that login dropped. Shared pointer across copies.
-	RunOutcomes *RunOutcomeStore
+	RunOutcomes    *RunOutcomeStore
+	LastOperations *TerminalOperationStore
 	// StatusCache is shared by the daemon API and agent session service so local
 	// readiness probes run once per provider instead of once per caller/window.
 	StatusCache                 *ProviderStatusCache
@@ -328,6 +330,7 @@ func NewService(dependencies ServiceDependencies) Service {
 		ClaudeCodeRuntimeDir:       dependencies.ClaudeCodeRuntimeDir,
 		UserCommandBinDir:          dependencies.UserCommandBinDir,
 		RunOutcomes:                NewRunOutcomeStore(),
+		LastOperations:             NewTerminalOperationStore(),
 		StatusCache:                NewProviderStatusCache(),
 		CLIVersionCache:            NewCLIVersionCache(),
 		AdapterProbeCache:          NewAdapterProbeCache(),
@@ -620,18 +623,27 @@ func (s Service) runInstallAction(ctx context.Context, spec ProviderSpec, result
 	return value.(RunActionResult), err
 }
 
-func (s Service) runInstallActionOnce(ctx context.Context, spec ProviderSpec, result RunActionResult) (RunActionResult, error) {
+func (s Service) runInstallActionOnce(ctx context.Context, spec ProviderSpec, result RunActionResult) (final RunActionResult, err error) {
+	// Tag this run's context with a unique token so an overlapping update action
+	// cannot overwrite or clear the install's active action after ownership moves.
+	token := nextActiveActionToken()
+	installCtx := withActiveActionToken(baseContext(ctx), token)
+	if s.LastOperations != nil {
+		s.LastOperations.Begin(spec.Provider, token)
+	}
+	defer func() {
+		if s.LastOperations != nil {
+			s.LastOperations.Complete(spec.Provider, token, final)
+		}
+		clearActiveAction(installCtx, spec.Provider)
+	}()
 	if result, ok := unsupportedProviderRunActionResult(spec, result); ok {
 		return result, nil
 	}
-	// Tag this run's context with a unique token so an overlapping update action
-	// cannot overwrite or clear the install's active action after ownership moves.
-	installCtx := withActiveActionToken(baseContext(ctx), nextActiveActionToken())
 	claimActiveAction(installCtx, spec.Provider, ActiveAction{
 		ID:     ActionInstall,
 		Status: "running",
 	})
-	defer clearActiveAction(installCtx, spec.Provider)
 	runtimeResolution := s.resolveProviderRuntime(ctx, spec)
 	if isCodexStatusSpec(spec) && codexRuntimeSelectionNeedsUserInput(runtimeResolution) {
 		result.Status = RunActionFailed

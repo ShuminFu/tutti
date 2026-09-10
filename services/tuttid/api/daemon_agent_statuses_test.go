@@ -128,6 +128,10 @@ func TestDaemonAPIRoutesAgentProviderStatuses(t *testing.T) {
 				return agentstatusservice.Snapshot{
 					CapturedAt: capturedAt,
 					Providers: []agentstatusservice.ProviderStatus{{
+						LastOperation: &agentstatusservice.RunActionResult{
+							Provider: "claude-code", ActionID: agentstatusservice.ActionInstall,
+							Status: agentstatusservice.RunActionFailed, ReasonCode: "install_command_failed",
+						},
 						ActiveAction: &agentstatusservice.ActiveAction{
 							ID:       agentstatusservice.ActionInstall,
 							Status:   "running",
@@ -178,6 +182,10 @@ func TestDaemonAPIRoutesAgentProviderStatuses(t *testing.T) {
 	}
 	if response.Providers[0].Provider != "claude-code" {
 		t.Fatalf("provider = %q, want claude-code", response.Providers[0].Provider)
+	}
+	lastOperation := response.Providers[0].LastOperation
+	if lastOperation == nil || lastOperation.Provider != "claude-code" || lastOperation.Status != tuttigenerated.AgentProviderActionRunStatusFailed {
+		t.Fatalf("lastOperation = %#v, want failed claude install", lastOperation)
 	}
 	activeAction := response.Providers[0].ActiveAction
 	if activeAction == nil {

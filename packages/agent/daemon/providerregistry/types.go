@@ -244,6 +244,7 @@ type InstallerDescriptor struct {
 	WindowsPowerShellCommand string
 	ShellCommand             string
 	FailureReasonMarkers     map[string][]string
+	HomebrewFormula          string
 }
 
 func (d ProviderDescriptor) ManagedNPMDescriptor() (managednpm.Descriptor, bool) {

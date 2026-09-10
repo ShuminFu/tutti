@@ -2,6 +2,7 @@ package agentstatus
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
@@ -241,13 +242,11 @@ func installerSpecFromProviderDescriptor(descriptor providerregistry.InstallerDe
 			},
 		}, nil
 	case providerregistry.InstallerKindOfficialScript:
-		var windowsFallbackNPM *ManagedNPMPackageInstallerSpec
-		if descriptor.WindowsFallback == providerregistry.InstallerWindowsFallbackManagedNPM {
-			windowsFallbackNPM = &ManagedNPMPackageInstallerSpec{
-				PackageName:     descriptor.PackageName,
-				PackageVersion:  descriptor.RecommendedVersion,
-				BinaryName:      descriptor.BinaryName,
-				IncludeOptional: descriptor.IncludeOptional,
+		var managedNPM *ManagedNPMPackageInstallerSpec
+		if strings.TrimSpace(descriptor.PackageName) != "" {
+			managedNPM = &ManagedNPMPackageInstallerSpec{
+				PackageName: descriptor.PackageName, PackageVersion: descriptor.RecommendedVersion,
+				BinaryName: descriptor.BinaryName, IncludeOptional: descriptor.IncludeOptional,
 			}
 		}
 		return InstallerSpec{
@@ -258,7 +257,8 @@ func installerSpecFromProviderDescriptor(descriptor providerregistry.InstallerDe
 			ScriptShell:              descriptor.ScriptShell,
 			WindowsFallback:          descriptor.WindowsFallback,
 			WindowsPowerShellCommand: descriptor.WindowsPowerShellCommand,
-			ManagedNPM:               windowsFallbackNPM,
+			HomebrewFormula:          descriptor.HomebrewFormula,
+			ManagedNPM:               managedNPM,
 		}, nil
 	case providerregistry.InstallerKindManagedNPM:
 		return InstallerSpec{

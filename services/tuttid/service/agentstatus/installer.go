@@ -7,8 +7,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"runtime"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"time"
@@ -320,6 +321,25 @@ func (s Service) executeInstaller(
 		return runResult(result, err)
 	case InstallerKindOfficialScript:
 		result, err := s.runOfficialScriptInstaller(installCtx, provider, spec)
+		if installCtx.Err() == nil && goruntime.GOOS != "windows" && strings.TrimSpace(spec.HomebrewFormula) != "" && spec.ManagedNPM != nil && (err != nil || result.ExitCode != 0) {
+			npmResult, npmErr := s.runManagedNPMPackageInstaller(installCtx, provider, *spec.ManagedNPM, "")
+			result = combineInstallCommandResults(result, npmResult)
+			err = npmErr
+		}
+		if installCtx.Err() == nil && goruntime.GOOS != "windows" && strings.TrimSpace(spec.HomebrewFormula) != "" && (err != nil || result.ExitCode != 0) {
+			lookPath := s.LookPath
+			if lookPath == nil {
+				lookPath = exec.LookPath
+			}
+			if brewPath, lookupErr := lookPath("brew"); lookupErr == nil && strings.TrimSpace(brewPath) != "" {
+				brewResult, brewErr := s.installCommand(installCtx, InstallCommandInput{
+					Command: brewPath, Args: []string{"install", spec.HomebrewFormula},
+					Env: s.commandResolver().Env(nil), OnStdout: activeActionStdoutAppender(ctx, provider),
+				})
+				result = combineInstallCommandResults(result, brewResult)
+				err = brewErr
+			}
+		}
 		return runResult(result, err)
 	case InstallerKindGitHubReleaseBinary:
 		installDir := ""
@@ -364,6 +384,14 @@ func (s Service) executeInstaller(
 	}
 }
 
+func combineInstallCommandResults(first, second InstallCommandResult) InstallCommandResult {
+	return InstallCommandResult{
+		ExitCode: second.ExitCode,
+		Stdout:   strings.TrimSpace(strings.Join([]string{first.Stdout, second.Stdout}, "\n")),
+		Stderr:   strings.TrimSpace(strings.Join([]string{first.Stderr, second.Stderr}, "\n")),
+	}
+}
+
 func (s Service) shellCommandInstallerEnv(ctx context.Context, spec InstallerSpec) []string {
 	resolver := s.commandResolver()
 	if !shellCommandUsesNPM(spec.ShellCommand) {
@@ -388,7 +416,7 @@ func shellCommandUsesNPM(command string) bool {
 }
 
 func installerLockCommand(spec InstallerSpec) string {
-	if runtime.GOOS == "windows" && spec.Kind == InstallerKindOfficialScript && spec.WindowsFallback == providerregistry.InstallerWindowsFallbackManagedNPM && spec.ManagedNPM != nil {
+	if goruntime.GOOS == "windows" && spec.Kind == InstallerKindOfficialScript && spec.WindowsFallback == providerregistry.InstallerWindowsFallbackManagedNPM && spec.ManagedNPM != nil {
 		return installerLockCommand(InstallerSpec{Kind: InstallerKindManagedNPMPackage, ManagedNPM: spec.ManagedNPM})
 	}
 	if spec.Kind == InstallerKindShellCommand {
@@ -412,7 +440,7 @@ func installerLockCommand(spec InstallerSpec) string {
 }
 
 func (s Service) runOfficialScriptInstaller(ctx context.Context, provider string, spec InstallerSpec) (InstallCommandResult, error) {
-	if runtime.GOOS == "windows" {
+	if goruntime.GOOS == "windows" {
 		switch spec.WindowsFallback {
 		case providerregistry.InstallerWindowsFallbackPowerShell:
 			command := strings.TrimSpace(spec.WindowsPowerShellCommand)
@@ -533,14 +561,14 @@ func (s Service) runReleaseBinaryInstaller(
 	if err := ensureWritableInstallDir(installDir); err != nil {
 		return InstallCommandResult{ExitCode: 1, Stderr: err.Error()}, nil
 	}
-	asset, ok := spec.releaseAsset(runtime.GOOS, runtime.GOARCH)
+	asset, ok := spec.releaseAsset(goruntime.GOOS, goruntime.GOARCH)
 	if !ok {
 		return InstallCommandResult{
 			ExitCode: 1,
-			Stderr:   fmt.Sprintf("release binary installer asset is unavailable for %s", releaseBinaryPlatformKey(runtime.GOOS, runtime.GOARCH)),
+			Stderr:   fmt.Sprintf("release binary installer asset is unavailable for %s", releaseBinaryPlatformKey(goruntime.GOOS, goruntime.GOARCH)),
 		}, nil
 	}
-	platformKey := releaseBinaryPlatformKey(runtime.GOOS, runtime.GOARCH)
+	platformKey := releaseBinaryPlatformKey(goruntime.GOOS, goruntime.GOARCH)
 	slog.Info(
 		"agent provider release binary install asset selected",
 		"binary", spec.ReleaseBinary.BinaryName,
@@ -699,7 +727,7 @@ func purgeNPMInstallTree(prefixDir string) {
 
 func (s Service) selectInstallDir() (string, error) {
 	resolver := s.commandResolver()
-	if runtime.GOOS == "windows" {
+	if goruntime.GOOS == "windows" {
 		home, err := s.homeDir()
 		if err != nil || strings.TrimSpace(home) == "" {
 			if err == nil {

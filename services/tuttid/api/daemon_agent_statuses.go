@@ -297,6 +297,14 @@ func generatedAgentProviderActionRun(result agentstatusservice.RunActionResult) 
 	}
 }
 
+func generatedAgentProviderActionRunPointer(result *agentstatusservice.RunActionResult) *tuttigenerated.AgentProviderActionRunResponse {
+	if result == nil {
+		return nil
+	}
+	generated := generatedAgentProviderActionRun(*result)
+	return &generated
+}
+
 func generatedAgentProviderProbe(result agentstatusservice.ProbeResult) tuttigenerated.AgentProviderProbeResponse {
 	return tuttigenerated.AgentProviderProbeResponse{
 		BinaryPath: stringPointerIfNotBlank(result.BinaryPath),
@@ -330,15 +338,16 @@ func generatedAgentProviderStatuses(statuses []agentstatusservice.ProviderStatus
 
 func generatedAgentProviderStatus(status agentstatusservice.ProviderStatus) tuttigenerated.AgentProviderStatus {
 	return tuttigenerated.AgentProviderStatus{
-		ActiveAction: generatedAgentProviderActiveAction(status.Provider, status.ActiveAction),
-		Actions:      generatedAgentProviderActions(status.Actions),
-		Adapter:      generatedAgentProviderAdapterStatus(status.Adapter),
-		Auth:         generatedAgentProviderAuthInfo(status.Auth),
-		Availability: generatedAgentProviderAvailability(status.Availability),
-		Cli:          generatedAgentProviderCLIStatus(status.CLI),
-		Network:      generatedAgentProviderNetworkStatus(status.Network),
-		Provider:     tuttigenerated.WorkspaceAgentProvider(status.Provider),
-		Update:       generatedAgentProviderUpdateStatus(status.Update),
+		ActiveAction:  generatedAgentProviderActiveAction(status.Provider, status.ActiveAction),
+		LastOperation: generatedAgentProviderActionRunPointer(status.LastOperation),
+		Actions:       generatedAgentProviderActions(status.Actions),
+		Adapter:       generatedAgentProviderAdapterStatus(status.Adapter),
+		Auth:          generatedAgentProviderAuthInfo(status.Auth),
+		Availability:  generatedAgentProviderAvailability(status.Availability),
+		Cli:           generatedAgentProviderCLIStatus(status.CLI),
+		Network:       generatedAgentProviderNetworkStatus(status.Network),
+		Provider:      tuttigenerated.WorkspaceAgentProvider(status.Provider),
+		Update:        generatedAgentProviderUpdateStatus(status.Update),
 	}
 }
 

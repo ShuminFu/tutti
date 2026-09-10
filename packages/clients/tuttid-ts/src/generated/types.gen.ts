@@ -2198,6 +2198,7 @@ export type AgentProviderStatus = {
   actions: Array<AgentProviderAction>;
   network?: AgentProviderNetworkStatus | null;
   activeAction?: AgentProviderActiveAction | null;
+  lastOperation?: AgentProviderActionRunResponse | null;
 };
 
 export type AgentProviderNetworkStatus = {

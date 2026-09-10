@@ -5240,15 +5240,16 @@ type AgentProviderSkillOptionSourceKind string
 
 // AgentProviderStatus defines model for AgentProviderStatus.
 type AgentProviderStatus struct {
-	Actions      []AgentProviderAction       `json:"actions"`
-	ActiveAction *AgentProviderActiveAction  `json:"activeAction,omitempty"`
-	Adapter      AgentProviderAdapterStatus  `json:"adapter"`
-	Auth         AgentProviderAuthInfo       `json:"auth"`
-	Availability AgentProviderAvailability   `json:"availability"`
-	Cli          AgentProviderCliStatus      `json:"cli"`
-	Network      *AgentProviderNetworkStatus `json:"network,omitempty"`
-	Provider     WorkspaceAgentProvider      `json:"provider"`
-	Update       AgentProviderUpdateStatus   `json:"update"`
+	Actions       []AgentProviderAction           `json:"actions"`
+	ActiveAction  *AgentProviderActiveAction      `json:"activeAction,omitempty"`
+	Adapter       AgentProviderAdapterStatus      `json:"adapter"`
+	Auth          AgentProviderAuthInfo           `json:"auth"`
+	Availability  AgentProviderAvailability       `json:"availability"`
+	Cli           AgentProviderCliStatus          `json:"cli"`
+	LastOperation *AgentProviderActionRunResponse `json:"lastOperation,omitempty"`
+	Network       *AgentProviderNetworkStatus     `json:"network,omitempty"`
+	Provider      WorkspaceAgentProvider          `json:"provider"`
+	Update        AgentProviderUpdateStatus       `json:"update"`
 }
 
 // AgentProviderStatusListResponse defines model for AgentProviderStatusListResponse.

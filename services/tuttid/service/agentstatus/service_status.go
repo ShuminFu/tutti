@@ -258,6 +258,9 @@ func (s Service) statusForSpec(
 		Actions: actions,
 	}
 	status.ActiveAction = activeActionForProvider(spec.Provider)
+	if s.LastOperations != nil {
+		status.LastOperation = s.LastOperations.Latest(spec.Provider)
+	}
 	if status.ActiveAction != nil {
 		bytes, lines := activeActionOutputStats(status.ActiveAction.Stdout)
 		slog.Info(

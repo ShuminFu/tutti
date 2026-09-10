@@ -48,6 +48,9 @@ func claudeCodeDescriptor() ProviderDescriptor {
 				ScriptURL:       "https://claude.ai/install.sh",
 				ScriptShell:     "bash",
 				WindowsFallback: InstallerWindowsFallbackManagedRuntime,
+				PackageName:     "@anthropic-ai/claude-code",
+				BinaryName:      "claude",
+				HomebrewFormula: "claude-code",
 				FailureReasonMarkers: map[string][]string{
 					"install_unavailable_in_region": {"app-unavailable-in-region", "app unavailable in region", "claude isn't available here", "claude isn&#x27;t available here", "claude isn&apos;t available here"},
 				},

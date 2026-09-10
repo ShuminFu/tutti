@@ -12065,6 +12065,10 @@ components:
           allOf:
             - $ref: "#/components/schemas/AgentProviderActiveAction"
           nullable: true
+        lastOperation:
+          allOf:
+            - $ref: "#/components/schemas/AgentProviderActionRunResponse"
+          nullable: true
     AgentProviderNetworkStatus:
       type: object
       additionalProperties: false

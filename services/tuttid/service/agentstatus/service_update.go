@@ -243,7 +243,18 @@ func (s Service) latestNPMVersionFromRegistry(ctx context.Context, registry stri
 	return strings.TrimSpace(metadata.Version), nil
 }
 
-func (s Service) runUpdateAction(ctx context.Context, spec ProviderSpec, result RunActionResult) (RunActionResult, error) {
+func (s Service) runUpdateAction(ctx context.Context, spec ProviderSpec, result RunActionResult) (final RunActionResult, err error) {
+	token := nextActiveActionToken()
+	updateCtx := withActiveActionToken(baseContext(ctx), token)
+	if s.LastOperations != nil {
+		s.LastOperations.Begin(spec.Provider, token)
+	}
+	defer func() {
+		if s.LastOperations != nil {
+			s.LastOperations.Complete(spec.Provider, token, final)
+		}
+		clearActiveAction(updateCtx, spec.Provider)
+	}()
 	if spec.Update.Capability != UpdateCapabilitySupported {
 		result.Status = RunActionFailed
 		result.ReasonCode = firstNonBlank(spec.Update.UnsupportedReason, "update_unsupported")
@@ -257,9 +268,7 @@ func (s Service) runUpdateAction(ctx context.Context, spec ProviderSpec, result 
 		return result, nil
 	}
 
-	updateCtx := withActiveActionToken(baseContext(ctx), nextActiveActionToken())
 	claimActiveAction(updateCtx, spec.Provider, ActiveAction{ID: ActionUpdate, Status: "running", Step: "detect"})
-	defer clearActiveAction(updateCtx, spec.Provider)
 
 	runtimeResolution := s.resolveProviderRuntime(ctx, spec)
 	if strings.TrimSpace(runtimeResolution.CLIPath) == "" {
