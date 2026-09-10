@@ -5,11 +5,47 @@ package agentstatus
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"golang.org/x/sys/windows"
 )
+
+func TestNewInstallExecCommandUsesNoConsole(t *testing.T) {
+	command := newInstallExecCommand(context.Background(), `C:\\Users\\tester\\codex.cmd`, "--version")
+	assertHiddenConsoleCommand(t, command)
+	if command.SysProcAttr.CreationFlags&windows.CREATE_NEW_PROCESS_GROUP == 0 {
+		t.Fatalf("CreationFlags = %#x, want CREATE_NEW_PROCESS_GROUP", command.SysProcAttr.CreationFlags)
+	}
+}
+
+func TestNewHiddenConsoleCommandHidesTaskkill(t *testing.T) {
+	command := newHiddenConsoleCommand("taskkill.exe", "/PID", "42", "/T", "/F")
+	assertHiddenConsoleCommand(t, command)
+	want := []string{"taskkill.exe", "/PID", "42", "/T", "/F"}
+	if !reflect.DeepEqual(command.Args, want) {
+		t.Fatalf("command args = %#v, want %#v", command.Args, want)
+	}
+}
+
+func assertHiddenConsoleCommand(t *testing.T, command *exec.Cmd) {
+	t.Helper()
+	if command.SysProcAttr == nil {
+		t.Fatal("SysProcAttr = nil")
+	}
+	if !command.SysProcAttr.HideWindow {
+		t.Fatal("HideWindow = false")
+	}
+	if command.SysProcAttr.CreationFlags&windows.CREATE_NO_WINDOW == 0 {
+		t.Fatalf("CreationFlags = %#x, want CREATE_NO_WINDOW", command.SysProcAttr.CreationFlags)
+	}
+	if command.SysProcAttr.CreationFlags&windows.CREATE_NEW_CONSOLE != 0 {
+		t.Fatalf("CreationFlags = %#x, must not include CREATE_NEW_CONSOLE", command.SysProcAttr.CreationFlags)
+	}
+}
 
 func TestNewInstallShellCommandUsesCmdInterpreter(t *testing.T) {
 	t.Setenv("ComSpec", `C:\Windows\System32\cmd.exe`)

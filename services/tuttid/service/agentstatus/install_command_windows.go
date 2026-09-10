@@ -16,6 +16,12 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// Provider status and authentication probes are background work. A fresh
+// CREATE_NEW_CONSOLE still allocates a conhost window before HideWindow is
+// observed and therefore flashes during short-lived probes. CREATE_NO_WINDOW
+// prevents Windows from allocating that console in the first place.
+// Keep this rule on cancellation helpers such as taskkill as well.
+
 func newInstallExecCommand(ctx context.Context, executable string, args ...string) *exec.Cmd {
 	extension := strings.ToLower(filepath.Ext(executable))
 	var command *exec.Cmd
@@ -49,13 +55,14 @@ func newInstallShellCommand(ctx context.Context, command string) *exec.Cmd {
 // wrappers; killing only the wrapper leaves the real child alive, which then
 // makes the next ACP probe hang or contend for the provider's database.
 func configureInstallProcessCommand(command *exec.Cmd, ctx context.Context) {
-	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP}
+	configureHiddenConsoleCommand(command)
+	command.SysProcAttr.CreationFlags |= windows.CREATE_NEW_PROCESS_GROUP
 	command.WaitDelay = 500 * time.Millisecond
 	command.Cancel = func() error {
 		if command.Process == nil {
 			return nil
 		}
-		err := exec.Command("taskkill.exe", "/PID", strconv.Itoa(command.Process.Pid), "/T", "/F").Run()
+		err := newHiddenConsoleCommand("taskkill.exe", "/PID", strconv.Itoa(command.Process.Pid), "/T", "/F").Run()
 		if err == nil {
 			return nil
 		}
@@ -64,6 +71,21 @@ func configureInstallProcessCommand(command *exec.Cmd, ctx context.Context) {
 		}
 		return nil
 	}
+}
+
+func newHiddenConsoleCommand(name string, args ...string) *exec.Cmd {
+	command := exec.Command(name, args...)
+	configureHiddenConsoleCommand(command)
+	return command
+}
+
+func configureHiddenConsoleCommand(command *exec.Cmd) {
+	if command.SysProcAttr == nil {
+		command.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	command.SysProcAttr.HideWindow = true
+	command.SysProcAttr.CreationFlags &^= windows.CREATE_NEW_CONSOLE
+	command.SysProcAttr.CreationFlags |= windows.CREATE_NO_WINDOW
 }
 
 func platformExecutableFile(os.FileInfo) bool {
