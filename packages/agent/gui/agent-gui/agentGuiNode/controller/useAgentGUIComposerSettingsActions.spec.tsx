@@ -974,6 +974,131 @@ describe("useAgentGUIComposerSettingsActions", () => {
 
     expect(loadDraftComposerOptions).toHaveBeenCalledWith();
   });
+
+  it("falls back an active session model only once per session and model pair", () => {
+    // Split view: two agent-gui windows share the same runtime snapshot key for
+    // one agent target, so each window's options load re-triggers the peer's
+    // reconcile. Without a gate the optimistic fallback write + warning repeat
+    // every round (~100ms) because the daemon still holds the stale model.
+    const sessionEngine = createAgentSessionEngine({
+      clock: { nowUnixMs: () => 1 },
+      commandPort: createTestEngineCommandPort({ execute: vi.fn() }),
+      identity: { origin: "test", workspaceId: "workspace-1" },
+      scheduler: { schedule: () => ({ cancel() {} }) }
+    });
+    const data: AgentGUINodeData = {
+      agentTargetId: "extension:grok",
+      lastActiveAgentSessionId: "session-1",
+      provider: "tutti-agent"
+    };
+    const target = {
+      agentTargetId: "extension:grok",
+      data,
+      provider: "tutti-agent" as const,
+      targetId: "extension:grok"
+    };
+    const onComposerDefaultsAuthorityReloadedRef =
+      createComposerDefaultsAuthorityReconcilerRef();
+    const onShowMessage = vi.fn();
+    // The hook publishes its own updater into this ref while rendering, so the
+    // spy has to survive that assignment: reads keep returning the spy, writes
+    // are swallowed.
+    const updateComposerSettings = vi.fn();
+    const updateComposerSettingsRef = {
+      get current() {
+        return updateComposerSettings;
+      },
+      set current(
+        _next: (settings: Partial<AgentSessionComposerSettings>) => void
+      ) {}
+    };
+    renderHook(() =>
+      useAgentGUIComposerSettingsActions({
+        activation: {
+          stateFor: vi.fn(() => "inactive" as const)
+        } as unknown as ReturnType<typeof useAgentGUIActivation>,
+        activeCanonicalComposerSettings: { model: "claude-opus-4-6" },
+        activeConversationIdRef: { current: "session-1" },
+        activeEngineActiveTurn: null,
+        agentActivityRuntime: {
+          getSnapshot: () => ({})
+        } as unknown as AgentGUIRuntime,
+        composerSupportPermissionModeChangeDeferred: false,
+        dataRef: { current: data },
+        defaultReasoningEffort: null,
+        draftSettingsBySessionIdRef: { current: {} },
+        isMountedRef: { current: true },
+        loadDraftComposerOptions: vi.fn(),
+        onComposerDefaultsAuthorityReloadedRef,
+        onDataChangeRef: { current: vi.fn() },
+        onRememberComposerDefaultsRef: { current: undefined },
+        onShowMessageRef: { current: onShowMessage },
+        reloadComposerOptionsForTarget: vi.fn(async () => {}),
+        selectedComposerTargetDataRef: { current: target },
+        sessionEngine,
+        setDraftSettingsBySessionId: vi.fn(),
+        updateComposerSettingsRef,
+        workspaceId: "workspace-1"
+      })
+    );
+    const optionsWithDefault = (
+      defaultModel: string
+    ): AgentActivityComposerOptions => ({
+      provider: "tutti-agent",
+      capabilities: null,
+      models: [
+        { value: "grok-4.6", label: "Grok 4.6" },
+        { value: "grok-4.5", label: "Grok 4.5" }
+      ],
+      reasoningEfforts: [],
+      speeds: [],
+      modelConfigurable: true,
+      reasoningConfigurable: false,
+      skills: [],
+      behavior: {
+        collapseModelOptionsToLatest: false,
+        modelOptionsAuthoritative: true,
+        refreshModelOptionsAfterSettings: false,
+        prewarmDraftSession: false,
+        planModeExclusiveWithPermissionMode: false
+      },
+      loadedAtUnixMs: 1,
+      effectiveSettings: { model: defaultModel }
+    });
+
+    act(() => {
+      // Two fresh options objects with an identical catalog: what the peer
+      // window's reload produces.
+      onComposerDefaultsAuthorityReloadedRef.current.reconcileHomeDefaults(
+        target,
+        optionsWithDefault("grok-4.6")
+      );
+      onComposerDefaultsAuthorityReloadedRef.current.reconcileHomeDefaults(
+        target,
+        optionsWithDefault("grok-4.6")
+      );
+    });
+
+    expect(updateComposerSettings).toHaveBeenCalledTimes(1);
+    expect(updateComposerSettings).toHaveBeenCalledWith({
+      model: "grok-4.6"
+    });
+    expect(onShowMessage).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      // A different target model is a new decision, not the same loop.
+      onComposerDefaultsAuthorityReloadedRef.current.reconcileHomeDefaults(
+        target,
+        optionsWithDefault("grok-4.5")
+      );
+    });
+
+    expect(updateComposerSettings).toHaveBeenCalledTimes(2);
+    expect(updateComposerSettings).toHaveBeenLastCalledWith({
+      model: "grok-4.5"
+    });
+    expect(onShowMessage).toHaveBeenCalledTimes(2);
+  });
 });
 
 function createComposerDefaultsAuthorityReconcilerRef(): {

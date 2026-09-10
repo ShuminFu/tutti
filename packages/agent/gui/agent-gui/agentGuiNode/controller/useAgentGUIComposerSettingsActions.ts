@@ -136,6 +136,17 @@ export function useAgentGUIComposerSettingsActions(
   );
   const pendingFastFallbackCommandRef = useRef<string | null>(null);
   const lastModelFallbackNoticeRef = useRef("");
+  // Gate for the active-session model fallback below. The optimistic write only
+  // changes the composer in this window: the daemon keeps the stale model, so
+  // the next session-state sync puts it back and the very next options reload
+  // reconciles again. With a split view two agent-gui windows share one runtime
+  // snapshot key (`composerOptionsByTargetKey[agentTargetId]`), so each window's
+  // load overwrites the other's and re-triggers the peer's reconcile, spinning
+  // the pair at ~100ms per round with a warning toast every time. Applying the
+  // same `agentSessionId + previousModel + nextModel` fallback at most once
+  // breaks the loop while still allowing a fallback after the session changes or
+  // the model pair changes.
+  const appliedActiveModelFallbacksRef = useRef(new Set<string>());
   useEffect(() => {
     return sessionEngine.subscribe((state) => {
       const commandId = pendingFastFallbackCommandRef.current;
@@ -224,7 +235,8 @@ export function useAgentGUIComposerSettingsActions(
           "warning"
         );
       };
-      if (activeConversationIdRef.current !== null) {
+      const activeConversationId = activeConversationIdRef.current;
+      if (activeConversationId !== null) {
         const currentModel = normalizeOptionalText(
           activeCanonicalComposerSettings.model
         );
@@ -239,8 +251,14 @@ export function useAgentGUIComposerSettingsActions(
             ).model
           ) === null
         ) {
-          updateComposerSettingsRef.current({ model: fallbackModel });
-          notifyFallback(currentModel, fallbackModel);
+          // Keyed by session so switching conversations needs no cleanup, and by
+          // the model pair so a genuinely new rejection still falls back once.
+          const fallbackKey = `${activeConversationId}\u0000${currentModel}\u0000${fallbackModel}`;
+          if (!appliedActiveModelFallbacksRef.current.has(fallbackKey)) {
+            appliedActiveModelFallbacksRef.current.add(fallbackKey);
+            updateComposerSettingsRef.current({ model: fallbackModel });
+            notifyFallback(currentModel, fallbackModel);
+          }
         }
         return;
       }
