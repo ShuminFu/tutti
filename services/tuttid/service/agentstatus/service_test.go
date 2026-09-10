@@ -133,6 +133,31 @@ func TestClaudeManagedBinaryOverridesBrokenPATHShim(t *testing.T) {
 	}
 }
 
+func TestClaudeSkipsBrokenPATHShimForNextCandidate(t *testing.T) {
+	home := t.TempDir()
+	badDir := filepath.Join(home, "bad")
+	goodDir := filepath.Join(home, "good")
+	badShim := filepath.Join(badDir, "claude")
+	goodBinary := filepath.Join(goodDir, "claude")
+	writeExecutable(t, badShim, "#!/bin/sh\necho '2.1.231 (Claude Code)'\nexit 1\n")
+	writeExecutable(t, goodBinary, "#!/bin/sh\necho '2.1.231 (Claude Code)'\n")
+	service := probeTestService(home)
+	service.Environ = func() []string {
+		return []string{"PATH=" + strings.Join([]string{badDir, goodDir}, string(os.PathListSeparator))}
+	}
+	spec := service.withPreferredClaudeCodeRuntime(context.Background(), ProviderSpec{
+		Provider:    "claude-code",
+		BinaryNames: []string{"claude"},
+	})
+	resolved := service.resolveProviderRuntime(context.Background(), spec)
+	if resolved.CLIPath != goodBinary {
+		t.Fatalf("CLIPath = %q, want healthy fallback %q instead of %q", resolved.CLIPath, goodBinary, badShim)
+	}
+	if got := envValueForKey(resolved.Env, claudeCodeExecutableEnv); got != goodBinary {
+		t.Fatalf("%s = %q, want %q", claudeCodeExecutableEnv, got, goodBinary)
+	}
+}
+
 func TestServiceListReturnsLatestActiveActionAfterNetworkProbe(t *testing.T) {
 	service := testService(func(_ string) (string, error) {
 		return "", errors.New("not found")

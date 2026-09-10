@@ -1,8 +1,11 @@
 package agentstatus
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -48,5 +51,31 @@ func TestCLIVersionHonorsContextCancellation(t *testing.T) {
 	}
 	if elapsed := time.Since(startedAt); elapsed > 500*time.Millisecond {
 		t.Fatalf("cliVersion() ignored context cancellation; elapsed = %s", elapsed)
+	}
+}
+
+func TestProviderCLIVersionLogsFailedCommandEvidence(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "claude")
+	writeExecutable(t, binary, "#!/bin/sh\necho '2.1.231 (Claude Code)'\nexit 7\n")
+	var output bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	got := (Service{}).providerCLIVersion(context.Background(), ProviderSpec{Provider: "claude-code"}, binary, nil)
+	if got != "" {
+		t.Fatalf("providerCLIVersion() = %q, want rejected output", got)
+	}
+	logLine := output.String()
+	for _, evidence := range []string{
+		"event=tutti.agent_provider.cli_version_probe.failed",
+		"provider=claude-code",
+		"binaryPath=" + binary,
+		"exitCode=7",
+		`output="2.1.231 (Claude Code)"`,
+	} {
+		if !strings.Contains(logLine, evidence) {
+			t.Fatalf("version failure log missing %q:\n%s", evidence, logLine)
+		}
 	}
 }

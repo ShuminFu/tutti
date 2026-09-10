@@ -143,20 +143,29 @@ func (s Service) withPreferredClaudeCodeRuntime(ctx context.Context, spec Provid
 	if !isClaudeStatusSpec(spec) {
 		return spec
 	}
-	env := s.commandResolver().Env(spec.AdapterEnv)
+	resolver := s.commandResolver()
+	env := resolver.Env(spec.AdapterEnv)
 	if s.validClaudeCodeExecutable(ctx, spec, envValueForKey(env, claudeCodeExecutableEnv), env) != "" {
 		return spec
 	}
-	managed := s.managedClaudeCodeExecutable()
-	if managed == "" {
-		return spec
+	if managed := s.managedClaudeCodeExecutable(); managed != "" {
+		return preferClaudeCodeExecutable(spec, managed, env)
 	}
-	pathValue := filepath.Dir(managed)
+	for _, candidate := range resolver.ResolveAllNames(spec.BinaryNames, env) {
+		if s.validClaudeCodeExecutable(ctx, spec, candidate, env) != "" {
+			return preferClaudeCodeExecutable(spec, candidate, env)
+		}
+	}
+	return spec
+}
+
+func preferClaudeCodeExecutable(spec ProviderSpec, executable string, env []string) ProviderSpec {
+	pathValue := filepath.Dir(executable)
 	if inherited := managedruntime.EnvValue(env, "PATH"); inherited != "" {
 		pathValue += string(os.PathListSeparator) + inherited
 	}
 	spec.AdapterEnv = append(spec.AdapterEnv,
-		claudeCodeExecutableEnv+"="+managed,
+		claudeCodeExecutableEnv+"="+executable,
 		"PATH="+pathValue,
 	)
 	return spec

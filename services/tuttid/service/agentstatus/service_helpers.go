@@ -356,7 +356,7 @@ func (s Service) cliVersion(ctx context.Context, binaryPath string, env []string
 // managed package providers. Other providers retain their historical
 // semver-ish output compatibility.
 func (s Service) providerCLIVersion(ctx context.Context, spec ProviderSpec, binaryPath string, env []string) string {
-	output := s.cliVersionOutput(ctx, binaryPath, env)
+	output := s.cliVersionOutputForProvider(ctx, spec.Provider, binaryPath, env)
 	if providerUsesManagedNPMVersionContract(spec) {
 		version, _ := managednpm.ExtractVersion(output)
 		return version
@@ -365,6 +365,10 @@ func (s Service) providerCLIVersion(ctx context.Context, spec ProviderSpec, bina
 }
 
 func (s Service) cliVersionOutput(ctx context.Context, binaryPath string, env []string) string {
+	return s.cliVersionOutputForProvider(ctx, "", binaryPath, env)
+}
+
+func (s Service) cliVersionOutputForProvider(ctx context.Context, provider string, binaryPath string, env []string) string {
 	binaryPath = strings.TrimSpace(binaryPath)
 	if binaryPath == "" {
 		return ""
@@ -386,6 +390,20 @@ func (s Service) cliVersionOutput(ctx context.Context, binaryPath string, env []
 		}
 		output, err := command.CombinedOutput()
 		if err != nil {
+			exitCode := -1
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
+				exitCode = exitErr.ExitCode()
+			}
+			slog.WarnContext(ctx,
+				"agent CLI version probe failed",
+				"event", "tutti.agent_provider.cli_version_probe.failed",
+				"provider", strings.TrimSpace(provider),
+				"binaryPath", binaryPath,
+				"exitCode", exitCode,
+				"output", truncateCodexProbeMessage(string(output)),
+				"error", err.Error(),
+			)
 			return ""
 		}
 		return string(output)
