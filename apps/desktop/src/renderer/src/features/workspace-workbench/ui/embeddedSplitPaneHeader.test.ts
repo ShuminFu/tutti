@@ -45,6 +45,7 @@ function snapshot(
         title: "跑验证"
       })
     },
+    railPushRatio: 0,
     ratio: 0.6,
     ...overrides
   };

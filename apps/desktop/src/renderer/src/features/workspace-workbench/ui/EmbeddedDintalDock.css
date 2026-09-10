@@ -47,6 +47,12 @@
 
 .rndmaster-dintaldock-embedded {
   --rndmaster-split-ratio: 0.5;
+  /* 左栏会话栏展开时两栏几何整体右移的**占比**（票 05）。会话栏在左栏里当真列，
+     它占的地方从右栏挤出来，所以左栏加宽这么多、右栏同步变窄、分隔线跟着右移。
+     覆盖层量出会话栏真实宽度换算后写进来（栏宽可拖，写死常量会对不上）；
+     没展开时是 0，此时下面几条 calc 全部退回原来的纯比例式。 */
+  --rndmaster-split-rail-push: 0;
+
   /* 栏头高度：与上游窗口头部行同高（44px），正文的预留也直接引用它。 */
   --rndmaster-split-header-height: 44px;
 }
@@ -54,13 +60,19 @@
 .rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
   .workbench-window-shell[data-rndmaster-pane="left"] {
   left: 0 !important;
-  width: calc(var(--rndmaster-split-ratio) * 100%) !important;
+  width: calc(
+    (var(--rndmaster-split-ratio) + var(--rndmaster-split-rail-push)) * 100%
+  ) !important;
 }
 
 .rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
   .workbench-window-shell[data-rndmaster-pane="right"] {
-  left: calc(var(--rndmaster-split-ratio) * 100%) !important;
-  width: calc((1 - var(--rndmaster-split-ratio)) * 100%) !important;
+  left: calc(
+    (var(--rndmaster-split-ratio) + var(--rndmaster-split-rail-push)) * 100%
+  ) !important;
+  width: calc(
+    (1 - var(--rndmaster-split-ratio) - var(--rndmaster-split-rail-push)) * 100%
+  ) !important;
 }
 
 /* 新窗口的壳挂进 DOM 早于 `launchNode` 的 promise 落地，那一刻覆盖层还不知道它是
@@ -87,6 +99,58 @@
 .rndmaster-dintaldock-embedded[data-rndmaster-collapsed="true"]
   .workbench-window-shell[data-rndmaster-pane][data-rndmaster-pane-focus="false"] {
   display: none !important;
+}
+
+/* ---- 左栏的会话栏：抽屉改回真列（票 05）--------------------------------
+ *
+ * 补丁 0073 给窄容器下的 DinTalDock 把会话栏做成浮在正文上的抽屉
+ * （`data-agent-gui-conversation-rail-overlay="true"`，见 agentactivity.css：
+ * 「cannot resize its fixed iframe to escape the responsive rail threshold」）。
+ * 单栏时那是对的；分栏时左栏只有半个主区，必然低于上游 630px 的自动折叠阈值，
+ * 于是一展开就把左栏正文整片盖住，连覆盖层的栏头标题也压在底下 ——
+ * 栏头「这是谁」的左缩进是量 `.agent-gui-node__detail-panel` 的左边界算的，
+ * 抽屉态下网格被压成 `0 0 1fr`、详情从壳最左边开始，缩进量算出来是 0，
+ * 标题正好落在抽屉底下（真机：左栏标题与正文同时被盖）。
+ *
+ * 分栏下改成：会话栏回到网格里当真列，占的空间由上面的 `--rndmaster-split-rail-push`
+ * 从右栏挤出来。网格与定位都是上游用内联 style / 高优先级规则写死的，只能 !important 压。
+ * 详情列这里用 `minmax(0, 1fr)`（不是上游的 `--agent-gui-detail-min-width`）：
+ * 推的宽度是量出来的，量与画之间有一帧差，留着 220px 下限会在那一帧把网格撑出容器。
+ */
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  [data-rndmaster-pane="left"]
+  .agent-gui-node__layout[data-agent-gui-conversation-rail-overlay="true"] {
+  grid-template-columns:
+    var(--agent-gui-provider-rail-width)
+    var(--agent-gui-conversation-rail-width)
+    minmax(0, 1fr) !important;
+}
+
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  [data-rndmaster-pane="left"]
+  .agent-gui-node__layout[data-agent-gui-conversation-rail-overlay="true"]
+  .agent-gui-node__provider-rail-panel,
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  [data-rndmaster-pane="left"]
+  .agent-gui-node__layout[data-agent-gui-conversation-rail-overlay="true"]
+  .agent-gui-node__rail-panel {
+  position: relative !important;
+  top: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  z-index: auto !important;
+  width: auto !important;
+  box-shadow: none !important;
+}
+
+/* 抽屉态下上游把详情钉在第 3 列（因为前两列宽 0）。列宽恢复之后这条仍然成立，
+   但要显式写出来：它是内联规则的一部分，漏了就会出现「详情跑回第 1 列」的老毛病
+   （见下面右栏那段的真机记录）。 */
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  [data-rndmaster-pane="left"]
+  .agent-gui-node__layout[data-agent-gui-conversation-rail-overlay="true"]
+  .agent-gui-node__detail-panel {
+  grid-column: 3 !important;
 }
 
 /* 右栏是「只有详情」的那一栏：会话栏、provider 栏、拖宽把手、悬浮的收起按钮

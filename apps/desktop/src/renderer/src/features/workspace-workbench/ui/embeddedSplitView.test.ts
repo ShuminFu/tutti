@@ -5,6 +5,8 @@ import type { ConversationRailSplitDragSession } from "@tutti-os/agent-gui/conve
 import { activateEmbeddedDintalDockSession } from "./embeddedDintalDock.ts";
 import {
   createEmbeddedSplitViewController,
+  embeddedSplitViewPaneDescriptor,
+  parseEmbeddedSplitViewPaneDescriptor,
   registerEmbeddedSplitViewController,
   type EmbeddedSplitGeometry,
   type EmbeddedSplitViewController,
@@ -817,5 +819,75 @@ test("a relaunched peer that never shows up is given up with a toast", async () 
     dragSession("session-b-relaunched")
   );
   assert.equal(controller.getSnapshot().panes.right?.sessionId, "session-b");
+  controller.dispose();
+});
+
+// 票 05：会话栏在分栏左栏里展开，空间从右栏挤出来 —— 左栏加宽、右栏变窄，
+// 分隔线跟着右移。判据钉在 fraction 上，因为窗口 body 拿到的容器宽度就是它算的
+// （embeddedDintalDock.ts 的 projectEmbeddedDintalDockNodeContext），
+// 而 CSS 画壳用的是同一个 railPushRatio —— 两者必须同源。
+test("会话栏展开时左栏加宽、右栏同步变窄，两栏仍然铺满", async () => {
+  const fake = createFakeHost({ surfaceWidth: 1600 });
+  const controller = makeController(fake);
+  await controller.adopt(["agent-left", "agent-right"]);
+  controller.select("session-a");
+  await controller.dropSession(dragSession("session-b"), "right");
+  const unregister = registerEmbeddedSplitViewController(controller);
+
+  assert.equal(controller.getSnapshot().railPushRatio, 0);
+
+  // 1600 宽、比例 0.5：右栏 800px，让出 280px 后仍有 520px，没碰到夹逼。
+  controller.setRailPushPx(280);
+  assert.ok(Math.abs(controller.getSnapshot().railPushRatio - 0.175) < 1e-9);
+  const left = parseEmbeddedSplitViewPaneDescriptor(
+    embeddedSplitViewPaneDescriptor("agent-left")
+  );
+  // 右栏的窗口是 dropSession 现起的，node id 由假宿主发号。
+  const right = parseEmbeddedSplitViewPaneDescriptor(
+    embeddedSplitViewPaneDescriptor(fake.launched[0] ?? "")
+  );
+  assert.ok(Math.abs((left?.fraction ?? 0) - 0.675) < 1e-3);
+  assert.ok(Math.abs((right?.fraction ?? 0) - 0.325) < 1e-3);
+  assert.ok(
+    Math.abs((left?.fraction ?? 0) + (right?.fraction ?? 0) - 1) < 1e-3
+  );
+
+  controller.setRailPushPx(0);
+  assert.equal(controller.getSnapshot().railPushRatio, 0);
+  unregister();
+  controller.dispose();
+});
+
+// 右栏被推到 320px 以下就等于分栏被会话栏吃掉了；宁可推得少一点，也不能推没。
+test("推力被夹在右栏 320px 最小宽度上", async () => {
+  const fake = createFakeHost({ surfaceWidth: 1000 });
+  const controller = makeController(fake);
+  await controller.adopt(["agent-left", "agent-right"]);
+  controller.select("session-a");
+  await controller.dropSession(dragSession("session-b"), "right");
+
+  // 右栏原有 500px，最多只让出 180px。
+  controller.setRailPushPx(400);
+  assert.ok(Math.abs(controller.getSnapshot().railPushRatio - 0.18) < 1e-9);
+  controller.dispose();
+});
+
+// 单栏没有「另一栏」可挤；折叠态只显示焦点栏，推了也只会让壳算错。
+test("单栏与折叠态一律不推", async () => {
+  const fake = createFakeHost({ surfaceWidth: 1000 });
+  const controller = makeController(fake);
+  await controller.adopt(["agent-left"]);
+  controller.select("session-a");
+
+  controller.setRailPushPx(280);
+  assert.equal(controller.getSnapshot().railPushRatio, 0);
+
+  await controller.dropSession(dragSession("session-b"), "right");
+  assert.ok(controller.getSnapshot().railPushRatio > 0);
+
+  fake.setSurfaceWidth(600);
+  fake.notify();
+  assert.equal(controller.getSnapshot().collapsed, true);
+  assert.equal(controller.getSnapshot().railPushRatio, 0);
   controller.dispose();
 });

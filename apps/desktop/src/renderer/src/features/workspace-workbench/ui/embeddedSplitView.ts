@@ -83,6 +83,13 @@ export interface EmbeddedSplitViewSnapshot {
     left: EmbeddedSplitPaneSnapshot | null;
     right: EmbeddedSplitPaneSnapshot | null;
   };
+  /**
+   * 左栏会话栏展开时，两栏几何整体右移的**占比**（票 05）。
+   * 覆盖层量出会话栏真实宽度后用 `setRailPushPx` 写进来，这里换算成占比给 CSS
+   * 与窗口 body 的 fraction 一起用——两者必须同源，否则 agent-gui 按一个宽度做
+   * 响应式、CSS 按另一个宽度画壳，会话栏会在阈值两侧来回抖。
+   */
+  railPushRatio: number;
   ratio: number;
 }
 
@@ -171,6 +178,11 @@ export interface EmbeddedSplitViewController {
   pairPanes(): Promise<PairOnDropResult>;
   resetRatio(): void;
   resize(ratio: number): void;
+  /**
+   * 左栏会话栏当前占多少像素（收起时给 0）。由覆盖层测量后写入：栏宽可拖，
+   * 常量猜不准；夹逼在这里做，保证右栏不会被推到 320px 以下。
+   */
+  setRailPushPx(px: number): void;
   /** 点选 / 宿主 open-session / 新建落地，统一入口。 */
   select(agentSessionId: string): boolean;
   setFocus(side: SplitSide): void;
@@ -364,6 +376,8 @@ export function createEmbeddedSplitViewController(
   const pendingLaunches = new Set<Promise<void>>();
   let dragging: EmbeddedSplitDragSnapshot | null = null;
   let collapsed = false;
+  // 左栏会话栏的实测宽度（px）。0 = 收起/量不到，几何退回纯比例式。
+  let railPushPx = 0;
   let pairs: readonly ConversationRailPeerPair[] = [];
   let pairingBusy = 0;
   let pairingUnsupported = readPairingHost() === null;
@@ -495,6 +509,19 @@ export function createEmbeddedSplitViewController(
     return linked ? "paired" : "unpaired";
   }
 
+  // 会话栏展开要「挤出空间」而不是盖住左栏：左栏加宽、分隔线右移、右栏变窄。
+  // 夹逼是必须的 —— 右栏被推到 0 宽就等于分栏被会话栏吃掉了，用户还以为窗口坏了。
+  // 折叠态（主区太窄、只显示焦点栏）下没有「两栏」可言，一律不推。
+  function railPushRatio(): number {
+    if (!isSplitLayoutSplit(layout) || collapsed) return 0;
+    const width = surfaceWidth();
+    if (width <= 0 || railPushPx <= 0) return 0;
+    const rightWidthPx = width * (1 - layout.ratio);
+    const maxPushPx = rightWidthPx - EMBEDDED_SPLIT_MIN_PANE_WIDTH_PX;
+    if (maxPushPx <= 0) return 0;
+    return Math.min(railPushPx, maxPushPx) / width;
+  }
+
   function buildSnapshot(): EmbeddedSplitViewSnapshot {
     return {
       collapsed,
@@ -502,6 +529,7 @@ export function createEmbeddedSplitViewController(
       focus: layout.focus,
       pairing: pairingState(),
       panes: { left: paneOf("left"), right: paneOf("right") },
+      railPushRatio: railPushRatio(),
       ratio: layout.ratio
     };
   }
@@ -1053,6 +1081,12 @@ export function createEmbeddedSplitViewController(
     resetRatio() {
       dispatch({ ratio: 0.5, type: "resize" });
     },
+    setRailPushPx(px) {
+      const next = Number.isFinite(px) && px > 0 ? Math.round(px) : 0;
+      if (next === railPushPx) return;
+      railPushPx = next;
+      emit();
+    },
     resize(ratio) {
       dispatch({ ratio, type: "resize" });
     },
@@ -1165,12 +1199,15 @@ export function embeddedSplitViewPaneDescriptor(nodeId: string): string {
   const snapshot = controller.getSnapshot();
   const split = snapshot.panes.right !== null;
   const focused = snapshot.focus === side;
+  // 推出来的那块地方是**左栏的**：左栏的 fraction 要加上它，右栏减去它。
+  // 这个 fraction 决定 agent-gui 拿到的容器宽度（见 embeddedDintalDock.ts 的
+  // projectEmbeddedDintalDockNodeContext），必须和 CSS 画的壳宽严格一致。
   const fraction =
     !split || snapshot.collapsed
       ? 1
       : side === "left"
-        ? snapshot.ratio
-        : 1 - snapshot.ratio;
+        ? snapshot.ratio + snapshot.railPushRatio
+        : 1 - snapshot.ratio - snapshot.railPushRatio;
   return `${side}|${focused ? "1" : "0"}|${fraction.toFixed(4)}`;
 }
 

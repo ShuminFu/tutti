@@ -612,3 +612,49 @@ test("a session-scoped launch while embedded lands in a pane instead of a third 
   assert.equal(routeEmbeddedDintalDockSessionLaunch(host, {}), undefined);
   assert.equal(activations.length, 1);
 });
+
+// 票 05：分栏时会话栏展开要把空间从右栏挤出来，而不是浮在左栏正文上。
+// 三条几何式必须一起带上推力，少一条就会出现「壳错位 / 分隔线不在缝上」。
+test("分栏几何把会话栏的推力算进两栏宽度", () => {
+  const left = embeddedDintalDockCss.match(
+    /\.workbench-window-shell\[data-rndmaster-pane="left"\] \{([^}]*)\}/
+  );
+  assert.notEqual(left, null);
+  assert.match(
+    String(left?.[1] ?? ""),
+    /width: calc\(\s*\(var\(--rndmaster-split-ratio\) \+ var\(--rndmaster-split-rail-push\)\)/
+  );
+  const right = embeddedDintalDockCss.match(
+    /\.workbench-window-shell\[data-rndmaster-pane="right"\] \{([^}]*)\}/
+  );
+  assert.notEqual(right, null);
+  assert.match(
+    String(right?.[1] ?? ""),
+    /left: calc\(\s*\(var\(--rndmaster-split-ratio\) \+ var\(--rndmaster-split-rail-push\)\)/
+  );
+  assert.match(
+    String(right?.[1] ?? ""),
+    /width: calc\(\s*\(1 - var\(--rndmaster-split-ratio\) - var\(--rndmaster-split-rail-push\)\)/
+  );
+  // 缺省值必须是 0：没分栏 / 会话栏收起时，几何要原样退回纯比例式。
+  assert.match(embeddedDintalDockCss, /--rndmaster-split-rail-push: 0;/);
+});
+
+// 补丁 0073 的窄容器抽屉在分栏左栏里必然生效（半个主区 < 上游 630px 阈值），
+// 一展开就盖住左栏正文和覆盖层栏头的标题。分栏下要把它按回网格里当真列。
+test("分栏左栏把会话栏抽屉按回网格里的真列", () => {
+  const grid = embeddedDintalDockCss.match(
+    /\[data-rndmaster-pane="left"\]\s*\n\s*\.agent-gui-node__layout\[data-agent-gui-conversation-rail-overlay="true"\] \{([^}]*)\}/
+  );
+  assert.notEqual(grid, null);
+  assert.match(
+    String(grid?.[1] ?? ""),
+    /var\(--agent-gui-conversation-rail-width\)/
+  );
+  const panels = embeddedDintalDockCss.match(
+    /\.agent-gui-node__rail-panel \{\n\s*position: relative !important;([^}]*)\}/
+  );
+  assert.notEqual(panels, null);
+  assert.match(String(panels?.[1] ?? ""), /left: auto !important;/);
+  assert.match(String(panels?.[1] ?? ""), /box-shadow: none !important;/);
+});

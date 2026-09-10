@@ -68,6 +68,9 @@ export function EmbeddedSplitChrome(): ReactNode {
 
   const split = snapshot !== null && snapshot.panes.right !== null;
   const ratio = snapshot?.ratio ?? 0.5;
+  // 左栏会话栏展开时，两栏几何整体右移这么多（占比，票 05）。分隔线、栏头、
+  // 壳的 left/width 全部要一起加，少加一处就会出现「线和栏错位」。
+  const railPush = snapshot?.railPushRatio ?? 0;
   const focus = snapshot?.focus ?? "left";
   const collapsed = snapshot?.collapsed === true;
 
@@ -83,6 +86,7 @@ export function EmbeddedSplitChrome(): ReactNode {
     main.dataset.rndmasterCollapsed = collapsed ? "true" : "false";
     main.dataset.rndmasterFocus = focus;
     main.style.setProperty("--rndmaster-split-ratio", String(ratio));
+    main.style.setProperty("--rndmaster-split-rail-push", String(railPush));
     const shells = main.querySelectorAll<HTMLElement>(
       '.workbench-window-shell[data-workbench-node-type-id="agent-gui"]'
     );
@@ -133,6 +137,19 @@ export function EmbeddedSplitChrome(): ReactNode {
     const main = root?.closest<HTMLElement>(".rndmaster-dintaldock-embedded");
     if (!root || !main) return;
     const sync = (): void => {
+      // 左栏会话栏占多宽 —— 推给 controller，让它把这块地方从右栏挤出来（票 05）。
+      // 量的是**面板实际宽度**而不是常量：栏宽可拖，而且上游还会按容器宽度夹逼
+      // （`clampAgentGUIConversationRailWidthPx`），写死数字必然对不上。
+      // 收起时面板宽 0，推力自然归零、几何退回原样。
+      // 注意别按「现在是不是抽屉态」来判要不要推：推了之后左栏变宽会跨过上游
+      // 630px 的自动折叠阈值、抽屉态消失，再据此撤销推力就会来回抖。按「栏在不在」
+      // 判则两种形态下量到的都是同一个 `--agent-gui-conversation-rail-width`，收敛。
+      const leftRail = main.querySelector<HTMLElement>(
+        '.workbench-window-shell[data-rndmaster-pane="left"] .agent-gui-node__rail-panel'
+      );
+      embeddedSplitViewController()?.setRailPushPx(
+        leftRail ? Math.round(leftRail.getBoundingClientRect().width) : 0
+      );
       for (const header of root.querySelectorAll<HTMLElement>(
         ".rndmaster-split-pane-header"
       )) {
@@ -173,6 +190,13 @@ export function EmbeddedSplitChrome(): ReactNode {
       ".agent-gui-node__detail-panel"
     )) {
       observer.observe(detail);
+    }
+    // 会话栏自己也要盯：它一展开/收起，主区和详情面板的尺寸可能一帧都不变
+    // （壳宽是我们按推力算的，鸡生蛋），只有它自己的宽度变了。
+    for (const railPanel of main.querySelectorAll(
+      ".agent-gui-node__rail-panel"
+    )) {
+      observer.observe(railPanel);
     }
     return () => observer.disconnect();
   });
@@ -230,7 +254,7 @@ export function EmbeddedSplitChrome(): ReactNode {
   );
 
   const dividerStyle: CSSProperties = {
-    left: `calc(${ratio} * 100%)`
+    left: `calc(${ratio + railPush} * 100%)`
   };
 
   const headers = buildEmbeddedSplitPaneHeaders(snapshot, {
@@ -303,9 +327,18 @@ export function EmbeddedSplitChrome(): ReactNode {
           onPointerDown={() =>
             embeddedSplitViewController()?.setFocus(header.side)
           }
+          // 栏头几何跟着壳走：左栏加宽 railPush，右栏起点右移、宽度同步变窄。
           style={{
-            left: `calc(${header.leftFraction} * 100%)`,
-            width: `calc(${header.widthFraction} * 100%)`
+            left: `calc(${
+              header.side === "left"
+                ? header.leftFraction
+                : header.leftFraction + railPush
+            } * 100%)`,
+            width: `calc(${
+              header.side === "left"
+                ? header.widthFraction + railPush
+                : header.widthFraction - railPush
+            } * 100%)`
           }}
         >
           <div className="rndmaster-split-pane-header__identity">
