@@ -6,6 +6,10 @@ import type { AgentProviderTerminalCommand } from "@tutti-os/client-tuttid-ts";
 import type { DesktopRuntimeApi } from "@preload/types";
 import type { WorkbenchHostHandle } from "@tutti-os/workbench-surface";
 import { classifyDesktopErrorCode } from "../../../../../shared/errors/desktopErrors.ts";
+import {
+  isHostBridgeAvailable,
+  requestHostCapability
+} from "@renderer/platform/desktop/web/webHostBridgeClient";
 import { defaultWorkspaceTerminalWorkbenchTypeId } from "./internal/workspaceTerminalWorkbenchConstants.ts";
 
 export function createAgentProviderTerminalCommandRunner(
@@ -27,6 +31,13 @@ export function createAgentProviderTerminalCommandRunner(
           event: "agent-provider.terminal-command.missing-host",
           level: "error"
         });
+        // Embedded DinTalDock: the host shell owns the terminal (the web build
+        // has no workbench node surface), so delegate the launch to the
+        // embedding host over the postMessage bridge. Outside an iframe the
+        // desktop error below is preserved.
+        if (isHostBridgeAvailable()) {
+          return launchTerminalCommandViaHostBridge(command, context);
+        }
         throw new Error("Missing workbench host for terminal command.");
       }
       try {
@@ -66,6 +77,12 @@ export function createAgentProviderTerminalCommandRunner(
           event: "agent-provider.terminal-command.error",
           level: "error"
         });
+        // Embedded DinTalDock: the workbench surface registers no terminal node
+        // type (single-purpose Agent surface), so launchNode fails here too.
+        // Delegate to the embedding host over the bridge whenever embedded.
+        if (isHostBridgeAvailable()) {
+          return launchTerminalCommandViaHostBridge(command, context);
+        }
         throw error;
       }
     }
@@ -122,6 +139,28 @@ async function launchTerminalCommand(input: {
     throw new Error("Terminal command did not open a workbench node.");
   }
   return nodeId;
+}
+
+// launchTerminalCommandViaHostBridge opens the terminal through the embedding
+// host (DinTalClaw shell) when the embedded web build has no workbench node
+// surface. The host owns the PTY lifecycle; we only carry a close handle.
+async function launchTerminalCommandViaHostBridge(
+  command: AgentProviderTerminalCommand,
+  context: AgentProviderStatusActionContext | undefined
+): Promise<{ close: () => void }> {
+  const result = await requestHostCapability<{ id?: string } | null>(
+    "launchTerminal",
+    [{ input: command.input, cwd: command.cwd ?? null }]
+  );
+  const id = result?.id;
+  if (!id || typeof id !== "string" || !id.trim()) {
+    throw new Error("Host did not open a terminal for the login command.");
+  }
+  return {
+    close: () => {
+      void requestHostCapability("closeTerminal", [id]).catch(() => undefined);
+    }
+  };
 }
 
 function terminalRunInput(input: string): string {
