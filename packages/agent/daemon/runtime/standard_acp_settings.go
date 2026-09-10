@@ -173,7 +173,7 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 			a.updateSessionConfigOption(session.AgentSessionID, reasoningConfigID, reasoning)
 		}
 	}
-	if speed := strings.TrimSpace(settings.Speed); speed != "" && supported["fast"] {
+	if speed := acpSpeedConfigOptionValue(startResult, settings.Speed); speed != "" && supported["fast"] {
 		if err := a.setSessionConfigOption(ctx, client, session, "fast", speed); err != nil {
 			return fmt.Errorf("agent session ACP fast configuration failed: %w", err)
 		}
@@ -545,7 +545,7 @@ func (a *standardACPAdapter) ApplySessionSettings(
 	}
 
 	if patch.Speed != nil {
-		speed := strings.TrimSpace(*patch.Speed)
+		speed := a.speedConfigOptionValue(session.AgentSessionID, *patch.Speed)
 		if speed != "" {
 			if !a.sessionConfigOptionMatches(session.AgentSessionID, "fast", speed) {
 				if err := a.setSessionConfigOption(ctx, acpSession.client, session, "fast", speed); err != nil {
@@ -567,6 +567,25 @@ func (a *standardACPAdapter) sessionUsesACPModelsAPI(agentSessionID string) bool
 	defer a.mu.Unlock()
 	session := a.sessions[strings.TrimSpace(agentSessionID)]
 	return session != nil && session.modelsAPI
+}
+
+func (a *standardACPAdapter) speedConfigOptionValue(agentSessionID string, speed string) string {
+	speed = strings.TrimSpace(speed)
+	if speed == "" || a == nil {
+		return speed
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	session := a.sessions[strings.TrimSpace(agentSessionID)]
+	if session == nil {
+		return speed
+	}
+	for _, option := range session.configOptionDescriptors {
+		if strings.TrimSpace(asString(option["id"])) == "fast" {
+			return acpSpeedConfigOptionValueFromDescriptor(option, speed)
+		}
+	}
+	return speed
 }
 
 func (a *standardACPAdapter) SessionState(session Session) SessionStateSnapshot {
@@ -729,6 +748,51 @@ func acpConfigOptionIDs(raw json.RawMessage) map[string]bool {
 		}
 	}
 	return ids
+}
+
+func acpSpeedConfigOptionValue(raw json.RawMessage, speed string) string {
+	speed = strings.TrimSpace(speed)
+	if speed == "" {
+		return ""
+	}
+	var payload struct {
+		ConfigOptions []map[string]any `json:"configOptions"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return speed
+	}
+	for _, option := range payload.ConfigOptions {
+		if strings.TrimSpace(asString(option["id"])) == "fast" {
+			return acpSpeedConfigOptionValueFromDescriptor(option, speed)
+		}
+	}
+	return speed
+}
+
+func acpSpeedConfigOptionValueFromDescriptor(option map[string]any, speed string) string {
+	speed = strings.TrimSpace(speed)
+	if speed == "" {
+		return ""
+	}
+	values := make(map[string]bool)
+	for _, entry := range configOptionEntries(option["options"]) {
+		if value := strings.TrimSpace(asString(entry["value"])); value != "" {
+			values[value] = true
+		}
+	}
+	// Claude Agent ACP exposes Fast mode as an on/off select unless the client
+	// explicitly negotiates boolean config options. The composer keeps the
+	// provider-neutral standard/fast vocabulary, so translate only when the
+	// advertised option proves that this protocol shape is in use.
+	if values["on"] && values["off"] {
+		switch speed {
+		case sessionSpeedStandard:
+			return "off"
+		case sessionSpeedFast:
+			return "on"
+		}
+	}
+	return speed
 }
 
 func acpReasoningConfigOptionID(supported map[string]bool) string {

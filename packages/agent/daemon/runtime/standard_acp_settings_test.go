@@ -38,6 +38,47 @@ func TestHermesAdapterStartAppliesModelAndReasoningConfigOptions(t *testing.T) {
 	}
 }
 
+func TestStandardACPAdapterMapsCanonicalSpeedToAdvertisedFastModeValues(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Claude Agent", "claude-session-speed")
+	transport.conn.configOptions = []map[string]any{{
+		"id":           "fast",
+		"currentValue": "off",
+		"options": []any{
+			map[string]any{"name": "On", "value": "on"},
+			map[string]any{"name": "Off", "value": "off"},
+		},
+	}}
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:    "acp:claude",
+		Name:        "claude-acp",
+		DisplayName: "Claude Agent",
+		Command:     []string{"claude-agent-acp"},
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	adapter := adapterRaw.(*standardACPAdapter)
+	session := standardTestSession("acp:claude")
+	session.Settings = &SessionSettings{Speed: sessionSpeedStandard}
+
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	calls := transport.conn.setConfigOptionCalls()
+	if len(calls) != 1 {
+		t.Fatalf("config option calls = %#v, want one speed update", calls)
+	}
+	if got, _ := calls[0]["configId"].(string); got != "fast" {
+		t.Fatalf("config id = %q, want fast", got)
+	}
+	if got, _ := calls[0]["value"].(string); got != "off" {
+		t.Fatalf("config value = %q, want off", got)
+	}
+}
+
 func TestStandardACPAdapterStartAppliesThoughtLevelConfigOption(t *testing.T) {
 	t.Parallel()
 

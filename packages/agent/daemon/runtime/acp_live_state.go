@@ -706,13 +706,24 @@ func sessionSettingsWithACPConfig(
 		asString(config["speed"]),
 		asString(config["fast"]),
 	); speed != "" {
-		settings.Speed = speed
+		settings.Speed = canonicalACPSpeedValue(speed)
 		hasSettings = true
 	}
 	if !hasSettings {
 		return nil
 	}
 	return cloneSessionSettings(settings)
+}
+
+func canonicalACPSpeedValue(value string) string {
+	switch strings.TrimSpace(value) {
+	case "on":
+		return sessionSpeedFast
+	case "off":
+		return sessionSpeedStandard
+	default:
+		return strings.TrimSpace(value)
+	}
 }
 
 func acpLiveStateReasoningConfigOptionID(state acpLiveStateSnapshot) string {
