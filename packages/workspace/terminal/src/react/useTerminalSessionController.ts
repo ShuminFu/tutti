@@ -19,7 +19,7 @@ export function useTerminalSessionController(input: {
         nodeId: input.nodeId,
         sessionId: input.sessionId
       }),
-    [input.nodeId, input.sessionId]
+    [input.feature, input.nodeId, input.sessionId]
   );
 
   useEffect(() => {

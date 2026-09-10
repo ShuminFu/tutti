@@ -63,15 +63,21 @@ export function acquireTerminalSessionController(input: {
   retainMs?: number;
   sessionId: string;
 }): TerminalSessionController {
+  const currentEntry = controllerRegistry.get(input.sessionId);
+  // Host contribution refreshes can replace the terminal feature and its
+  // transport while keeping the same persisted session id. Reusing the old
+  // controller would keep recovery bound to the stale transport but route
+  // writes through the new one, leaving the terminal permanently detached.
   const entry =
-    controllerRegistry.get(input.sessionId) ??
-    createTerminalSessionControllerEntry({
-      feature: input.feature,
-      nodeId: input.nodeId,
-      retainMs: input.retainMs ?? defaultControllerRetainMs,
-      sessionId: input.sessionId
-    });
-  if (!controllerRegistry.has(input.sessionId)) {
+    currentEntry?.context.feature === input.feature
+      ? currentEntry
+      : createTerminalSessionControllerEntry({
+          feature: input.feature,
+          nodeId: input.nodeId,
+          retainMs: input.retainMs ?? defaultControllerRetainMs,
+          sessionId: input.sessionId
+        });
+  if (entry !== currentEntry) {
     controllerRegistry.set(input.sessionId, entry);
   }
 
@@ -162,7 +168,9 @@ function createTerminalSessionControllerEntry(input: {
         return;
       }
       entry.teardown();
-      controllerRegistry.delete(entry.context.sessionId);
+      if (controllerRegistry.get(entry.context.sessionId) === entry) {
+        controllerRegistry.delete(entry.context.sessionId);
+      }
     }, input.retainMs);
   };
 

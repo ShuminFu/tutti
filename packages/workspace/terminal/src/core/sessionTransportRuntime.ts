@@ -37,6 +37,7 @@ interface TerminalSessionTransportRuntimeEntry {
   stateBuffer: TerminalStateEvent[];
   stateListeners: Set<(event: TerminalStateEvent) => void>;
   teardown(): void;
+  transport: TerminalTransport;
 }
 
 const defaultDetachGraceMs = 200;
@@ -48,10 +49,12 @@ export function acquireTerminalSessionTransportRuntime(input: {
   sessionId: string;
   transport: TerminalTransport;
 }): TerminalSessionTransportRuntime {
+  const currentEntry = runtimeRegistry.get(input.sessionId);
   const entry =
-    runtimeRegistry.get(input.sessionId) ??
-    createTerminalSessionTransportRuntimeEntry(input);
-  if (!runtimeRegistry.has(input.sessionId)) {
+    currentEntry?.transport === input.transport
+      ? currentEntry
+      : createTerminalSessionTransportRuntimeEntry(input);
+  if (entry !== currentEntry) {
     runtimeRegistry.set(input.sessionId, entry);
   }
   entry.refCount += 1;
@@ -137,7 +140,9 @@ function createTerminalSessionTransportRuntimeEntry(input: {
         }
         void attachmentController.detach().finally(() => {
           entry.teardown();
-          runtimeRegistry.delete(entry.sessionId);
+          if (runtimeRegistry.get(entry.sessionId) === entry) {
+            runtimeRegistry.delete(entry.sessionId);
+          }
         });
       }, entry.detachGraceMs);
     },
@@ -175,7 +180,8 @@ function createTerminalSessionTransportRuntimeEntry(input: {
       entry.stateBuffer.length = 0;
       entry.snapshotCache = null;
       entry.snapshotPromise = null;
-    }
+    },
+    transport: input.transport
   };
 
   const disposeData = input.transport.onData((event) => {
