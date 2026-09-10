@@ -273,9 +273,67 @@ function createWebPlatformApi(): DesktopPlatformApi {
 function createWebHostApi(): DesktopHostApi {
   return {
     files: {
-      createUserDocumentsProjectDirectory() {
-        return Promise.reject(
-          electronDebugRequired("createUserDocumentsProjectDirectory")
+      createUserDocumentsProjectDirectory(input) {
+        // Embedded DinTalDock serves this UI and the directory endpoint from
+        // the same cliagent origin. Prefer the direct route so session creation
+        // does not depend on the parent postMessage bridge lifecycle.
+        const bootstrapUrl = new URLSearchParams(window.location.search)
+          .get("tuttiBootstrapUrl")
+          ?.trim();
+        if (bootstrapUrl) {
+          let endpoint: URL | null = null;
+          try {
+            endpoint = new URL("/tutti/project-directory", bootstrapUrl);
+          } catch {
+            endpoint = null;
+          }
+          if (endpoint && endpoint.origin === window.location.origin) {
+            return fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: input.name,
+                allow_existing: Boolean(input.allowExisting),
+              }),
+            }).then(async (response) => {
+              if (!response.ok) {
+                throw new Error(
+                  `createUserDocumentsProjectDirectory failed: HTTP ${response.status}`
+                );
+              }
+              const result = (await response.json()) as { path?: string };
+              if (!result.path) {
+                throw electronDebugRequired(
+                  "createUserDocumentsProjectDirectory"
+                );
+              }
+              return { path: result.path };
+            });
+          }
+        }
+
+        // Keep the host capability as the fallback for non-embedded web
+        // environments that provide their own desktop bridge.
+        return requestHostCapability<{ path?: string } | null>(
+          "createUserDocumentsProjectDirectory",
+          [input]
+        ).then(
+          (result) => {
+            if (!result?.path) {
+              return Promise.reject(
+                electronDebugRequired("createUserDocumentsProjectDirectory")
+              );
+            }
+            return { path: result.path };
+          },
+          (error) => {
+            if (error instanceof HostBridgeUnavailableError) {
+              return Promise.reject(
+                electronDebugRequired("createUserDocumentsProjectDirectory")
+              );
+            }
+            return Promise.reject(error);
+          }
         );
       },
       selectAppArchive() {
