@@ -244,6 +244,39 @@ func TestResolverFindsFnmNodeBin(t *testing.T) {
 	}
 }
 
+func TestResolverPrefersNewestFnmNodeBin(t *testing.T) {
+	home := t.TempDir()
+	fnmDir := filepath.Join(home, "custom-fnm")
+	for _, version := range []string{"v18.20.8", "v20.20.2", "v22.22.2"} {
+		binDir := filepath.Join(fnmDir, "node-versions", version, "installation", "bin")
+		if err := os.MkdirAll(binDir, 0o755); err != nil {
+			t.Fatalf("mkdir bin dir: %v", err)
+		}
+		writeExecutable(t, filepath.Join(binDir, "node"))
+	}
+
+	resolver := Resolver{
+		Environ: func() []string {
+			return []string{
+				"PATH=/usr/bin:/bin",
+				"FNM_DIR=" + fnmDir,
+			}
+		},
+		HomeDir: func() (string, error) {
+			return home, nil
+		},
+		LookPath: func(string) (string, error) {
+			return "", os.ErrNotExist
+		},
+	}
+
+	env := resolver.Env(nil)
+	want := filepath.Join(fnmDir, "node-versions", "v22.22.2", "installation", "bin", "node")
+	if got := resolver.Resolve("node", env); got != want {
+		t.Fatalf("Resolve() = %q, want newest FNM Node %q", got, want)
+	}
+}
+
 func TestResolverPrefersFnmNodeBinOverExistingPathNode(t *testing.T) {
 	home := t.TempDir()
 	fnmDir := filepath.Join(home, "custom-fnm")

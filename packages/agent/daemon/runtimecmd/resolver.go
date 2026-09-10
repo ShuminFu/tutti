@@ -290,6 +290,9 @@ func fnmNodeBinDirs(fnmDir string) []string {
 	if err != nil {
 		return nil
 	}
+	sort.SliceStable(matches, func(i, j int) bool {
+		return compareNVMNodeBinDirs(filepath.Dir(matches[i]), filepath.Dir(matches[j])) > 0
+	})
 	return matches
 }
 
