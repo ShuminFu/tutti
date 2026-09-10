@@ -10,7 +10,7 @@ import type { AgentGUIRuntime } from "../../../agentActivityRuntime";
 import type { AgentHostUserProject } from "../../../host/agentHostApi";
 import type { AgentSessionComposerSettings } from "../../../shared/agentSessionTypes";
 import { createTestEngineCommandPort } from "../../../shared/testing/createTestAgentSessionEngine";
-import type { AgentGUINodeData } from "../../../types";
+import type { AgentGUINodeData, AgentGUIProvider } from "../../../types";
 import type { AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
 import type { AgentComposerDraft } from "../model/agentGuiNodeTypes";
 import type { AgentGUIComposerTargetData } from "./agentGuiController.composerPresentation";
@@ -217,39 +217,43 @@ describe("P0 new-conversation placement scenarios", () => {
     });
   });
 
-  it("preserves an explicit project selection already made on Home", async () => {
-    const projectPath = "/workspace/project-a";
-    const sectionKey = "project:workspace-1:/workspace/project-a";
-    const scenario = renderNewConversationScenario({
-      activeConversation: null,
-      initialHomeProjectPath: projectPath,
-      userProjects: [
-        {
-          id: "project-a",
-          label: "Project A",
-          path: projectPath,
-          pinnedAtUnixMs: 0,
+  it.each(["codex", "claude-code", "opencode"] as const)(
+    "preserves an explicit project selection already made on %s Home",
+    async (provider) => {
+      const projectPath = "/workspace/project-a";
+      const sectionKey = "project:workspace-1:/workspace/project-a";
+      const scenario = renderNewConversationScenario({
+        activeConversation: null,
+        initialHomeProjectPath: projectPath,
+        provider,
+        userProjects: [
+          {
+            id: "project-a",
+            label: "Project A",
+            path: projectPath,
+            pinnedAtUnixMs: 0,
+            sectionKey
+          }
+        ]
+      });
+
+      act(() => scenario.requestNewConversation());
+      act(() =>
+        scenario.submitPrompt([{ type: "text", text: "start in my project" }])
+      );
+
+      expect(await scenario.waitForActivation()).toMatchObject({
+        cwd: projectPath,
+        initialContent: [{ type: "text", text: "start in my project" }],
+        railPlacement: {
+          version: 1,
+          kind: "project",
+          projectPath,
           sectionKey
         }
-      ]
-    });
-
-    act(() => scenario.requestNewConversation());
-    act(() =>
-      scenario.submitPrompt([{ type: "text", text: "start in my project" }])
-    );
-
-    expect(await scenario.waitForActivation()).toMatchObject({
-      cwd: projectPath,
-      initialContent: [{ type: "text", text: "start in my project" }],
-      railPlacement: {
-        version: 1,
-        kind: "project",
-        projectPath,
-        sectionKey
-      }
-    });
-  });
+      });
+    }
+  );
 });
 
 function renderNewConversationScenario(input: {
@@ -257,6 +261,7 @@ function renderNewConversationScenario(input: {
   authoritativeSettings?: AgentSessionComposerSettings;
   codexSaverModeEntryEnabled?: boolean;
   initialHomeProjectPath: string | null;
+  provider?: AgentGUIProvider;
   rememberedSettings?: AgentSessionComposerSettings;
   userProjects: AgentHostUserProject[];
 }) {
@@ -273,18 +278,19 @@ function renderNewConversationScenario(input: {
     scheduler: { schedule: () => ({ cancel() {} }) }
   });
   const activateSession = vi.spyOn(sessionEngine, "activateSession");
-  const target = createLocalAgentGUIAgentTarget("codex");
+  const provider = input.provider ?? "codex";
+  const target = createLocalAgentGUIAgentTarget(provider);
   const dataRef: { current: AgentGUINodeData } = {
     current: {
       agentTargetId: target.agentTargetId,
       lastActiveAgentSessionId: input.activeConversation?.id ?? null,
-      provider: "codex" as const
+      provider
     }
   };
   const targetData: AgentGUIComposerTargetData = {
     agentTargetId: target.agentTargetId ?? null,
     data: dataRef.current,
-    provider: "codex",
+    provider,
     targetId: target.targetId
   };
   const activeConversationIdRef = {
@@ -305,7 +311,7 @@ function renderNewConversationScenario(input: {
     current: input.activeConversation ? [input.activeConversation] : []
   };
   const conversationListQuery = {
-    provider: "codex" as const,
+    provider,
     sessionOrigin: "local",
     userId: "user-1",
     workspaceId: "workspace-1"
@@ -325,7 +331,7 @@ function renderNewConversationScenario(input: {
       composerAppendRequest: null,
       composerTargetDataFromProviderTarget: () => targetData,
       conversationFilterRef: { current: { kind: "all" } },
-      currentProvider: "codex",
+      currentProvider: provider,
       dataRef,
       defaultAgentTargetId: target.agentTargetId ?? null,
       draftByScopeKeyRef,
@@ -376,7 +382,7 @@ function renderNewConversationScenario(input: {
       draftSettingsBySessionIdRef: {
         current: input.rememberedSettings
           ? {
-              [nodeDefaultDraftKey("codex", target.agentTargetId)]:
+              [nodeDefaultDraftKey(provider, target.agentTargetId)]:
                 input.rememberedSettings
             }
           : {}
@@ -394,7 +400,7 @@ function renderNewConversationScenario(input: {
         effectiveSettings: input.authoritativeSettings,
         loadedAtUnixMs: 1,
         models: [],
-        provider: "codex",
+        provider,
         reasoningEfforts: [],
         skills: [],
         speeds: []
@@ -420,7 +426,7 @@ function renderNewConversationScenario(input: {
       setIsComposerHome: vi.fn(),
       setIsLoadingMessages: vi.fn(),
       submittedDraftSnapshotsRef,
-      tuttiModeDraftKey: "node-default:codex:local:codex",
+      tuttiModeDraftKey: `node-default:${provider}:local:${provider}`,
       userProjectsRef: { current: input.userProjects },
       workspaceId: "workspace-1"
     });
