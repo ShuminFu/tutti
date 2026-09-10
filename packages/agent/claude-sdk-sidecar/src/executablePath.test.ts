@@ -27,6 +27,14 @@ test("explicit CLAUDE_CODE_EXECUTABLE always wins", () => {
   assert.equal(resolved, "/custom/claude");
 });
 
+test("DinTalDock managed engine wins over SDK self-resolution", () => {
+  const resolved = resolveClaudeCodeExecutablePath(
+    { RNDMASTER_CLAUDE_ENGINE: "C:\\managed\\claude.exe" },
+    () => true
+  );
+  assert.equal(resolved, "C:\\managed\\claude.exe");
+});
+
 test("no override when the SDK resolves its own native binary", () => {
   const resolved = resolveClaudeCodeExecutablePath(
     { TUTTI_CLAUDE_CODE_FALLBACK_EXECUTABLE: fakeExecutable("claude") },

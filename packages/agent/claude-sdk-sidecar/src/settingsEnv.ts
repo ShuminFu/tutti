@@ -15,6 +15,9 @@ export function loadClaudeSettingsEnv(
  * precedence over settings.json in each directory.
  */
 export function claudeSettingsEnv(cwd: string): Record<string, string> {
+  if (process.env.RNDMASTER_CLAUDE_MANAGED === "1") {
+    return {};
+  }
   const configDir = process.env.CLAUDE_CONFIG_DIR || `${homedir()}/.claude`;
   const merged = loadClaudeSettingsEnv(configDir);
   for (const path of claudeProjectSettingsPaths(cwd)) {

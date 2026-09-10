@@ -8,10 +8,11 @@
 // services/tuttid/service/agentstatus/claude_binary.go). Precedence:
 //
 //   1. CLAUDE_CODE_EXECUTABLE — explicit operator override, always wins.
-//   2. SDK self-resolution — when a native package sits next to the SDK
+//   2. RNDMASTER_CLAUDE_ENGINE — the DinTalDock-managed, verified engine.
+//   3. SDK self-resolution — when a native package sits next to the SDK
 //      (dev tree via pnpm, or a legacy bundle), let the SDK use its exact
 //      pinned binary by passing no override at all.
-//   3. TUTTI_CLAUDE_CODE_FALLBACK_EXECUTABLE — the tuttid-provisioned binary,
+//   4. TUTTI_CLAUDE_CODE_FALLBACK_EXECUTABLE — the tuttid-provisioned binary,
 //      or a PATH-installed claude as last resort.
 
 import { existsSync } from "node:fs";
@@ -26,6 +27,10 @@ export function resolveClaudeCodeExecutablePath(
   const explicit = env.CLAUDE_CODE_EXECUTABLE?.trim();
   if (explicit) {
     return explicit;
+  }
+  const managed = env.RNDMASTER_CLAUDE_ENGINE?.trim();
+  if (managed) {
+    return managed;
   }
   if (sdkResolvesNativeBinary()) {
     return undefined;
