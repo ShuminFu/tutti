@@ -72,6 +72,7 @@ type scriptedACPConnection struct {
 	recv                       chan ProcessFrame
 	supportsSessionRestore     bool
 	supportsHTTPMCP            bool
+	supportsSteering           bool
 	respondSetMode             bool
 	authRequiredOnNewSession   bool
 	commandUpdateOnNewSession  bool
@@ -120,6 +121,14 @@ func (c *scriptedACPConnection) Send(data []byte) error {
 					capabilities["mcpCapabilities"] = map[string]any{"http": true}
 				}
 				result["agentCapabilities"] = capabilities
+			}
+			if c.supportsSteering {
+				if result["_meta"] == nil {
+					result["_meta"] = map[string]any{}
+				}
+				result["_meta"].(map[string]any)["steering"] = map[string]any{
+					"supported": true,
+				}
 			}
 			c.sendJSON(map[string]any{
 				"jsonrpc": "2.0",
@@ -191,6 +200,14 @@ func (c *scriptedACPConnection) Send(data []byte) error {
 				"jsonrpc": "2.0",
 				"id":      message.ID,
 				"result":  map[string]any{},
+			})
+		case acpMethodSteering:
+			c.sendJSON(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      message.ID,
+				"result": map[string]any{
+					"outcome": "accepted",
+				},
 			})
 		case acpMethodPrompt:
 			if c.promptPermission || c.promptKind != "" {

@@ -28,6 +28,7 @@ const (
 	acpMethodPermission       = "session/request_permission"
 	acpMethodSetMode          = "session/set_mode"
 	cursorACPMethodCreatePlan = "cursor/create_plan"
+	acpMethodSteering         = "_session/steering"
 	acpProtocolVersion        = 1
 	acpStartCallTimeout       = 30 * time.Second
 )

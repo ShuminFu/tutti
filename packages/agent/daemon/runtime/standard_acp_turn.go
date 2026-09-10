@@ -2,11 +2,13 @@ package agentruntime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
 )
@@ -371,6 +373,63 @@ func (a *standardACPAdapter) Cancel(ctx context.Context, session Session, _ stri
 	}
 	a.rejectPendingApprovals(session.AgentSessionID, errPermissionRequestCanceled)
 	return nil, nil
+}
+
+func (a *standardACPAdapter) GuideActiveTurn(
+	ctx context.Context,
+	session Session,
+	content []PromptContentBlock,
+	displayPrompt string,
+	turnID string,
+	emit EventSink,
+	_ CommandSnapshotSink,
+) ([]activityshared.Event, error) {
+	acpSession := a.getSession(session.AgentSessionID)
+	if acpSession == nil || acpSession.client == nil {
+		return nil, ErrSessionDisconnected
+	}
+	session.ProviderSessionID = acpSession.providerSessionID
+	explicitDisplayPrompt, visibleText := explicitAndVisiblePromptText(content, displayPrompt)
+	providerContent, err := materializeProviderPromptImagesAtBoundary(ctx, content, a.promptImageMaterializer)
+	if err != nil {
+		return nil, err
+	}
+	acpPromptContent := promptContentForACP(providerContent)
+	events := []activityshared.Event{
+		newUserPromptActivityEvent(ctx, session, content, explicitDisplayPrompt, visibleText, turnID, map[string]any{
+			"adapter":  a.config.adapterName,
+			"guidance": true,
+			"steered":  true,
+		}),
+	}
+	steerParams := map[string]any{
+		"sessionId": acpSession.providerSessionID,
+		"prompt":    acpPromptContent,
+		"_meta": map[string]any{
+			"steering": map[string]any{
+				"idleBehavior": "promptRequired",
+			},
+		},
+	}
+	steerCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	result, err := acpSession.client.CallNoHandler(steerCtx, acpMethodSteering, steerParams)
+	if err != nil {
+		return events, err
+	}
+	var steerResult struct {
+		Outcome string `json:"outcome"`
+		Reason  string `json:"reason,omitempty"`
+	}
+	if parseErr := json.Unmarshal(result, &steerResult); parseErr == nil {
+		if steerResult.Outcome == "promptRequired" {
+			return events, fmt.Errorf("steering failed: %s (reason: %s)", steerResult.Outcome, steerResult.Reason)
+		}
+	}
+	if emit != nil {
+		emit(events)
+	}
+	return events, nil
 }
 
 func standardACPRootProviderTurnStartedEvent(session Session, rootTurnID string) activityshared.Event {
