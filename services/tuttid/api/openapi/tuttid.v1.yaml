@@ -12067,6 +12067,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AgentProviderAction"
+        configOptions:
+          type: array
+          description: Raw ACP session config options captured by the provider readiness probe.
+          items:
+            type: object
+            additionalProperties: true
         network:
           allOf:
             - $ref: "#/components/schemas/AgentProviderNetworkStatus"

@@ -109,6 +109,7 @@ func (s Service) statusForSpec(
 		s.shouldProbeAdapterCommandForStatus(spec, runtimeResolution) {
 		probeCacheKey := s.adapterProbeCacheKey(detectionCtx, spec, runtimeResolution)
 		if !options.forceRefresh &&
+			!strings.EqualFold(strings.TrimSpace(spec.Provider), "cursor") &&
 			s.AdapterProbeCache.readyWithin(probeCacheKey, runtimeResolution.AdapterPath, now, s.providerStatusCacheTTL()) {
 			adapterProbeCacheHit = true
 			adapterProbeCacheAge, _ = s.AdapterProbeCache.age(probeCacheKey, runtimeResolution.AdapterPath, now)
@@ -272,6 +273,7 @@ func (s Service) statusForSpec(
 		},
 		Auth:    auth,
 		Actions: actions,
+		ConfigOptions: cloneConfigOptions(adapterProbe.ConfigOptions),
 	}
 	status.ActiveAction = activeActionForProvider(spec.Provider)
 	if s.LastOperations != nil {

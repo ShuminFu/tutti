@@ -23,6 +23,21 @@ func (a *standardACPAdapter) startupCallTimeout() time.Duration {
 }
 
 func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]activityshared.Event, error) {
+	prepared, contract, err := a.prepareRnDMasterACPSession(session)
+	if err != nil {
+		return nil, err
+	}
+	session = prepared
+	if providerSessionID := rndmasterResumeProviderSessionID(session); providerSessionID != "" {
+		session.ProviderSessionID = providerSessionID
+		if err := a.Resume(ctx, session); err != nil {
+			return nil, err
+		}
+		return []activityshared.Event{newSessionActivityEvent(session, EventSessionStarted, SessionStatusReady, map[string]any{
+			"adapter": a.config.adapterName, "command": strings.Join(a.config.command, " "),
+			"importedProviderSession": true, "permissionModeId": session.PermissionModeID,
+		})}, nil
+	}
 	unlockLifecycle := a.lockSessionLifecycle(session.AgentSessionID)
 	defer unlockLifecycle()
 	a.logStandardACPStartupDiagnostics("start.enter", map[string]any{
@@ -42,7 +57,13 @@ func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]acti
 		return nil, err
 	}
 	mcpServers := acpMCPServers(session.MCPServers)
-	if len(mcpServers) > 0 && !a.supportsHTTPMCP(initializeResult) {
+	contractMCPServers, contractHasHTTP, err := rndmasterACPMCPServers(contract)
+	if err != nil {
+		_ = client.Close()
+		return nil, err
+	}
+	mcpServers = rndmasterMergeACPMCPServers(mcpServers, contractMCPServers)
+	if (len(acpMCPServers(session.MCPServers)) > 0 || contractHasHTTP) && !a.supportsHTTPMCP(initializeResult) {
 		_ = client.Close()
 		return nil, ErrMCPHTTPUnsupported
 	}
@@ -234,6 +255,11 @@ func standardACPProtocolCWD(cwd string) string {
 }
 
 func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error {
+	prepared, contract, err := a.prepareRnDMasterACPSession(session)
+	if err != nil {
+		return err
+	}
+	session = prepared
 	if strings.TrimSpace(session.ProviderSessionID) == "" {
 		return missingProviderSessionResumeError(session)
 	}
@@ -244,7 +270,13 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 		return err
 	}
 	mcpServers := acpMCPServers(session.MCPServers)
-	if !attachedCheckpoint && len(mcpServers) > 0 && !a.supportsHTTPMCP(initializeResult) {
+	contractMCPServers, contractHasHTTP, err := rndmasterACPMCPServers(contract)
+	if err != nil {
+		_ = client.Close()
+		return err
+	}
+	mcpServers = rndmasterMergeACPMCPServers(mcpServers, contractMCPServers)
+	if !attachedCheckpoint && (len(acpMCPServers(session.MCPServers)) > 0 || contractHasHTTP) && !a.supportsHTTPMCP(initializeResult) {
 		_ = client.Close()
 		return ErrMCPHTTPUnsupported
 	}
@@ -319,6 +351,13 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 	}
 
 	method := acpResumeMethod(initializeResult)
+	importing := rndmasterResumeProviderSessionID(session) != ""
+	if importing {
+		if !rndmasterACPLoadSupported(initializeResult) {
+			return rndmasterLegacySessionUnavailable(session, "session/load not advertised", nil)
+		}
+		method = acpMethodLoadSession
+	}
 	if method == "" {
 		return unsupportedACPResumeError(session)
 	}
@@ -335,6 +374,9 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 		return err
 	})
 	if err != nil {
+		if importing {
+			return rndmasterLegacySessionUnavailable(session, err.Error(), err)
+		}
 		return classifyACPResumeError(session, method, err)
 	}
 	applyACPConfigOptionsResult(&acpSession.acpLiveState, loadSessionResult)

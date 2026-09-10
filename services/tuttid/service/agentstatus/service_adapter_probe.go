@@ -94,7 +94,11 @@ func (s Service) probeAdapterRuntimeCommand(
 		(isClaudeStatusSpec(spec) && strings.TrimSpace(spec.ExternalRegistryID) == "claude-acp") {
 		// Standard ACP binaries, including Claude's separately installed bridge,
 		// must complete initialize instead of only staying alive.
-		result = s.probeStandardACPHandshake(ctx, result, command, env, s.probeTimeoutForSpec(spec))
+		if strings.EqualFold(strings.TrimSpace(spec.Provider), "cursor") {
+			result = s.probeCursorACPConfigOptions(ctx, result, command, env, s.probeTimeoutForSpec(spec))
+		} else {
+			result = s.probeStandardACPHandshake(ctx, result, command, env, s.probeTimeoutForSpec(spec))
+		}
 	} else {
 		result = s.probeCommandWithReadyAfter(ctx, result, command, env, s.probeReadyAfterForSpec(spec))
 	}

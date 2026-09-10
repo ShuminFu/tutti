@@ -130,6 +130,7 @@ type ProbeResult struct {
 	CommandCategory     string
 	ProtocolCategory    string
 	ProtocolPackageName string
+	ConfigOptions       []map[string]any
 }
 
 type RunActionResult struct {
@@ -159,6 +160,7 @@ type ProviderStatus struct {
 	LastError     *ProviderLastError
 	ActiveAction  *ActiveAction
 	LastOperation *RunActionResult
+	ConfigOptions []map[string]any
 }
 
 type UpdateStatus struct {

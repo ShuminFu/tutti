@@ -128,15 +128,28 @@ func hasCursorPluginDirArg(command []string) bool {
 }
 
 func cursorACPInitialPromptContext(session Session) (string, error) {
-	path := strings.TrimSpace(sessionEnvValue(session.Env, cursorPromptContextFileEnv))
-	if path == "" {
+	if strings.TrimSpace(session.ProviderSessionID) != "" {
 		return "", nil
 	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read cursor initial prompt context: %w", err)
+	parts := []string{}
+	path := strings.TrimSpace(sessionEnvValue(session.Env, cursorPromptContextFileEnv))
+	if path != "" {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return "", fmt.Errorf("read cursor initial prompt context: %w", err)
+		}
+		if prompt := strings.TrimSpace(string(content)); prompt != "" {
+			parts = append(parts, prompt)
+		}
 	}
-	return strings.TrimSpace(string(content)), nil
+	contract, err := rndmasterContractFromSession(session)
+	if err != nil {
+		return "", err
+	}
+	if prompt := strings.TrimSpace(contract.SystemPrompt); prompt != "" {
+		parts = append(parts, prompt)
+	}
+	return strings.Join(parts, "\n\n"), nil
 }
 
 func NewCursorAdapter(transport ProcessTransport) *standardACPAdapter {

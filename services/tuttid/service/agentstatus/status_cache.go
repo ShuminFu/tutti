@@ -108,6 +108,7 @@ func cloneProviderStatus(status ProviderStatus) ProviderStatus {
 		}
 	}
 	result.Checks = append([]ProviderCheck(nil), status.Checks...)
+	result.ConfigOptions = cloneConfigOptions(status.ConfigOptions)
 	if status.LastError != nil {
 		lastError := *status.LastError
 		result.LastError = &lastError

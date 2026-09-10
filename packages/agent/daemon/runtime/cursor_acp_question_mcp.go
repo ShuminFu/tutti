@@ -270,6 +270,18 @@ func (a *standardACPAdapter) handleCursorMCPAskQuestion(
 	}
 	normalized["requestId"] = requestID
 	title := firstNonEmpty(strings.TrimSpace(parsed.Title), cursorACPQuestionMCPToolName)
+	if strings.TrimSpace(session.PermissionModeID) == cursorPermissionFullAccess {
+		interactionErr := &AppError{Code: AppErrorInteractionRequired,
+			Message: "interaction_required: Cursor requested user input during a full-access headless turn."}
+		if emit != nil {
+			emit([]activityshared.Event{newTurnActivityEventWithID(
+				session, callID, EventCallFailed, turnID, SessionStatusWorking, "", title,
+				map[string]any{"callId": callID, "callType": "interactive", "toolName": cursorACPQuestionMCPToolName,
+					"status": "failed", "code": AppErrorInteractionRequired, "input": clonePayload(normalized)},
+			)})
+		}
+		return nil, interactionErr
+	}
 	pending := &pendingACPApproval{
 		agentSessionID:       strings.TrimSpace(session.AgentSessionID),
 		requestID:            requestID,

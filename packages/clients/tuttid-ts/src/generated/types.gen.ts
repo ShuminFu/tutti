@@ -2202,6 +2202,8 @@ export type AgentProviderStatus = {
   auth: AgentProviderAuthInfo;
   update: AgentProviderUpdateStatus;
   actions: Array<AgentProviderAction>;
+  /** Raw ACP session config options captured by the provider readiness probe. */
+  configOptions?: Array<{ [key: string]: unknown }>;
   network?: AgentProviderNetworkStatus | null;
   activeAction?: AgentProviderActiveAction | null;
   lastOperation?: AgentProviderActionRunResponse | null;

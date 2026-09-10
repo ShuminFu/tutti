@@ -345,6 +345,7 @@ func generatedAgentProviderStatus(status agentstatusservice.ProviderStatus) tutt
 		Auth:          generatedAgentProviderAuthInfo(status.Auth),
 		Availability:  generatedAgentProviderAvailability(status.Availability),
 		Cli:           generatedAgentProviderCLIStatus(status.CLI),
+		ConfigOptions: status.ConfigOptions,
 		Network:       generatedAgentProviderNetworkStatus(status.Network),
 		Provider:      tuttigenerated.WorkspaceAgentProvider(status.Provider),
 		Update:        generatedAgentProviderUpdateStatus(status.Update),

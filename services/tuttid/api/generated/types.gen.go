@@ -5256,6 +5256,7 @@ type AgentProviderStatus struct {
 	Auth          AgentProviderAuthInfo           `json:"auth"`
 	Availability  AgentProviderAvailability       `json:"availability"`
 	Cli           AgentProviderCliStatus          `json:"cli"`
+	ConfigOptions []map[string]interface{}         `json:"configOptions,omitempty"`
 	LastOperation *AgentProviderActionRunResponse `json:"lastOperation,omitempty"`
 	Network       *AgentProviderNetworkStatus     `json:"network,omitempty"`
 	Provider      WorkspaceAgentProvider          `json:"provider"`
