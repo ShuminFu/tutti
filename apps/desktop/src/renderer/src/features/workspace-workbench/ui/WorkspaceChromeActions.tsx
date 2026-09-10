@@ -295,6 +295,7 @@ function WorkspaceMissionControlAction({
 }
 
 export function WorkspaceSettingsTrigger({
+  embedded = false,
   onOpenExternalAgentImport,
   onSelectWallpaper,
   onSelectWallpaperDisplayMode,
@@ -302,6 +303,7 @@ export function WorkspaceSettingsTrigger({
   selectedWallpaperID,
   workspace
 }: {
+  embedded?: boolean;
   onOpenExternalAgentImport: () => void;
   onSelectWallpaper: (id: WorkspaceWallpaperId) => void;
   onSelectWallpaperDisplayMode: (
@@ -314,13 +316,17 @@ export function WorkspaceSettingsTrigger({
   const { t } = useTranslation();
   const { service: settingsService, state: settingsState } =
     useWorkspaceSettingsService();
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const wasOpenRef = useRef(settingsState.open);
 
   // Deep-link bridge: the agent-gui rail's "Usage & Settings" popover publishes
   // an open request (with a target section) into a shared store. React to new
   // requests by opening the global settings panel navigated to that section.
   const settingsPanelRequest = useWorkspaceSettingsPanelRequest();
   const lastHandledSettingsRequestRef = useRef(
-    settingsPanelRequest.requestSequence
+    embedded
+      ? Math.max(0, settingsPanelRequest.requestSequence - 1)
+      : settingsPanelRequest.requestSequence
   );
   useEffect(() => {
     if (
@@ -335,7 +341,11 @@ export function WorkspaceSettingsTrigger({
       { id: workspace.id },
       settingsPanelRequest.section || settingsPanelRequest.pane
         ? {
-            section: settingsPanelRequest.section
+            section: embedded
+              ? settingsPanelRequest.section === "model"
+                ? "model"
+                : "agent"
+              : settingsPanelRequest.section
               ? (settingsPanelRequest.section as WorkspaceSettingsSectionID)
               : undefined,
             pane: settingsPanelRequest.pane ?? undefined,
@@ -343,7 +353,14 @@ export function WorkspaceSettingsTrigger({
           }
         : undefined
     );
-  }, [settingsPanelRequest, settingsService, workspace.id]);
+  }, [embedded, settingsPanelRequest, settingsService, workspace.id]);
+
+  useEffect(() => {
+    if (wasOpenRef.current && !settingsState.open) {
+      triggerRef.current?.focus();
+    }
+    wasOpenRef.current = settingsState.open;
+  }, [settingsState.open]);
 
   return (
     <>
@@ -355,6 +372,8 @@ export function WorkspaceSettingsTrigger({
             className="inline-flex"
           >
             <Button
+              data-dintaldock-settings-trigger={embedded ? "true" : undefined}
+              ref={triggerRef}
               aria-expanded={settingsState.open}
               aria-label={t("workspace.settings.trigger")}
               className={cn(
@@ -369,7 +388,9 @@ export function WorkspaceSettingsTrigger({
               onClick={() =>
                 settingsService.openPanel(
                   { id: workspace.id },
-                  { section: "general" }
+                  embedded
+                    ? { section: "agent", pane: "agents" }
+                    : { section: "general" }
                 )
               }
             >
@@ -380,6 +401,7 @@ export function WorkspaceSettingsTrigger({
         <TooltipContent>{t("workspace.settings.trigger")}</TooltipContent>
       </Tooltip>
       <WorkspaceSettingsPanel
+        embedded={embedded}
         onOpenExternalAgentImport={onOpenExternalAgentImport}
         onSelectWallpaper={onSelectWallpaper}
         onSelectWallpaperDisplayMode={onSelectWallpaperDisplayMode}

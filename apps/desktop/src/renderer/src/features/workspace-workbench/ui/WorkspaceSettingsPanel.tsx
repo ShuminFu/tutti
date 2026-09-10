@@ -157,6 +157,7 @@ const cuaDriverToggleDemoUrl = new URL(
   import.meta.url
 ).href;
 export function WorkspaceSettingsPanel({
+  embedded = false,
   onOpenExternalAgentImport,
   onSelectWallpaper,
   onSelectWallpaperDisplayMode,
@@ -164,6 +165,7 @@ export function WorkspaceSettingsPanel({
   selectedWallpaperID,
   workspace
 }: {
+  embedded?: boolean;
   onOpenExternalAgentImport: () => void;
   onSelectWallpaper: (id: WorkspaceWallpaperId) => void;
   onSelectWallpaperDisplayMode: (
@@ -194,6 +196,7 @@ export function WorkspaceSettingsPanel({
     desktopPreferencesState.changingFeatureFlags ??
     desktopPreferencesState.featureFlags;
   const labSectionVisible =
+    !embedded &&
     settingsState.developerPanelVisible &&
     isFeatureEnabled(pendingFeatureFlags, LAB_ENABLED_FLAG);
   const earlyAccessIntegrationsEnabled = isFeatureEnabled(
@@ -211,10 +214,26 @@ export function WorkspaceSettingsPanel({
     pendingFeatureFlags,
     LAB_AUTOMATION_RULES_FLAG
   );
-  const mobileRemoteAccessSettingsEnabled = isFeatureEnabled(
+  const mobileRemoteAccessSettingsEnabled = !embedded && isFeatureEnabled(
     pendingFeatureFlags,
     MOBILE_REMOTE_ACCESS_SETTINGS_FLAG
   );
+
+  useEffect(() => {
+    if (
+      embedded &&
+      settingsState.activeSection !== "agent" &&
+      settingsState.activeSection !== "model"
+    ) {
+      settingsService.selectSection("agent");
+    }
+  }, [embedded, settingsService, settingsState.activeSection]);
+
+  useEffect(() => {
+    if (embedded && settingsState.agentTab === "general") {
+      settingsService.selectAgentTab("agents");
+    }
+  }, [embedded, settingsService, settingsState.agentTab]);
 
   useEffect(() => {
     if (settingsState.open) {
@@ -224,36 +243,48 @@ export function WorkspaceSettingsPanel({
 
   useEffect(() => {
     if (!labSectionVisible && settingsState.activeSection === "lab") {
-      settingsService.selectSection("general");
+      embedded
+        ? settingsService.selectSection("agent")
+        : settingsService.selectSection("general");
     }
-  }, [labSectionVisible, settingsService, settingsState.activeSection]);
+  }, [embedded, labSectionVisible, settingsService, settingsState.activeSection]);
 
   useEffect(() => {
     if (
       !mobileRemoteAccessSettingsEnabled &&
       settingsState.activeSection === "connection"
     ) {
-      settingsService.selectSection("general");
+      embedded
+        ? settingsService.selectSection("agent")
+        : settingsService.selectSection("general");
     }
   }, [
     mobileRemoteAccessSettingsEnabled,
     settingsService,
-    settingsState.activeSection
+    settingsState.activeSection,
+    embedded
   ]);
 
   useEffect(() => {
     if (!automationRulesEnabled && settingsState.agentTab === "automation") {
-      settingsService.selectAgentTab("general");
+      embedded
+        ? settingsService.selectAgentTab("agents")
+        : settingsService.selectAgentTab("general");
     }
-  }, [automationRulesEnabled, settingsService, settingsState.agentTab]);
+  }, [automationRulesEnabled, embedded, settingsService, settingsState.agentTab]);
 
   useEffect(() => {
     if (!connectorsVisible && settingsState.agentTab === "connectors") {
-      settingsService.selectAgentTab("general");
+      embedded
+        ? settingsService.selectAgentTab("agents")
+        : settingsService.selectAgentTab("general");
     }
-  }, [connectorsVisible, settingsService, settingsState.agentTab]);
+  }, [connectorsVisible, embedded, settingsService, settingsState.agentTab]);
 
   const handleVersionTap = () => {
+    if (embedded) {
+      return;
+    }
     if (settingsState.developerPanelVisible) {
       return;
     }
@@ -313,10 +344,14 @@ export function WorkspaceSettingsPanel({
           className="col-start-1 row-start-2 flex min-h-0 flex-col gap-2 overflow-y-auto border-r border-[var(--border-1)] bg-[var(--background-fronted)] px-3 pb-4 pt-3"
         >
           {[
-            {
-              id: "general" as const,
-              label: t("workspace.settings.nav.general")
-            },
+            ...(!embedded
+              ? [
+                  {
+                    id: "general" as const,
+                    label: t("workspace.settings.nav.general")
+                  }
+                ]
+              : []),
             {
               id: "agent" as const,
               label: t("workspace.settings.nav.agent")
@@ -325,10 +360,14 @@ export function WorkspaceSettingsPanel({
               id: "model" as const,
               label: t("workspace.settings.nav.model")
             },
-            {
-              id: "appearance" as const,
-              label: t("workspace.settings.nav.appearance")
-            },
+            ...(!embedded
+              ? [
+                  {
+                    id: "appearance" as const,
+                    label: t("workspace.settings.nav.appearance")
+                  }
+                ]
+              : []),
             ...(mobileRemoteAccessSettingsEnabled
               ? [
                   {
@@ -337,15 +376,19 @@ export function WorkspaceSettingsPanel({
                   }
                 ]
               : []),
-            {
-              id: "deletedConversations" as const,
-              label: t("workspace.settings.nav.deletedConversations")
-            },
-            {
-              id: "about" as const,
-              label: t("workspace.settings.nav.about")
-            },
-            ...(settingsState.developerPanelVisible
+            ...(!embedded
+              ? [
+                  {
+                    id: "deletedConversations" as const,
+                    label: t("workspace.settings.nav.deletedConversations")
+                  },
+                  {
+                    id: "about" as const,
+                    label: t("workspace.settings.nav.about")
+                  }
+                ]
+              : []),
+            ...(!embedded && settingsState.developerPanelVisible
               ? [
                   {
                     id: "developer" as const,
@@ -353,7 +396,7 @@ export function WorkspaceSettingsPanel({
                   }
                 ]
               : []),
-            ...(labSectionVisible
+            ...(!embedded && labSectionVisible
               ? [
                   {
                     id: "lab" as const,
@@ -391,7 +434,7 @@ export function WorkspaceSettingsPanel({
                 : "overflow-y-auto px-[22px] pb-[22px] pt-0"
             )}
           >
-            {settingsState.activeSection === "general" ? (
+            {settingsState.activeSection === "general" && !embedded ? (
               <WorkspaceGeneralSettingsSection
                 changingFeatureFlags={
                   desktopPreferencesState.changingFeatureFlags
@@ -425,10 +468,14 @@ export function WorkspaceSettingsPanel({
                   ariaLabel={t("workspace.settings.nav.agent")}
                   className="h-8 shrink-0"
                   tabs={[
-                    {
-                      value: "general" as const,
-                      label: t("workspace.settings.agent.tabs.general")
-                    },
+                    ...(!embedded
+                      ? [
+                          {
+                            value: "general" as const,
+                            label: t("workspace.settings.agent.tabs.general")
+                          }
+                        ]
+                      : []),
                     {
                       value: "agents" as const,
                       label: t("workspace.settings.agent.tabs.agents")
@@ -502,8 +549,11 @@ export function WorkspaceSettingsPanel({
                         [flag]: enabled
                       });
                     }}
-                    onOpenEnvironment={(provider) =>
-                      agentEnvService.open({ focus: "detect", provider })
+                    onOpenEnvironment={
+                      embedded
+                        ? undefined
+                        : (provider) =>
+                            agentEnvService.open({ focus: "detect", provider })
                     }
                   />
                 ) : settingsState.agentTab === "connectors" &&
@@ -523,7 +573,7 @@ export function WorkspaceSettingsPanel({
                   <SettingsRows>
                     <WorkspaceAutomationRulesSection />
                   </SettingsRows>
-                ) : (
+                ) : embedded ? null : (
                   <WorkspaceAgentSettingsSection
                     agentConversationDetailMode={
                       desktopPreferencesState.agentConversationDetailMode
@@ -560,7 +610,7 @@ export function WorkspaceSettingsPanel({
                   />
                 )}
               </div>
-            ) : settingsState.activeSection === "appearance" ? (
+            ) : settingsState.activeSection === "appearance" && !embedded ? (
               <WorkspaceAppearanceSettingsSection
                 changingDockPlacement={
                   desktopPreferencesState.changingDockPlacement
@@ -600,7 +650,7 @@ export function WorkspaceSettingsPanel({
               />
             ) : settingsState.activeSection === "model" ? (
               <WorkspaceModelSettingsSection />
-            ) : settingsState.activeSection === "lab" ? (
+            ) : settingsState.activeSection === "lab" && !embedded ? (
               <WorkspaceLabSettingsSection
                 changingFeatureFlags={
                   desktopPreferencesState.changingFeatureFlags
@@ -614,14 +664,14 @@ export function WorkspaceSettingsPanel({
                   void settingsService.changeWorkbenchShortcuts(shortcuts);
                 }}
               />
-            ) : settingsState.activeSection === "connection" ? (
+            ) : settingsState.activeSection === "connection" && !embedded ? (
               <WorkspaceConnectionSettingsSection
                 featureFlags={
                   desktopPreferencesState.changingFeatureFlags ??
                   desktopPreferencesState.featureFlags
                 }
               />
-            ) : settingsState.activeSection === "deletedConversations" ? (
+            ) : settingsState.activeSection === "deletedConversations" && !embedded ? (
               <WorkspaceDeletedConversationsSection
                 changingRetentionDays={
                   desktopPreferencesState.changingDeletedAgentConversationRetentionDays
@@ -637,12 +687,12 @@ export function WorkspaceSettingsPanel({
                   );
                 }}
               />
-            ) : settingsState.activeSection === "about" ? (
+            ) : settingsState.activeSection === "about" && !embedded ? (
               <WorkspaceAboutSettingsSection
                 developerLogs={settingsState.developerLogs}
                 onVersionTap={handleVersionTap}
               />
-            ) : (
+            ) : embedded ? null : (
               <WorkspaceDeveloperSettingsSection />
             )}
           </div>

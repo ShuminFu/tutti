@@ -102,6 +102,7 @@ import { WorkspaceAppExternalBridge } from "./WorkspaceAppExternalBridge";
 import { WorkspaceLaunchpadOverlay } from "./WorkspaceLaunchpadOverlay.tsx";
 import { useWorkspaceWorkbenchShellRuntime } from "./useWorkspaceWorkbenchShellRuntime";
 import { useWorkspaceWorkbenchHostService } from "./useWorkspaceWorkbenchHostService.ts";
+import { EmbeddedWorkspaceSettingsHost } from "./EmbeddedWorkspaceSettingsHost";
 import { WorkspaceCloseGuardDialog } from "./WorkspaceCloseGuardDialog.tsx";
 import { WorkspaceFallbackState } from "./WorkspaceFallbackState.tsx";
 import type { WorkspaceWorkbenchHostSessionBinding } from "../services/workspaceWorkbenchHostService.interface.ts";
@@ -923,6 +924,15 @@ function ReadyWorkspaceWorkbenchWithSession({
         )}
       >
         <WorkspaceAppCenterIntegration workspaceId={state.workspace.id} />
+        {embeddedDintalDock ? (
+          <EmbeddedWorkspaceSettingsHost
+            onSelectWallpaper={runtime.selectWallpaper}
+            onSelectWallpaperDisplayMode={runtime.selectWallpaperDisplayMode}
+            selectedWallpaperDisplayMode={runtime.selectedWallpaperDisplayMode}
+            selectedWallpaperID={runtime.selectedWallpaperID}
+            workspace={state.workspace}
+          />
+        ) : null}
         <WorkbenchHost
           captureNodePreviewImages={hostInput.captureNodePreviewImages}
           className="h-full"

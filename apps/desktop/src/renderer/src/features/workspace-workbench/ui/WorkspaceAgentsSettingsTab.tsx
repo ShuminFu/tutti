@@ -184,7 +184,7 @@ export function WorkspaceAgentsSettingsTab({
     enabled: boolean
   ) => Promise<void>;
   onAutoCheckEnabledChange: (enabled: boolean) => void;
-  onOpenEnvironment: (provider: WorkspaceAgentProvider) => void;
+  onOpenEnvironment?: (provider: WorkspaceAgentProvider) => void;
   onExtensionEnabledChange: (
     flag: AgentExtensionActivationFlag,
     enabled: boolean
@@ -543,7 +543,11 @@ export function WorkspaceAgentsSettingsTab({
                       environmentLabel={environmentLabel}
                       label={t(statusLabelKeys[status])}
                       status={status}
-                      onOpenEnvironment={() => onOpenEnvironment(provider)}
+                      onOpenEnvironment={
+                        onOpenEnvironment
+                          ? () => onOpenEnvironment(provider)
+                          : undefined
+                      }
                     />
                   </span>
                 </div>
@@ -556,7 +560,11 @@ export function WorkspaceAgentsSettingsTab({
                     environmentLabel={environmentLabel}
                     label={t(statusLabelKeys[status])}
                     status={status}
-                    onOpenEnvironment={() => onOpenEnvironment(provider)}
+                    onOpenEnvironment={
+                      onOpenEnvironment
+                        ? () => onOpenEnvironment(provider)
+                        : undefined
+                    }
                   />
                 </div>
                 <div
