@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -39,15 +41,18 @@ func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]acti
 		})
 		return nil, err
 	}
-	if len(acpMCPServers(session.MCPServers)) > 0 && !a.supportsHTTPMCP(initializeResult) {
+	mcpServers := acpMCPServers(session.MCPServers)
+	if len(mcpServers) > 0 && !a.supportsHTTPMCP(initializeResult) {
 		_ = client.Close()
 		return nil, ErrMCPHTTPUnsupported
 	}
 	started := false
 	keepSession := false
 	previousSession := a.getSession(session.AgentSessionID)
+	var acpSession *standardACPSession
 	defer func() {
 		if !started {
+			acpSession.releaseLocalTools()
 			_ = client.Close()
 		}
 		if !keepSession {
@@ -62,7 +67,7 @@ func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]acti
 	if err != nil {
 		return nil, err
 	}
-	acpSession := &standardACPSession{
+	acpSession = &standardACPSession{
 		client:               client,
 		agentInfo:            acpAgentInfo(initializeResult),
 		promptImage:          standardACPProviderPromptImageSupported(a.config.provider, initializeResult),
@@ -74,10 +79,18 @@ func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]acti
 		initialPromptContext: initialPromptContext,
 	}
 	a.storeSession(session.AgentSessionID, acpSession)
+	if a.config.localToolBridge != nil && standardACPHTTPMCPSupported(initializeResult) {
+		binding, release, bindErr := a.config.localToolBridge.Bind(ctx, session)
+		if bindErr != nil {
+			return nil, fmt.Errorf("bind local ACP tool bridge: %w", bindErr)
+		}
+		acpSession.localToolRelease = release
+		mcpServers = append(mcpServers, acpMCPServers([]MCPServerBinding{binding})...)
+	}
 
 	newSessionParams := map[string]any{
-		"cwd":        firstNonEmpty(session.CWD, "/"),
-		"mcpServers": acpMCPServers(session.MCPServers),
+		"cwd":        standardACPProtocolCWD(session.CWD),
+		"mcpServers": mcpServers,
 	}
 	if err := a.applyProviderSessionMeta(newSessionParams, session); err != nil {
 		return nil, err
@@ -86,10 +99,10 @@ func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]acti
 	a.logStandardACPStartupDiagnostics("session_new.start", map[string]any{
 		"room_id":          session.RoomID,
 		"agent_session_id": session.AgentSessionID,
-		"cwd":              firstNonEmpty(session.CWD, "/"),
+		"cwd":              standardACPProtocolCWD(session.CWD),
 		"timeout_ms":       a.startupCallTimeout().Milliseconds(),
 	})
-	newSessionResult, err := client.CallWithTimeout(ctx, a.startupCallTimeout(), acpMethodNewSession, newSessionParams, func(ctx context.Context, message acpMessage) error {
+	newSessionResult, err := a.callSessionNewWithRetry(ctx, client, session, newSessionParams, func(ctx context.Context, message acpMessage) error {
 		_, err := a.handleACPMessage(ctx, client, session, "", message, nil, nil, nil)
 		return err
 	})
@@ -175,6 +188,51 @@ func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]acti
 	})}, nil
 }
 
+func (a *standardACPAdapter) callSessionNewWithRetry(
+	ctx context.Context,
+	client *acpClient,
+	session Session,
+	params map[string]any,
+	handler acpMessageHandler,
+) (json.RawMessage, error) {
+	limit := 0
+	if a != nil && a.config.retrySessionNewError != nil && a.config.sessionNewRetryLimit > 0 {
+		limit = a.config.sessionNewRetryLimit
+	}
+	for attempt := 0; ; attempt++ {
+		result, err := client.CallWithTimeout(ctx, a.startupCallTimeout(), acpMethodNewSession, params, handler)
+		if err == nil || attempt >= limit || a.config.retrySessionNewError == nil || !a.config.retrySessionNewError(err) {
+			return result, err
+		}
+		a.logStandardACPStartupDiagnostics("session_new.retry", map[string]any{
+			"room_id":          session.RoomID,
+			"agent_session_id": session.AgentSessionID,
+			"attempt":          attempt + 1,
+			"max_retries":      limit,
+			"error":            err.Error(),
+		})
+	}
+}
+
+// standardACPProtocolCWD keeps the provider protocol's working directory
+// aligned with the process working directory when the caller did not supply
+// one. A POSIX root is not a valid Windows workspace fallback: sending "/"
+// makes a Windows provider resolve searches against a path that cannot exist.
+func standardACPProtocolCWD(cwd string) string {
+	if strings.TrimSpace(cwd) != "" {
+		return cwd
+	}
+	if runtime.GOOS == "windows" {
+		if processCWD, err := os.Getwd(); err == nil && strings.TrimSpace(processCWD) != "" {
+			return processCWD
+		}
+		// Keep the provider anchored to the child process's native cwd even if
+		// the host cannot materialize an absolute spelling for it.
+		return "."
+	}
+	return "/"
+}
+
 func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error {
 	if strings.TrimSpace(session.ProviderSessionID) == "" {
 		return missingProviderSessionResumeError(session)
@@ -185,15 +243,18 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 	if err != nil {
 		return err
 	}
-	if !attachedCheckpoint && len(acpMCPServers(session.MCPServers)) > 0 && !a.supportsHTTPMCP(initializeResult) {
+	mcpServers := acpMCPServers(session.MCPServers)
+	if !attachedCheckpoint && len(mcpServers) > 0 && !a.supportsHTTPMCP(initializeResult) {
 		_ = client.Close()
 		return ErrMCPHTTPUnsupported
 	}
 	started := false
 	keepSession := false
 	previousSession := a.getSession(session.AgentSessionID)
+	var acpSession *standardACPSession
 	defer func() {
 		if !started {
+			acpSession.releaseLocalTools()
 			_ = client.Close()
 		}
 		if !keepSession {
@@ -215,7 +276,7 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 			a.startupModeID(session),
 		)
 		agentInfo, _ := session.RuntimeContext["agent"].(map[string]any)
-		acpSession := &standardACPSession{
+		acpSession = &standardACPSession{
 			client:               client,
 			providerSessionID:    session.ProviderSessionID,
 			resumeRuntimeContext: clonePayload(session.RuntimeContext),
@@ -232,7 +293,7 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 		a.closeReplacedSession(previousSession, client)
 		return nil
 	}
-	acpSession := &standardACPSession{
+	acpSession = &standardACPSession{
 		client:               client,
 		providerSessionID:    session.ProviderSessionID,
 		agentInfo:            acpAgentInfo(initializeResult),
@@ -248,6 +309,14 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 		acpSession.acpLiveState = cloneACPLiveState(previousSession.acpLiveState)
 	}
 	a.storeSession(session.AgentSessionID, acpSession)
+	if a.config.localToolBridge != nil && standardACPHTTPMCPSupported(initializeResult) {
+		binding, release, bindErr := a.config.localToolBridge.Bind(ctx, session)
+		if bindErr != nil {
+			return fmt.Errorf("bind local ACP tool bridge: %w", bindErr)
+		}
+		acpSession.localToolRelease = release
+		mcpServers = append(mcpServers, acpMCPServers([]MCPServerBinding{binding})...)
+	}
 
 	method := acpResumeMethod(initializeResult)
 	if method == "" {
@@ -255,8 +324,8 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 	}
 	resumeParams := map[string]any{
 		"sessionId":  session.ProviderSessionID,
-		"cwd":        firstNonEmpty(session.CWD, "/"),
-		"mcpServers": acpMCPServers(session.MCPServers),
+		"cwd":        standardACPProtocolCWD(session.CWD),
+		"mcpServers": mcpServers,
 	}
 	if err := a.applyProviderSessionMeta(resumeParams, session); err != nil {
 		return err
@@ -342,6 +411,7 @@ func (a *standardACPAdapter) Close(ctx context.Context, session Session) error {
 	delete(a.sessions, agentSessionID)
 	a.mu.Unlock()
 	if acpSession != nil && acpSession.client != nil {
+		acpSession.releaseLocalTools()
 		a.closeProviderSession(ctx, session, acpSession)
 		closeErr := acpSession.client.Close()
 		if closeErr != nil {
@@ -375,6 +445,7 @@ func (a *standardACPAdapter) closeReplacedSession(previousSession *standardACPSe
 	if previousSession == nil || previousSession.client == nil || previousSession.client == currentClient {
 		return
 	}
+	previousSession.releaseLocalTools()
 	if err := previousSession.client.Close(); err != nil {
 		slog.Warn("agent session ACP replaced client close failed",
 			"event", "agent_session.acp.replaced_client.close_failed",

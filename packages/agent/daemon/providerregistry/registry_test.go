@@ -411,6 +411,19 @@ func TestMigratedClaudeCodeDescriptorIsComplete(t *testing.T) {
 	}
 }
 
+func TestCursorDescriptorWatchesAccountState(t *testing.T) {
+	descriptor, ok := Find(CursorProviderID)
+	if !ok {
+		t.Fatal("Cursor descriptor missing")
+	}
+	watch := descriptor.Status.AuthWatch
+	if watch.ContentFingerprint != AuthWatchContentFingerprintFullFile ||
+		len(watch.Sources) != 1 || watch.Sources[0].DefaultRoot != "~/.cursor" ||
+		len(watch.Sources[0].Paths) != 1 || watch.Sources[0].Paths[0] != "cli-config.json" {
+		t.Fatalf("Cursor AuthWatch = %#v", watch)
+	}
+}
+
 func TestMigratedReturnsClones(t *testing.T) {
 	first := Migrated()
 	first[0].Runtime.Command[0] = "mutated"

@@ -49,6 +49,12 @@ func cursorDescriptor() ProviderDescriptor {
 				WindowsPowerShellCommand: `$script = irm 'https://cursor.com/install?win32=true'; $script = $script.Replace('Invoke-WebRequest -Uri $fullUrl -OutFile $tempFile', 'curl.exe -fL --retry 3 --retry-delay 1 --retry-all-errors --output $tempFile $fullUrl; if ($LASTEXITCODE -ne 0) { throw "Cursor Agent download failed with exit code $LASTEXITCODE" }'); iex $script`,
 			},
 			Update: UpdateDescriptor{Capability: UpdateCapabilityUnsupported, UnsupportedReason: UpdateUnsupportedReasonOfficialScript},
+			AuthWatch: AuthWatchDescriptor{
+				Sources: []AuthWatchSourceDescriptor{
+					{DefaultRoot: "~/.cursor", Paths: []string{"cli-config.json"}},
+				},
+				ContentFingerprint: AuthWatchContentFingerprintFullFile,
+			},
 		},
 		ComposerProfile: ComposerProfileDescriptor{
 			// Cursor exposes its account-scoped model catalog from ACP session/new,

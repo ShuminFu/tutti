@@ -2,6 +2,7 @@ package agentruntime
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
@@ -47,6 +48,68 @@ func TestStandardACPToolCallEventInfersFailedStatusFromRawOutput(t *testing.T) {
 	}
 	if failed.Payload.Error["output"] != "Exit code 137" {
 		t.Fatalf("failed error = %#v, want raw output preserved", failed.Payload.Error)
+	}
+}
+
+func TestStandardACPToolCallEventPreservesCursorTransportFailureDetails(t *testing.T) {
+	t.Parallel()
+
+	session := standardTestSession(ProviderCursor)
+	failed, ok := standardACPToolCallEventWithID(session, "event-cursor-read-failed", "turn-1", "tool_call_update", map[string]any{
+		"sessionUpdate": "tool_call_update",
+		"toolCallId":    "read-1",
+		"title":         "Read file",
+		"status":        "completed",
+		"kind":          "read",
+		"rawOutput": map[string]any{
+			"result":           "Error: Aborted",
+			"rawErrorMessages": []any{"[aborted] Client network socket disconnected before secure TLS connection was established"},
+		},
+	})
+	if !ok {
+		t.Fatal("standardACPToolCallEventWithID(cursor read failure) returned !ok")
+	}
+	if failed.Type != activityshared.EventCallFailed {
+		t.Fatalf("failed event type = %s, want call.failed", failed.Type)
+	}
+	if got := activityshared.BestEffortErrorMessage(failed.Payload); !strings.Contains(got, "Client network socket disconnected") {
+		t.Fatalf("best-effort error = %q, want Cursor transport detail", got)
+	}
+	if got := asString(failed.Payload.Error["error"]); !strings.Contains(got, "Error: Aborted") || !strings.Contains(got, "Client network socket disconnected") {
+		t.Fatalf("normalized error = %#v, want result and raw transport details", failed.Payload.Error["error"])
+	}
+	if got := asString(failed.Payload.Output["rawErrorMessages"]); got != "" {
+		t.Fatalf("mirrored rawErrorMessages unexpectedly stringified = %q", got)
+	}
+	if _, ok := failed.Payload.Output["rawErrorMessages"]; !ok {
+		t.Fatalf("mirrored output = %#v, want rawErrorMessages preserved", failed.Payload.Output)
+	}
+}
+
+func TestStandardACPNonzeroToolExitDoesNotFailCompletedAssistantTurn(t *testing.T) {
+	t.Parallel()
+
+	session := standardTestSession(hermesExtensionTestProvider)
+	normalizer := newACPTurnNormalizer()
+	toolEvents := standardACPUpdateEvents(standardACPConfig{provider: hermesExtensionTestProvider}, session, "turn-1", json.RawMessage(`{
+		"update": {
+			"sessionUpdate": "tool_call_update",
+			"toolCallId": "git-check-1",
+			"title": "Run command",
+			"kind": "execute",
+			"rawInput": {"command": "powershell.exe -Command 'git status; git diff; git diff --no-index -- /dev/null README.md'"},
+			"rawOutput": {"exitCode": 1, "stdout": "diff --git a/README.md b/README.md"}
+		}
+	}`), normalizer)
+	if len(toolEvents) != 1 || toolEvents[0].Type != activityshared.EventCallFailed {
+		t.Fatalf("tool events = %#v, want one call.failed", toolEvents)
+	}
+
+	normalizer.ApplyAssistantFinalText("The comparison completed and found differences.")
+	turnEvents := normalizer.FinishCompleted(session, "turn-1")
+	assistant := activityMessagesWithRole(turnEvents, activityshared.MessageRoleAssistant)
+	if len(assistant) != 1 || assistant[0].Payload.Metadata["streamState"] != messageStreamStateCompleted {
+		t.Fatalf("assistant events = %#v, want completed assistant response", assistant)
 	}
 }
 

@@ -104,6 +104,8 @@ type standardACPConnection struct {
 	closeSessionExits             bool
 	isClosed                      bool
 	lastNewSessionParams          map[string]any
+	newSessionCallCount           int
+	newSessionErrors              []*acpError
 	lastLoadSessionParams         map[string]any
 	lastCloseSessionParams        map[string]any
 	lastPromptParamsSnapshot      map[string]any

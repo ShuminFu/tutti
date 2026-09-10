@@ -438,6 +438,7 @@ func acpNormalizeToolOutput(rawOutput any, content any) map[string]any {
 	}
 	body = acpSanitizeImagePayloadMap(body)
 	acpPromoteToolOutputMetadata(body)
+	acpPromoteToolErrorMetadata(body)
 	if content != nil {
 		sanitizedContent := acpSanitizeImagePayload(content)
 		body["content"] = sanitizedContent
@@ -513,7 +514,7 @@ func acpMirrorFailedToolOutput(body map[string]any) map[string]any {
 		return nil
 	}
 	mirrored := map[string]any{}
-	for _, key := range []string{"text", "stdout", "stderr", "aggregated_output", "formatted_output", "content", "structuredContent", "isError", "success", "changes", "status", "call_id", "turn_id", "cwd", "parsed_cmd", "command", "exit_code", "duration", "duration_ms", "completed_at_ms", "source", "process_id"} {
+	for _, key := range []string{"text", "stdout", "stderr", "aggregated_output", "formatted_output", "content", "structuredContent", "result", "error", "err", "errorMessage", "error_message", "message", "detail", "rawErrorMessages", "raw_error_messages", "isError", "is_error", "success", "changes", "status", "call_id", "turn_id", "cwd", "parsed_cmd", "command", "exit_code", "duration", "duration_ms", "completed_at_ms", "source", "process_id"} {
 		if value, ok := body[key]; ok && value != nil {
 			mirrored[key] = clonePayloadValue(value)
 		}
@@ -718,6 +719,9 @@ func canonicalACPStatusToken(status string) string {
 }
 
 func acpResolvedToolCallStatus(update map[string]any, fallback string) string {
+	if acpToolCallReportsError(update, acpToolCallRawOutput(update)) {
+		return messageStreamStateFailed
+	}
 	status := normalizedCallStatus(firstNonEmpty(asString(update["status"]), fallback))
 	if status != messageStreamStateStreaming {
 		return status
