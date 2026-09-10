@@ -22,6 +22,8 @@ func (s *Service) clampReasoningEffortForModel(
 	return clampReasoningEffortForModelWithCatalog(ctx, catalog, provider, model, selected)
 }
 
+var clampSkipsOpenProviderIdentities = true
+
 func clampReasoningEffortForModelWithCatalog(
 	ctx context.Context,
 	catalog AgentModelCatalog,
@@ -30,6 +32,22 @@ func clampReasoningEffortForModelWithCatalog(
 	selected string,
 ) string {
 	selected = strings.TrimSpace(selected)
+	// rndmaster: open / 扩展自带的 provider 身份（acp:grok 等）在建会话时已经由
+	// Agent Target 授权，它们的 reasoning 词表由运行时经 ACP configOptions 自己
+	// 宣告（grok 宣告 xhigh/high/medium/low）。内置封闭表里没有它们，查表得到全零
+	// profile，normalizeReasoningEffortForProvider 就把用户选的 "high" 压成 ""，
+	// 而下游 ACP 校验器（standard_acp_settings.go 的 ValidateSessionSettings）恰恰
+	// 拒绝 ""：resume 必回 502 `agent session ACP reasoning value "" is not
+	// advertised`，那条会话从此永久发不出去。
+	// 判据与上游 normalizeObservedComposerSettingsForProvider 一字不差、语义同源：
+	// 已建立的会话不该被封闭表 clamp。只挡 clamp 这一族（UpdateSettings、resume 前
+	// 的持久化 clamp、host 侧 NormalizePersistedSettings），建会话的 create 路径与
+	// normalizeComposerSettingsForProvider 都不经过这里，行为不变。
+	// 回退看红：改成 false。
+	if clampSkipsOpenProviderIdentities &&
+		agentprovider.Normalize(provider) == "" && agentprovider.NormalizeOpen(provider) != "" {
+		return selected
+	}
 	// Only Codex-derived providers currently treat model-advertised reasoning
 	// values as authoritative. OpenCode uses its model catalog for discovery but
 	// keeps the static reasoning vocabulary.
