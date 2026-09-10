@@ -39,6 +39,7 @@ const WORKSPACE_CHROME_MAC_TRAFFIC_LIGHT_RESERVED_WIDTH_PX =
 
 export function WorkspaceChrome({
   appName,
+  embedded = false,
   externalAgentSessionImportPromptEnabled,
   headerSlot,
   missionControl,
@@ -53,6 +54,7 @@ export function WorkspaceChrome({
   workspace
 }: {
   appName: string;
+  embedded?: boolean;
   externalAgentSessionImportPromptEnabled: boolean;
   headerSlot?: React.ReactNode;
   missionControl: {
@@ -116,6 +118,10 @@ export function WorkspaceChrome({
       );
     };
   }, [openExternalAgentImport]);
+
+  if (embedded) {
+    return null;
+  }
 
   return (
     <>

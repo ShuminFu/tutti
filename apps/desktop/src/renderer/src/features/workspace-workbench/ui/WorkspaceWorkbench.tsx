@@ -60,7 +60,8 @@ import { cn } from "@renderer/lib/format";
 import {
   agentGuiWorkbenchOpenSessionActivationType,
   createWorkspaceAgentGuiDraftLaunchRequest,
-  createWorkspaceAgentGuiSessionLaunchRequest
+  createWorkspaceAgentGuiSessionLaunchRequest,
+  workspaceAgentGuiNodeID
 } from "../services/workspaceAgentGuiLaunch.ts";
 import {
   resolveWorkspaceAgentChatProvider,
@@ -124,6 +125,11 @@ import {
   openWorkspaceWorkbenchAgentConversationShortcut,
   openWorkspaceWorkbenchSameTypeWindowShortcut
 } from "../services/workspaceWorkbenchShortcutActions.ts";
+import {
+  isEmbeddedDintalDock,
+  reconcileEmbeddedDintalDock
+} from "./embeddedDintalDock.ts";
+import "./EmbeddedDintalDock.css";
 
 const workspaceDockRetentionActionPrefix = "workspace-dock-retention:";
 
@@ -250,6 +256,7 @@ function ReadyWorkspaceWorkbenchWithSession({
 }: ReadyWorkspaceWorkbenchProps & {
   hostSession: WorkspaceWorkbenchHostSessionBinding;
 }) {
+  const embeddedDintalDock = isEmbeddedDintalDock();
   const { service: appCenterService } = useWorkspaceAppCenterService();
   const agentsService = useService(IAgentsService);
   const workspaceAgentActivityService = useService(
@@ -307,6 +314,17 @@ function ReadyWorkspaceWorkbenchWithSession({
     state
   });
   const hostInput = runtime.hostInput;
+  const contributions = useMemo(
+    () =>
+      embeddedDintalDock
+        ? hostInput.contributions?.filter((contribution) =>
+            contribution.nodes?.some(
+              (node) => node.typeId === workspaceAgentGuiNodeID
+            )
+          )
+        : hostInput.contributions,
+    [embeddedDintalDock, hostInput.contributions]
+  );
   const [workbenchHost, setWorkbenchHost] =
     useState<WorkbenchHostHandle | null>(null);
   // Replay machinery mounts only inside the isolated replay Desktop runtime
@@ -421,7 +439,7 @@ function ReadyWorkspaceWorkbenchWithSession({
       }
       if (request.actionId.startsWith(workspaceDockRetentionActionPrefix)) {
         const entry = findWorkspaceDockRetentionEntry({
-          contributions: hostInput.contributions,
+          contributions,
           dockEntries: hostInput.dockEntries,
           entryId: request.entryId
         });
@@ -439,7 +457,7 @@ function ReadyWorkspaceWorkbenchWithSession({
     },
     [
       appCenterService,
-      hostInput.contributions,
+      contributions,
       hostInput.dockEntries,
       hostInput.onDockEntryAction,
       runtime.dockRetentionByEntryId,
@@ -450,13 +468,13 @@ function ReadyWorkspaceWorkbenchWithSession({
     () =>
       resolveWorkspaceDockEntryPresentationOverrides({
         appCenterService,
-        contributions: hostInput.contributions,
+        contributions,
         dockEntries: hostInput.dockEntries,
         retainedByEntryId: runtime.dockRetentionByEntryId
       }),
     [
       appCenterService,
-      hostInput.contributions,
+      contributions,
       hostInput.dockEntries,
       runtime.dockRetentionByEntryId
     ]
@@ -497,7 +515,7 @@ function ReadyWorkspaceWorkbenchWithSession({
         registerWorkspaceTerminalLoginLaunchHandler(
           state.workspace.id,
           createWorkbenchTerminalLoginPresenter({
-            contributions: hostInput.contributions ?? [],
+            contributions: contributions ?? [],
             host,
             runtimeApi
           })
@@ -624,11 +642,15 @@ function ReadyWorkspaceWorkbenchWithSession({
             return nodeId !== null;
           }
         );
+      if (embeddedDintalDock) {
+        void reconcileEmbeddedDintalDock(host).catch(() => undefined);
+      }
     },
     [
       agentEnvService,
       appCenterService,
-      hostInput.contributions,
+      contributions,
+      embeddedDintalDock,
       runtime,
       runtimeApi,
       state.workspace.id,
@@ -782,7 +804,7 @@ function ReadyWorkspaceWorkbenchWithSession({
 
   useWorkspaceOnboardingAutoOpen({
     appCenterService,
-    workbenchHost,
+    workbenchHost: embeddedDintalDock ? null : workbenchHost,
     workbenchHostService: runtime.workbenchHostService,
     workspaceId: state.workspace.id
   });
@@ -888,6 +910,7 @@ function ReadyWorkspaceWorkbenchWithSession({
       <main
         className={cn(
           "relative h-screen min-h-0 overflow-hidden bg-background",
+          embeddedDintalDock && "rndmaster-dintaldock-embedded",
           launchpadOpen && "workspace-workbench-shell--launchpad-open"
         )}
       >
@@ -895,7 +918,7 @@ function ReadyWorkspaceWorkbenchWithSession({
         <WorkbenchHost
           captureNodePreviewImages={hostInput.captureNodePreviewImages}
           className="h-full"
-          contributions={hostInput.contributions}
+          contributions={contributions}
           debugDiagnostics={hostInput.debugDiagnostics}
           dockPreviewCache={hostInput.dockPreviewCache}
           dockPlacement={runtime.dockPlacement}
@@ -934,6 +957,7 @@ function ReadyWorkspaceWorkbenchWithSession({
           renderTopChrome={(chromeContext) => (
             <WorkspaceChrome
               appName={appName}
+              embedded={embeddedDintalDock}
               externalAgentSessionImportPromptEnabled={!replayRuntimeActive}
               headerSlot={headerSlot}
               launchNode={chromeContext.launchNode}

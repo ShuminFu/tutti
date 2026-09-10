@@ -1,0 +1,38 @@
+.rndmaster-dintaldock-embedded .workbench-surface__wallpaper,
+.rndmaster-dintaldock-embedded .desktop-dock-plate,
+.rndmaster-dintaldock-embedded
+  .workbench-window-shell:not([data-workbench-node-type-id="agent-gui"]) {
+  display: none !important;
+}
+
+/* The embedded workspace chrome renders above the Agent header. Remove its
+   empty hit-test layer as well as its content so WebView2 reaches the rail toggle. */
+.rndmaster-dintaldock-embedded .workbench-surface__top-chrome {
+  display: none !important;
+}
+
+.rndmaster-dintaldock-embedded
+  .workbench-window-shell[data-workbench-node-type-id="agent-gui"] {
+  top: 0 !important;
+  left: 0 !important;
+  translate: 0 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+  min-height: 0;
+  transition: none;
+}
+
+.rndmaster-dintaldock-embedded
+  .workbench-window-shell[data-workbench-node-type-id="agent-gui"]
+  .workbench-window {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.rndmaster-dintaldock-embedded .agent-gui-workbench-header__traffic-lights,
+.rndmaster-dintaldock-embedded .agent-gui-workbench-header__detached-window,
+.rndmaster-dintaldock-embedded .workbench-window__resize-handle {
+  display: none !important;
+}
