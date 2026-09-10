@@ -203,10 +203,15 @@ export function installHostAgentSessionBridge(
 // `applyHostThemeTokens` is optional so an appearance-only message — the shape
 // this bridge shipped with — keeps working unchanged. Tokens that are not a
 // plain record of strings are dropped silently; the appearance still applies.
+// `applyHostWindowInsets` (issue 04) rides the same message: the host pushes
+// the window safe area whenever it changes (page zoom included). A malformed
+// `insets` field is dropped on its own — the appearance and the palette in the
+// same message still apply.
 export function installHostThemeBridge(
   applyHostThemeAppearance: (appearance: "light" | "dark") => void,
   windowRef: Window = window,
-  applyHostThemeTokens?: (tokens: unknown, themeId: unknown) => void
+  applyHostThemeTokens?: (tokens: unknown, themeId: unknown) => void,
+  applyHostWindowInsets?: (insets: unknown) => void
 ): () => void {
   const coordinates = bridgeCoordinates(windowRef.location.search);
   if (!coordinates || !windowRef.parent || windowRef.parent === windowRef) {
@@ -222,6 +227,7 @@ export function installHostThemeBridge(
           appearance?: unknown;
           themeId?: unknown;
           tokens?: unknown;
+          insets?: unknown;
         }
       | null
       | undefined;
@@ -243,10 +249,39 @@ export function installHostThemeBridge(
         applyHostThemeTokens(tokens, data.themeId);
       }
     }
+    if (applyHostWindowInsets && "insets" in data) {
+      const insets = data.insets;
+      // Shape gate here, value gate in theme/hostWindowInsets.ts: only a plain
+      // record whose platform is a string and whose insets are finite,
+      // non-negative numbers survives both.
+      if (
+        insets &&
+        typeof insets === "object" &&
+        !Array.isArray(insets) &&
+        isHostWindowInsetsPayload(insets as Record<string, unknown>)
+      ) {
+        applyHostWindowInsets(insets);
+      }
+    }
   };
 
   windowRef.addEventListener("message", onMessage);
   return () => windowRef.removeEventListener("message", onMessage);
+}
+
+function isHostWindowInsetsPayload(insets: Record<string, unknown>): boolean {
+  if (typeof insets.platform !== "string") {
+    return false;
+  }
+  for (const [key, value] of Object.entries(insets)) {
+    if (key === "platform") {
+      continue;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function installHostFileDropBridge(

@@ -70,3 +70,66 @@
   .workbench-window__header {
   display: none !important;
 }
+
+/* Window safe area while the embedded Agent window is fullscreen (issue 04).
+ *
+ * Normally the master shell's canvas toolbar is the window's top row and it is
+ * the one yielding space to the system window controls. When the user puts this
+ * Agent window into its own fullscreen the master hides that toolbar, so the
+ * three columns below become the topmost row of the whole window and inherit
+ * that duty.
+ *
+ * The host publishes its own `--window-controls-*` geometry as
+ * `--rndmaster-host-controls-*` on the document root, plus
+ * `data-rndmaster-host-platform` (theme/hostWindowInsets.ts). None of it is
+ * painted for the standalone build, so every rule here falls back to the
+ * upstream value through `var(…, <upstream>)`.
+ *
+ * macOS: the traffic lights are drawn natively over the top-left corner, and
+ * the host's `--window-controls-top` (62px = 2 x the shared 31px centre line) is
+ * exactly the band they live in. Re-using the header-height reservation that
+ * issue 03 zeroed moves ALL THREE columns below that band with one variable —
+ * the 52px provider rail (its topmost provider tile is a click target and sits
+ * left of x=90, so padding the conversation rail alone would not clear it), the
+ * conversation rail's toolbar row, and the detail column. No horizontal padding
+ * is needed for the in-rail row as a result, and no width is lost.
+ *
+ * Not fullscreen: the reservation stays 0 (issue 03) and nothing moves.
+ */
+:root[data-rndmaster-host-platform="mac"]
+  .rndmaster-dintaldock-embedded
+  .workbench-window-shell[data-display-mode="fullscreen"]
+  .workbench-window[data-window-header-layout="overlay"] {
+  --agent-gui-workbench-header-height: var(--rndmaster-host-controls-top, 0px);
+}
+
+/* The collapsed rail's floating toggle is the first click target of the whole
+ * window in that state, and it is absolutely positioned at the layout's
+ * top-left corner — right where the lights are. Its `top` already tracks the
+ * reservation above; this puts it past the light cluster horizontally too, so
+ * it clears them in both axes. Without host insets it keeps its upstream 8px.
+ */
+.rndmaster-dintaldock-embedded
+  .workbench-window-shell[data-display-mode="fullscreen"]
+  .agent-gui-node__rail-toggle-button--floating {
+  left: max(
+    8px,
+    calc(
+      var(--rndmaster-host-controls-left, 0px) +
+        var(--rndmaster-host-controls-gap, 0px)
+    )
+  );
+}
+
+/* Windows: the host keeps the system title bar, so its caption buttons never
+ * overlap web content and `--rndmaster-host-caption-right` is 0 — this rule is
+ * inert today. It exists so a frameless host that does overlay its caption only
+ * has to publish a non-zero number: the top-right corner of a fullscreen
+ * embedded window is the detail column, so that column yields the width.
+ */
+:root[data-rndmaster-host-platform="windows"]
+  .rndmaster-dintaldock-embedded
+  .workbench-window-shell[data-display-mode="fullscreen"]
+  .agent-gui-node__detail {
+  padding-right: var(--rndmaster-host-caption-right, 0px);
+}

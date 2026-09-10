@@ -7,6 +7,11 @@ import {
   type HostThemeTokens
 } from "./hostThemeTokens.ts";
 import {
+  applyHostWindowInsets,
+  normalizeHostWindowInsets,
+  readHostWindowInsetsFromLocation
+} from "./hostWindowInsets.ts";
+import {
   defaultDesktopThemeSource,
   type DesktopThemeSource,
   type DesktopThemeAppearance,
@@ -48,6 +53,12 @@ let hostThemeAppearance: DesktopThemeAppearance | null =
 // over the same secured bridge. `EmbeddedHostTheme.css` maps them onto this
 // renderer's variables; provider brand colours are deliberately not mapped.
 applyHostThemeFromLocation();
+
+// The host also owns the window safe area (issue 04): once the embedded Agent
+// window goes fullscreen this renderer's top row is the window's top row and
+// has to clear the system window controls. Same first-frame path as the
+// palette, same secured bridge afterwards.
+applyHostWindowInsetsFromLocation();
 
 let requestedTheme: DesktopThemeState = {
   appearance: readInitialThemeAppearanceFromLocation(),
@@ -137,6 +148,20 @@ export function setHostThemeTokens(
   if (themeId !== undefined) {
     applyHostThemeId(normalizeHostThemeId(themeId));
   }
+}
+
+// Replaces the host window insets pushed over the bridge. An invalid payload
+// clears them and the layout falls back to upstream (no safe area).
+export function setHostWindowInsets(insets: unknown): void {
+  applyHostWindowInsets(normalizeHostWindowInsets(insets));
+}
+
+function applyHostWindowInsetsFromLocation(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  applyHostWindowInsets(readHostWindowInsetsFromLocation(window.location.search));
 }
 
 function applyHostThemeFromLocation(): void {

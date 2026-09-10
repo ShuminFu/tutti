@@ -522,6 +522,74 @@ test("embedded theme bridge forwards host role tokens and drops bad payloads", (
   assert.deepEqual(applied, ["light", "light", "light", "light", "light"]);
 });
 
+test("embedded theme bridge forwards host window insets and drops bad payloads", () => {
+  let messageListener: ((event: MessageEvent) => void) | null = null;
+  const parent = {} as WindowProxy;
+  const applied: string[] = [];
+  const insetPushes: unknown[] = [];
+  const windowRef = {
+    addEventListener(type: string, listener: EventListener) {
+      if (type === "message") {
+        messageListener = listener as (event: MessageEvent) => void;
+      }
+    },
+    location: {
+      search:
+        "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+    },
+    parent,
+    removeEventListener(type: string) {
+      if (type === "message") {
+        messageListener = null;
+      }
+    }
+  } as unknown as Window;
+
+  installHostThemeBridge(
+    (appearance) => applied.push(appearance),
+    windowRef,
+    undefined,
+    (insets) => insetPushes.push(insets)
+  );
+  const send = (data: Record<string, unknown>) => {
+    messageListener?.({
+      data: {
+        type: HOST_THEME_TYPE,
+        nonce: "nonce-1",
+        appearance: "light",
+        ...data
+      },
+      origin: "http://wails.localhost",
+      source: parent
+    } as MessageEvent);
+  };
+
+  const insets = {
+    platform: "mac",
+    controlsTop: 62,
+    controlsLeft: 90,
+    controlsGap: 8,
+    captionRight: 0
+  };
+  send({ insets });
+  assert.deepEqual(insetPushes, [insets]);
+
+  // An appearance-only message stays valid, and an insets field that is not a
+  // plain record of a platform string plus non-negative finite numbers is
+  // dropped without touching the layout.
+  send({});
+  send({ insets: [62, 90] });
+  send({ insets: "controls-top:62" });
+  send({ insets: null });
+  send({ insets: { controlsTop: 62 } });
+  send({ insets: { platform: "mac", controlsTop: -1 } });
+  send({ insets: { platform: "mac", controlsTop: Number.NaN } });
+  send({ insets: { platform: "mac", controlsTop: "62" } });
+  send({ insets: { platform: 42, controlsTop: 62 } });
+  assert.equal(insetPushes.length, 1);
+  assert.equal(applied.length, 10);
+});
+
 test("host theme bridge stays inert outside the embedded host", () => {
   const windowRef = {
     addEventListener() {

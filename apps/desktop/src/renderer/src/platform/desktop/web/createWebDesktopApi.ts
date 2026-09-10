@@ -20,7 +20,8 @@ import type {
 import { desktopErrorCodes } from "@shared/errors/desktopErrors";
 import {
   setHostThemeAppearance,
-  setHostThemeTokens
+  setHostThemeTokens,
+  setHostWindowInsets
 } from "@renderer/theme/runtime";
 import { resolveWebBackendConfigFrom } from "./resolveWebBackendConfig";
 import {
@@ -53,7 +54,12 @@ export function createWebDesktopApi(): DesktopApi {
   const backendConfig = resolveWebBackendConfig();
   installHostFileDropBridge();
   installHostFocusRecovery();
-  installHostThemeBridge(setHostThemeAppearance, window, setHostThemeTokens);
+  installHostThemeBridge(
+    setHostThemeAppearance,
+    window,
+    setHostThemeTokens,
+    setHostWindowInsets
+  );
   installHostWorkbenchLayoutNotifications();
 
   return {
