@@ -242,6 +242,7 @@ export function WorkspaceUserProjectSelect({
     createProjectNameDescription ||
     resolvedLabels.createProjectNamePlaceholder.trim();
   const [apiProjects, setApiProjects] = useState<WorkspaceUserProject[]>([]);
+  const [apiRevision, setApiRevision] = useState(0);
   const [isApiLoading, setIsApiLoading] = useState(false);
   const [isApiUnavailable, setIsApiUnavailable] = useState(!effectiveApi);
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
@@ -321,6 +322,15 @@ export function WorkspaceUserProjectSelect({
     showNoProjectAction;
   const showProjectActionDivider =
     visibleProjects.length > 0 && hasProjectActions;
+
+  useEffect(() => {
+    if (service || !effectiveApi?.subscribe) {
+      return;
+    }
+    return effectiveApi.subscribe(() => {
+      setApiRevision((current) => current + 1);
+    });
+  }, [effectiveApi, service]);
 
   useEffect(() => {
     if (!disabled) return;
@@ -408,6 +418,7 @@ export function WorkspaceUserProjectSelect({
       canceled = true;
     };
   }, [
+    apiRevision,
     effectiveApi,
     hasPinnedNoProjectSelection,
     projectLocked,

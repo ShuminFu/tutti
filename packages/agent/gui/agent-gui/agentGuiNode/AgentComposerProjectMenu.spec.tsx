@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createDefaultWorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
@@ -179,6 +179,51 @@ describe("WorkspaceUserProjectSelect render budget", () => {
       })
     );
     await waitFor(() => expect(prepareSelection).toHaveBeenCalledTimes(2));
+  });
+
+  it("clears the composer selection when the project is removed externally", async () => {
+    const project = {
+      id: "project-alpha",
+      label: "Alpha",
+      path: "/workspace/alpha",
+      pinnedAtUnixMs: 0
+    };
+    let projects = [project];
+    let notifyProjectsChanged = () => undefined;
+    const rememberDefaultSelection = vi.fn(async () => undefined);
+    const api = {
+      list: vi.fn(async () => ({ projects })),
+      rememberDefaultSelection,
+      subscribe: vi.fn((listener: () => void) => {
+        notifyProjectsChanged = listener;
+        return () => undefined;
+      })
+    };
+
+    function ControlledSelect() {
+      const [path, setPath] = useState<string | null>(project.path);
+      return (
+        <WorkspaceUserProjectSelect
+          api={api}
+          selectedProjectPath={path}
+          onProjectPathChange={setPath}
+        />
+      );
+    }
+
+    render(<ControlledSelect />);
+    await screen.findByRole("combobox", { name: "Project" });
+    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(1));
+
+    projects = [];
+    act(() => notifyProjectsChanged());
+
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Project" })).toHaveTextContent(
+        "No project"
+      )
+    );
+    expect(rememberDefaultSelection).toHaveBeenCalledWith({ path: null });
   });
 });
 
