@@ -163,17 +163,23 @@ type ExtensionModelEndpointConfigKeys struct {
 }
 
 type ExtensionRuntimeHome struct {
-	EnvVar             string   `json:"envVar"`
-	DirName            string   `json:"dirName"`
-	SourceEnvVar       string   `json:"sourceEnvVar,omitempty"`
-	SourceDefaultRel   string   `json:"sourceDefaultRel,omitempty"`
-	CopyFiles          []string `json:"copyFiles,omitempty"`
-	ConfigFile         string   `json:"configFile,omitempty"`
-	ConfigFormat       string   `json:"configFormat,omitempty"`
-	ExternalDirsKey    []string `json:"externalDirsKey,omitempty"`
-	UserHomeSkillDir   string   `json:"userHomeSkillDir,omitempty"`
-	IncludeSkillRoots  bool     `json:"includeSkillRoots,omitempty"`
-	IncludeUserHomeDir bool     `json:"includeUserHomeDir,omitempty"`
+	EnvVar             string                        `json:"envVar"`
+	DirName            string                        `json:"dirName"`
+	SourceEnvVar       string                        `json:"sourceEnvVar,omitempty"`
+	SourceDefaultRel   string                        `json:"sourceDefaultRel,omitempty"`
+	CopyFiles          []string                      `json:"copyFiles,omitempty"`
+	ManagedFiles       []ExtensionRuntimeManagedFile `json:"managedFiles,omitempty"`
+	ConfigFile         string                        `json:"configFile,omitempty"`
+	ConfigFormat       string                        `json:"configFormat,omitempty"`
+	ExternalDirsKey    []string                      `json:"externalDirsKey,omitempty"`
+	UserHomeSkillDir   string                        `json:"userHomeSkillDir,omitempty"`
+	IncludeSkillRoots  bool                          `json:"includeSkillRoots,omitempty"`
+	IncludeUserHomeDir bool                          `json:"includeUserHomeDir,omitempty"`
+}
+
+type ExtensionRuntimeManagedFile struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
 }
 
 type SkillBundle struct {

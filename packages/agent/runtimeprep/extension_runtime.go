@@ -86,6 +86,9 @@ func prepareExtensionRuntimeHome(input ProviderPrepareInput, home ExtensionRunti
 	if err != nil {
 		return "", err
 	}
+	if err := writeExtensionRuntimeManagedFiles(sessionHome, home.ManagedFiles); err != nil {
+		return "", err
+	}
 	externalDirs, err := extensionRuntimeExternalDirs(input, sourceHome, home)
 	if err != nil {
 		return "", err
@@ -160,6 +163,19 @@ func copyExtensionRuntimeHomeFile(src string, dst string) error {
 		return fmt.Errorf("create extension runtime home subdir: %w", err)
 	}
 	return os.WriteFile(dst, data, 0o600)
+}
+
+func writeExtensionRuntimeManagedFiles(sessionHome string, files []ExtensionRuntimeManagedFile) error {
+	for _, file := range files {
+		dst := filepath.Join(sessionHome, filepath.Clean(filepath.FromSlash(strings.TrimSpace(file.Path))))
+		if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+			return fmt.Errorf("create extension runtime managed file dir: %w", err)
+		}
+		if err := os.WriteFile(dst, []byte(file.Content), 0o600); err != nil {
+			return fmt.Errorf("write extension runtime managed file: %w", err)
+		}
+	}
+	return nil
 }
 
 func extensionRuntimeExternalDirs(input ProviderPrepareInput, sourceHome string, home ExtensionRuntimeHome) ([]string, error) {
@@ -322,6 +338,11 @@ func ValidateExtensionRuntimePrep(prep ExtensionRuntimePrep) error {
 	}
 	for _, file := range home.CopyFiles {
 		if err := validateExtensionRuntimeRelPath(file, "extension runtime copy file"); err != nil {
+			return err
+		}
+	}
+	for _, file := range home.ManagedFiles {
+		if err := validateExtensionRuntimeRelPath(file.Path, "extension runtime managed file"); err != nil {
 			return err
 		}
 	}
