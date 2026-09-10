@@ -104,6 +104,9 @@ export function WorkspaceChrome({
     []
   );
   useEffect(() => {
+    if (embedded) {
+      return;
+    }
     const openImportWizard = (): void => {
       openExternalAgentImport();
     };
@@ -117,7 +120,7 @@ export function WorkspaceChrome({
         openImportWizard
       );
     };
-  }, [openExternalAgentImport]);
+  }, [embedded, openExternalAgentImport]);
 
   if (embedded) {
     return null;

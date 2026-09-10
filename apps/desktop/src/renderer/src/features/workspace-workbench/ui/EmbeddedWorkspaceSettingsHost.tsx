@@ -1,4 +1,7 @@
+import { useCallback, useEffect, useState } from "react";
+import { AGENT_GUI_WORKBENCH_OPEN_EXTERNAL_IMPORT_EVENT } from "@tutti-os/agent-gui/workbench/contribution";
 import type { WorkspaceSummary } from "@tutti-os/client-tuttid-ts";
+import { ExternalAgentSessionImportWizard } from "./ExternalAgentSessionImportWizard";
 import { WorkspaceSettingsTrigger } from "./WorkspaceChromeActions";
 import type {
   WorkspaceWallpaperDisplayMode,
@@ -25,22 +28,47 @@ export function EmbeddedWorkspaceSettingsHost({
   selectedWallpaperID: WorkspaceWallpaperId;
   workspace: WorkspaceSummary;
 }) {
+  const [externalImportOpen, setExternalImportOpen] = useState(false);
+  const openExternalAgentImport = useCallback(() => {
+    setExternalImportOpen(true);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener(
+      AGENT_GUI_WORKBENCH_OPEN_EXTERNAL_IMPORT_EVENT,
+      openExternalAgentImport
+    );
+    return () => {
+      window.removeEventListener(
+        AGENT_GUI_WORKBENCH_OPEN_EXTERNAL_IMPORT_EVENT,
+        openExternalAgentImport
+      );
+    };
+  }, [openExternalAgentImport]);
+
   return (
-    <div
-      className="pointer-events-none absolute inset-x-0 top-0 z-[var(--z-panel-popover)] flex justify-end p-2"
-      data-dintaldock-settings-host="true"
-    >
-      <div className="pointer-events-auto rounded-md bg-[color-mix(in_srgb,var(--background-fronted)_88%,transparent)] shadow-sm">
-        <WorkspaceSettingsTrigger
-          embedded
-          onOpenExternalAgentImport={() => undefined}
-          onSelectWallpaper={onSelectWallpaper}
-          onSelectWallpaperDisplayMode={onSelectWallpaperDisplayMode}
-          selectedWallpaperDisplayMode={selectedWallpaperDisplayMode}
-          selectedWallpaperID={selectedWallpaperID}
-          workspace={workspace}
-        />
+    <>
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-[var(--z-panel-popover)] flex justify-end p-2"
+        data-dintaldock-settings-host="true"
+      >
+        <div className="pointer-events-auto rounded-md bg-[color-mix(in_srgb,var(--background-fronted)_88%,transparent)] shadow-sm">
+          <WorkspaceSettingsTrigger
+            embedded
+            onOpenExternalAgentImport={openExternalAgentImport}
+            onSelectWallpaper={onSelectWallpaper}
+            onSelectWallpaperDisplayMode={onSelectWallpaperDisplayMode}
+            selectedWallpaperDisplayMode={selectedWallpaperDisplayMode}
+            selectedWallpaperID={selectedWallpaperID}
+            workspace={workspace}
+          />
+        </div>
       </div>
-    </div>
+      <ExternalAgentSessionImportWizard
+        open={externalImportOpen}
+        workspace={workspace}
+        onOpenChange={setExternalImportOpen}
+      />
+    </>
   );
 }

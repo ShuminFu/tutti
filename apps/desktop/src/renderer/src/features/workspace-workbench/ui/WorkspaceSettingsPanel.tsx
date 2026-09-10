@@ -504,6 +504,11 @@ export function WorkspaceSettingsPanel({
                   value={settingsState.agentTab}
                   onValueChange={(tab) => settingsService.selectAgentTab(tab)}
                 />
+                {embedded && settingsState.agentTab === "agents" ? (
+                  <WorkspaceExternalAgentImportSettingsRow
+                    onOpenExternalAgentImport={onOpenExternalAgentImport}
+                  />
+                ) : null}
                 {settingsState.agentTab === "agents" ? (
                   <WorkspaceAgentsSettingsTab
                     autoCheckEnabled={
@@ -2298,6 +2303,39 @@ function resolveComputerUsePermissionStateLabel(
   }
 }
 
+function WorkspaceExternalAgentImportSettingsRow({
+  onOpenExternalAgentImport
+}: {
+  onOpenExternalAgentImport: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex w-full items-center justify-between gap-4 max-[560px]:flex-col max-[560px]:items-stretch">
+      <div className="flex min-w-0 flex-1 flex-col gap-1 max-[560px]:w-full">
+        <strong className="text-[13px] font-semibold text-[var(--text-primary)]">
+          {t("workspace.externalImport.settingsLabel")}
+        </strong>
+        <p className="m-0 text-[13px] leading-[1.3] text-[var(--text-secondary)]">
+          {t("workspace.externalImport.settingsDescription")}
+        </p>
+      </div>
+      <div
+        className={cn(
+          "flex justify-end max-[560px]:justify-start",
+          workspaceSettingsControlColumnClass
+        )}
+      >
+        <WorkspaceSettingsActionButton
+          icon={<ImportLinedIcon className="size-3.5" />}
+          label={t("workspace.externalImport.settingsAction")}
+          type="button"
+          onClick={onOpenExternalAgentImport}
+        />
+      </div>
+    </div>
+  );
+}
+
 function WorkspaceAgentSettingsSection({
   agentConversationDetailMode,
   browserUseConnectionMode,
@@ -2423,29 +2461,9 @@ function WorkspaceAgentSettingsSection({
         </div>
       </div>
 
-      <div className="flex w-full items-center justify-between gap-4 max-[560px]:flex-col max-[560px]:items-stretch">
-        <div className="flex min-w-0 flex-1 flex-col gap-1 max-[560px]:w-full">
-          <strong className="text-[13px] font-semibold text-[var(--text-primary)]">
-            {t("workspace.externalImport.settingsLabel")}
-          </strong>
-          <p className="m-0 text-[13px] leading-[1.3] text-[var(--text-secondary)]">
-            {t("workspace.externalImport.settingsDescription")}
-          </p>
-        </div>
-        <div
-          className={cn(
-            "flex justify-end max-[560px]:justify-start",
-            workspaceSettingsControlColumnClass
-          )}
-        >
-          <WorkspaceSettingsActionButton
-            icon={<ImportLinedIcon className="size-3.5" />}
-            label={t("workspace.externalImport.settingsAction")}
-            type="button"
-            onClick={onOpenExternalAgentImport}
-          />
-        </div>
-      </div>
+      <WorkspaceExternalAgentImportSettingsRow
+        onOpenExternalAgentImport={onOpenExternalAgentImport}
+      />
 
       <div className="flex w-full items-center justify-between gap-4 max-[560px]:flex-col max-[560px]:items-stretch">
         <div className="flex min-w-0 flex-1 flex-col gap-1 max-[560px]:w-full">
