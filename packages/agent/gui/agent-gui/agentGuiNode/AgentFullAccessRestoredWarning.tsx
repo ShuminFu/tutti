@@ -23,7 +23,11 @@ export function AgentFullAccessRestoredWarning({
   const [dismissedForCurrentOpen, setDismissedForCurrentOpen] = useState(false);
   const acknowledged = isCodexFullAccessWarningAcknowledged();
   const normalizedPermissionModeId = permissionModeId?.trim() ?? "";
+  const embeddedInHost = new URLSearchParams(
+    globalThis.location?.search ?? ""
+  ).has("tuttiBootstrap");
   const shouldShow =
+    !embeddedInHost &&
     visibleOnHome &&
     !isSettingsLoading &&
     !dismissedForCurrentOpen &&

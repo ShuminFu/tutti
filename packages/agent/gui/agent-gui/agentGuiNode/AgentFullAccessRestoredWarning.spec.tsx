@@ -7,12 +7,20 @@ import { CODEX_FULL_ACCESS_WARNING_ACKNOWLEDGEMENT_STORAGE_KEY } from "./view/ag
 describe("AgentFullAccessRestoredWarning", () => {
   beforeEach(() => {
     globalThis.localStorage.clear();
+    globalThis.history.replaceState(null, "", "/");
   });
 
   it("warns for an unacknowledged Codex full-access home default", () => {
     renderWarning();
 
     expect(screen.getByRole("alert")).toHaveTextContent("Full access is on");
+  });
+
+  it("does not warn in the embedded host", () => {
+    globalThis.history.replaceState(null, "", "/?tuttiBootstrap=nonce");
+    renderWarning();
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("does not warn for another permission mode or provider", () => {
