@@ -695,3 +695,30 @@ export function requestHostSessionLiveness(args: {
     })
   );
 }
+
+/**
+ * 告诉宿主「用户又在这条会话里说话了」，让它把被后端重启打断的任务行重新挂上
+ *（补丁 0124）。宿主幂等：已经有活行就原样返回那一行，短时间内重复调也不会多挂。
+ *
+ * 回的形状与 sessionLiveness 的单条一致，调用方拿到就能直接更新圆点，
+ * 不必等下一拍轮询。宿主没实现这个能力时桥抛 HostBridgeUnavailableError。
+ */
+export function requestHostSessionAttach(args: {
+  agentSessionId: string;
+}): Promise<HostSessionLivenessEntry> {
+  return requestHostCapability<Partial<HostSessionLivenessEntry>>(
+    "sessionAttach",
+    [{ agentSessionId: args.agentSessionId }]
+  ).then((result) => ({
+    // 宿主回了不认识的 state 就当 unknown：这条路上宁可什么都不断言，
+    // 也不要凭空报一个 closed 把还活着的会话的圆点抹掉。
+    state:
+      result?.state === "live" ||
+      result?.state === "closed" ||
+      result?.state === "unknown"
+        ? result.state
+        : "unknown",
+    status: typeof result?.status === "string" ? result.status : "",
+    taskId: typeof result?.taskId === "string" ? result.taskId : ""
+  }));
+}

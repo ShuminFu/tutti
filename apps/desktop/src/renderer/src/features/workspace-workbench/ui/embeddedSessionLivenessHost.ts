@@ -4,6 +4,7 @@
 import { registerSessionLivenessHost } from "@tutti-os/agent-gui/conversation-rail-projection";
 import {
   HostBridgeUnavailableError,
+  requestHostSessionAttach,
   requestHostSessionLiveness
 } from "../../../platform/desktop/web/webHostBridgeClient.ts";
 
@@ -22,6 +23,10 @@ function normalizeBridgeError(error: unknown): never {
 export function installEmbeddedSessionLivenessHost(): () => void {
   return registerSessionLivenessHost({
     querySessionLiveness: (input) =>
-      requestHostSessionLiveness(input).catch(normalizeBridgeError)
+      requestHostSessionLiveness(input).catch(normalizeBridgeError),
+    // 补挂（补丁 0124）。老宿主只实现了 sessionLiveness，这里同样归一成
+    // "unsupported"，gui 侧收到就永久停止补挂、圆点行为逐字回到 0122。
+    attachSession: (input) =>
+      requestHostSessionAttach(input).catch(normalizeBridgeError)
   });
 }

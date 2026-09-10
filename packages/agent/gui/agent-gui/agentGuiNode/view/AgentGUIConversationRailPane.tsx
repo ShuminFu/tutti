@@ -54,6 +54,8 @@ import type {
 } from "./agentGUIConversationRailTypes";
 import { useAgentGUIConversationRailBatchDeletion } from "./useAgentGUIConversationRailBatchDeletion";
 import { useHostSessionLiveness } from "../../../shared/agentConversation/useHostSessionLiveness";
+import { useHostSessionAttach } from "../../../shared/agentConversation/useHostSessionAttach";
+import { agentGUIConversationPresence } from "./agentGUIConversationPresence";
 export type { AgentGUIProjectActionDialog } from "./agentGUIConversationRailTypes";
 export interface AgentGUIConversationRailControllerProps {
   activityContextKey?: string;
@@ -415,6 +417,22 @@ export const AgentGUIConversationRailPane = memo(
       [groupedConversations]
     );
     const railHostLiveness = useHostSessionLiveness(railHostLivenessIds);
+    // 补挂（补丁 0124）：看见「这一轮正在跑、宿主却说这条不活」就让宿主把账重新挂上。
+    // 「正在跑」用的就是画蓝点那份判据 —— 会话栏拿不到发送事件，但一轮跑起来它一定
+    // 看得见，而这正是「用户又在这条会话里说话了」的可靠旁证。已结束的会话
+    // （presence 为 null）自然不在其列，不会把用户主动关掉的会话拉回来。
+    const railHostAttachCandidates = useMemo(
+      () =>
+        groupedConversations.flatMap((section) =>
+          section.items.map((item) => ({
+            id: item.id,
+            working: agentGUIConversationPresence(item) === "working",
+            hostLiveness: railHostLiveness.get(item.id)
+          }))
+        ),
+      [groupedConversations, railHostLiveness]
+    );
+    useHostSessionAttach(railHostAttachCandidates);
     const hasRailContent = groupedConversations.some(
       (section) =>
         section.items.length > 0 ||

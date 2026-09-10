@@ -37,6 +37,23 @@ export interface SessionLivenessHost {
   querySessionLiveness(input: { agentSessionIds: string[] }): Promise<{
     sessions: Record<string, HostSessionLivenessEntry>;
   }>;
+  /**
+   * 告诉宿主「用户又在这条会话里说话了」，让它把被后端重启打断的任务行重新挂上
+   *（补丁 0124）。
+   *
+   * 为什么需要：宿主一重启，在跑的任务行全被打成 failed，而在 DinTalDock 里直接
+   * 聊天**不经过宿主**、一行都不会新建 —— 那条会话从此在宿主眼里永远死着，
+   * 圆点再也不出现（真机：会话 ac85f3bc 名下唯一一行 07:45 被打成 failed，
+   * 10:41 还在正常对话，宿主仍回 closed）。
+   *
+   * 可选：老宿主只实现了 querySessionLiveness，缺这一项时补挂整档不启用。
+   * 宿主保证幂等（已有活行原样返回，短时间内重复调不会多挂）。
+   */
+  attachSession?(input: { agentSessionId: string }): Promise<{
+    state: HostSessionLivenessState;
+    taskId: string;
+    status: string;
+  }>;
 }
 
 let registeredHost: SessionLivenessHost | null = null;
