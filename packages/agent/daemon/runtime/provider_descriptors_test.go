@@ -43,6 +43,7 @@ func TestMigratedCodexDescriptorBuildsDefaultAdapter(t *testing.T) {
 }
 
 func TestMigratedClaudeCodeDescriptorBuildsSDKAdapter(t *testing.T) {
+	t.Setenv(claudeCodeRuntimeEnv, "")
 	descriptor, ok := providerregistry.Find(ProviderClaudeCode)
 	if !ok {
 		t.Fatal("claude-code descriptor missing")
@@ -59,6 +60,31 @@ func TestMigratedClaudeCodeDescriptorBuildsSDKAdapter(t *testing.T) {
 	}
 	if adapter.Provider() != ProviderClaudeCode {
 		t.Fatalf("adapter.Provider() = %q", adapter.Provider())
+	}
+}
+
+func TestMigratedClaudeCodeDescriptorBuildsACPAdapterWhenSelected(t *testing.T) {
+	t.Setenv(claudeCodeRuntimeEnv, claudeCodeRuntimeACP)
+	descriptor, ok := providerregistry.Find(ProviderClaudeCode)
+	if !ok {
+		t.Fatal("claude-code descriptor missing")
+	}
+	adapter := newAdapterFromProviderDescriptor(
+		descriptor,
+		nil,
+		HostMetadata{},
+		nil,
+		providerAdapterOptions{},
+	)
+	standardAdapter, ok := adapter.(*standardACPAdapter)
+	if !ok {
+		t.Fatalf("adapter = %T, want *standardACPAdapter", adapter)
+	}
+	if standardAdapter.config.adapterName != "claude-agent-acp" || standardAdapter.config.command[0] != "claude-agent-acp" {
+		t.Fatalf("adapter config = %#v, want claude-agent-acp", standardAdapter.config)
+	}
+	if got := standardAdapter.config.permissionModeID("bypassPermissions"); got != "bypassPermissions" {
+		t.Fatalf("permission mode = %q, want bypassPermissions", got)
 	}
 }
 

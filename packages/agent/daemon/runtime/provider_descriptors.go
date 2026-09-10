@@ -87,6 +87,9 @@ func newAdapterFromProviderDescriptor(
 			return nil
 		}
 	case providerregistry.RuntimeKindClaudeSDK:
+		if descriptor.Identity.ID == providerregistry.ClaudeCodeProviderID && claudeCodeACPRuntimeEnabled() {
+			return newClaudeCodeACPAdapterFromProviderDescriptor(descriptor, transport, host, commandResolver)
+		}
 		return NewClaudeCodeSDKAdapter(transport)
 	default:
 		return nil

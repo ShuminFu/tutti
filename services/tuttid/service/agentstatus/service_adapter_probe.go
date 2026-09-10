@@ -90,11 +90,10 @@ func (s Service) probeAdapterRuntimeCommand(
 			result.ReasonCode = "codex_platform_pkg_incomplete"
 		}
 		return result
-	} else if isStandardACPStatusSpec(spec) && sameResolvedBinary(runtimeResolution.AdapterPath, runtimeResolution.CLIPath) {
-		// cursor-agent and opencode have the same "CLI is the adapter" shape as
-		// Codex (invoked as `<binary> acp`), so they get the same real
-		// initialize handshake instead of only checking the process didn't
-		// exit.
+	} else if (isStandardACPStatusSpec(spec) && sameResolvedBinary(runtimeResolution.AdapterPath, runtimeResolution.CLIPath)) ||
+		(isClaudeStatusSpec(spec) && strings.TrimSpace(spec.ExternalRegistryID) == "claude-acp") {
+		// Standard ACP binaries, including Claude's separately installed bridge,
+		// must complete initialize instead of only staying alive.
 		result = s.probeStandardACPHandshake(ctx, result, command, env, s.probeTimeoutForSpec(spec))
 	} else {
 		result = s.probeCommandWithReadyAfter(ctx, result, command, env, s.probeReadyAfterForSpec(spec))
