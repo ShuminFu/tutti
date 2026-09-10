@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	"github.com/tutti-os/tutti/packages/agent/daemon/runtimecmd"
+	"github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
 	externalagentregistry "github.com/tutti-os/tutti/services/tuttid/service/externalagentregistry"
 	managedruntime "github.com/tutti-os/tutti/services/tuttid/service/managedruntime"
 )
@@ -23,6 +26,10 @@ const ReasonClaudeSDKSidecarUnavailable = "claude_sdk_sidecar_unavailable"
 const claudeSDKSidecarCommandEnv = "TUTTI_CLAUDE_SDK_SIDECAR_COMMAND"
 const claudeSDKSidecarEntryPathEnv = "TUTTI_CLAUDE_SDK_SIDECAR_ENTRY_PATH"
 const claudeSDKSidecarDefaultNodeArg = "--experimental-strip-types"
+const managedCodexRuntimeEnv = "TUTTI_CODEX_MANAGED"
+const managedCodexAppServerPathEnv = "TUTTI_CODEX_APP_SERVER_PATH"
+const managedCodexGatewayBaseEnv = "TUTTI_CODEX_GATEWAY_BASE"
+const managedCodexGatewayKeyEnv = "TUTTI_CODEX_GATEWAY_KEY"
 
 type ProviderCommandResolution struct {
 	Command []string
@@ -46,6 +53,9 @@ func (s Service) selectProviderSpecs(ctx context.Context, providers []string, re
 }
 
 func (s Service) ResolveProviderCommand(ctx context.Context, provider string) (ProviderCommandResolution, error) {
+	if provider == agentprovider.Codex && os.Getenv(managedCodexRuntimeEnv) == "1" {
+		return resolveManagedCodexCommand()
+	}
 	specs, err := s.selectProviderSpecs(ctx, []string{provider}, true)
 	if err != nil {
 		return ProviderCommandResolution{}, err
@@ -77,6 +87,26 @@ func (s Service) ResolveProviderCommand(ctx context.Context, provider string) (P
 	return ProviderCommandResolution{
 		Command: cloneStrings(spec.AdapterCommand),
 		Env:     s.adapterCommandEnv(ctx, spec),
+	}, nil
+}
+
+func resolveManagedCodexCommand() (ProviderCommandResolution, error) {
+	binary := strings.TrimSpace(os.Getenv(managedCodexAppServerPathEnv))
+	gateway := strings.TrimSpace(os.Getenv(managedCodexGatewayBaseEnv))
+	key := os.Getenv(managedCodexGatewayKeyEnv)
+	info, err := os.Stat(binary)
+	parsed, parseErr := url.Parse(gateway)
+	var ip net.IP
+	if parseErr == nil {
+		ip = net.ParseIP(parsed.Hostname())
+	}
+	if !filepath.IsAbs(binary) || err != nil || !info.Mode().IsRegular() ||
+		parseErr != nil || parsed.Scheme != "http" || parsed.User != nil || parsed.Path != "/v1" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Port() == "" || ip == nil || !ip.IsLoopback() || key == "" {
+		return ProviderCommandResolution{}, fmt.Errorf("managed_codex_runtime_invalid")
+	}
+	return ProviderCommandResolution{
+		Command: []string{binary},
+		Env:     []string{"DINTAL_LLM_KEY=" + key},
 	}, nil
 }
 

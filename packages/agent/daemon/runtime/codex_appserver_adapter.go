@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -493,7 +494,13 @@ func (a *CodexAppServerAdapter) resolveCLIVersion(env []string) string {
 	if a.cliVersionCached != "" {
 		return a.cliVersionCached
 	}
-	cmd := exec.Command(a.config.command[0], "--version")
+	command := a.config.command[0]
+	if a.config.provider == ProviderCodex && os.Getenv("TUTTI_CODEX_MANAGED") == "1" {
+		if managed := strings.TrimSpace(os.Getenv("TUTTI_CODEX_APP_SERVER_PATH")); managed != "" {
+			command = managed
+		}
+	}
+	cmd := exec.Command(command, "--version")
 	if len(env) > 0 {
 		cmd.Env = env
 	}

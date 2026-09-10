@@ -2009,6 +2009,23 @@ func TestServiceResolveProviderCommandPrefersUserNodeForCodex(t *testing.T) {
 	}
 }
 
+func TestServiceResolveProviderCommandUsesManagedCodexWithoutPATH(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "codex-app-server")
+	writeExecutable(t, binary, "#!/bin/sh\nexit 0\n")
+	t.Setenv(managedCodexRuntimeEnv, "1")
+	t.Setenv(managedCodexAppServerPathEnv, binary)
+	t.Setenv(managedCodexGatewayBaseEnv, "http://127.0.0.1:43121/v1")
+	t.Setenv(managedCodexGatewayKeyEnv, "session-secret")
+
+	result, err := (Service{}).ResolveProviderCommand(context.Background(), "codex")
+	if err != nil {
+		t.Fatalf("ResolveProviderCommand() error = %v", err)
+	}
+	if !slices.Equal(result.Command, []string{binary}) || !slices.Equal(result.Env, []string{"DINTAL_LLM_KEY=session-secret"}) {
+		t.Fatalf("managed resolution = %#v", result)
+	}
+}
+
 func TestServiceResolveProviderCommandFallsBackToManagedNodeForCodex(t *testing.T) {
 	home := t.TempDir()
 	binDir := filepath.Join(home, "bin")

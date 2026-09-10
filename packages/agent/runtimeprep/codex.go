@@ -14,6 +14,8 @@ import (
 
 const (
 	codexProjectRootMarkersDisabledConfig = `project_root_markers = []`
+	managedCodexRuntimeEnv                = "TUTTI_CODEX_MANAGED"
+	managedCodexConfigTemplateEnv         = "TUTTI_CODEX_CONFIG_TEMPLATE"
 )
 
 type CodexPreparer struct {
@@ -124,26 +126,35 @@ func prepareCodexHome(codexHome string, input PrepareInput) error {
 		return fmt.Errorf("create codex home: %w", err)
 	}
 	logRuntimePrepareTrace("runtime_prepare.codex.home_dir_resolved", input, nil)
-	logRuntimePrepareTrace("runtime_prepare.codex.user_files_requested", input, nil)
-	if err := exposeUserCodexFiles(codexHome); err != nil {
-		return err
+	managed := os.Getenv(managedCodexRuntimeEnv) == "1"
+	if managed {
+		if err := installManagedCodexConfig(codexHome); err != nil {
+			return err
+		}
+	} else {
+		logRuntimePrepareTrace("runtime_prepare.codex.user_files_requested", input, nil)
+		if err := exposeUserCodexFiles(codexHome); err != nil {
+			return err
+		}
+		logRuntimePrepareTrace("runtime_prepare.codex.user_files_resolved", input, nil)
+		logRuntimePrepareTrace("runtime_prepare.codex.imported_rollout_requested", input, nil)
+		if err := exposeCodexImportedRolloutFile(codexHome, input.ExternalRolloutSourcePath); err != nil {
+			return err
+		}
+		logRuntimePrepareTrace("runtime_prepare.codex.imported_rollout_resolved", input, nil)
 	}
-	logRuntimePrepareTrace("runtime_prepare.codex.user_files_resolved", input, nil)
-	logRuntimePrepareTrace("runtime_prepare.codex.imported_rollout_requested", input, nil)
-	if err := exposeCodexImportedRolloutFile(codexHome, input.ExternalRolloutSourcePath); err != nil {
-		return err
-	}
-	logRuntimePrepareTrace("runtime_prepare.codex.imported_rollout_resolved", input, nil)
 	logRuntimePrepareTrace("runtime_prepare.codex.session_config_requested", input, nil)
 	if err := ensureCodexSessionConfig(filepath.Join(codexHome, "config.toml"), input); err != nil {
 		return err
 	}
 	logRuntimePrepareTrace("runtime_prepare.codex.session_config_resolved", input, nil)
-	logRuntimePrepareTrace("runtime_prepare.codex.user_skills_requested", input, nil)
-	if err := exposeUserCodexSkillFolders(filepath.Join(codexHome, "skills"), input); err != nil {
-		return err
+	if !managed {
+		logRuntimePrepareTrace("runtime_prepare.codex.user_skills_requested", input, nil)
+		if err := exposeUserCodexSkillFolders(filepath.Join(codexHome, "skills"), input); err != nil {
+			return err
+		}
+		logRuntimePrepareTrace("runtime_prepare.codex.user_skills_resolved", input, nil)
 	}
-	logRuntimePrepareTrace("runtime_prepare.codex.user_skills_resolved", input, nil)
 	logRuntimePrepareTrace("runtime_prepare.codex.native_skills_requested", input, nil)
 	skillPaths, err := installProviderNativeSkills(filepath.Join(codexHome, "skills"), input)
 	if err != nil {
@@ -157,6 +168,30 @@ func prepareCodexHome(codexHome string, input PrepareInput) error {
 		return err
 	}
 	logRuntimePrepareTrace("runtime_prepare.codex.approval_rules_resolved", input, nil)
+	return nil
+}
+
+func installManagedCodexConfig(codexHome string) error {
+	source := strings.TrimSpace(os.Getenv(managedCodexConfigTemplateEnv))
+	if !filepath.IsAbs(source) {
+		return fmt.Errorf("managed codex config template must be absolute")
+	}
+	info, err := os.Lstat(source)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("managed codex config template is unavailable")
+	}
+	if userHome, err := os.UserHomeDir(); err == nil {
+		if rel, err := filepath.Rel(filepath.Join(userHome, ".codex"), source); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("managed codex config template may not use personal CODEX_HOME")
+		}
+	}
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return fmt.Errorf("read managed codex config template: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(codexHome, "config.toml"), data, 0o600); err != nil {
+		return fmt.Errorf("write managed codex config: %w", err)
+	}
 	return nil
 }
 

@@ -391,6 +391,39 @@ func TestDefaultPreparerCodexWritesInstructionsSkillManifestAndEnv(t *testing.T)
 	}
 }
 
+func TestDefaultPreparerManagedCodexDoesNotReadPersonalHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	writeSidecarTestFile(t, filepath.Join(home, ".codex", "auth.json"), `{"token":"personal"}`)
+	writeSidecarTestFile(t, filepath.Join(home, ".codex", "skills", "personal", "SKILL.md"), "---\nname: personal\n---\nPersonal\n")
+	template := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(template, []byte("model = \"managed\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(managedCodexRuntimeEnv, "1")
+	t.Setenv(managedCodexConfigTemplateEnv, template)
+
+	prepared, err := NewDefaultPreparer(t.TempDir()).Prepare(t.Context(), PrepareInput{
+		WorkspaceID: "workspace-managed", AgentSessionID: "session-managed",
+		Provider: "codex", Cwd: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	codexHome := envValue(prepared.Env, "CODEX_HOME")
+	config, err := os.ReadFile(filepath.Join(codexHome, "config.toml"))
+	if err != nil || !strings.Contains(string(config), `model = "managed"`) {
+		t.Fatalf("managed config not installed: config=%q err=%v", config, err)
+	}
+	if _, err := os.Stat(filepath.Join(codexHome, "auth.json")); !os.IsNotExist(err) {
+		t.Fatalf("personal auth was exposed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(codexHome, "skills", "personal")); !os.IsNotExist(err) {
+		t.Fatalf("personal skill was exposed: %v", err)
+	}
+}
+
 func TestDefaultPreparerReturnsAuthoritativeMCPBindings(t *testing.T) {
 	setTestHome(t, t.TempDir())
 	input := PrepareInput{
