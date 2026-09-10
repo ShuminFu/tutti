@@ -259,9 +259,16 @@ func modelPlanModels(models []runtimeprep.ModelEndpointModel) []modelplanbiz.Mod
 }
 
 func hostDefaultModelResolution(provider string, agentTargetID string, requestedModel string) (modelPlanResolution, bool) {
-	endpoint := runtimeprep.HostModelEndpoint(provider)
 	requiredProtocol, supported := modelPlanProtocolForProvider(provider)
-	if endpoint == nil || !supported || string(requiredProtocol) != endpoint.Protocol {
+	if !supported {
+		return modelPlanResolution{}, false
+	}
+	return hostDefaultModelResolutionForProtocol(provider, agentTargetID, requestedModel, string(requiredProtocol))
+}
+
+func hostDefaultModelResolutionForProtocol(provider string, agentTargetID string, requestedModel string, requiredProtocol string) (modelPlanResolution, bool) {
+	endpoint := runtimeprep.HostModelEndpoint(provider)
+	if endpoint == nil || strings.TrimSpace(requiredProtocol) != endpoint.Protocol {
 		return modelPlanResolution{}, false
 	}
 	models := modelPlanModels(endpoint.Models)
@@ -422,6 +429,17 @@ func (s *Service) applyModelPlanComposerOverlay(ctx context.Context, input Compo
 		options.Provider,
 		strings.TrimSpace(input.Settings.Model),
 	)
+	if resolution.Endpoint == nil {
+		if hostDefault, ok := s.extensionHostDefaultModelResolution(
+			ctx,
+			input.providerTargetRef,
+			options.Provider,
+			input.AgentTargetID,
+			strings.TrimSpace(input.Settings.Model),
+		); ok {
+			resolution = hostDefault
+		}
+	}
 	return applyResolvedModelPlanComposerOverlay(options, resolution)
 }
 
@@ -503,6 +521,17 @@ func (s *Service) resolveCreateSessionModelForPlanOrProvider(ctx context.Context
 		}
 	} else {
 		resolution = s.resolveModelPlan(ctx, workspaceID, input.AgentTargetID, provider, requestedModel)
+		if resolution.Endpoint == nil {
+			if hostDefault, ok := s.extensionHostDefaultModelResolution(
+				ctx,
+				input.ProviderTargetRef,
+				provider,
+				input.AgentTargetID,
+				requestedModel,
+			); ok {
+				resolution = hostDefault
+			}
+		}
 	}
 	if resolution.Endpoint != nil {
 		if !(resolution.ModelConfiguration.Source == modelConfigurationSourceHostDefault && len(resolution.Models) == 0) {

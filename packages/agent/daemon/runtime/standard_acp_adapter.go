@@ -83,6 +83,7 @@ type standardACPConfig struct {
 	setModelReasoningEffortMeta    bool
 	messageDiagnostics             *standardACPMessageDiagnostics
 	capabilities                   []string
+	declaredHTTPMCP                bool
 	agentTargetID                  string
 	installationID                 string
 	executableIdentity             *ExecutableIdentity

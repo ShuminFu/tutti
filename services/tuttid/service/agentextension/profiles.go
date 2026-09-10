@@ -19,6 +19,11 @@ type ComposerProfile struct {
 	SchemaVersion string          `json:"schemaVersion"`
 	Model         json.RawMessage `json:"model"`
 	Permission    json.RawMessage `json:"permission"`
+	ACP           *struct {
+		MCPCapabilities *struct {
+			HTTP bool `json:"http"`
+		} `json:"mcpCapabilities,omitempty"`
+	} `json:"acp,omitempty"`
 	ConfigOptions *struct {
 		Model      ComposerConfigOptionReference `json:"model"`
 		Permission ComposerConfigOptionReference `json:"permission"`
@@ -58,6 +63,10 @@ type ComposerProfile struct {
 		} `json:"roots"`
 	} `json:"skills,omitempty"`
 	RuntimePrep *runtimeprep.ExtensionRuntimePrep `json:"runtimePrep,omitempty"`
+}
+
+func (profile ComposerProfile) DeclaresHTTPMCP() bool {
+	return profile.ACP != nil && profile.ACP.MCPCapabilities != nil && profile.ACP.MCPCapabilities.HTTP
 }
 
 type ComposerPermissionMode struct {

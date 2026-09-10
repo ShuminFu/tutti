@@ -9,6 +9,51 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type yamlStringValue struct {
+	Path  []string
+	Value string
+}
+
+func mergeYAMLStringValues(config string, values []yamlStringValue) (string, error) {
+	var doc yaml.Node
+	if strings.TrimSpace(config) == "" {
+		doc = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode}}}
+	} else if err := yaml.Unmarshal([]byte(config), &doc); err != nil {
+		return "", fmt.Errorf("parse extension runtime YAML config: %w", err)
+	}
+	root := yamlDocumentRoot(&doc)
+	if root.Kind != yaml.MappingNode {
+		return "", errors.New("extension runtime YAML config must be a mapping")
+	}
+	for _, value := range values {
+		if err := yamlSetStringPath(root, value.Path, value.Value); err != nil {
+			return "", err
+		}
+	}
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return "", fmt.Errorf("write extension runtime YAML config: %w", err)
+	}
+	return string(out), nil
+}
+
+func yamlSetStringPath(root *yaml.Node, keyPath []string, value string) error {
+	mapping := root
+	for _, key := range keyPath[:len(keyPath)-1] {
+		next := yamlMappingValue(mapping, key)
+		if next == nil {
+			next = &yaml.Node{Kind: yaml.MappingNode}
+			yamlSetMappingValue(mapping, key, next)
+		}
+		if next.Kind != yaml.MappingNode {
+			return fmt.Errorf("extension runtime YAML %s must be a mapping", strings.Join(keyPath[:len(keyPath)-1], "."))
+		}
+		mapping = next
+	}
+	yamlReplaceMappingValue(mapping, keyPath[len(keyPath)-1], &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value})
+	return nil
+}
+
 func mergeYAMLStringList(config string, keyPath []string, values []string) (string, error) {
 	dirs := dedupeStringList(values)
 	if len(dirs) == 0 {
@@ -88,6 +133,16 @@ func yamlSetMappingValue(mapping *yaml.Node, key string, value *yaml.Node) {
 		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
 		value,
 	)
+}
+
+func yamlReplaceMappingValue(mapping *yaml.Node, key string, value *yaml.Node) {
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if mapping.Content[index].Value == key {
+			mapping.Content[index+1] = value
+			return
+		}
+	}
+	yamlSetMappingValue(mapping, key, value)
 }
 
 func yamlStringSequenceValues(sequence *yaml.Node) []string {

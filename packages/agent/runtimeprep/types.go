@@ -137,8 +137,29 @@ type ConnectorAgentContext struct {
 }
 
 type ExtensionRuntimePrep struct {
-	InstructionsFile string                `json:"instructionsFile,omitempty"`
-	Home             *ExtensionRuntimeHome `json:"home,omitempty"`
+	InstructionsFile string                  `json:"instructionsFile,omitempty"`
+	Home             *ExtensionRuntimeHome   `json:"home,omitempty"`
+	ModelEndpoint    *ExtensionModelEndpoint `json:"modelEndpoint,omitempty"`
+}
+
+// ExtensionModelEndpoint declares how an extension consumes a host-provided
+// model endpoint. The bundled extension profile owns provider-specific config
+// locations; Tutti only applies this generic mapping inside the session home.
+type ExtensionModelEndpoint struct {
+	Protocol           string                           `json:"protocol"`
+	WireAPI            string                           `json:"wireAPI"`
+	WireAPIConfigValue string                           `json:"wireAPIConfigValue,omitempty"`
+	APIKeyEnv          string                           `json:"apiKeyEnv"`
+	ProviderValue      string                           `json:"providerValue"`
+	ConfigKeys         ExtensionModelEndpointConfigKeys `json:"configKeys"`
+}
+
+type ExtensionModelEndpointConfigKeys struct {
+	Provider  []string `json:"provider"`
+	Model     []string `json:"model"`
+	BaseURL   []string `json:"baseURL"`
+	APIKeyEnv []string `json:"apiKeyEnv,omitempty"`
+	WireAPI   []string `json:"wireAPI,omitempty"`
 }
 
 type ExtensionRuntimeHome struct {

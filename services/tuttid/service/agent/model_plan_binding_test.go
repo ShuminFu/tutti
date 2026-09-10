@@ -13,10 +13,14 @@ import (
 	modelplanbiz "github.com/tutti-os/tutti/services/tuttid/biz/modelplan"
 )
 
-func setHostModelEndpointContract(t *testing.T, provider string, protocol string) {
+func setHostModelEndpointContract(t *testing.T, provider string, protocol string, wireAPIs ...string) {
 	t.Helper()
+	wireAPI := "responses"
+	if len(wireAPIs) > 0 {
+		wireAPI = wireAPIs[0]
+	}
 	path := filepath.Join(t.TempDir(), "host-model-endpoints.json")
-	payload := `{"version":1,"providers":{"` + provider + `":{"planName":"DinTal Runtime LLM Proxy","protocol":"` + protocol + `","baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback","wireAPI":"responses","model":"gateway-default","models":[{"id":"gateway-default","name":"Gateway Default"},{"id":"gateway-alt","name":"Gateway Alt"}]}}}`
+	payload := `{"version":1,"providers":{"` + provider + `":{"planName":"DinTal Runtime LLM Proxy","protocol":"` + protocol + `","baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback","wireAPI":"` + wireAPI + `","model":"gateway-default","models":[{"id":"gateway-default","name":"Gateway Default"},{"id":"gateway-alt","name":"Gateway Alt"}]}}}`
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -152,6 +156,44 @@ func TestResolveModelPlanEndpointMatchesProviderProtocol(t *testing.T) {
 	// Providers without an endpoint-injection adapter keep native credentials.
 	if endpoint, _ := service.resolveModelPlanEndpoint(ctx, "ws", "local:cursor", "cursor", ""); endpoint != nil {
 		t.Fatalf("cursor should not receive a plan endpoint yet: %#v", endpoint)
+	}
+}
+
+func TestResolveCreateSessionModelUsesExtensionDeclaredHostEndpoint(t *testing.T) {
+	setHostModelEndpointContract(t, "acp:test-agent", "openai", "chat")
+	service := &Service{
+		ExtensionComposerProfiles: extensionComposerProfileResolverStub{profile: ExtensionComposerProfile{
+			RuntimePrep: &runtimeprep.ExtensionRuntimePrep{
+				ModelEndpoint: &runtimeprep.ExtensionModelEndpoint{Protocol: "openai", WireAPI: "chat"},
+			},
+		}},
+	}
+	input := CreateSessionInput{
+		AgentTargetID: "extension:test-agent",
+		ProviderTargetRef: map[string]any{
+			"kind":                    "agent_extension",
+			"extensionInstallationId": "test-installation",
+		},
+	}
+
+	resolution, err := service.resolveCreateSessionModelForPlanOrProvider(
+		context.Background(),
+		"workspace",
+		"acp:test-agent",
+		"",
+		&input,
+	)
+	if err != nil {
+		t.Fatalf("resolveCreateSessionModelForPlanOrProvider() error = %v", err)
+	}
+	if resolution.Endpoint == nil || resolution.Endpoint.Model != "gateway-default" {
+		t.Fatalf("resolution = %#v, want host endpoint", resolution)
+	}
+	if resolution.ModelConfiguration.Source != modelConfigurationSourceHostDefault {
+		t.Fatalf("source = %q", resolution.ModelConfiguration.Source)
+	}
+	if value(input.Model) != "gateway-default" {
+		t.Fatalf("input model = %q", value(input.Model))
 	}
 }
 

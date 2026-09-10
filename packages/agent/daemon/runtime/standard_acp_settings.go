@@ -135,6 +135,7 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 	modelSet := false
 	if model := strings.TrimSpace(settings.Model); model != "" && modelConfigID != "" &&
 		(supported[modelConfigID] || (modelConfigID == "model" && modelsAPI)) {
+		model = a.sessionModelIDForRequest(session.AgentSessionID, model)
 		modelAlreadySelected := modelsAPI && modelConfigID == "model" &&
 			strings.TrimSpace(a.sessionCurrentModelID(session.AgentSessionID)) == model
 		if !modelAlreadySelected {
@@ -153,7 +154,7 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 	}
 	if reasoning := strings.TrimSpace(settings.ReasoningEffort); reasoning != "" {
 		if a.config.setModelReasoningEffortMeta {
-			model := strings.TrimSpace(settings.Model)
+			model := a.sessionModelIDForRequest(session.AgentSessionID, settings.Model)
 			if model == "" {
 				model = a.sessionCurrentModelID(session.AgentSessionID)
 			}
@@ -740,6 +741,11 @@ func (a *standardACPAdapter) SessionState(session Session) SessionStateSnapshot 
 		)
 	}
 	if snapshot.Settings != nil {
+		snapshot.Settings.Model = acpProjectedModelValue(
+			state.configOptionDescriptors,
+			session.SettingsValue().Model,
+			snapshot.Settings.Model,
+		)
 		snapshot.RuntimeContext["model"] = snapshot.Settings.Model
 		snapshot.RuntimeContext["reasoningEffort"] = snapshot.Settings.ReasoningEffort
 		snapshot.RuntimeContext["speed"] = snapshot.Settings.Speed

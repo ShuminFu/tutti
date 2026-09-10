@@ -371,6 +371,7 @@ func (m *Manager) runtimeBinding(installation Installation, command []string, ve
 		SetModelReasoningEffortMeta:  composerProfile.SetModelReasoningEffortMeta(), Capabilities: capabilities,
 		ExecutableIdentity: executableIdentity,
 		Env:                resolveRuntimeLaunchEnv(installation.Manifest.Runtime.Launch.Env),
+		DeclaredHTTPMCP:    composerProfile.DeclaresHTTPMCP(),
 	}, nil
 }
 

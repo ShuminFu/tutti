@@ -107,6 +107,12 @@ func TestResolveAgentExtensionSourcesAppliesLocalPackageOnlyInDevelopment(t *tes
 	if production.Enabled || production.LocalPackageDir != "" {
 		t.Fatalf("production local package override must be ignored: %#v", production)
 	}
+
+	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "1")
+	embedded := agentExtensionSourceByKey(t, ResolveAgentExtensionSources(), "codebuddy")
+	if embedded.LocalPackageDir != packageDir {
+		t.Fatalf("embedded local package override not applied: %#v", embedded)
+	}
 }
 
 func TestGrokAgentExtensionSourcePinsApprovedSigningIdentity(t *testing.T) {

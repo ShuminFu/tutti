@@ -12,6 +12,7 @@ import (
 	"time"
 
 	agentruntime "github.com/tutti-os/tutti/packages/agent/daemon/runtime"
+	"github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	agentextensionbiz "github.com/tutti-os/tutti/services/tuttid/biz/agentextension"
 )
 
@@ -307,6 +308,12 @@ func (s *SetupService) snapshotForPlan(ctx context.Context, plan InstallPlan, wo
 		}
 		snapshot.Status = SetupStatus(probe.Status)
 		snapshot.AuthMethods = probe.AuthMethods
+		if snapshot.Status == SetupAuthRequired && s.Plans.Manager != nil {
+			profile, profileErr := s.Plans.Manager.LoadComposerProfile(binding.Installation.ID)
+			if profileErr == nil && extensionHostModelEndpointAvailable(binding.Installation.Provider, profile.RuntimePrep) {
+				snapshot.Status = SetupReady
+			}
+		}
 		if snapshot.Status == SetupReady && s.AuthInvalidation != nil &&
 			s.AuthInvalidation.AuthInvalidated(binding.Installation.Provider) {
 			snapshot.Status = SetupAuthRequired
@@ -330,6 +337,13 @@ func (s *SetupService) snapshotForPlan(ctx context.Context, plan InstallPlan, wo
 		snapshot.Reason = action.ErrorCode
 	}
 	return snapshot, nil
+}
+
+func extensionHostModelEndpointAvailable(provider string, prep *runtimeprep.ExtensionRuntimePrep) bool {
+	if prep == nil {
+		return false
+	}
+	return runtimeprep.ExtensionModelEndpointApplies(runtimeprep.HostModelEndpoint(provider), prep.ModelEndpoint)
 }
 
 func setupStatusForAction(action SetupAction) SetupStatus {

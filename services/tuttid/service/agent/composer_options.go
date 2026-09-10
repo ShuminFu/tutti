@@ -250,6 +250,17 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 			provider,
 			settings.Model,
 		)
+		if modelPlanResolution.Endpoint == nil {
+			if hostDefault, ok := s.extensionHostDefaultModelResolution(
+				ctx,
+				input.providerTargetRef,
+				provider,
+				input.AgentTargetID,
+				settings.Model,
+			); ok {
+				modelPlanResolution = hostDefault
+			}
+		}
 	}
 	planEndpoint := modelPlanResolution.Endpoint
 	if planEndpoint != nil {

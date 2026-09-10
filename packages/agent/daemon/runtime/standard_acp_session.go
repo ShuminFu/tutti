@@ -39,7 +39,7 @@ func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]acti
 		})
 		return nil, err
 	}
-	if len(acpMCPServers(session.MCPServers)) > 0 && !standardACPHTTPMCPSupported(initializeResult) {
+	if len(acpMCPServers(session.MCPServers)) > 0 && !a.supportsHTTPMCP(initializeResult) {
 		_ = client.Close()
 		return nil, ErrMCPHTTPUnsupported
 	}
@@ -185,7 +185,7 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 	if err != nil {
 		return err
 	}
-	if !attachedCheckpoint && len(acpMCPServers(session.MCPServers)) > 0 && !standardACPHTTPMCPSupported(initializeResult) {
+	if !attachedCheckpoint && len(acpMCPServers(session.MCPServers)) > 0 && !a.supportsHTTPMCP(initializeResult) {
 		_ = client.Close()
 		return ErrMCPHTTPUnsupported
 	}
@@ -314,6 +314,10 @@ func standardACPHTTPMCPSupported(raw json.RawMessage) bool {
 		} `json:"agentCapabilities"`
 	}
 	return json.Unmarshal(raw, &result) == nil && result.AgentCapabilities.MCPCapabilities.HTTP
+}
+
+func (a *standardACPAdapter) supportsHTTPMCP(raw json.RawMessage) bool {
+	return standardACPHTTPMCPSupported(raw) || (a != nil && a.config.declaredHTTPMCP)
 }
 
 func (*standardACPAdapter) CanResume(session Session) bool {

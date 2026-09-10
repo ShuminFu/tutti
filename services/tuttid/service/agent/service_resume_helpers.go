@@ -119,7 +119,13 @@ func (s *Service) prepareRuntimeForResume(ctx context.Context, session Persisted
 		model := snapshot.Model
 		input.Model = &model
 	}
-	endpoint, err := s.modelEndpointFromSessionRuntimeSnapshot(ctx, strings.TrimSpace(session.WorkspaceID), snapshot, value(input.Model))
+	endpoint, err := s.modelEndpointFromSessionRuntimeSnapshot(
+		ctx,
+		strings.TrimSpace(session.WorkspaceID),
+		snapshot,
+		value(input.Model),
+		input.ProviderTargetRef,
+	)
 	if err != nil {
 		return preparedRuntime{}, err
 	}

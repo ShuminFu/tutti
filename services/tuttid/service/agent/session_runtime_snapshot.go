@@ -289,6 +289,7 @@ func (s *Service) modelEndpointFromSessionRuntimeSnapshot(
 	workspaceID string,
 	snapshot sessionRuntimeSnapshot,
 	effectiveModel string,
+	providerTargetRefs ...map[string]any,
 ) (*runtimeprep.ModelEndpointConfig, error) {
 	if snapshot.ModelConfigurationSource == modelConfigurationSourceProviderNative {
 		expected := newProviderNativeModelConfiguration(snapshot.Provider, snapshot.AgentTargetID)
@@ -302,6 +303,24 @@ func (s *Service) modelEndpointFromSessionRuntimeSnapshot(
 	}
 	if snapshot.ModelConfigurationSource == modelConfigurationSourceHostDefault {
 		resolution, ok := hostDefaultModelResolution(snapshot.Provider, snapshot.AgentTargetID, effectiveModel)
+		if !ok {
+			var providerTargetRef map[string]any
+			if len(providerTargetRefs) > 0 {
+				providerTargetRef = providerTargetRefs[0]
+			} else {
+				input := CreateSessionInput{}
+				if err := s.applyHarnessFromSessionRuntimeSnapshot(ctx, snapshot, &input); err == nil {
+					providerTargetRef = input.ProviderTargetRef
+				}
+			}
+			resolution, ok = s.extensionHostDefaultModelResolution(
+				ctx,
+				providerTargetRef,
+				snapshot.Provider,
+				snapshot.AgentTargetID,
+				effectiveModel,
+			)
+		}
 		if !ok || resolution.Endpoint == nil {
 			return nil, fmt.Errorf("%w: host model endpoint is unavailable", ErrSessionRuntimeAccessRevoked)
 		}
@@ -312,6 +331,7 @@ func (s *Service) modelEndpointFromSessionRuntimeSnapshot(
 			effectiveModel = snapshot.Model
 		}
 		if len(resolution.Models) > 0 {
+			effectiveModel = hostDefaultModelID(resolution.Models, effectiveModel)
 			if err := validateModelAgainstPlan(snapshot.Provider, effectiveModel, resolution.Models); err != nil {
 				return nil, err
 			}
@@ -368,6 +388,14 @@ func (s *Service) modelEndpointFromSessionRuntimeSnapshot(
 		Models:              modelEndpointModels(plan.Models),
 		PlanUpdatedAtUnixMS: plan.UpdatedAt.UnixMilli(),
 	}, nil
+}
+
+func hostDefaultModelID(models []modelplanbiz.Model, value string) string {
+	value = strings.TrimSpace(value)
+	if _, modelID, ok := strings.Cut(value, ":"); ok && modelplanbiz.ModelsContain(models, modelID) {
+		return strings.TrimSpace(modelID)
+	}
+	return value
 }
 
 func modelPlanFingerprintMatchesSnapshot(snapshot sessionRuntimeSnapshot, plan modelplanbiz.Plan) bool {

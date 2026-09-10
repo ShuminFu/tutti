@@ -200,10 +200,11 @@ func ResolveAppVersion() string {
 func ResolveAgentExtensionSources() []AgentExtensionSource {
 	result := make([]AgentExtensionSource, 0, len(generatedDefaults.AgentExtensions.Sources))
 	development := resolveTuttiEnv() == "development"
+	localPackagesEnabled := development || os.Getenv("RNDMASTER_TUTTI_EMBEDDED") == "1"
 	for _, source := range generatedDefaults.AgentExtensions.Sources {
 		envPrefix := "TUTTI_AGENT_EXTENSION_" + strings.ToUpper(strings.ReplaceAll(source.Key, "-", "_"))
 		localPackageDir := ""
-		if development {
+		if localPackagesEnabled {
 			localPackageDir = strings.TrimSpace(os.Getenv(envPrefix + "_PACKAGE_DIR"))
 		}
 		result = append(result, AgentExtensionSource{

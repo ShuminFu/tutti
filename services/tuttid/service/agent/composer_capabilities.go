@@ -58,6 +58,36 @@ func (s *Service) resolveExtensionRuntimePrep(ctx context.Context, providerTarge
 	return profile.RuntimePrep
 }
 
+func (s *Service) extensionHostDefaultModelResolution(
+	ctx context.Context,
+	providerTargetRef map[string]any,
+	provider string,
+	agentTargetID string,
+	requestedModel string,
+) (modelPlanResolution, bool) {
+	profile, err := s.extensionComposerProfileForLaunch(ctx, providerTargetRef)
+	if err != nil || profile.RuntimePrep == nil || profile.RuntimePrep.ModelEndpoint == nil {
+		return modelPlanResolution{}, false
+	}
+	resolution, ok := hostDefaultModelResolutionForProtocol(
+		provider,
+		agentTargetID,
+		requestedModel,
+		profile.RuntimePrep.ModelEndpoint.Protocol,
+	)
+	if !ok || resolution.Endpoint == nil {
+		return modelPlanResolution{}, false
+	}
+	wireAPI := strings.TrimSpace(resolution.Endpoint.WireAPI)
+	if wireAPI == "" {
+		wireAPI = "chat"
+	}
+	if wireAPI != strings.TrimSpace(profile.RuntimePrep.ModelEndpoint.WireAPI) {
+		return modelPlanResolution{}, false
+	}
+	return resolution, true
+}
+
 func composerProviderCapabilities(provider string, computerUseAvailable, browserUseAvailable bool) []string {
 	if !composerProfileKnown(provider) {
 		return nil

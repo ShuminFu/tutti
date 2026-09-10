@@ -497,6 +497,28 @@ func TestStandardACPSessionRejectsHTTPMCPWhenAgentDoesNotAdvertiseCapability(t *
 	}
 }
 
+func TestStandardACPSessionUsesExtensionDeclaredHTTPMCPCapability(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("MCP Declared ACP", "mcp-declared-session")
+	transport.conn.supportsHTTPMCP = false
+	adapter, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider: "acp:mcp-declared", Name: "mcp-declared-acp", DisplayName: "MCP Declared ACP",
+		Command: []string{"mcp-acp", "stdio"}, DeclaredHTTPMCP: true,
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	session := standardTestSession("acp:mcp-declared")
+	session.MCPServers = []MCPServerBinding{{Name: "connector", Type: "http", URL: "http://127.0.0.1:1234/mcp/connector"}}
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if servers, ok := transport.conn.lastNewSessionParams["mcpServers"].([]any); !ok || len(servers) != 1 {
+		t.Fatalf("session/new mcpServers = %#v, want declared connector binding", transport.conn.lastNewSessionParams["mcpServers"])
+	}
+}
+
 func TestStandardACPSetModelCarriesAdvertisedPerModelReasoningMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -602,14 +624,14 @@ func TestStandardACPStartupFailsWhenRequestedModelIsRejected(t *testing.T) {
 	}
 }
 
-func TestStandardACPStartupDoesNotReapplyCurrentRequestedModel(t *testing.T) {
+func TestStandardACPStartupResolvesRequestedModelNameToCurrentAdvertisedID(t *testing.T) {
 	t.Parallel()
 
 	transport := newStandardACPTransport("Model ACP", "model-current-session")
 	transport.conn.models = map[string]any{
-		"currentModelId": "requested-model",
+		"currentModelId": "custom:requested-model",
 		"availableModels": []any{
-			map[string]any{"modelId": "requested-model", "name": "Requested Model"},
+			map[string]any{"modelId": "custom:requested-model", "name": "requested-model"},
 		},
 	}
 	transport.conn.setModelError = &acpError{
@@ -629,5 +651,50 @@ func TestStandardACPStartupDoesNotReapplyCurrentRequestedModel(t *testing.T) {
 	}
 	if calls := transport.conn.setModelCalls(); len(calls) != 0 {
 		t.Fatalf("set_model calls = %#v, want current model left unchanged", calls)
+	}
+	state := adapterRaw.(StateAdapter).SessionState(session)
+	if state.Settings == nil || state.Settings.Model != "requested-model" {
+		t.Fatalf("projected model = %#v, want unqualified composer model", state.Settings)
+	}
+	// A legacy row that already stores the advertised model id keeps it: the id
+	// is a selectable composer value, the display name is not.
+	session.Settings.Model = "custom:requested-model"
+	state = adapterRaw.(StateAdapter).SessionState(session)
+	if state.Settings == nil || state.Settings.Model != "custom:requested-model" {
+		t.Fatalf("legacy qualified projected model = %#v, want the advertised model id", state.Settings)
+	}
+}
+
+// grok advertises modelId "grok-4.6" with the display name "Grok 4.6". Projecting
+// the name would persist it as the session model, and the composer rejects it on
+// the next options reload ("The selected model is no longer available").
+func TestStandardACPProjectsAdvertisedModelIDNotItsDisplayName(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Grok ACP", "grok-display-name-session")
+	transport.conn.models = map[string]any{
+		"currentModelId": "grok-4.6",
+		"availableModels": []any{
+			map[string]any{"modelId": "grok-4.6", "name": "Grok 4.6"},
+		},
+	}
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider: "acp:grok", Name: "grok-acp", DisplayName: "Grok", Command: []string{"grok-acp", "stdio"},
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	session := standardTestSession("acp:grok")
+	session.Settings = &SessionSettings{Model: "grok-4.6"}
+
+	if _, err := adapterRaw.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	state := adapterRaw.(StateAdapter).SessionState(session)
+	if state.Settings == nil || state.Settings.Model != "grok-4.6" {
+		t.Fatalf("projected model = %#v, want the advertised model id", state.Settings)
+	}
+	if model := strings.TrimSpace(asString(state.RuntimeContext["model"])); model != "grok-4.6" {
+		t.Fatalf("runtime context model = %q, want the advertised model id", model)
 	}
 }

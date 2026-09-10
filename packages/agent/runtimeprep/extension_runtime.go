@@ -13,6 +13,7 @@ import (
 )
 
 var extensionRuntimeEnvName = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+var extensionRuntimeConfigKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
 type ExtensionRuntimePreparer struct{}
 
@@ -44,9 +45,13 @@ func (ExtensionRuntimePreparer) Prepare(ctx context.Context, input ProviderPrepa
 	if err != nil {
 		return ProviderPrepareResult{}, err
 	}
+	envs := []string{env}
+	if endpoint, declaration := input.ModelEndpoint, input.ExtensionRuntimePrep.ModelEndpoint; ExtensionModelEndpointApplies(endpoint, declaration) {
+		envs = append(envs, strings.TrimSpace(declaration.APIKeyEnv)+"="+endpoint.APIKey)
+	}
 	return ProviderPrepareResult{
 		Cwd: input.Cwd,
-		Env: []string{env},
+		Env: envs,
 	}, nil
 }
 
@@ -85,7 +90,14 @@ func prepareExtensionRuntimeHome(input ProviderPrepareInput, home ExtensionRunti
 	if err != nil {
 		return "", err
 	}
-	if err := writeExtensionRuntimeConfig(filepath.Join(sessionHome, filepath.FromSlash(home.ConfigFile)), userConfig, externalDirs, home); err != nil {
+	if err := writeExtensionRuntimeConfig(
+		filepath.Join(sessionHome, filepath.FromSlash(home.ConfigFile)),
+		userConfig,
+		externalDirs,
+		home,
+		input.ModelEndpoint,
+		input.ExtensionRuntimePrep.ModelEndpoint,
+	); err != nil {
 		return "", err
 	}
 	if input.Manifest != nil {
@@ -219,7 +231,14 @@ func materializeExtensionRuntimeSkills(input ProviderPrepareInput, roots []strin
 	return nil
 }
 
-func writeExtensionRuntimeConfig(path string, userConfig []byte, externalDirs []string, home ExtensionRuntimeHome) error {
+func writeExtensionRuntimeConfig(
+	path string,
+	userConfig []byte,
+	externalDirs []string,
+	home ExtensionRuntimeHome,
+	endpoint *ModelEndpointConfig,
+	declaration *ExtensionModelEndpoint,
+) error {
 	if strings.TrimSpace(home.ConfigFile) == "" {
 		return nil
 	}
@@ -227,6 +246,34 @@ func writeExtensionRuntimeConfig(path string, userConfig []byte, externalDirs []
 	if len(home.ExternalDirsKey) > 0 {
 		var err error
 		config, err = mergeYAMLStringList(config, home.ExternalDirsKey, externalDirs)
+		if err != nil {
+			return err
+		}
+	}
+	if ExtensionModelEndpointApplies(endpoint, declaration) {
+		var err error
+		values := []yamlStringValue{
+			{Path: declaration.ConfigKeys.Provider, Value: strings.TrimSpace(declaration.ProviderValue)},
+			{Path: declaration.ConfigKeys.Model, Value: strings.TrimSpace(endpoint.Model)},
+			{Path: declaration.ConfigKeys.BaseURL, Value: strings.TrimRight(strings.TrimSpace(endpoint.BaseURL), "/")},
+		}
+		if len(declaration.ConfigKeys.APIKeyEnv) > 0 {
+			values = append(values, yamlStringValue{
+				Path:  declaration.ConfigKeys.APIKeyEnv,
+				Value: strings.TrimSpace(declaration.APIKeyEnv),
+			})
+		}
+		if len(declaration.ConfigKeys.WireAPI) > 0 {
+			wireAPIValue := strings.TrimSpace(declaration.WireAPIConfigValue)
+			if wireAPIValue == "" {
+				wireAPIValue = strings.TrimSpace(declaration.WireAPI)
+			}
+			values = append(values, yamlStringValue{
+				Path:  declaration.ConfigKeys.WireAPI,
+				Value: wireAPIValue,
+			})
+		}
+		config, err = mergeYAMLStringValues(config, values)
 		if err != nil {
 			return err
 		}
@@ -250,6 +297,9 @@ func ValidateExtensionRuntimePrep(prep ExtensionRuntimePrep) error {
 		}
 	}
 	if prep.Home == nil {
+		if prep.ModelEndpoint != nil {
+			return errors.New("extension model endpoint requires a runtime home")
+		}
 		return nil
 	}
 	home := *prep.Home
@@ -286,6 +336,65 @@ func ValidateExtensionRuntimePrep(prep ExtensionRuntimePrep) error {
 	if userSkillDir := strings.TrimSpace(home.UserHomeSkillDir); userSkillDir != "" {
 		if err := validateExtensionRuntimeRelPath(userSkillDir, "extension runtime user skill dir"); err != nil {
 			return err
+		}
+	}
+	if prep.ModelEndpoint != nil {
+		endpoint := *prep.ModelEndpoint
+		if strings.TrimSpace(home.ConfigFile) == "" || strings.TrimSpace(home.ConfigFormat) != "yaml" {
+			return errors.New("extension model endpoint requires a YAML config file")
+		}
+		if strings.TrimSpace(endpoint.Protocol) != "openai" || strings.TrimSpace(endpoint.WireAPI) != "chat" {
+			return errors.New("extension model endpoint protocol is unsupported")
+		}
+		if !extensionRuntimeEnvName.MatchString(strings.TrimSpace(endpoint.APIKeyEnv)) {
+			return errors.New("extension model endpoint API key env is unsupported")
+		}
+		if strings.TrimSpace(endpoint.ProviderValue) == "" {
+			return errors.New("extension model endpoint provider value is required")
+		}
+		paths := [][]string{endpoint.ConfigKeys.Provider, endpoint.ConfigKeys.Model, endpoint.ConfigKeys.BaseURL}
+		for _, optionalPath := range [][]string{endpoint.ConfigKeys.APIKeyEnv, endpoint.ConfigKeys.WireAPI} {
+			if len(optionalPath) > 0 {
+				paths = append(paths, optionalPath)
+			}
+		}
+		for _, keyPath := range paths {
+			if err := validateExtensionModelEndpointKeyPath(keyPath); err != nil {
+				return err
+			}
+		}
+		for i := range paths {
+			for j := i + 1; j < len(paths); j++ {
+				if slices.Equal(paths[i], paths[j]) {
+					return errors.New("extension model endpoint config keys must be distinct")
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// ExtensionModelEndpointApplies reports whether a validated host endpoint
+// satisfies an extension's declared session mapping.
+func ExtensionModelEndpointApplies(endpoint *ModelEndpointConfig, declaration *ExtensionModelEndpoint) bool {
+	if endpoint == nil || declaration == nil || !endpoint.valid() || strings.TrimSpace(endpoint.Model) == "" {
+		return false
+	}
+	wireAPI := strings.TrimSpace(endpoint.WireAPI)
+	if wireAPI == "" {
+		wireAPI = "chat"
+	}
+	return strings.TrimSpace(endpoint.Protocol) == strings.TrimSpace(declaration.Protocol) &&
+		wireAPI == strings.TrimSpace(declaration.WireAPI)
+}
+
+func validateExtensionModelEndpointKeyPath(keyPath []string) error {
+	if len(keyPath) == 0 || len(keyPath) > 4 {
+		return errors.New("extension model endpoint config key path is unsupported")
+	}
+	for _, key := range keyPath {
+		if !extensionRuntimeConfigKey.MatchString(strings.TrimSpace(key)) {
+			return errors.New("extension model endpoint config key path is unsupported")
 		}
 	}
 	return nil

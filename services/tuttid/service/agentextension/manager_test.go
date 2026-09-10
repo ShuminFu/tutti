@@ -947,6 +947,17 @@ func TestValidateComposerProfileAcceptsDeclarativeRuntimePrep(t *testing.T) {
 		"schemaVersion":"tutti.agent.composer.v1",
 		"runtimePrep":{
 			"instructionsFile":"AGENTS.md",
+			"modelEndpoint":{
+				"protocol":"openai",
+				"wireAPI":"chat",
+				"apiKeyEnv":"OPENAI_API_KEY",
+				"providerValue":"custom",
+				"configKeys":{
+					"provider":["model","provider"],
+					"model":["model","default"],
+					"baseURL":["model","base_url"]
+				}
+			},
 			"home":{
 				"envVar":"HERMES_HOME",
 				"dirName":"hermes",
@@ -975,6 +986,11 @@ func TestValidateComposerProfileAcceptsDeclarativeRuntimePrep(t *testing.T) {
 	profile.RuntimePrep.Home.CopyFiles[0] = "../config.yaml"
 	if err := validateComposerProfile(profile); err == nil {
 		t.Fatal("validateComposerProfile() error = nil, want unsafe copy file rejection")
+	}
+	profile.RuntimePrep.Home.CopyFiles[0] = "config.yaml"
+	profile.RuntimePrep.ModelEndpoint.Protocol = "anthropic"
+	if err := validateComposerProfile(profile); err == nil {
+		t.Fatal("validateComposerProfile() error = nil, want unsupported model endpoint rejection")
 	}
 }
 
@@ -1333,6 +1349,7 @@ func TestLoadExtensionComposerSlashCommandsAndCapabilities(t *testing.T) {
 		"permissionModes":[
 			{"runtimeId":"default","semantic":"ask-before-write"}
 		],
+		"acp":{"mcpCapabilities":{"http":true}},
 		"slashCommands":{
 			"commandCatalogAuthoritative":true,
 			"commands":[
@@ -1364,6 +1381,9 @@ func TestLoadExtensionComposerSlashCommandsAndCapabilities(t *testing.T) {
 	}
 	if err := validateComposerProfile(profile); err != nil {
 		t.Fatalf("validateComposerProfile() error = %v", err)
+	}
+	if !profile.DeclaresHTTPMCP() {
+		t.Fatal("DeclaresHTTPMCP() = false, want true")
 	}
 	capabilities, err := loadDeclaredCapabilities(installation)
 	if err != nil {

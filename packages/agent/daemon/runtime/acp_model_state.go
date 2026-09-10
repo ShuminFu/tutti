@@ -255,3 +255,56 @@ func (a *standardACPAdapter) sessionCurrentModelID(agentSessionID string) string
 	}
 	return strings.TrimSpace(asString(session.configOptions["model"]))
 }
+
+func acpModelIDForRequest(descriptors []map[string]any, requested string) string {
+	requested = strings.TrimSpace(requested)
+	matchedLabel := ""
+	for _, descriptor := range descriptors {
+		if strings.TrimSpace(asString(descriptor["id"])) != "model" {
+			continue
+		}
+		for _, model := range configOptionEntries(descriptor["options"]) {
+			modelID := strings.TrimSpace(asString(model["value"]))
+			if modelID == requested {
+				return modelID
+			}
+			if strings.TrimSpace(asString(model["label"])) == requested {
+				if matchedLabel != "" && matchedLabel != modelID {
+					return requested
+				}
+				matchedLabel = modelID
+			}
+		}
+	}
+	return firstNonEmptyString(matchedLabel, requested)
+}
+
+// acpProjectedModelValue keeps the business-layer model value stable: the
+// transport-layer model id must not write back over what the composer stores.
+// The projected value is persisted (workspace_agent_sessions.model and
+// settings_json), so it has to stay a value the composer catalog can select.
+// It must never be the advertised display name: an agent whose name differs
+// from its id (grok: modelId "grok-4.6", name "Grok 4.6") would otherwise get
+// "Grok 4.6" written into the session, and every later options reload rejects
+// it as unavailable and falls the composer back with a warning toast.
+func acpProjectedModelValue(descriptors []map[string]any, base, runtime string) string {
+	base = strings.TrimSpace(base)
+	runtime = strings.TrimSpace(runtime)
+	if base != "" && acpModelIDForRequest(descriptors, base) == runtime {
+		return base
+	}
+	return runtime
+}
+
+func (a *standardACPAdapter) sessionModelIDForRequest(agentSessionID string, requested string) string {
+	if a == nil {
+		return strings.TrimSpace(requested)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	session := a.sessions[strings.TrimSpace(agentSessionID)]
+	if session == nil {
+		return strings.TrimSpace(requested)
+	}
+	return acpModelIDForRequest(session.configOptionDescriptors, requested)
+}

@@ -174,10 +174,14 @@ type StandardACPAdapterConfig struct {
 	LaunchPermission             *StandardACPLaunchPermissionSetting
 	SetModelReasoningEffortMeta  bool
 	Capabilities                 []string
-	AgentTargetID                string
-	InstallationID               string
-	ExecutableIdentity           *ExecutableIdentity
-	Env                          []string
+	// DeclaredHTTPMCP is a trusted extension compatibility declaration for
+	// runtimes that accept McpServer::Http in session/new but omit the
+	// corresponding initialize.agentCapabilities flag.
+	DeclaredHTTPMCP    bool
+	AgentTargetID      string
+	InstallationID     string
+	ExecutableIdentity *ExecutableIdentity
+	Env                []string
 	// StartupTimeout bounds initialize/session-new calls for setup probes.
 	// Zero keeps the normal ACP timeout.
 	StartupTimeout time.Duration
@@ -226,6 +230,7 @@ func NewStandardACPAdapter(config StandardACPAdapterConfig, transport ProcessTra
 			reasoningConfigOptionID:      strings.TrimSpace(config.ReasoningConfigOptionID),
 			restrictConfigOptions:        config.RestrictConfigOptions,
 			capabilities:                 append([]string(nil), config.Capabilities...),
+			declaredHTTPMCP:              config.DeclaredHTTPMCP,
 			agentTargetID:                strings.TrimSpace(config.AgentTargetID),
 			installationID:               strings.TrimSpace(config.InstallationID),
 			executableIdentity:           cloneExecutableIdentity(config.ExecutableIdentity),

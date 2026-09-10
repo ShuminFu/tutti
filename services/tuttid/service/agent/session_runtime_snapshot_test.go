@@ -194,6 +194,15 @@ func TestHostDefaultRuntimeSnapshotResumesWithCurrentHostCredential(t *testing.T
 	if endpoint == nil || endpoint.APIKey != "loopback" || endpoint.Model != "gateway-alt" {
 		t.Fatalf("resumed endpoint = %#v", endpoint)
 	}
+	endpoint, err = (&Service{}).modelEndpointFromSessionRuntimeSnapshot(
+		context.Background(), "workspace", snapshot, "custom:gateway-alt",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if endpoint == nil || endpoint.Model != "gateway-alt" {
+		t.Fatalf("qualified ACP model resume endpoint = %#v", endpoint)
+	}
 }
 
 func TestSessionRuntimeSnapshotPreservesOpenProviderIdentity(t *testing.T) {

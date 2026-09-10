@@ -544,6 +544,17 @@ func (s *Service) prepareRuntime(ctx context.Context, workspaceID string, cwd st
 	} else {
 		provider := strings.TrimSpace(input.Provider)
 		planEndpoint, _ = s.resolveModelPlanEndpoint(ctx, workspaceID, input.AgentTargetID, provider, value(input.Model))
+		if planEndpoint == nil {
+			if hostDefault, ok := s.extensionHostDefaultModelResolution(
+				ctx,
+				input.ProviderTargetRef,
+				provider,
+				input.AgentTargetID,
+				value(input.Model),
+			); ok {
+				planEndpoint = hostDefault.Endpoint
+			}
+		}
 	}
 	return s.prepareRuntimeWithModelEndpoint(ctx, workspaceID, cwd, input, planEndpoint)
 }

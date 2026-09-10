@@ -37,6 +37,7 @@ type RuntimeBinding struct {
 	Capabilities                 []string
 	ExecutableIdentity           *agentruntime.ExecutableIdentity
 	Env                          []string
+	DeclaredHTTPMCP              bool
 }
 
 func (r RuntimeResolver) ResolveAdapter(ctx context.Context, input agentruntime.AdapterResolveInput) (agentruntime.Adapter, error) {
@@ -85,6 +86,7 @@ func runtimeAdapterConfig(binding RuntimeBinding, agentTargetID string) agentrun
 		LaunchPermission:             binding.LaunchPermission,
 		SetModelReasoningEffortMeta:  binding.SetModelReasoningEffortMeta,
 		Capabilities:                 binding.Capabilities,
+		DeclaredHTTPMCP:              binding.DeclaredHTTPMCP,
 		AgentTargetID:                strings.TrimSpace(agentTargetID),
 		InstallationID:               binding.Installation.ID,
 		ExecutableIdentity:           binding.ExecutableIdentity,
