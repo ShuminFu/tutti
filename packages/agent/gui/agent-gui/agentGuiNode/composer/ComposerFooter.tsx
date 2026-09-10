@@ -80,6 +80,8 @@ interface Props {
   onCapabilitySettingsRequest: AgentComposerProps["onCapabilitySettingsRequest"];
   onRequestWorkspaceReferences: AgentComposerProps["onRequestWorkspaceReferences"];
   onWorkspaceReferencePicker: () => void;
+  onSelectLocalFiles: () => void;
+  localFilesSupported: boolean;
   onMentionPaletteButton: () => void;
   onSettingsChange: AgentComposerProps["onSettingsChange"];
   onRetryComposerOptions: AgentComposerProps["onRetryComposerOptions"];
@@ -135,6 +137,8 @@ export function ComposerFooter({
   onCapabilitySettingsRequest,
   onRequestWorkspaceReferences,
   onWorkspaceReferencePicker: handleWorkspaceReferencePicker,
+  onSelectLocalFiles: handleSelectLocalFiles,
+  localFilesSupported,
   onMentionPaletteButton: handleMentionPaletteButton,
   onSettingsChange,
   onRetryComposerOptions,
@@ -151,31 +155,49 @@ export function ComposerFooter({
           <div className="inline-flex shrink-0 items-center gap-1">
             <TooltipProvider delayDuration={120}>
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={labels.addContent}
-                    className={cn(
-                      styles.composerMenuTrigger,
-                      styles.composerReferenceTrigger,
-                      "group inline-flex w-auto items-center justify-center text-[var(--agent-gui-text-secondary)] hover:text-[var(--agent-gui-text-primary)] focus-visible:text-[var(--agent-gui-text-primary)] disabled:pointer-events-none disabled:opacity-50"
-                    )}
-                    data-testid="agent-gui-composer-add-content-trigger"
-                    disabled={
-                      composerControlsHardDisabled ||
-                      !onRequestWorkspaceReferences
-                    }
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => {
+                <Select
+                  value="idle"
+                  onValueChange={(value) => {
+                    if (value === "local-file") {
+                      handleSelectLocalFiles();
+                    } else if (value === "workspace-reference") {
                       void handleWorkspaceReferencePicker();
-                    }}
-                  >
-                    <AgentComposerMaskIcon
-                      iconUrl={addLinedIconUrl}
-                      marker="reference-add"
-                    />
-                  </button>
-                </TooltipTrigger>
+                    }
+                  }}
+                >
+                  <TooltipTrigger asChild>
+                    <SelectTrigger
+                      aria-label={labels.addContent}
+                      className={cn(
+                        styles.composerMenuTrigger,
+                        styles.composerReferenceTrigger,
+                        "group inline-flex w-auto items-center justify-center text-[var(--agent-gui-text-secondary)] hover:text-[var(--agent-gui-text-primary)] focus-visible:text-[var(--agent-gui-text-primary)] disabled:pointer-events-none disabled:opacity-50"
+                      )}
+                      data-testid="agent-gui-composer-add-content-trigger"
+                      disabled={
+                        composerControlsHardDisabled ||
+                        (!localFilesSupported && !onRequestWorkspaceReferences)
+                      }
+                    >
+                      <AgentComposerMaskIcon
+                        iconUrl={addLinedIconUrl}
+                        marker="reference-add"
+                      />
+                    </SelectTrigger>
+                  </TooltipTrigger>
+                  <SelectContent>
+                    {localFilesSupported ? (
+                      <SelectItem value="local-file">
+                        {labels.addContent}
+                      </SelectItem>
+                    ) : null}
+                    {onRequestWorkspaceReferences ? (
+                      <SelectItem value="workspace-reference">
+                        {labels.referenceWorkspaceFiles}
+                      </SelectItem>
+                    ) : null}
+                  </SelectContent>
+                </Select>
                 <TooltipContent side="top">{labels.addContent}</TooltipContent>
               </Tooltip>
             </TooltipProvider>

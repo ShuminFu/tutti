@@ -70,17 +70,26 @@ func lifecycleFromTurn(turn storesqlite.Turn) TurnLifecycle {
 }
 
 func imageOnlyDisplayText(content []PromptContentBlock) string {
-	count := 0
+	imageCount, fileCount := 0, 0
 	for _, block := range content {
 		if block.Type == "image" {
-			count++
+			imageCount++
+		}
+		if block.Type == "file" {
+			fileCount++
 		}
 	}
-	if count == 1 {
+	if imageCount == 1 {
 		return "[Image]"
 	}
-	if count > 1 {
+	if imageCount > 1 {
 		return "[Images]"
+	}
+	if fileCount == 1 {
+		return "[File]"
+	}
+	if fileCount > 1 {
+		return "[Files]"
 	}
 	return ""
 }

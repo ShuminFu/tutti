@@ -21,7 +21,10 @@ import {
   agentPreparedPromptFileToDraftFile,
   materializeAgentComposerFileMentions
 } from "./agentExternalPromptFiles";
-import { agentComposerFileMentionReferences } from "../agentRichText/agentMentionMarkdown";
+import {
+  agentComposerFileMentionReferences,
+  parseAgentMentionMarkdown
+} from "../agentRichText/agentMentionMarkdown";
 import { pastedTextDraftDisplayName } from "../../../shared/pastedTextReferenceProjection";
 
 export {
@@ -501,12 +504,15 @@ export function agentComposerDraftToPromptContent(input: {
   draft: AgentComposerDraft;
   skills: readonly AgentGUIProviderSkillOption[];
 }): AgentPromptContentBlock[] {
-  const providerPrompt = materializeAgentComposerFileMentions(
-    agentComposerDraftPrompt(input.draft),
+  const fileProjection = projectLocalFileMentions(
+    materializeAgentComposerFileMentions(
+      agentComposerDraftPrompt(input.draft),
+      agentComposerDraftFiles(input.draft)
+    ),
     agentComposerDraftFiles(input.draft)
   );
   const prompt = promptForProviderSkills({
-    prompt: providerPrompt,
+    prompt: fileProjection.prompt,
     skills: input.skills
   });
   const connectorProjection = projectLocalConnectorPrompt({
@@ -523,6 +529,7 @@ export function agentComposerDraftToPromptContent(input: {
       type: "connector" as const,
       connectorKey
     })),
+    ...fileProjection.files,
     ...agentComposerDraftImages(input.draft)
       .slice(0, MAX_AGENT_COMPOSER_DRAFT_IMAGES)
       .filter((image) => !image.uploading && !image.uploadError)
@@ -539,6 +546,68 @@ export function agentComposerDraftToPromptContent(input: {
       })),
     ...largeTextPromptContent(agentComposerDraftLargeTexts(input.draft))
   ]);
+}
+
+function projectLocalFileMentions(
+  prompt: string,
+  draftFiles: readonly AgentComposerDraftFile[]
+): { prompt: string; files: AgentPromptContentBlock[] } {
+  const files: AgentPromptContentBlock[] = [];
+  const seenPaths = new Set<string>();
+  let result = "";
+  let cursor = 0;
+  while (cursor < prompt.length) {
+    const start = prompt.indexOf("[", cursor);
+    if (start < 0) break;
+    const parsed = parseAgentMentionMarkdown(prompt, start);
+    const path =
+      parsed?.item.kind === "file" && !parsed.item.attachmentId
+        ? parsed.item.path.trim()
+        : "";
+    if (!parsed || !isAbsoluteLocalPromptFilePath(path)) {
+      result += prompt.slice(cursor, start + 1);
+      cursor = start + 1;
+      continue;
+    }
+    result += prompt.slice(cursor, start);
+    cursor = parsed.end;
+    const before = result.at(-1) ?? "";
+    const after = prompt[cursor] ?? "";
+    if (/\s/.test(before) && /\s/.test(after)) {
+      cursor += 1;
+    } else if (before && after && !/\s/.test(before) && !/\s/.test(after)) {
+      result += " ";
+    }
+    if (seenPaths.has(path)) continue;
+    seenPaths.add(path);
+    const draftFile = draftFiles.find(
+      (file) => file.path?.trim() === path && !file.uploading && !file.uploadError
+    );
+    files.push({
+      type: "file",
+      kind: "file",
+      name: parsed.item.name.trim() || promptFileName(path),
+      path,
+      ...(typeof draftFile?.sizeBytes === "number" &&
+      Number.isFinite(draftFile.sizeBytes)
+        ? { sizeBytes: draftFile.sizeBytes }
+        : {})
+    });
+  }
+  result += prompt.slice(cursor);
+  return { prompt: result, files };
+}
+
+function isAbsoluteLocalPromptFilePath(path: string): boolean {
+  return (
+    path.startsWith("/") ||
+    /^\\\\[^\\/]+[\\/][^\\/]+/.test(path) ||
+    /^[A-Za-z]:[\\/]/.test(path)
+  );
+}
+
+function promptFileName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? "file";
 }
 
 export function agentComposerDraftSubmittedText(

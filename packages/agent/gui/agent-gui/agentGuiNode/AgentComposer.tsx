@@ -53,6 +53,7 @@ import {
   resolveAgentExternalPromptEntries
 } from "./model/agentExternalPromptEntries";
 import { useComposerInputHistory } from "./composer/useComposerInputHistory";
+import { useOptionalAgentHostApi } from "../../agentActivityHost";
 
 export { formatSlashStatusTokenCount };
 
@@ -585,6 +586,34 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     },
     [addDraftFiles, editorHandleRef, resolveExternalPromptEntries]
   );
+  const agentHostApi = useOptionalAgentHostApi();
+  const selectLocalPromptFiles = useCallback(async (): Promise<void> => {
+    const selectFiles = agentHostApi?.workspace?.selectFiles;
+    if (!selectFiles) return;
+    try {
+      const selected = await selectFiles({ allowDirectories: false });
+      const files = selected
+        .map((entry) => {
+          const path = entry.path.trim();
+          if (!path) return null;
+          const name =
+            entry.name?.trim() ||
+            path.split(/[\\/]/).filter(Boolean).at(-1) ||
+            "file";
+          const file = new File([], name);
+          Object.defineProperty(file, "path", { value: path });
+          return file;
+        })
+        .filter((file): file is File => file !== null);
+      if (files.length > 0) addExternalPromptEntries(files);
+    } catch (error) {
+      agentHostApi?.toast?.error(
+        error instanceof Error
+          ? error.message
+          : labels.addContent
+      );
+    }
+  }, [addExternalPromptEntries, agentHostApi, labels.addContent]);
 
   const providerState = useComposerProviderTargets({
     layoutMode,
@@ -718,6 +747,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
       mentionControllerRef={mentionControllerRef}
       externalPromptEntriesSupported={externalPromptEntriesSupported}
       addExternalPromptEntries={addExternalPromptEntries}
+      onSelectLocalFiles={selectLocalPromptFiles}
       onDismissProjectMenuAutoFocus={restoreComposerCaretAfterProjectMenu}
       paletteDraftPrompt={paletteDraftPrompt}
       showFileMentionPalette={showFileMentionPalette}

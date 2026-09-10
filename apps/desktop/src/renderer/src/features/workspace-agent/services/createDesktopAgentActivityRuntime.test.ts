@@ -311,6 +311,39 @@ test("desktop agent activity runtime rejects file uploads without hostPath or da
   );
 });
 
+test("desktop agent activity runtime archives empty inline files", async () => {
+  const archiveInputs: unknown[] = [];
+  const runtime = createDesktopAgentActivityRuntime(
+    createWorkspaceAgentActivityService(),
+    {
+      hostFilesApi: {
+        async archiveAgentPromptFile(input) {
+          archiveInputs.push(input);
+          return {
+            name: "empty.txt",
+            path: "/runtime/empty.txt",
+            sizeBytes: 0
+          };
+        }
+      }
+    }
+  );
+
+  await runtime.uploadPromptContent?.({
+    workspaceId: "workspace-1",
+    content: [{ type: "file", data: "", name: "empty.txt", sizeBytes: 0 }]
+  });
+
+  assert.deepEqual(archiveInputs, [
+    {
+      workspaceID: "workspace-1",
+      dataBase64: "",
+      displayName: "empty.txt",
+      mimeType: null
+    }
+  ]);
+});
+
 test("desktop agent activity runtime archives prompt image uploads", async () => {
   const archiveInputs: unknown[] = [];
   const runtime = createDesktopAgentActivityRuntime(

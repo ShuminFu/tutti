@@ -24,6 +24,7 @@ const (
 )
 
 var connectorPromptKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,127}$`)
+var absolutePromptFilePathPattern = regexp.MustCompile(`^(?:/|[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+)`)
 
 type PromptAttachmentStore struct {
 	RootDir       string
@@ -168,6 +169,21 @@ func normalizePromptContent(content []PromptContentBlock) ([]PromptContentBlock,
 				Name:         strings.TrimSpace(block.Name),
 				Path:         path,
 			})
+		case "file":
+			path, name := strings.TrimSpace(block.Path), strings.TrimSpace(block.Name)
+			if !absolutePromptFilePathPattern.MatchString(path) || block.SizeBytes < 0 {
+				return nil, "", ErrInvalidArgument
+			}
+			if name == "" {
+				name = promptFileBaseName(path)
+			}
+			if name == "" {
+				return nil, "", ErrInvalidArgument
+			}
+			hasInput = true
+			normalized = append(normalized, PromptContentBlock{
+				Type: "file", Name: name, Path: path, SizeBytes: block.SizeBytes,
+			})
 		case "skill", "mention":
 			name := strings.TrimSpace(block.Name)
 			path := strings.TrimSpace(block.Path)
@@ -197,6 +213,14 @@ func normalizePromptContent(content []PromptContentBlock) ([]PromptContentBlock,
 		return nil, "", ErrInvalidArgument
 	}
 	return normalized, strings.Join(textParts, "\n"), nil
+}
+
+func promptFileBaseName(path string) string {
+	path = strings.TrimRight(strings.ReplaceAll(path, `\`, "/"), "/")
+	if index := strings.LastIndexByte(path, '/'); index >= 0 {
+		return path[index+1:]
+	}
+	return path
 }
 
 func safePromptImageURL(value string) bool {

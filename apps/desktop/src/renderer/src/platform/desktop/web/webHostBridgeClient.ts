@@ -355,7 +355,7 @@ export function requestHostCapability<T>(
 
     const onMessage = (event: MessageEvent): void => {
       const data = event.data as
-        | { type?: unknown; id?: unknown; nonce?: unknown; result?: T; error?: unknown }
+        | { type?: unknown; id?: unknown; nonce?: unknown; result?: T; error?: unknown; code?: unknown }
         | null
         | undefined;
       if (
@@ -375,13 +375,15 @@ export function requestHostCapability<T>(
       settled = true;
       cleanup();
       if (typeof data.error === "string") {
-        reject(
-          data.error === "unsupported"
-            ? new HostBridgeUnavailableError(
-                `tutti host bridge: ${capability} unsupported`
-              )
-            : new Error(data.error)
-        );
+        const error = data.error === "unsupported"
+          ? new HostBridgeUnavailableError(
+              `tutti host bridge: ${capability} unsupported`
+            )
+          : new Error(data.error);
+        if (typeof data.code === "string" && data.code.trim()) {
+          Object.assign(error, { code: data.code.trim() });
+        }
+        reject(error);
         return;
       }
       resolve(data.result as T);

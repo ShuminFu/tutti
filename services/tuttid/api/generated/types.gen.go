@@ -112,6 +112,7 @@ func (e AgentPromptContentBlockMimeType) Valid() bool {
 // Defines values for AgentPromptContentBlockType.
 const (
 	AgentPromptContentBlockTypeConnector AgentPromptContentBlockType = "connector"
+	AgentPromptContentBlockTypeFile      AgentPromptContentBlockType = "file"
 	AgentPromptContentBlockTypeImage     AgentPromptContentBlockType = "image"
 	AgentPromptContentBlockTypeMention   AgentPromptContentBlockType = "mention"
 	AgentPromptContentBlockTypeSkill     AgentPromptContentBlockType = "skill"
@@ -122,6 +123,8 @@ const (
 func (e AgentPromptContentBlockType) Valid() bool {
 	switch e {
 	case AgentPromptContentBlockTypeConnector:
+		return true
+	case AgentPromptContentBlockTypeFile:
 		return true
 	case AgentPromptContentBlockTypeImage:
 		return true
@@ -4930,12 +4933,13 @@ type AgentPromptContentBlock struct {
 	ConnectorKey *string `json:"connectorKey,omitempty"`
 
 	// Data Base64-encoded image bytes. Mutually exclusive with url.
-	Data     *string                          `json:"data,omitempty"`
-	MimeType *AgentPromptContentBlockMimeType `json:"mimeType,omitempty"`
-	Name     *string                          `json:"name,omitempty"`
-	Path     *string                          `json:"path,omitempty"`
-	Text     *string                          `json:"text,omitempty"`
-	Type     AgentPromptContentBlockType      `json:"type"`
+	Data      *string                          `json:"data,omitempty"`
+	MimeType  *AgentPromptContentBlockMimeType `json:"mimeType,omitempty"`
+	Name      *string                          `json:"name,omitempty"`
+	Path      *string                          `json:"path,omitempty"`
+	SizeBytes *int64                           `json:"sizeBytes,omitempty"`
+	Text      *string                          `json:"text,omitempty"`
+	Type      AgentPromptContentBlockType      `json:"type"`
 
 	// Url HTTPS image URL fetched directly by a capable provider. Mutually exclusive with data.
 	Url *string `json:"url,omitempty"`

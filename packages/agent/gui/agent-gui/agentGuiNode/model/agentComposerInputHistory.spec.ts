@@ -188,8 +188,10 @@ describe("agent composer input history", () => {
       })
     ).toEqual([
       {
-        type: "text",
-        text: "[@report.pdf](/runtime/report.pdf)"
+        type: "file",
+        kind: "file",
+        name: "report.pdf",
+        path: "/runtime/report.pdf"
       }
     ]);
   });
@@ -234,7 +236,13 @@ describe("agent composer input history", () => {
     ).toEqual([
       {
         type: "text",
-        text: "Summarize[@report.pdf](/runtime/report.pdf)"
+        text: "Summarize"
+      },
+      {
+        type: "file",
+        kind: "file",
+        name: "report.pdf",
+        path: "/runtime/report.pdf"
       }
     ]);
   });

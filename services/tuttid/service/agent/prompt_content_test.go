@@ -33,6 +33,26 @@ func TestNormalizePromptContentAcceptsImagePath(t *testing.T) {
 	}
 }
 
+func TestNormalizePromptContentAcceptsFileOnlyInput(t *testing.T) {
+	content, text, err := normalizePromptContent([]PromptContentBlock{{
+		Type: "file", Name: " report.pdf ", Path: " /tmp/report.pdf ", SizeBytes: 42,
+	}})
+	if err != nil {
+		t.Fatalf("normalizePromptContent() error = %v, want nil", err)
+	}
+	if len(content) != 1 || content[0].Name != "report.pdf" || content[0].Path != "/tmp/report.pdf" || content[0].SizeBytes != 42 || text != "" {
+		t.Fatalf("content = %#v, text = %q, want canonical file", content, text)
+	}
+	for _, block := range []PromptContentBlock{
+		{Type: "file", Name: "relative.txt", Path: "relative.txt"},
+		{Type: "file", Name: "negative.txt", Path: "/tmp/negative.txt", SizeBytes: -1},
+	} {
+		if _, _, err := normalizePromptContent([]PromptContentBlock{block}); !errors.Is(err, ErrInvalidArgument) {
+			t.Fatalf("normalizePromptContent(%#v) error = %v, want ErrInvalidArgument", block, err)
+		}
+	}
+}
+
 func TestNormalizePromptContentAcceptsConnectorOnlyInput(t *testing.T) {
 	content, text, err := normalizePromptContent([]PromptContentBlock{{
 		Type: "connector", ConnectorKey: " lark-cli ",

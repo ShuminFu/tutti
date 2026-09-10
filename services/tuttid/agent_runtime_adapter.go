@@ -342,6 +342,7 @@ func runtimePromptContentFromService(content []agentservice.PromptContentBlock) 
 			AttachmentID: block.AttachmentID,
 			Name:         block.Name,
 			Path:         block.Path,
+			SizeBytes:    block.SizeBytes,
 			ConnectorKey: block.ConnectorKey,
 		})
 	}

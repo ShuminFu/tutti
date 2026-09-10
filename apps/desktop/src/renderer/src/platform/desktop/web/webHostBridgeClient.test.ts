@@ -10,8 +10,53 @@ import {
   installHostAgentSessionBridge,
   installHostFileDropBridge,
   installHostFocusRecovery,
-  installHostWorkbenchLayoutNotifications
+  installHostWorkbenchLayoutNotifications,
+  requestHostCapability
 } from "./webHostBridgeClient.ts";
+
+test("host capability errors preserve stable error codes", async () => {
+  const previousWindow = globalThis.window;
+  let messageListener: ((event: MessageEvent) => void) | null = null;
+  const parent = {
+    postMessage(message: { id: string }, _origin: string) {
+      queueMicrotask(() => messageListener?.({
+        data: {
+          type: "tutti-host-response",
+          id: message.id,
+          nonce: "nonce-1",
+          error: "Agent prompt file is too large.",
+          code: "file_too_large"
+        },
+        origin: "http://wails.localhost",
+        source: parent
+      } as MessageEvent));
+    }
+  } as unknown as WindowProxy;
+  const windowRef = {
+    addEventListener(type: string, listener: EventListener) {
+      if (type === "message") messageListener = listener as (event: MessageEvent) => void;
+    },
+    clearTimeout,
+    location: {
+      search: "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+    },
+    parent,
+    removeEventListener() {},
+    setTimeout
+  } as unknown as Window;
+  Object.defineProperty(globalThis, "window", { configurable: true, value: windowRef });
+
+  try {
+    await assert.rejects(
+      requestHostCapability("archiveAgentPromptFile", [{}]),
+      (error: Error & { code?: string }) =>
+        error.message === "Agent prompt file is too large." &&
+        error.code === "file_too_large"
+    );
+  } finally {
+    Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+  }
+});
 
 test("embedded host file drops reuse the workspace-file composer path", () => {
   let messageListener: ((event: MessageEvent) => void) | null = null;

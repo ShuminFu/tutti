@@ -32,6 +32,9 @@ func agentPromptContentFromGenerated(content []tuttigenerated.AgentPromptContent
 		if block.Path != nil {
 			item.Path = *block.Path
 		}
+		if block.SizeBytes != nil {
+			item.SizeBytes = *block.SizeBytes
+		}
 		if block.ConnectorKey != nil {
 			item.ConnectorKey = *block.ConnectorKey
 		}

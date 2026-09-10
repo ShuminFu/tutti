@@ -86,6 +86,7 @@ interface Props {
   mentionControllerRef: MutableRefObject<AgentMentionSearchController | null>;
   externalPromptEntriesSupported: boolean;
   addExternalPromptEntries: (files: readonly File[]) => void;
+  onSelectLocalFiles: () => void;
   onDismissProjectMenuAutoFocus?: (event: Event) => void;
   paletteDraftPrompt: string;
   showFileMentionPalette: boolean;
@@ -746,6 +747,8 @@ export function AgentComposerView(input: Props): React.JSX.Element {
             }
             onRequestWorkspaceReferences={onRequestWorkspaceReferences}
             onWorkspaceReferencePicker={handleWorkspaceReferencePicker}
+            onSelectLocalFiles={input.onSelectLocalFiles}
+            localFilesSupported={input.externalPromptEntriesSupported}
             onMentionPaletteButton={handleMentionPaletteButton}
             onSettingsChange={onSettingsChange}
             onRetryComposerOptions={input.props.onRetryComposerOptions}

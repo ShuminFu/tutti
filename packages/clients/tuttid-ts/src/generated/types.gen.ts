@@ -3492,7 +3492,7 @@ export type AgentSubmitDiagnostics = {
 };
 
 export type AgentPromptContentBlock = {
-  type: "text" | "image" | "skill" | "mention" | "connector";
+  type: "text" | "image" | "file" | "skill" | "mention" | "connector";
   text?: string;
   mimeType?: "image/png" | "image/jpeg" | "image/webp";
   /**
@@ -3506,6 +3506,7 @@ export type AgentPromptContentBlock = {
   attachmentId?: string;
   name?: string;
   path?: string;
+  sizeBytes?: number;
   /**
    * Stable key of an installed local connector selected for this prompt.
    */

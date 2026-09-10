@@ -371,6 +371,7 @@ type PromptContentBlock struct {
 	AttachmentID string `json:"attachmentId,omitempty"`
 	Name         string `json:"name,omitempty"`
 	Path         string `json:"path,omitempty"`
+	SizeBytes    int64  `json:"sizeBytes,omitempty"`
 	ConnectorKey string `json:"connectorKey,omitempty"`
 }
 

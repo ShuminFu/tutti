@@ -15072,6 +15072,7 @@ components:
           enum:
             - text
             - image
+            - file
             - skill
             - mention
             - connector
@@ -15097,6 +15098,10 @@ components:
           type: string
         path:
           type: string
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 0
         connectorKey:
           type: string
           minLength: 1

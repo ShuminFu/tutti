@@ -150,7 +150,27 @@ function tuttiPromptContentBlocksFromActivity(
 ): TuttidAgentPromptContentBlock[] {
   return content.map((block) => {
     if (block.type === "file") {
-      throw new Error("File prompt blocks must be uploaded before submission");
+      const name = block.name?.trim() ?? "";
+      const path = block.path?.trim() ?? "";
+      if (
+        !name ||
+        (!path.startsWith("/") &&
+          !/^[A-Za-z]:[\\/]/.test(path) &&
+          !/^\\\\[^\\/]+[\\/][^\\/]+/.test(path)) ||
+        (block.sizeBytes !== undefined &&
+          (!Number.isSafeInteger(block.sizeBytes) || block.sizeBytes < 0))
+      ) {
+        throw new Error("File prompt blocks must be uploaded before submission");
+      }
+      const nextBlock: TuttidAgentPromptContentBlock = {
+        type: "file",
+        name,
+        path
+      };
+      if (block.sizeBytes !== undefined) {
+        nextBlock.sizeBytes = block.sizeBytes;
+      }
+      return nextBlock;
     }
     if (
       block.type !== "text" &&

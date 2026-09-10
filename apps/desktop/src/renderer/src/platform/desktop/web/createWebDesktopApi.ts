@@ -24,6 +24,7 @@ import {
   installHostFileDropBridge,
   installHostFocusRecovery,
   installHostWorkbenchLayoutNotifications,
+  isHostBridgeAvailable,
   requestHostCapability
 } from "./webHostBridgeClient";
 
@@ -320,9 +321,7 @@ function createWebPlatformApi(): DesktopPlatformApi {
 function createWebHostApi(): DesktopHostApi {
   return {
     files: {
-      // The web API keeps the desktop method for type compatibility, but the
-      // runtime must not mistake its rejecting stub for upload support.
-      agentPromptFileArchiveSupported: false,
+      agentPromptFileArchiveSupported: isHostBridgeAvailable(),
       createUserDocumentsProjectDirectory(input) {
         // Embedded DinTalDock serves this UI and the directory endpoint from
         // the same cliagent origin. Prefer the direct route so session creation
@@ -456,8 +455,28 @@ function createWebHostApi(): DesktopHostApi {
       readLocalPreviewFile() {
         return Promise.reject(electronDebugRequired("readLocalPreviewFile"));
       },
-      archiveAgentPromptFile() {
-        return Promise.reject(electronDebugRequired("archiveAgentPromptFile"));
+      archiveAgentPromptFile(input) {
+        return requestHostCapability<{
+          name?: string;
+          path?: string;
+          sizeBytes?: number;
+        }>("archiveAgentPromptFile", [input]).then(
+          (result) => {
+            const name = result?.name?.trim() ?? "";
+            const path = result?.path?.trim() ?? "";
+            const sizeBytes = Number(result?.sizeBytes);
+            if (!name || !path || !Number.isFinite(sizeBytes) || sizeBytes < 0) {
+              return Promise.reject(electronDebugRequired("archiveAgentPromptFile"));
+            }
+            return { name, path, sizeBytes };
+          },
+          (error) => {
+            if (error instanceof HostBridgeUnavailableError) {
+              return Promise.reject(electronDebugRequired("archiveAgentPromptFile"));
+            }
+            return Promise.reject(error);
+          }
+        );
       },
       readPreviewFile() {
         return Promise.reject(electronDebugRequired("readPreviewFile"));

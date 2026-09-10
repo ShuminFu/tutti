@@ -17,7 +17,8 @@ export function createDesktopAgentExternalPromptEntryResolver(input: {
 
     return files.map((file, sourceIndex) => {
       const entry = entries[sourceIndex];
-      const path = entry?.path.trim() ?? "";
+      const selectedPath = (file as File & { path?: string }).path;
+      const path = entry?.path.trim() ?? selectedPath?.trim() ?? "";
       if (!path) {
         return { disposition: "prepare" as const, sourceIndex };
       }

@@ -98,6 +98,17 @@ func normalizeRuntimePromptContent(content []PromptContentBlock) []PromptContent
 				AttachmentID: attachmentID,
 				Name:         strings.TrimSpace(block.Name),
 			})
+		case "file":
+			path, name := strings.TrimSpace(block.Path), strings.TrimSpace(block.Name)
+			if _, ok := promptFileURI(path); !ok || block.SizeBytes < 0 {
+				continue
+			}
+			if name == "" {
+				name = promptFileBaseName(path)
+			}
+			if name != "" {
+				out = append(out, PromptContentBlock{Type: "file", Name: name, Path: path, SizeBytes: block.SizeBytes})
+			}
 		case "skill", "mention":
 			name := strings.TrimSpace(block.Name)
 			path := strings.TrimSpace(block.Path)
@@ -151,6 +162,17 @@ func normalizeRuntimePromptContentForValidation(content []PromptContentBlock) []
 				Name:         strings.TrimSpace(block.Name),
 				Path:         path,
 			})
+		case "file":
+			path, name := strings.TrimSpace(block.Path), strings.TrimSpace(block.Name)
+			if _, ok := promptFileURI(path); !ok || block.SizeBytes < 0 {
+				continue
+			}
+			if name == "" {
+				name = promptFileBaseName(path)
+			}
+			if name != "" {
+				out = append(out, PromptContentBlock{Type: "file", Name: name, Path: path, SizeBytes: block.SizeBytes})
+			}
 		case "skill", "mention":
 			name := strings.TrimSpace(block.Name)
 			path := strings.TrimSpace(block.Path)
@@ -244,12 +266,16 @@ func runtimePromptImageMimeTypeSupported(mimeType string) bool {
 func promptDisplayText(content []PromptContentBlock) string {
 	textParts := make([]string, 0, len(content))
 	imageCount := 0
+	fileCount := 0
 	for _, block := range content {
 		if block.Type == "text" && strings.TrimSpace(block.Text) != "" {
 			textParts = append(textParts, strings.TrimSpace(block.Text))
 		}
 		if block.Type == "image" {
 			imageCount++
+		}
+		if block.Type == "file" {
+			fileCount++
 		}
 	}
 	if len(textParts) > 0 {
@@ -260,6 +286,12 @@ func promptDisplayText(content []PromptContentBlock) string {
 	}
 	if imageCount > 1 {
 		return "[Images]"
+	}
+	if fileCount == 1 {
+		return "[File]"
+	}
+	if fileCount > 1 {
+		return "[Files]"
 	}
 	return ""
 }
@@ -386,9 +418,53 @@ func promptContentForACP(content []PromptContentBlock) []map[string]any {
 				"mimeType": block.MimeType,
 				"data":     block.Data,
 			})
+		case "file":
+			fileURI, ok := promptFileURI(block.Path)
+			if !ok {
+				continue
+			}
+			item := map[string]any{"type": "resource_link", "name": block.Name, "uri": fileURI}
+			if block.SizeBytes > 0 {
+				item["size"] = block.SizeBytes
+			}
+			out = append(out, item)
 		}
 	}
 	return out
+}
+
+func promptFileURI(path string) (string, bool) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", false
+	}
+	normalized := strings.ReplaceAll(path, `\`, "/")
+	if strings.HasPrefix(normalized, "//") {
+		host, sharePath, ok := strings.Cut(strings.TrimPrefix(normalized, "//"), "/")
+		if !ok || host == "" || sharePath == "" {
+			return "", false
+		}
+		return (&url.URL{Scheme: "file", Host: host, Path: "/" + sharePath}).String(), true
+	}
+	if len(normalized) >= 3 && isASCIIAlpha(normalized[0]) && normalized[1] == ':' && normalized[2] == '/' {
+		return (&url.URL{Scheme: "file", Path: "/" + normalized}).String(), true
+	}
+	if !strings.HasPrefix(normalized, "/") {
+		return "", false
+	}
+	return (&url.URL{Scheme: "file", Path: normalized}).String(), true
+}
+
+func promptFileBaseName(path string) string {
+	path = strings.TrimRight(strings.ReplaceAll(path, `\`, "/"), "/")
+	if index := strings.LastIndexByte(path, '/'); index >= 0 {
+		return path[index+1:]
+	}
+	return path
+}
+
+func isASCIIAlpha(value byte) bool {
+	return value >= 'A' && value <= 'Z' || value >= 'a' && value <= 'z'
 }
 
 // materializeProviderPromptImagesWithClient converts remote HTTPS image references at
@@ -507,6 +583,12 @@ func promptContentForActivity(content []PromptContentBlock) []map[string]any {
 			}
 			if strings.TrimSpace(block.Name) != "" {
 				item["name"] = strings.TrimSpace(block.Name)
+			}
+			out = append(out, item)
+		case "file":
+			item := map[string]any{"type": block.Type, "name": block.Name, "path": block.Path}
+			if block.SizeBytes > 0 {
+				item["sizeBytes"] = block.SizeBytes
 			}
 			out = append(out, item)
 		case "connector":

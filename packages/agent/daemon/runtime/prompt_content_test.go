@@ -77,6 +77,46 @@ func TestNormalizeRuntimePromptContentPreservesURLOnlyImage(t *testing.T) {
 	}
 }
 
+func TestPromptContentForACPProjectsLocalFilesAsResourceLinks(t *testing.T) {
+	tests := map[string]struct{ path, uri string }{
+		"posix":   {path: "/tmp/a b#c.txt", uri: "file:///tmp/a%20b%23c.txt"},
+		"windows": {path: `C:\Users\me\a b.txt`, uri: "file:///C:/Users/me/a%20b.txt"},
+		"unc":     {path: `\\server\share\a b.txt`, uri: "file://server/share/a%20b.txt"},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			content := normalizeRuntimePromptContent([]PromptContentBlock{{
+				Type: "file", Name: "a b.txt", Path: test.path, SizeBytes: 42,
+			}})
+			projected := promptContentForACP(content)
+			if len(projected) != 1 || projected[0]["type"] != "resource_link" ||
+				projected[0]["name"] != "a b.txt" || projected[0]["uri"] != test.uri ||
+				projected[0]["size"] != int64(42) {
+				t.Fatalf("ACP content = %#v, want resource_link %q", projected, test.uri)
+			}
+		})
+	}
+	if got := normalizeRuntimePromptContent([]PromptContentBlock{{Type: "file", Name: "relative.txt", Path: "relative.txt"}}); len(got) != 0 {
+		t.Fatalf("relative file normalized as %#v, want rejection", got)
+	}
+}
+
+func TestUserPromptActivityPayloadPreservesFileMetadata(t *testing.T) {
+	payload := userPromptActivityPayload([]PromptContentBlock{{
+		Type: "file", Name: "report.pdf", Path: "/tmp/report.pdf", SizeBytes: 99,
+	}}, "", nil)
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serialized := string(encoded)
+	for _, want := range []string{`"type":"file"`, `"name":"report.pdf"`, `"path":"/tmp/report.pdf"`, `"sizeBytes":99`} {
+		if !strings.Contains(serialized, want) {
+			t.Fatalf("activity payload = %s, missing %s", serialized, want)
+		}
+	}
+}
+
 func TestProjectRuntimeConnectorPromptContentUsesNativeInterfaces(t *testing.T) {
 	content := normalizeRuntimePromptContent([]PromptContentBlock{
 		{Type: "text", Text: "list my calendar events"},

@@ -206,7 +206,7 @@ export function createDesktopAgentActivityRuntime(
                 if (block.type === "file") {
                   const hostPath = block.hostPath?.trim() ?? "";
                   const inlineData = block.data?.trim() ?? "";
-                  if (!hostPath && !inlineData) {
+                  if (!hostPath && typeof block.data !== "string") {
                     throw new Error(
                       "Prompt file upload requires hostPath or data."
                     );

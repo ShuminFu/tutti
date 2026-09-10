@@ -143,10 +143,9 @@ describe("agentComposerDraft", () => {
     });
 
     expect(agentComposerDraftToPromptContent({ draft, skills: [] })).toEqual([
-      {
-        type: "text",
-        text: "before [@first.pdf](/runtime/first.pdf) middle [@second.txt](/runtime/second.txt) after"
-      }
+      { type: "text", text: "before middle after" },
+      { type: "file", kind: "file", name: "first.pdf", path: "/runtime/first.pdf" },
+      { type: "file", kind: "file", name: "second.txt", path: "/runtime/second.txt" }
     ]);
   });
 
@@ -169,11 +168,10 @@ describe("agentComposerDraft", () => {
 
     expect(projectAgentComposerDraftSubmission({ draft, skills: [] })).toEqual({
       content: [
-        {
-          type: "text",
-          text: "summarize [@report.pdf](/runtime/report.pdf)"
-        }
-      ]
+        { type: "text", text: "summarize" },
+        { type: "file", kind: "file", name: "report.pdf", path: "/runtime/report.pdf" }
+      ],
+      displayPrompt: "summarize [@report.pdf](/runtime/report.pdf)"
     });
     expect(agentComposerDraftDisplayPrompt(draft)).toBeUndefined();
   });
@@ -210,14 +208,17 @@ describe("agentComposerDraft", () => {
       })
     ).toEqual({
       content: [
-        {
-          type: "text",
-          text: "$review-code [@notes.md](/runtime/notes.md)"
-        },
+        { type: "text", text: "$review-code" },
         {
           type: "skill",
           name: "review-code",
           path: "/skills/review-code/SKILL.md"
+        },
+        {
+          type: "file",
+          kind: "file",
+          name: "notes.md",
+          path: "/runtime/notes.md"
         }
       ],
       displayPrompt: `/review-code [@notes.md](/runtime/notes.md)`
@@ -265,10 +266,20 @@ describe("agentComposerDraft", () => {
       "mention://composer-file/queued:file:0"
     );
     expect(agentComposerDraftToPromptContent({ draft, skills: [] })).toEqual([
-      {
-        type: "text",
-        text: "before[@report.pdf](/runtime/report.pdf)after"
-      }
+      { type: "text", text: "before after" },
+      { type: "file", kind: "file", name: "report.pdf", path: "/runtime/report.pdf" }
+    ]);
+  });
+
+  it("projects native workspace file mentions without duplicating their paths in text", () => {
+    const draft = buildAgentComposerDraft({
+      prompt: "compare [@mac file](/tmp/a file.txt) and [@win file](C:\\\\Users\\\\me\\\\b.txt)"
+    });
+
+    expect(agentComposerDraftToPromptContent({ draft, skills: [] })).toEqual([
+      { type: "text", text: "compare and" },
+      { type: "file", kind: "file", name: "mac file", path: "/tmp/a file.txt" },
+      { type: "file", kind: "file", name: "win file", path: "C:\\Users\\me\\b.txt" }
     ]);
   });
 
@@ -1094,8 +1105,11 @@ describe("agentComposerDraft", () => {
       })
     ).toEqual([
       {
-        type: "text",
-        text: "[@report.pdf](/var/cache/tsh/local-assets/workspace-1/user-1/report.pdf)"
+        type: "file",
+        kind: "file",
+        name: "report.pdf",
+        path: "/var/cache/tsh/local-assets/workspace-1/user-1/report.pdf",
+        sizeBytes: 42
       }
     ]);
   });

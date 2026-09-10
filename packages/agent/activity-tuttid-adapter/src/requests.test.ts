@@ -11,7 +11,18 @@ import {
 } from "./index.ts";
 
 test("create and send projections share one prompt allowlist", () => {
-  const content = [activityTextBlock()];
+  const content: AgentPromptContentBlock[] = [
+    activityTextBlock(),
+    {
+      type: "file",
+      name: "report.pdf",
+      path: "/runtime/report.pdf",
+      sizeBytes: 0,
+      hostPath: "/tmp/report.pdf",
+      mimeType: "application/pdf",
+      uploadStatus: "uploaded"
+    }
+  ];
   const activityCreate = tuttiCreateWorkspaceAgentSessionRequestFromActivity({
     agentSessionId: "session-1",
     agentTargetId: "target-1",
@@ -47,7 +58,15 @@ test("create and send projections share one prompt allowlist", () => {
     activationCreate.initialContent,
     send.content
   ]) {
-    assert.deepEqual(projected, [{ text: "hello", type: "text" }]);
+    assert.deepEqual(projected, [
+      { text: "hello", type: "text" },
+      {
+        type: "file",
+        name: "report.pdf",
+        path: "/runtime/report.pdf",
+        sizeBytes: 0
+      }
+    ]);
   }
   assert.equal(activationCreate.browserUse, true);
   assert.equal(activationCreate.codexSaverMode, true);
@@ -58,17 +77,30 @@ test("create and send projections share one prompt allowlist", () => {
   ]);
 });
 
-test("request projection rejects local file blocks", () => {
-  assert.throws(
-    () =>
-      tuttiSendWorkspaceAgentSessionInputRequestFromActivity({
-        agentSessionId: "session-1",
-        clientSubmitId: "submit-1",
-        content: [{ hostPath: "/tmp/file.txt", type: "file" }],
-        workspaceId: "workspace-1"
-      }),
-    /File prompt blocks must be uploaded before submission/
-  );
+test("request projection rejects non-canonical file blocks", () => {
+  for (const block of [
+    { hostPath: "/tmp/file.txt", type: "file" as const },
+    { data: "ZmlsZQ==", name: "file.txt", type: "file" as const },
+    { name: "empty.txt", path: "  ", type: "file" as const },
+    { name: "relative.txt", path: "relative.txt", type: "file" as const },
+    {
+      name: "negative.txt",
+      path: "/runtime/negative.txt",
+      sizeBytes: -1,
+      type: "file" as const
+    }
+  ]) {
+    assert.throws(
+      () =>
+        tuttiSendWorkspaceAgentSessionInputRequestFromActivity({
+          agentSessionId: "session-1",
+          clientSubmitId: "submit-1",
+          content: [block],
+          workspaceId: "workspace-1"
+        }),
+      /File prompt blocks must be uploaded before submission/
+    );
+  }
 });
 
 test("request projection carries the exact target only for guidance", () => {
