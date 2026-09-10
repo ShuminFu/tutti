@@ -127,6 +127,7 @@ import {
 } from "../services/workspaceWorkbenchShortcutActions.ts";
 import {
   applyEmbeddedDintalDockContributions,
+  installEmbeddedDintalDockSessionBridge,
   isEmbeddedDintalDock,
   reconcileEmbeddedDintalDock
 } from "./embeddedDintalDock.ts";
@@ -660,6 +661,10 @@ function ReadyWorkspaceWorkbenchWithSession({
       workspaceAppExternalApi
     ]
   );
+  useEffect(() => {
+    if (!embeddedDintalDock || !workbenchHost) return undefined;
+    return installEmbeddedDintalDockSessionBridge(workbenchHost);
+  }, [embeddedDintalDock, workbenchHost]);
   const windowManagement = useMemo<WorkbenchWindowManagementConfig>(
     () => ({
       edgeSnapEnabled: runtime.workbenchWindowSnapping.enabled,

@@ -1,11 +1,18 @@
-import type { WorkbenchContribution } from "@tutti-os/workbench-surface";
+import type {
+  WorkbenchContribution,
+  WorkbenchHostHandle
+} from "@tutti-os/workbench-surface";
 import {
   createElement,
   type ReactNode,
   useEffect,
   useSyncExternalStore
 } from "react";
-import { workspaceAgentGuiNodeID } from "../services/workspaceAgentGuiLaunch.ts";
+import { installHostAgentSessionBridge } from "../../../platform/desktop/web/webHostBridgeClient.ts";
+import {
+  agentGuiWorkbenchOpenSessionActivationType,
+  workspaceAgentGuiNodeID
+} from "../services/workspaceAgentGuiLaunch.ts";
 
 type EmbeddedDintalDockNode = NonNullable<
   WorkbenchContribution["nodes"]
@@ -81,20 +88,47 @@ type EmbeddedDintalDockHostWithController =
     };
   };
 
-interface EmbeddedDintalDockHost {
-  closeNode(nodeId: string): void;
-  exitFullscreenNode(nodeId: string): void;
-  focusNode(nodeId: string): void;
-  getSnapshot(): {
-    nodeStack: readonly string[];
-    nodes: readonly {
-      data: { typeId: string };
-      displayMode: string;
-      id: string;
-    }[];
-  };
-  launchNode(input: { reason: "host"; typeId: string }): Promise<string | null>;
-  load(): Promise<void>;
+type EmbeddedDintalDockHost = Pick<
+  WorkbenchHostHandle,
+  | "activateNode"
+  | "closeNode"
+  | "exitFullscreenNode"
+  | "focusNode"
+  | "getSnapshot"
+  | "launchNode"
+  | "load"
+>;
+
+export function installEmbeddedDintalDockSessionBridge(
+  host: EmbeddedDintalDockHost,
+  windowRef: Window = window
+): () => void {
+  return installHostAgentSessionBridge(
+    (agentSessionId) => activateEmbeddedDintalDockSession(host, agentSessionId),
+    windowRef
+  );
+}
+
+export function activateEmbeddedDintalDockSession(
+  host: EmbeddedDintalDockHost,
+  agentSessionId: string
+): boolean {
+  const snapshot = host.getSnapshot();
+  const nodeId = [...snapshot.nodeStack]
+    .reverse()
+    .find((id) => snapshot.nodes.some(
+      (node) => node.id === id && node.data.typeId === workspaceAgentGuiNodeID
+    ));
+  if (!nodeId) return false;
+  host.activateNode(
+    { nodeId },
+    {
+      payload: { agentSessionId },
+      type: agentGuiWorkbenchOpenSessionActivationType
+    }
+  );
+  host.focusNode(nodeId);
+  return true;
 }
 
 export function isEmbeddedDintalDock(

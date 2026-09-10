@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  activateEmbeddedDintalDockSession,
   applyEmbeddedDintalDockContributions,
   isEmbeddedDintalDock,
   reconcileEmbeddedDintalDock,
@@ -11,6 +12,37 @@ import {
 test("detects only the protected host bootstrap query", () => {
   assert.equal(isEmbeddedDintalDock("?tuttiBootstrap=nonce-1"), true);
   assert.equal(isEmbeddedDintalDock("?workspace=one"), false);
+});
+
+test("activates the requested session in the frontmost Agent node", () => {
+  const activations: unknown[] = [];
+  const focused: string[] = [];
+  const result = activateEmbeddedDintalDockSession({
+    activateNode: (...args: unknown[]) => activations.push(args),
+    closeNode() {},
+    exitFullscreenNode() {},
+    focusNode: (id: string) => focused.push(id),
+    getSnapshot: () => ({
+      nodeStack: ["agent-old", "files", "agent-current"],
+      nodes: [
+        { data: { typeId: "agent-gui" }, id: "agent-old" },
+        { data: { typeId: "files" }, id: "files" },
+        { data: { typeId: "agent-gui" }, id: "agent-current" }
+      ]
+    }),
+    launchNode: async () => null,
+    load: async () => undefined
+  } as never, "session-1");
+
+  assert.equal(result, true);
+  assert.deepEqual(activations, [[
+    { nodeId: "agent-current" },
+    {
+      payload: { agentSessionId: "session-1" },
+      type: "agent-gui:open-session"
+    }
+  ]]);
+  assert.deepEqual(focused, ["agent-current"]);
 });
 
 test("projects the embedded Agent frame for its body and header", () => {

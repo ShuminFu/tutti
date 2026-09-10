@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  HOST_AGENT_SESSION_READY_TYPE,
   HOST_FILE_DROP_TYPE,
   HOST_FOCUS_TYPE,
+  HOST_OPEN_AGENT_SESSION_ACK_TYPE,
+  HOST_OPEN_AGENT_SESSION_TYPE,
   HOST_WORKBENCH_LAYOUT_TYPE,
+  installHostAgentSessionBridge,
   installHostFileDropBridge,
   installHostFocusRecovery,
   installHostWorkbenchLayoutNotifications
@@ -158,6 +162,74 @@ test("host focus recovery stops after dispose", () => {
   harness.hostFocus();
 
   assert.equal(harness.terminalFallback.focusCalls.length, 0);
+});
+
+test("embedded host opens only secured Agent sessions and acknowledges the result", () => {
+  let messageListener: ((event: MessageEvent) => void) | null = null;
+  const parentPosts: Array<{ message: unknown; origin: string }> = [];
+  const parent = {
+    postMessage(message: unknown, origin: string) {
+      parentPosts.push({ message, origin });
+    }
+  } as WindowProxy;
+  const opened: string[] = [];
+  const windowRef = {
+    addEventListener(type: string, listener: EventListener) {
+      if (type === "message") messageListener = listener as (event: MessageEvent) => void;
+    },
+    location: {
+      search: "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+    },
+    parent,
+    removeEventListener() {}
+  } as unknown as Window;
+  installHostAgentSessionBridge((id) => {
+    opened.push(id);
+    return id === "session-1";
+  }, windowRef);
+  assert.deepEqual(parentPosts, [{
+    message: { type: HOST_AGENT_SESSION_READY_TYPE, nonce: "nonce-1" },
+    origin: "http://wails.localhost"
+  }]);
+  const send = (overrides: Record<string, unknown> = {}) => messageListener?.({
+    data: {
+      type: HOST_OPEN_AGENT_SESSION_TYPE,
+      nonce: "nonce-1",
+      requestId: "request-1",
+      agentSessionId: " session-1 ",
+      ...(overrides.data as object | undefined)
+    },
+    origin: "http://wails.localhost",
+    source: parent,
+    ...overrides
+  } as MessageEvent);
+
+  send({ origin: "https://evil.example" });
+  send({ source: {} as WindowProxy });
+  send({ data: { nonce: "wrong" } });
+  send();
+  send({ data: { requestId: "request-2", agentSessionId: "session-missing" } });
+  assert.deepEqual(opened, ["session-1", "session-missing"]);
+  assert.deepEqual(parentPosts.slice(1), [
+    {
+      message: {
+        type: HOST_OPEN_AGENT_SESSION_ACK_TYPE,
+        nonce: "nonce-1",
+        requestId: "request-1",
+        opened: true
+      },
+      origin: "http://wails.localhost"
+    },
+    {
+      message: {
+        type: HOST_OPEN_AGENT_SESSION_ACK_TYPE,
+        nonce: "nonce-1",
+        requestId: "request-2",
+        opened: false
+      },
+      origin: "http://wails.localhost"
+    }
+  ]);
 });
 
 test("embedded workbench reports fullscreen layout changes to its host", () => {

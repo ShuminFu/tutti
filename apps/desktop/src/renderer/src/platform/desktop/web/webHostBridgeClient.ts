@@ -19,6 +19,9 @@ const REQUEST_TYPE = "tutti-host-request";
 const RESPONSE_TYPE = "tutti-host-response";
 export const HOST_FOCUS_TYPE = "tutti-host-focus";
 export const HOST_FILE_DROP_TYPE = "tutti-host-file-drop";
+export const HOST_OPEN_AGENT_SESSION_TYPE = "tutti-host-open-agent-session";
+export const HOST_AGENT_SESSION_READY_TYPE = "tutti-host-agent-session-ready";
+export const HOST_OPEN_AGENT_SESSION_ACK_TYPE = "tutti-host-open-agent-session-ack";
 export const HOST_WORKBENCH_LAYOUT_TYPE = "tutti-host-workbench-layout";
 const FULLSCREEN_WORKBENCH_WINDOW_SELECTOR =
   '.workbench-window-shell[data-display-mode="fullscreen"]';
@@ -120,6 +123,63 @@ export function installHostFocusRecovery(
     documentRef.removeEventListener("focusin", onFocusIn);
     windowRef.removeEventListener("message", onMessage);
   };
+}
+
+export function installHostAgentSessionBridge(
+  onOpen: (agentSessionId: string) => boolean,
+  windowRef: Window = window
+): () => void {
+  const coordinates = bridgeCoordinates(windowRef.location.search);
+  if (!coordinates || !windowRef.parent || windowRef.parent === windowRef) {
+    return () => undefined;
+  }
+  const parent = windowRef.parent;
+  const onMessage = (event: MessageEvent): void => {
+    const data = event.data as
+      | {
+          type?: unknown;
+          nonce?: unknown;
+          requestId?: unknown;
+          agentSessionId?: unknown;
+        }
+      | null
+      | undefined;
+    if (
+      !data ||
+      typeof data !== "object" ||
+      data.type !== HOST_OPEN_AGENT_SESSION_TYPE ||
+      data.nonce !== coordinates.nonce ||
+      event.source !== parent ||
+      event.origin !== coordinates.hostOrigin ||
+      typeof data.requestId !== "string" ||
+      !data.requestId ||
+      typeof data.agentSessionId !== "string" ||
+      !data.agentSessionId.trim()
+    ) {
+      return;
+    }
+    let opened = false;
+    try {
+      opened = onOpen(data.agentSessionId.trim());
+    } catch {
+      // Activation failures are reported to the host so it can retry.
+    }
+    parent.postMessage(
+      {
+        type: HOST_OPEN_AGENT_SESSION_ACK_TYPE,
+        nonce: coordinates.nonce,
+        requestId: data.requestId,
+        opened
+      },
+      coordinates.hostOrigin
+    );
+  };
+  windowRef.addEventListener("message", onMessage);
+  parent.postMessage(
+    { type: HOST_AGENT_SESSION_READY_TYPE, nonce: coordinates.nonce },
+    coordinates.hostOrigin
+  );
+  return () => windowRef.removeEventListener("message", onMessage);
 }
 
 export function installHostFileDropBridge(
