@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -279,7 +280,9 @@ func TestExtensionAdapterResumeLoadIncludesContractMCPAndFailsWithLegacyCode(t *
 	})
 }
 
-func TestStandardACPAdapterIgnoresRuntimeContractWithoutExtensionTarget(t *testing.T) {
+// 没有 extension:* 目标时合同只贡献 mcpServers：env/cwd/model/systemPrompt 一概不覆盖，
+// 但那台 stdio MCP 必须进 session/new——否则托管 claude 会话里没有后端工具。
+func TestStandardACPAdapterMergesOnlyContractMCPWithoutExtensionTarget(t *testing.T) {
 	t.Parallel()
 
 	transport := newStandardACPTransport("Hermes Agent", "hermes-session-contract-ignored")
@@ -297,7 +300,12 @@ func TestStandardACPAdapterIgnoresRuntimeContractWithoutExtensionTarget(t *testi
 		t.Fatalf("session/new cwd = %q, want unchanged without extension:* target", got)
 	}
 	servers, _ := newSession["mcpServers"].([]any)
-	if len(servers) != 0 {
-		t.Fatalf("session/new MCP servers = %#v, want none without extension:* target", servers)
+	names := make([]string, 0, len(servers))
+	for _, raw := range servers {
+		names = append(names, asString(payloadObject(raw)["name"]))
+	}
+	sort.Strings(names)
+	if len(names) != 2 || names[0] != "audit" || names[1] != "workflow_report" {
+		t.Fatalf("session/new MCP servers = %#v, want the contract servers merged", servers)
 	}
 }

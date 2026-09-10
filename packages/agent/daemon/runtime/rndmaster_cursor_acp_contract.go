@@ -35,7 +35,8 @@ func (a *standardACPAdapter) prepareRnDMasterACPSession(session Session) (Sessio
 	if a.appliesExtensionRuntimeContract(session) {
 		return a.mergeExtensionRnDMasterACPSession(session)
 	}
-	return session, rndmasterRuntimeContract{}, nil
+	// 其余 standard-acp 目标（local:claude-code、local:codex …）只取合同的 mcpServers。
+	return rndmasterContractMCPOnlyACPSession(session)
 }
 
 func rndmasterResumeProviderSessionID(session Session) string {
