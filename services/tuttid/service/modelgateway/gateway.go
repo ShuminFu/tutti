@@ -19,7 +19,7 @@ import (
 const (
 	defaultListenAddress   = "127.0.0.1:0"
 	defaultRequestTimeout  = 10 * time.Minute
-	defaultFirstTokenLimit = 90 * time.Second
+	defaultFirstTokenLimit = 5 * time.Minute
 	defaultMaxRequestBytes = 32 << 20
 	defaultMaxErrorBytes   = 1 << 20
 )
