@@ -26,6 +26,11 @@ import type {
   AgentConversationParticipantPresentation
 } from "../contracts/agentConversationParticipantPresentation";
 import { AgentMessageDetailsDisclosure } from "./AgentMessageDetailsDisclosure";
+import { AgentPeerMessageCards } from "./AgentPeerMessageCard";
+
+// RNDMASTER_PEER_MESSAGE_CARD：同伴消息信封折叠成卡片。回退看红时改 false，保留本符号。
+const peerMessageEnvelopeCard = true;
+import { parsePeerMessageEnvelope } from "./peerMessageEnvelope";
 import { AgentToolGroupRow } from "./AgentToolGroupRow";
 import {
   AgentVisibleErrorMessage,
@@ -241,6 +246,8 @@ export function AgentMessageBlock({
       !isUser && !message.visibleError
         ? recoverVisibleErrorFromMessage(message, provider)
         : null;
+    // RnDMaster 会话互通：同伴消息信封折叠成卡片，不走 RichText。
+    const peerBlocks = isUser ? parsePeerMessageEnvelope(message.body) : [];
     const renderedContent =
       isUser && message.contentKind === "image-grid" ? (
         <AgentUserImageGrid message={message} />
@@ -251,6 +258,8 @@ export function AgentMessageBlock({
           checkpointWake={message.checkpointWake}
           fullText={message.body}
         />
+      ) : isUser && peerMessageEnvelopeCard && peerBlocks.length > 0 ? (
+        <AgentPeerMessageCards blocks={peerBlocks} />
       ) : isUser ? (
         <AgentRichTextReadonly
           value={message.body}

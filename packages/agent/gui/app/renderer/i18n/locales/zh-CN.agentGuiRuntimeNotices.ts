@@ -13,6 +13,7 @@ export const zhCNAgentGuiRuntimeNotices = {
   visibleErrorPluginUnavailable: "{{provider}} 暂时无法使用可选集成",
   visibleErrorSessionInterrupted: "{{provider}} 在完成前意外停止，请重试",
   visibleErrorDetails: "查看详情",
+  peerMessageFrom: "来自",
   visibleErrorRawDetails: "原始错误",
   visibleErrorCliNotFound:
     "未检测到 {{provider}} CLI，无法运行。请先完成安装。",

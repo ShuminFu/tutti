@@ -19,6 +19,7 @@ export const enAgentGuiRuntimeNotices = {
   visibleErrorSessionInterrupted:
     "{{provider}} stopped unexpectedly before it finished. Try again.",
   visibleErrorDetails: "View details",
+  peerMessageFrom: "Message from",
   visibleErrorRawDetails: "Raw error",
   visibleErrorCliNotFound:
     "{{provider}} CLI wasn't found, so it couldn't run. Set it up to continue.",
