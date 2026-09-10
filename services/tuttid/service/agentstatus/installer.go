@@ -40,6 +40,16 @@ type installerExecutionSummary struct {
 	ExitCode *int
 }
 
+const (
+	installFallbackFailedMarker = "TUTTI_INSTALL_FALLBACK_FAILED"
+	installStageSummaryLimit    = 1600
+)
+
+var (
+	errInstalledCLINotDetected     = errors.New("installed provider CLI was not detected")
+	errInstalledAdapterNotDetected = errors.New("installed provider adapter was not detected")
+)
+
 func (s Service) installMissingProviderRuntime(
 	ctx context.Context,
 	spec ProviderSpec,
@@ -57,12 +67,12 @@ func (s Service) installMissingProviderRuntime(
 		switch installTarget {
 		case "cli":
 			if attemptedCLI {
-				return summary, current, fmt.Errorf("provider CLI is still unavailable after install")
+				return summary, current, fmt.Errorf("%w: provider CLI is still unavailable after install", errInstalledCLINotDetected)
 			}
 			attemptedCLI = true
 		case "adapter":
 			if attemptedAdapter {
-				return summary, current, fmt.Errorf("provider adapter is still unavailable after install")
+				return summary, current, fmt.Errorf("%w: provider adapter is still unavailable after install", errInstalledAdapterNotDetected)
 			}
 			attemptedAdapter = true
 		}
@@ -165,7 +175,11 @@ func (s Service) installMissingProviderRuntime(
 		stillMissing := (installTarget == "cli" && strings.TrimSpace(current.CLIPath) == "") ||
 			(installTarget == "adapter" && strings.TrimSpace(current.AdapterPath) == "")
 		if stillMissing {
-			err := fmt.Errorf("provider %s is still unavailable after installer exited successfully", spec.Provider)
+			missingErr := errInstalledCLINotDetected
+			if installTarget == "adapter" {
+				missingErr = errInstalledAdapterNotDetected
+			}
+			err := fmt.Errorf("%w: provider %s is still unavailable after installer exited successfully", missingErr, spec.Provider)
 			s.reportProviderSetupNodeResult(ctx, providerSetupNodeResultInput{
 				Node:     installNodeForTarget(installTarget),
 				Provider: spec.Provider,
@@ -321,9 +335,14 @@ func (s Service) executeInstaller(
 		return runResult(result, err)
 	case InstallerKindOfficialScript:
 		result, err := s.runOfficialScriptInstaller(installCtx, provider, spec)
-		if installCtx.Err() == nil && goruntime.GOOS != "windows" && strings.TrimSpace(spec.HomebrewFormula) != "" && spec.ManagedNPM != nil && (err != nil || result.ExitCode != 0) {
+		if installCtx.Err() == nil && officialScriptUsesManagedNPMFallback(goruntime.GOOS, spec) && (err != nil || result.ExitCode != 0) {
+			result = labelInstallCommandResult("official", installCommandResultWithError(result, err))
 			npmResult, npmErr := s.runManagedNPMPackageInstaller(installCtx, provider, *spec.ManagedNPM, "")
-			result = combineInstallCommandResults(result, npmResult)
+			npmResult = installCommandResultWithError(npmResult, npmErr)
+			fallbackFailed := npmErr != nil || npmResult.ExitCode != 0
+			result = combineInstallCommandResults(result, labelInstallCommandResult("managed-npm", npmResult))
+			result = markInstallFallbackFailure(goruntime.GOOS, result, fallbackFailed)
+			command = strings.Join([]string{command, managedNPMInstallDisplayCommand(*spec.ManagedNPM)}, " -> ")
 			err = npmErr
 		}
 		if installCtx.Err() == nil && goruntime.GOOS != "windows" && strings.TrimSpace(spec.HomebrewFormula) != "" && (err != nil || result.ExitCode != 0) {
@@ -392,6 +411,44 @@ func combineInstallCommandResults(first, second InstallCommandResult) InstallCom
 	}
 }
 
+func officialScriptUsesManagedNPMFallback(goos string, spec InstallerSpec) bool {
+	if spec.ManagedNPM == nil {
+		return false
+	}
+	if goos == "windows" {
+		return spec.WindowsFallback == providerregistry.InstallerWindowsFallbackPowerShell
+	}
+	return strings.TrimSpace(spec.HomebrewFormula) != ""
+}
+
+func installCommandResultWithError(result InstallCommandResult, err error) InstallCommandResult {
+	if err != nil {
+		result.Stderr = strings.TrimSpace(strings.Join([]string{result.Stderr, err.Error()}, "\n"))
+	}
+	return result
+}
+
+func markInstallFallbackFailure(goos string, result InstallCommandResult, failed bool) InstallCommandResult {
+	if goos == "windows" && failed {
+		result.Stderr = strings.TrimSpace(strings.Join([]string{installFallbackFailedMarker, result.Stderr}, "\n"))
+	}
+	return result
+}
+
+func labelInstallCommandResult(label string, result InstallCommandResult) InstallCommandResult {
+	stderrSummary := truncateInstallStageSummary(firstNonBlank(result.Stderr, result.Stdout, "(no output)"))
+	if output := strings.TrimSpace(result.Stdout); output != "" {
+		result.Stdout = "[" + label + "]\n" + truncateInstallStageSummary(output)
+	}
+	result.Stderr = "[" + label + "]\n" + stderrSummary
+	return result
+}
+
+func truncateInstallStageSummary(value string) string {
+	trimmed := strings.TrimSpace(value)
+	return trimmed[:min(len(trimmed), installStageSummaryLimit)]
+}
+
 func (s Service) shellCommandInstallerEnv(ctx context.Context, spec InstallerSpec) []string {
 	resolver := s.commandResolver()
 	if !shellCommandUsesNPM(spec.ShellCommand) {
@@ -416,7 +473,8 @@ func shellCommandUsesNPM(command string) bool {
 }
 
 func installerLockCommand(spec InstallerSpec) string {
-	if goruntime.GOOS == "windows" && spec.Kind == InstallerKindOfficialScript && spec.WindowsFallback == providerregistry.InstallerWindowsFallbackManagedNPM && spec.ManagedNPM != nil {
+	if goruntime.GOOS == "windows" && spec.Kind == InstallerKindOfficialScript && spec.ManagedNPM != nil &&
+		(spec.WindowsFallback == providerregistry.InstallerWindowsFallbackManagedNPM || spec.WindowsFallback == providerregistry.InstallerWindowsFallbackPowerShell) {
 		return installerLockCommand(InstallerSpec{Kind: InstallerKindManagedNPMPackage, ManagedNPM: spec.ManagedNPM})
 	}
 	if spec.Kind == InstallerKindShellCommand {
@@ -448,7 +506,7 @@ func (s Service) runOfficialScriptInstaller(ctx context.Context, provider string
 				return InstallCommandResult{ExitCode: 1, Stderr: "Windows PowerShell installer command is missing"}, nil
 			}
 			return s.installCommand(ctx, InstallCommandInput{
-				Args:     []string{"powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command},
+				Args:     []string{"powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", windowsPowerShellUTF8Command(command)},
 				Env:      s.commandResolver().Env(nil),
 				OnStdout: activeActionStdoutAppender(ctx, provider),
 			})
@@ -507,6 +565,10 @@ func (s Service) runOfficialScriptInstaller(ctx context.Context, provider string
 		Env:      env,
 		OnStdout: activeActionStdoutAppender(ctx, provider),
 	})
+}
+
+func windowsPowerShellUTF8Command(command string) string {
+	return `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding; ` + command
 }
 
 func (s Service) runManagedClaudeCodeInstaller(ctx context.Context) (InstallCommandResult, error) {

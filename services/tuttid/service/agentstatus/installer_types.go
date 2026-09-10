@@ -70,6 +70,7 @@ type ManagedNPMPackageInstallerSpec struct {
 	PackageVersion  string
 	BinaryName      string
 	IncludeOptional bool
+	VerifyBinary    bool
 	InstallDir      string
 }
 

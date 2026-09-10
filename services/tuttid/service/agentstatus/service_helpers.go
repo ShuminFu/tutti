@@ -123,6 +123,13 @@ func (s Service) installTimeout() time.Duration {
 	return defaultInstallTimeout
 }
 
+func (s Service) installVerifyTimeout() time.Duration {
+	if s.InstallVerifyTimeout > 0 {
+		return s.InstallVerifyTimeout
+	}
+	return defaultInstallVerifyTimeout
+}
+
 func runDefaultInstallCommand(ctx context.Context, input InstallCommandInput) (InstallCommandResult, error) {
 	ctx = baseContext(ctx)
 	var cmd *exec.Cmd
@@ -377,37 +384,49 @@ func (s Service) cliVersionOutputForProvider(ctx context.Context, provider strin
 		ctx = context.Background()
 	}
 	return s.CLIVersionCache.load(binaryPath, func() string {
-		release, acquired := s.DetectionCommands.acquire(ctx)
-		if !acquired {
-			return ""
-		}
-		defer release()
-		commandCtx, cancel := context.WithTimeout(ctx, authStatusCommandTimeout)
-		defer cancel()
-		command := newInstallExecCommand(commandCtx, binaryPath, "--version")
-		if env != nil {
-			command.Env = env
-		}
-		output, err := command.CombinedOutput()
-		if err != nil {
-			exitCode := -1
-			var exitErr *exec.ExitError
-			if errors.As(err, &exitErr) {
-				exitCode = exitErr.ExitCode()
-			}
-			slog.WarnContext(ctx,
-				"agent CLI version probe failed",
-				"event", "tutti.agent_provider.cli_version_probe.failed",
-				"provider", strings.TrimSpace(provider),
-				"binaryPath", binaryPath,
-				"exitCode", exitCode,
-				"output", truncateCodexProbeMessage(string(output)),
-				"error", err.Error(),
-			)
-			return ""
-		}
-		return string(output)
+		return s.runCLIVersionCommand(ctx, provider, binaryPath, env, authStatusCommandTimeout)
 	})
+}
+
+func (s Service) runCLIVersionCommand(ctx context.Context, provider string, binaryPath string, env []string, timeout time.Duration, registries ...string) string {
+	release, acquired := s.DetectionCommands.acquire(ctx)
+	if !acquired {
+		return ""
+	}
+	defer release()
+	commandCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	command := newInstallExecCommand(commandCtx, binaryPath, "--version")
+	if env != nil {
+		command.Env = env
+	}
+	output, err := command.CombinedOutput()
+	outputText := string(output)
+	for _, registry := range registries {
+		outputText = redactNPMRegistryCredentials(outputText, registry)
+	}
+	if err != nil {
+		exitCode := -1
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		}
+		errorText := err.Error()
+		for _, registry := range registries {
+			errorText = redactNPMRegistryCredentials(errorText, registry)
+		}
+		slog.WarnContext(ctx,
+			"agent CLI version probe failed",
+			"event", "tutti.agent_provider.cli_version_probe.failed",
+			"provider", strings.TrimSpace(provider),
+			"binaryPath", binaryPath,
+			"exitCode", exitCode,
+			"output", truncateCodexProbeMessage(outputText),
+			"error", errorText,
+		)
+		return ""
+	}
+	return outputText
 }
 
 func cloneProviderChecks(input []ProviderCheck) []ProviderCheck {

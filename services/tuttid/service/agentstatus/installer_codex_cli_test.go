@@ -1,8 +1,11 @@
 package agentstatus
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,6 +32,111 @@ func TestDisplayNPMRegistryStripsCredentials(t *testing.T) {
 		if got := displayNPMRegistry(in); got != want {
 			t.Errorf("displayNPMRegistry(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestManagedNPMRegistryCredentialsAreRedactedFromResultsAndProgress(t *testing.T) {
+	const (
+		provider = "credential-redaction-test"
+		registry = "https://user:token@registry.example.test/npm/"
+	)
+	home := t.TempDir()
+	runtimeRoot := fakeManagedRuntimeRoot(t)
+	service := probeTestService(home)
+	service.ManagedRuntime = fakeManagedRuntimeResolver(t, runtimeRoot)
+	service.Environ = func() []string {
+		return []string{"PATH=/usr/bin:/bin", agentNPMRegistryEnv + "=" + registry}
+	}
+	service.InstallCommand = func(_ context.Context, input InstallCommandInput) (InstallCommandResult, error) {
+		input.OnStdout("fetching " + registry + "\n")
+		return InstallCommandResult{
+			ExitCode: 1,
+			Stdout:   "stdout " + registry,
+			Stderr:   "stderr " + registry,
+		}, errors.New("request failed for " + registry)
+	}
+
+	ctx := withActiveActionToken(context.Background(), nextActiveActionToken())
+	claimActiveAction(ctx, provider, ActiveAction{ID: ActionInstall, Status: "running"})
+	defer clearActiveAction(ctx, provider)
+	result, err := service.runManagedNPMPackageInstaller(ctx, provider, ManagedNPMPackageInstallerSpec{
+		PackageName: "@anthropic-ai/claude-code",
+		BinaryName:  "claude",
+	}, "")
+	action := activeActionForProvider(provider)
+	values := []string{result.Stdout, result.Stderr}
+	if err != nil {
+		values = append(values, err.Error())
+	}
+	if action != nil {
+		values = append(values, action.Registry, action.Stdout)
+	}
+	for _, value := range values {
+		if strings.Contains(value, "user") || strings.Contains(value, "token") {
+			t.Fatalf("credential leaked in %q", value)
+		}
+	}
+}
+
+func TestNPMRegistryErrorRedactionPreservesUnchangedErrorIdentity(t *testing.T) {
+	if got := redactNPMRegistryError(context.Canceled, "https://registry.example.test"); !errors.Is(got, context.Canceled) {
+		t.Fatalf("redacted error = %v, want context.Canceled identity preserved", got)
+	}
+}
+
+func TestNPMRegistryErrorRedactionPreservesWrappedCancellation(t *testing.T) {
+	const registry = "https://user:token@registry.example.test/npm/"
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		err := fmt.Errorf("request to %s failed: %w", registry, cause)
+		got := redactNPMRegistryError(err, registry)
+		if !errors.Is(got, cause) {
+			t.Fatalf("redacted error = %v, want %v identity preserved", got, cause)
+		}
+		if strings.Contains(got.Error(), "user") || strings.Contains(got.Error(), "token") {
+			t.Fatalf("redacted error leaked credentials: %q", got)
+		}
+	}
+}
+
+func TestManagedNPMVerificationDoesNotExposeRegistryCredentials(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a POSIX probe shim; native Windows coverage is in installer_claude_windows_test.go")
+	}
+	const registry = "https://user:token@registry.example.test/npm/"
+	installPrefix := t.TempDir()
+	candidate := managedNPMBinPathCandidates(installPrefix, "claude")[0]
+	envCapture := filepath.Join(t.TempDir(), "probe-env.txt")
+	writeExecutable(t, candidate, fmt.Sprintf(`#!/bin/sh
+printf '%%s\n%%s\n' "$TUTTI_AGENT_NPM_REGISTRY" "$npm_config_registry" > %q
+printf '%%s\n' "$TUTTI_AGENT_NPM_REGISTRY$npm_config_registry" >&2
+exit 7
+`, envCapture))
+
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	ready := (Service{}).managedNPMPackageInstallReady(
+		context.Background(),
+		"claude-code",
+		ManagedNPMPackageInstallerSpec{BinaryName: "claude", VerifyBinary: true},
+		installPrefix,
+		[]string{"PATH=" + os.Getenv("PATH"), agentNPMRegistryEnv + "=" + registry, "npm_config_registry=" + registry},
+		registry,
+	)
+	if ready {
+		t.Fatal("credential-echoing failed shim unexpectedly passed verification")
+	}
+	captured, err := os.ReadFile(envCapture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(captured)) != "" {
+		t.Fatalf("verification process inherited registry credentials: %q", captured)
+	}
+	if value := logs.String(); strings.Contains(value, "user") || strings.Contains(value, "token") {
+		t.Fatalf("verification logs leaked registry credentials:\n%s", value)
 	}
 }
 
@@ -290,6 +398,51 @@ func TestRunManagedNPMPackageInstallerInstallsTuttiAgentWithManagedRuntime(t *te
 	}
 	if !slices.Contains(command.Env, "npm_config_registry=https://registry.example.test") {
 		t.Fatalf("Env = %#v, want selected npm registry", command.Env)
+	}
+}
+
+func TestRunManagedNPMPackageInstallerRetriesWhenInstalledBinaryIsInvalid(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test fixture uses a Unix executable")
+	}
+	home := t.TempDir()
+	runtimeRoot := fakeManagedRuntimeRoot(t)
+	managedNPM := filepath.Join(runtimeRoot, "node", "bin", npmBinaryNameForTest())
+	managedNode := filepath.Join(runtimeRoot, "node", "bin", nodeBinaryNameForTest())
+	service := probeTestService(home)
+	service.HTTPClient = agentNPMRegistryProbeHTTPClient(nil)
+	service.Environ = func() []string { return []string{"PATH=/usr/bin:/bin"} }
+	service.ManagedRuntime = staticManagedRuntimeResolver{runtime: managedruntime.ResolvedRuntime{
+		Root: runtimeRoot, Node: managedNode, NPM: managedNPM,
+		BinDirs: []string{filepath.Dir(managedNode)},
+		EnvOverrides: []string{
+			"TUTTI_APP_RUNTIME_ROOT=" + runtimeRoot,
+			"TUTTI_APP_NODE=" + managedNode,
+			"TUTTI_APP_NPM=" + managedNPM,
+			"PATH=" + filepath.Dir(managedNode) + string(os.PathListSeparator) + "/usr/bin:/bin",
+		},
+	}}
+	service.IsExecutableFile = isTestExecutableUnderHome(home)
+	binaryPath := filepath.Join(managedNPMInstallPrefixForTest(home), "bin", "claude")
+	var registriesTried []string
+	service.InstallCommand = func(_ context.Context, input InstallCommandInput) (InstallCommandResult, error) {
+		registriesTried = append(registriesTried, registryFromEnv(input.Env))
+		if len(registriesTried) == 1 {
+			writeExecutable(t, binaryPath, "#!/bin/sh\necho placeholder\n")
+		} else {
+			writeExecutable(t, binaryPath, "#!/bin/sh\necho 'Claude Code 2.1.0'\n")
+		}
+		return InstallCommandResult{ExitCode: 0, Stdout: "installed"}, nil
+	}
+
+	result, err := service.runManagedNPMPackageInstaller(context.Background(), "claude-code", ManagedNPMPackageInstallerSpec{
+		PackageName: "@anthropic-ai/claude-code", BinaryName: "claude", IncludeOptional: true, VerifyBinary: true,
+	}, "")
+	if err != nil || result.ExitCode != 0 {
+		t.Fatalf("runManagedNPMPackageInstaller() = %#v, %v", result, err)
+	}
+	if len(registriesTried) != 2 {
+		t.Fatalf("registries tried = %#v, want retry after npm success with unusable binary", registriesTried)
 	}
 }
 

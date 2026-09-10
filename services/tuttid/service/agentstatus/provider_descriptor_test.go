@@ -144,10 +144,13 @@ func TestClaudeCodeStatusSpecComesFromProviderDescriptor(t *testing.T) {
 		spec.Install.ScriptURL != "https://claude.ai/install.sh" ||
 		spec.Install.ScriptShell != "bash" ||
 		spec.Install.WindowsFallback != providerregistry.InstallerWindowsFallbackPowerShell ||
-		spec.Install.WindowsPowerShellCommand != `& ([scriptblock]::Create((irm https://claude.ai/install.ps1))) stable` ||
+		!strings.Contains(spec.Install.WindowsPowerShellCommand, "TUTTI_INSTALL_SOURCE_UNREACHABLE") ||
+		!strings.Contains(spec.Install.WindowsPowerShellCommand, "-TimeoutSec 30") ||
 		spec.Install.ManagedNPM == nil ||
 		spec.Install.ManagedNPM.PackageName != "@anthropic-ai/claude-code" ||
 		spec.Install.ManagedNPM.BinaryName != "claude" ||
+		!spec.Install.ManagedNPM.IncludeOptional ||
+		spec.Install.ManagedNPM.VerifyBinary != (runtime.GOOS == "windows") ||
 		spec.Install.HomebrewFormula != "claude-code" {
 		t.Fatalf("claude installer = %#v", spec.Install)
 	}

@@ -2,6 +2,7 @@ package agentstatus
 
 import (
 	"fmt"
+	goruntime "runtime"
 	"strings"
 	"time"
 
@@ -250,6 +251,7 @@ func installerSpecFromProviderDescriptor(descriptor providerregistry.InstallerDe
 			managedNPM = &ManagedNPMPackageInstallerSpec{
 				PackageName: descriptor.PackageName, PackageVersion: descriptor.RecommendedVersion,
 				BinaryName: descriptor.BinaryName, IncludeOptional: descriptor.IncludeOptional,
+				VerifyBinary: goruntime.GOOS == "windows" && descriptor.WindowsFallback == providerregistry.InstallerWindowsFallbackPowerShell,
 			}
 		}
 		return InstallerSpec{

@@ -30,6 +30,53 @@ func displayNPMRegistry(registry string) string {
 	return parsed.String()
 }
 
+func redactNPMRegistryCredentials(value string, registry string) string {
+	parsed, err := url.Parse(strings.TrimSpace(registry))
+	if err != nil || parsed.User == nil {
+		return value
+	}
+	redacted := strings.ReplaceAll(value, registry, displayNPMRegistry(registry))
+	return strings.ReplaceAll(redacted, parsed.User.String()+"@", "")
+}
+
+func redactNPMRegistryResult(result InstallCommandResult, registry string) InstallCommandResult {
+	result.Stdout = redactNPMRegistryCredentials(result.Stdout, registry)
+	result.Stderr = redactNPMRegistryCredentials(result.Stderr, registry)
+	return result
+}
+
+func redactNPMRegistryError(err error, registry string) error {
+	if err == nil {
+		return nil
+	}
+	redacted := redactNPMRegistryCredentials(err.Error(), registry)
+	if redacted == err.Error() {
+		return err
+	}
+	return redactedRegistryError{message: redacted, cause: err}
+}
+
+type redactedRegistryError struct {
+	message string
+	cause   error
+}
+
+func (e redactedRegistryError) Error() string { return e.message }
+func (e redactedRegistryError) Unwrap() error { return e.cause }
+
+func withoutNPMRegistryEnv(env []string) []string {
+	prefixes := []string{strings.ToLower(agentNPMRegistryEnv) + "=", "npm_config_registry="}
+	result := make([]string, 0, len(env))
+	for _, item := range env {
+		lower := strings.ToLower(item)
+		if slices.ContainsFunc(prefixes, func(prefix string) bool { return strings.HasPrefix(lower, prefix) }) {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
 func (s Service) runCodexCLILatestInstaller(
 	ctx context.Context,
 	provider string,
@@ -149,6 +196,7 @@ func (s Service) runManagedNPMPackageAction(
 	cleanupManagedNPMStagingDirs(installPrefix, packageName)
 	for i, registry := range registries {
 		registryDisplay := displayNPMRegistry(registry)
+		registryEnv := withAgentNPMRegistry(slices.Clone(baseEnv), registry)
 		setActiveAction(ctx, provider, ActiveAction{
 			ID:         actionID,
 			Status:     "running",
@@ -160,13 +208,15 @@ func (s Service) runManagedNPMPackageAction(
 		result, err = s.installCommand(attemptCtx, InstallCommandInput{
 			Command: command,
 			Args:    commandArgs,
-			Env:     withAgentNPMRegistry(slices.Clone(baseEnv), registry),
+			Env:     registryEnv,
 			OnStdout: func(output string) {
-				appendActiveActionStdout(ctx, provider, output)
+				appendActiveActionStdout(ctx, provider, redactNPMRegistryCredentials(output, registry))
 			},
 		})
 		cancel()
-		if err == nil && result.ExitCode == 0 {
+		result = redactNPMRegistryResult(result, registry)
+		err = redactNPMRegistryError(err, registry)
+		if err == nil && result.ExitCode == 0 && s.managedNPMPackageInstallReady(ctx, provider, spec, installPrefix, registryEnv, registry) {
 			setActiveAction(ctx, provider, ActiveAction{
 				ID:         actionID,
 				Status:     "running",
@@ -176,6 +226,10 @@ func (s Service) runManagedNPMPackageAction(
 				Stdout:     result.Stdout,
 			})
 			return result, nil
+		}
+		if err == nil && result.ExitCode == 0 {
+			result.ExitCode = 1
+			result.Stderr = strings.TrimSpace(strings.Join([]string{result.Stderr, "managed npm install completed but the installed " + binaryName + " executable did not report a version"}, "\n"))
 		}
 		if !binConflictRepaired && s.repairManagedNPMBinEEXIST(ctx, result, installPrefix, binaryName, spec.PackageVersion, baseEnv) {
 			binConflictRepaired = true
@@ -191,13 +245,15 @@ func (s Service) runManagedNPMPackageAction(
 			result, err = s.installCommand(attemptCtx, InstallCommandInput{
 				Command: command,
 				Args:    commandArgs,
-				Env:     withAgentNPMRegistry(slices.Clone(baseEnv), registry),
+				Env:     registryEnv,
 				OnStdout: func(output string) {
-					appendActiveActionStdout(ctx, provider, output)
+					appendActiveActionStdout(ctx, provider, redactNPMRegistryCredentials(output, registry))
 				},
 			})
 			cancel()
-			if err == nil && result.ExitCode == 0 {
+			result = redactNPMRegistryResult(result, registry)
+			err = redactNPMRegistryError(err, registry)
+			if err == nil && result.ExitCode == 0 && s.managedNPMPackageInstallReady(ctx, provider, spec, installPrefix, registryEnv, registry) {
 				setActiveAction(ctx, provider, ActiveAction{
 					ID:         actionID,
 					Status:     "running",
@@ -207,6 +263,10 @@ func (s Service) runManagedNPMPackageAction(
 					Stdout:     result.Stdout,
 				})
 				return result, nil
+			}
+			if err == nil && result.ExitCode == 0 {
+				result.ExitCode = 1
+				result.Stderr = strings.TrimSpace(strings.Join([]string{result.Stderr, "managed npm install completed but the installed " + binaryName + " executable did not report a version"}, "\n"))
 			}
 		}
 		cleanupManagedNPMStagingDirs(installPrefix, packageName)
@@ -225,6 +285,42 @@ func (s Service) runManagedNPMPackageAction(
 		}
 	}
 	return result, err
+}
+
+func (s Service) managedNPMPackageInstallReady(
+	ctx context.Context,
+	provider string,
+	spec ManagedNPMPackageInstallerSpec,
+	installPrefix string,
+	env []string,
+	registry string,
+) bool {
+	if !spec.VerifyBinary {
+		return true
+	}
+	env = withoutNPMRegistryEnv(env)
+	candidates := managedNPMBinPathCandidates(installPrefix, spec.BinaryName)
+	verificationOutput := ""
+	for _, candidate := range candidates {
+		if !s.executableFile(candidate) {
+			continue
+		}
+		output := s.runCLIVersionCommand(ctx, provider, candidate, env, s.installVerifyTimeout(), registry)
+		verificationOutput = truncateCodexProbeMessage(output)
+		version, _ := managednpm.ExtractVersion(output)
+		if strings.TrimSpace(version) != "" {
+			return true
+		}
+	}
+	slog.WarnContext(ctx,
+		"agent provider managed npm installed binary failed verification",
+		"event", "tutti.agent_provider.managed_npm.binary_verification_failed",
+		"provider", provider,
+		"binary", strings.TrimSpace(spec.BinaryName),
+		"candidates", candidates,
+		"output", verificationOutput,
+	)
+	return false
 }
 
 func cleanupManagedNPMStagingDirs(installPrefix, packageName string) {

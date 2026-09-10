@@ -257,6 +257,7 @@ type Service struct {
 	LookPath                    func(string) (string, error)
 	InstallCommand              func(context.Context, InstallCommandInput) (InstallCommandResult, error)
 	InstallTimeout              time.Duration
+	InstallVerifyTimeout        time.Duration
 	RunAuthStatusCommand        func(context.Context, ProviderSpec, string) (AuthInfo, bool)
 	runCursorAuthStatusCommand  func(context.Context, string, []string) (AuthInfo, string, bool)
 	AuthStatusCommandRetryDelay time.Duration
@@ -359,6 +360,7 @@ const defaultAuthStatusCommandRetryDelay = 150 * time.Millisecond
 // (e.g. a slow npmjs before a fast CN mirror) without prematurely killing a
 // registry that would have succeeded.
 const defaultInstallTimeout = 8 * time.Minute
+const defaultInstallVerifyTimeout = 15 * time.Second
 const defaultProbeReadyAfter = 600 * time.Millisecond
 const defaultProbeTimeout = 3 * time.Second
 const defaultProbeWaitDelay = 500 * time.Millisecond
@@ -826,13 +828,26 @@ func installActionErrorResult(result RunActionResult, err error, timeout time.Du
 		result.Message = err.Error()
 		return result
 	}
-	result.Message = err.Error()
+	if errors.Is(err, errInstalledCLINotDetected) {
+		result.ReasonCode = "installed_cli_not_detected"
+		result.Message = err.Error()
+		return result
+	}
+	if errors.Is(err, errInstalledAdapterNotDetected) {
+		result.ReasonCode = "installed_adapter_not_detected"
+		result.Message = err.Error()
+		return result
+	}
+	result.Message = firstNonBlank(result.Stderr, result.Stdout, err.Error())
 	result.ReasonCode = installerFailureReasonCode(installer, result.Message, "install_start_failed")
 	return result
 }
 
 func installerFailureReasonCode(installer InstallerSpec, message string, fallback string) string {
 	normalized := strings.ToLower(message)
+	if strings.Contains(normalized, strings.ToLower(installFallbackFailedMarker)) {
+		return "install_fallback_failed"
+	}
 	for reasonCode, markers := range installer.FailureReasonMarkers {
 		for _, marker := range markers {
 			if normalizedMarker := strings.ToLower(strings.TrimSpace(marker)); normalizedMarker != "" && strings.Contains(normalized, normalizedMarker) {
