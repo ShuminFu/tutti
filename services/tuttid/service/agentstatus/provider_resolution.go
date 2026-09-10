@@ -145,8 +145,11 @@ func (s Service) withPreferredClaudeCodeRuntime(ctx context.Context, spec Provid
 	}
 	resolver := s.commandResolver()
 	env := resolver.Env(spec.AdapterEnv)
-	if s.validClaudeCodeExecutable(ctx, spec, envValueForKey(env, claudeCodeExecutableEnv), env) != "" {
-		return spec
+	if preferred := s.validClaudeCodeExecutable(ctx, spec, envValueForKey(env, claudeCodeExecutableEnv), env); preferred != "" {
+		if claudeCodeAdapterExecutable(runtime.GOOS, spec, preferred) == preferred {
+			return spec
+		}
+		return preferClaudeCodeExecutable(spec, preferred, env)
 	}
 	if managed := s.managedClaudeCodeExecutable(); managed != "" {
 		return preferClaudeCodeExecutable(spec, managed, env)
@@ -160,15 +163,35 @@ func (s Service) withPreferredClaudeCodeRuntime(ctx context.Context, spec Provid
 }
 
 func preferClaudeCodeExecutable(spec ProviderSpec, executable string, env []string) ProviderSpec {
+	return preferClaudeCodeExecutableForPlatform(runtime.GOOS, spec, executable, env)
+}
+
+func preferClaudeCodeExecutableForPlatform(platform string, spec ProviderSpec, executable string, env []string) ProviderSpec {
 	pathValue := filepath.Dir(executable)
 	if inherited := managedruntime.EnvValue(env, "PATH"); inherited != "" {
 		pathValue += string(os.PathListSeparator) + inherited
 	}
 	spec.AdapterEnv = append(spec.AdapterEnv,
-		claudeCodeExecutableEnv+"="+executable,
+		claudeCodeExecutableEnv+"="+claudeCodeAdapterExecutable(platform, spec, executable),
 		"PATH="+pathValue,
 	)
 	return spec
+}
+
+func claudeCodeAdapterExecutable(platform string, spec ProviderSpec, executable string) string {
+	if platform != "windows" || strings.TrimSpace(spec.ExternalRegistryID) != "claude-acp" {
+		return executable
+	}
+	switch strings.ToLower(filepath.Ext(strings.TrimSpace(executable))) {
+	case ".cmd", ".bat":
+		// claude-agent-acp passes CLAUDE_CODE_EXECUTABLE directly to Node's
+		// child_process.spawn. Windows batch shims are shell scripts, not native
+		// executables, so that call fails with spawn EINVAL. Clearing the override
+		// lets the adapter use the matching native claude.exe bundled with its SDK.
+		return ""
+	default:
+		return executable
+	}
 }
 
 func (s Service) validClaudeCodeExecutable(ctx context.Context, spec ProviderSpec, path string, env []string) string {
