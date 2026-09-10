@@ -299,6 +299,28 @@ func (c *localProcessConnection) RecvContext(ctx context.Context) (ProcessFrame,
 	}
 }
 
+// Close grace budget. A provider child (claude-agent-acp → claude CLI) may be
+// in the middle of an OAuth refresh: the server has already rotated the
+// refresh token and only the child's pending keychain write makes the new
+// token durable. Killing it inside that window leaves a dead token on disk and
+// the next process wipes the login (invalid_grant). Stdin EOF already makes
+// the adapter dispose its sessions and exit on its own, and the Claude SDK
+// gives its CLI child 5s after SIGTERM before SIGKILL; the budgets below let
+// that chain finish instead of pre-empting it. Variables so tests can shrink
+// them.
+var (
+	processCloseInputGrace     = 5 * time.Second
+	processCloseTerminateGrace = 5 * time.Second
+	processCloseKillGrace      = 2 * time.Second
+)
+
+func (c *localProcessConnection) pid() int {
+	if c == nil || c.cmd == nil || c.cmd.Process == nil {
+		return 0
+	}
+	return c.cmd.Process.Pid
+}
+
 func (c *localProcessConnection) Close() error {
 	if c == nil {
 		return nil
@@ -306,12 +328,15 @@ func (c *localProcessConnection) Close() error {
 	c.closeOnce.Do(func() {
 		close(c.closing)
 		_ = c.CloseInput()
-		if !c.waitDone(250 * time.Millisecond) {
+		stage := "input_eof"
+		if !c.waitDone(processCloseInputGrace) {
+			stage = "terminate"
 			_ = c.Terminate()
 		}
-		if !c.waitDone(750 * time.Millisecond) {
+		if !c.waitDone(processCloseTerminateGrace) {
+			stage = "kill"
 			killErr := c.Kill()
-			if !c.waitDone(2 * time.Second) {
+			if !c.waitDone(processCloseKillGrace) {
 				if killErr != nil {
 					c.closeErr = killErr
 					return
@@ -320,6 +345,10 @@ func (c *localProcessConnection) Close() error {
 				return
 			}
 		}
+		slog.Info("agent session process closed",
+			"event", "agent_session.process.closed",
+			"stage", stage,
+			"pid", c.pid())
 	})
 	if c.closeErr != nil {
 		return c.closeErr

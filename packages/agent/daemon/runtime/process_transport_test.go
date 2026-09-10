@@ -241,11 +241,21 @@ func TestLocalProcessTransportPreservesFinalStderrBeforeClose(t *testing.T) {
 	}
 }
 
+func shrinkProcessCloseGrace(t *testing.T, input, terminate time.Duration) {
+	t.Helper()
+	prevInput, prevTerminate := processCloseInputGrace, processCloseTerminateGrace
+	processCloseInputGrace, processCloseTerminateGrace = input, terminate
+	t.Cleanup(func() {
+		processCloseInputGrace, processCloseTerminateGrace = prevInput, prevTerminate
+	})
+}
+
 func TestLocalProcessTransportCloseKillsProcessAfterGracefulShutdownFails(t *testing.T) {
 	shPath, err := exec.LookPath("sh")
 	if err != nil {
 		t.Skip("sh is unavailable")
 	}
+	shrinkProcessCloseGrace(t, 250*time.Millisecond, 750*time.Millisecond)
 
 	conn, err := NewLocalProcessTransport().Start(context.Background(), ProcessSpec{
 		Command: []string{shPath, "-c", "trap '' TERM; while true; do sleep 1; done"},
@@ -342,5 +352,45 @@ func writeRuntimeExecutable(t *testing.T, path string, contents string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(contents), 0o755); err != nil {
 		t.Fatalf("write executable %s: %v", path, err)
+	}
+}
+
+// A child that finishes its own shutdown work after stdin EOF (the OAuth
+// refresh write-back case) must not be signalled while inside the grace.
+func TestLocalProcessTransportCloseLetsChildFinishAfterInputEOF(t *testing.T) {
+	shPath, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("sh is unavailable")
+	}
+	marker := filepath.Join(t.TempDir(), "marker")
+	conn, err := NewLocalProcessTransport().Start(context.Background(), ProcessSpec{
+		Command: []string{shPath, "-c",
+			"trap 'echo signalled > \"$0\"; exit 1' TERM; cat >/dev/null; sleep 1.5; echo clean > \"$0\"", marker},
+	})
+	if err != nil {
+		t.Fatalf("start transport: %v", err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	var exitCode *int
+	for {
+		frame, err := conn.Recv()
+		if err != nil {
+			break
+		}
+		if frame.ExitCode != nil {
+			exitCode = frame.ExitCode
+		}
+	}
+	got, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("marker not written: %v", err)
+	}
+	if strings.TrimSpace(string(got)) != "clean" {
+		t.Fatalf("marker = %q, want clean (child was signalled inside the grace)", got)
+	}
+	if exitCode == nil || *exitCode != 0 {
+		t.Fatalf("exit code = %v, want 0", exitCode)
 	}
 }
