@@ -17,6 +17,7 @@ import type {
 } from "../agentsService.interface.ts";
 
 export interface DesktopAgentsServiceDependencies {
+  catalogFirst?: boolean;
   earlyAccessEnabled?: boolean;
   clearTimeout?: (timer: ReturnType<typeof setTimeout>) => void;
   isAgentTargetProviderGated?: (provider: string) => boolean;
@@ -145,11 +146,21 @@ export class DesktopAgentsService implements IAgentsService {
     if (this.snapshot.status === "ready") {
       return Promise.resolve(this.snapshot);
     }
-    return this.requestSnapshot(signal);
+    const catalogOnly =
+      this.dependencies.catalogFirst === true &&
+      this.snapshot.agents.length === 0;
+    const request = this.requestSnapshot(signal, !catalogOnly);
+    if (!catalogOnly) {
+      return request;
+    }
+    return request.then((snapshot) => {
+      void this.requestSnapshot(undefined, true).catch(() => undefined);
+      return snapshot;
+    });
   }
 
   refresh(signal?: AbortSignal): Promise<AgentsSnapshot> {
-    return this.requestSnapshot(signal);
+    return this.requestSnapshot(signal, true);
   }
 
   subscribe(listener: () => void): () => void {
@@ -159,21 +170,29 @@ export class DesktopAgentsService implements IAgentsService {
     };
   }
 
-  private requestSnapshot(signal?: AbortSignal): Promise<AgentsSnapshot> {
+  private requestSnapshot(
+    signal?: AbortSignal,
+    resolveAvailability = true
+  ): Promise<AgentsSnapshot> {
     if (this.loadPromise) {
       return this.loadPromise;
     }
     this.clearScheduledRetry();
-    const request = this.fetchSnapshot(signal).finally(() => {
-      if (this.loadPromise === request) {
-        this.loadPromise = null;
+    const request = this.fetchSnapshot(signal, resolveAvailability).finally(
+      () => {
+        if (this.loadPromise === request) {
+          this.loadPromise = null;
+        }
       }
-    });
+    );
     this.loadPromise = request;
     return request;
   }
 
-  private async fetchSnapshot(signal?: AbortSignal): Promise<AgentsSnapshot> {
+  private async fetchSnapshot(
+    signal?: AbortSignal,
+    resolveAvailability = true
+  ): Promise<AgentsSnapshot> {
     if (signal?.aborted) {
       return this.snapshot;
     }
@@ -186,7 +205,9 @@ export class DesktopAgentsService implements IAgentsService {
     });
     try {
       const [targetResponse, workspaceAgentResponse] = await Promise.all([
-        this.dependencies.tuttidClient.listAgentTargets(),
+        this.dependencies.tuttidClient.listAgentTargets(
+          resolveAvailability ? undefined : { resolveAvailability: false }
+        ),
         this.dependencies.tuttidClient.listWorkspaceAgents(
           this.dependencies.workspaceId
         )
@@ -271,7 +292,7 @@ export class DesktopAgentsService implements IAgentsService {
     const schedule = this.dependencies.setTimeout ?? setTimeout;
     this.retryTimer = schedule(() => {
       this.retryTimer = null;
-      void this.requestSnapshot().catch(() => undefined);
+      void this.load().catch(() => undefined);
     }, this.dependencies.retryDelayMs ?? 5_000);
     this.retryTimer.unref?.();
   }
@@ -353,14 +374,16 @@ export function mapAgentTargetsToPresentations(
       heroImageUrl: target.heroImageUrl?.trim() || null,
       availability: {
         status:
-          target.availability?.status === "not_installed"
-            ? "not_installed"
-            : target.availability?.status === "auth_required"
-              ? "auth_required"
-              : target.availability?.status === "unsupported" ||
-                  target.availability?.status === "unknown"
-                ? "unavailable"
-                : "ready"
+          isExtension && target.availability == null
+            ? "unavailable"
+            : target.availability?.status === "not_installed"
+              ? "not_installed"
+              : target.availability?.status === "auth_required"
+                ? "auth_required"
+                : target.availability?.status === "unsupported" ||
+                    target.availability?.status === "unknown"
+                  ? "unavailable"
+                  : "ready"
       },
       launchRefType: target.launchRef.type,
       name: target.name,

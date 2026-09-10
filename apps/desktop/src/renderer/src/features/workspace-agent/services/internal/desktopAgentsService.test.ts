@@ -49,6 +49,124 @@ test("desktop agents service publishes explicit idle, loading, and ready lifecyc
   assert.deepEqual(snapshots, ["loading", "ready"]);
 });
 
+test("embedded desktop agents service publishes the icon catalog before availability", async () => {
+  const availabilityRequest = createDeferred<{ targets: AgentTarget[] }>();
+  const options: Array<{ resolveAvailability?: boolean } | undefined> = [];
+  const catalogTarget: AgentTarget = {
+    createdAtUnixMs: 1780272000000,
+    enabled: true,
+    heroImageUrl: null,
+    iconKey: "extension:gemini",
+    iconUrl: "data:image/svg+xml;base64,gemini",
+    maskIconUrl: null,
+    id: "extension:gemini",
+    launchRef: {
+      extensionInstallationId: "gemini@1.0.3",
+      type: "agent_extension"
+    },
+    name: "Gemini CLI",
+    provider: "acp:gemini",
+    sortOrder: 700,
+    source: "system",
+    updatedAtUnixMs: 1780272000000
+  };
+  const service = new DesktopAgentsService({
+    catalogFirst: true,
+    earlyAccessEnabled: true,
+    tuttidClient: {
+      listAgentTargets(option) {
+        options.push(option);
+        return options.length === 1
+          ? Promise.resolve({ targets: [catalogTarget] })
+          : availabilityRequest.promise;
+      },
+      async listWorkspaceAgents() {
+        return { agents: [] };
+      }
+    },
+    workspaceId: "workspace-1"
+  });
+
+  const catalogSnapshot = await service.load();
+  assert.equal(catalogSnapshot.status, "ready");
+  assert.equal(catalogSnapshot.agents[0]?.iconUrl, catalogTarget.iconUrl);
+  assert.equal(catalogSnapshot.agents[0]?.availability.status, "unavailable");
+  assert.deepEqual(options[0], { resolveAvailability: false });
+  await waitFor(() => options.length === 2);
+  assert.equal(options[1], undefined);
+  assert.equal(service.getSnapshot().status, "loading");
+  assert.equal(service.getSnapshot().agents[0]?.iconUrl, catalogTarget.iconUrl);
+
+  availabilityRequest.resolve({
+    targets: [
+      {
+        ...catalogTarget,
+        availability: { status: "ready" }
+      }
+    ]
+  });
+  await waitFor(() => service.getSnapshot().status === "ready");
+  assert.equal(service.getSnapshot().agents[0]?.availability.status, "ready");
+});
+
+test("standalone desktop agents service keeps the single full directory load", async () => {
+  const options: Array<{ resolveAvailability?: boolean } | undefined> = [];
+  const service = new DesktopAgentsService({
+    tuttidClient: {
+      async listAgentTargets(option) {
+        options.push(option);
+        return { targets: [] };
+      },
+      async listWorkspaceAgents() {
+        return { agents: [] };
+      }
+    },
+    workspaceId: "workspace-1"
+  });
+
+  await service.load();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(options, [undefined]);
+});
+
+test("embedded availability refresh failure retains the catalog", async () => {
+  const retryCallbacks: Array<() => void> = [];
+  let requestCount = 0;
+  const target = createAgentTarget({
+    iconUrl: "data:image/svg+xml;base64,codex",
+    id: "local:codex",
+    name: "Codex",
+    provider: "codex",
+    sortOrder: 10
+  });
+  const service = new DesktopAgentsService({
+    catalogFirst: true,
+    setTimeout(callback) {
+      retryCallbacks.push(callback);
+      return 1 as unknown as ReturnType<typeof setTimeout>;
+    },
+    tuttidClient: {
+      async listAgentTargets() {
+        requestCount += 1;
+        if (requestCount > 1) {
+          throw new Error("availability probe failed");
+        }
+        return { targets: [target] };
+      },
+      async listWorkspaceAgents() {
+        return { agents: [] };
+      }
+    },
+    workspaceId: "workspace-1"
+  });
+
+  const catalogSnapshot = await service.load();
+  await waitFor(() => service.getSnapshot().status === "error");
+  assert.equal(service.getSnapshot().error, "availability probe failed");
+  assert.deepEqual(service.getSnapshot().agents, catalogSnapshot.agents);
+  assert.equal(retryCallbacks.length, 1);
+});
+
 test("desktop agents service publishes failures, retains cached data, and owns retry scheduling", async () => {
   const retryCallbacks: Array<() => void> = [];
   let shouldFail = false;
@@ -404,21 +522,13 @@ test("desktop agents service keeps stable extensions visible without Early Acces
     mapAgentTargetPresentationsToAgents(presentations).map(
       (agent) => agent.agentTargetId
     ),
-    [
-      "extension:deepseek-harness",
-      "extension:hermes",
-      "extension:kimi-code"
-    ]
+    ["extension:deepseek-harness", "extension:hermes", "extension:kimi-code"]
   );
   assert.deepEqual(
     mapAgentTargetPresentationsToAgents(presentations, {
       earlyAccessEnabled: false
     }).map((agent) => agent.agentTargetId),
-    [
-      "extension:deepseek-harness",
-      "extension:hermes",
-      "extension:kimi-code"
-    ]
+    ["extension:deepseek-harness", "extension:hermes", "extension:kimi-code"]
   );
   // Early Access on: the remaining extension also becomes launchable.
   assert.deepEqual(

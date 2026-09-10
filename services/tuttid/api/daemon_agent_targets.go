@@ -15,10 +15,11 @@ import (
 
 type AgentTargetService interface {
 	List(context.Context) ([]agenttargetbiz.Target, error)
+	ListWithOptions(context.Context, agenttargetservice.ListOptions) ([]agenttargetbiz.Target, error)
 	SetEnabled(context.Context, agenttargetservice.SetEnabledInput) (agenttargetbiz.Target, error)
 }
 
-func (api DaemonAPI) ListAgentTargets(ctx context.Context, _ tuttigenerated.ListAgentTargetsRequestObject) (tuttigenerated.ListAgentTargetsResponseObject, error) {
+func (api DaemonAPI) ListAgentTargets(ctx context.Context, request tuttigenerated.ListAgentTargetsRequestObject) (tuttigenerated.ListAgentTargetsResponseObject, error) {
 	if api.AgentTargetService == nil {
 		return tuttigenerated.ListAgentTargets503JSONResponse{
 			ServiceUnavailableErrorJSONResponse: serviceUnavailableError(
@@ -29,7 +30,10 @@ func (api DaemonAPI) ListAgentTargets(ctx context.Context, _ tuttigenerated.List
 			),
 		}, nil
 	}
-	targets, err := api.AgentTargetService.List(ctx)
+	resolveAvailability := request.Params.ResolveAvailability == nil || *request.Params.ResolveAvailability
+	targets, err := api.AgentTargetService.ListWithOptions(ctx, agenttargetservice.ListOptions{
+		ResolveAvailability: resolveAvailability,
+	})
 	if err != nil {
 		return tuttigenerated.ListAgentTargets502JSONResponse{
 			PreferencesOperationErrorJSONResponse: preferencesOperationError(

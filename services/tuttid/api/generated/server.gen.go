@@ -88,7 +88,7 @@ type ServerInterface interface {
 	VerifyAgentSessionReplayTransport(w http.ResponseWriter, r *http.Request, cassetteID openapi_types.UUID)
 	// List daemon-owned Agent Targets
 	// (GET /v1/agent-targets)
-	ListAgentTargets(w http.ResponseWriter, r *http.Request)
+	ListAgentTargets(w http.ResponseWriter, r *http.Request, params ListAgentTargetsParams)
 	// Enable or disable one daemon-owned system Agent Target
 	// (PATCH /v1/agent-targets/{agentTargetID}/enabled)
 	SetSystemAgentTargetEnabled(w http.ResponseWriter, r *http.Request, agentTargetID string)
@@ -1473,6 +1473,25 @@ func (siw *ServerInterfaceWrapper) VerifyAgentSessionReplayTransport(w http.Resp
 // ListAgentTargets operation middleware
 func (siw *ServerInterfaceWrapper) ListAgentTargets(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAgentTargetsParams
+
+	// ------------- Optional query parameter "resolveAvailability" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resolveAvailability", r.URL.Query(), &params.ResolveAvailability, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resolveAvailability"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resolveAvailability", Err: err})
+		}
+		return
+	}
+
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
@@ -1480,7 +1499,7 @@ func (siw *ServerInterfaceWrapper) ListAgentTargets(w http.ResponseWriter, r *ht
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListAgentTargets(w, r)
+		siw.Handler.ListAgentTargets(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13440,6 +13459,7 @@ func (response VerifyAgentSessionReplayTransport503JSONResponse) VisitVerifyAgen
 }
 
 type ListAgentTargetsRequestObject struct {
+	Params ListAgentTargetsParams
 }
 
 type ListAgentTargetsResponseObject interface {
@@ -40501,8 +40521,10 @@ func (sh *strictHandler) VerifyAgentSessionReplayTransport(w http.ResponseWriter
 }
 
 // ListAgentTargets operation middleware
-func (sh *strictHandler) ListAgentTargets(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ListAgentTargets(w http.ResponseWriter, r *http.Request, params ListAgentTargetsParams) {
 	var request ListAgentTargetsRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListAgentTargets(ctx, request.(ListAgentTargetsRequestObject))

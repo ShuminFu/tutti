@@ -65,6 +65,7 @@ export interface DesktopAgentGUIWorkbenchBodyProps {
   dockPreviewCache: WorkbenchDockPreviewCache;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
   onCapabilitySettingsRequest?: AgentGUIProps["hostActions"]["onCapabilitySettingsRequest"];
+  onAgentDirectoryRetry?: () => void;
   onOpenAgentConversationWindow?: (input: {
     agentSessionId: string;
     agentTargetId: string | null;
@@ -174,6 +175,7 @@ export function areDesktopAgentGUIWorkbenchBodyPropsEqual(
     previous.dockPreviewCache === next.dockPreviewCache &&
     previous.onLinkAction === next.onLinkAction &&
     previous.onCapabilitySettingsRequest === next.onCapabilitySettingsRequest &&
+    previous.onAgentDirectoryRetry === next.onAgentDirectoryRetry &&
     previous.onOpenAgentConversationWindow ===
       next.onOpenAgentConversationWindow &&
     previous.prefillPromptBootstrapRequest ===

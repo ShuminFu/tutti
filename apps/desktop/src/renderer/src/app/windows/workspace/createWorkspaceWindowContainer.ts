@@ -231,6 +231,9 @@ export async function createWorkspaceWindowContainer(): Promise<WorkspaceWindowC
   });
   const workspaceAgentServices = registerWorkspaceAgentServices(registry, {
     accountLogin: accountService,
+    catalogFirstAgentDirectory: new URLSearchParams(
+      globalThis.location?.search ?? ""
+    ).has("tuttiBootstrap"),
     clipboard: {
       writeText: (text) => navigator.clipboard.writeText(text)
     },

@@ -121,6 +121,7 @@ import type {
 
 export type {
   CreateTuttidClientInput,
+  ListAgentTargetsOptions,
   MobileRemoteAccessClient,
   TuttidClient,
   TuttidRequestOptions,
@@ -180,9 +181,9 @@ export function createTuttidClient(
         "Move Agent quick prompt request failed."
       );
     },
-    async listAgentTargets() {
+    async listAgentTargets(options = {}) {
       return unwrapData(
-        await listAgentTargets({ client }),
+        await listAgentTargets({ client, query: options }),
         "Agent targets request failed."
       );
     },

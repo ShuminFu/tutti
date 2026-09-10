@@ -27,6 +27,7 @@ export type {
 export {
   createTuttidClient,
   type CreateTuttidClientInput,
+  type ListAgentTargetsOptions,
   type MobileRemoteAccessClient,
   type TuttidClient
 } from "./tuttidClient.ts";

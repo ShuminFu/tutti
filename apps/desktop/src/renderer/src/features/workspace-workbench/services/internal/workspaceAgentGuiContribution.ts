@@ -82,7 +82,7 @@ export function createWorkspaceAgentGuiContribution(input: {
   hostWindowApi: Pick<DesktopHostWindowApi, "openAgentWindow">;
   i18n: WorkspaceWorkbenchDesktopI18nRuntime;
   onCapabilitySettingsRequest?: DesktopAgentGUIWorkbenchBodyProps["onCapabilitySettingsRequest"];
-  agentsService: Pick<IAgentsService, "getSnapshot" | "subscribe">;
+  agentsService: Pick<IAgentsService, "getSnapshot" | "load" | "subscribe">;
   allAgentsPresentation?: AgentGUIAllAgentsPresentation | null;
   renderAgentsEmpty?: AgentGUIAgentsEmptyRenderer;
   comingSoonAgentProviders?: readonly AgentGUIProvider[];
@@ -134,6 +134,9 @@ export function createWorkspaceAgentGuiContribution(input: {
   const sessionEngine = input.workspaceAgentActivityService.getSessionEngine(
     input.workspaceId
   );
+  const retryAgentDirectory = () => {
+    void input.agentsService.load().catch(() => undefined);
+  };
   const handleLinkAction: NonNullable<
     DesktopAgentGUIWorkbenchBodyProps["onLinkAction"]
   > = (action) => {
@@ -198,6 +201,7 @@ export function createWorkspaceAgentGuiContribution(input: {
       },
       onStateChange: (...args) => helpers.onStateChange(...args),
       onConversationRailLayoutChange: helpers.onConversationRailLayoutChange,
+      onAgentDirectoryRetry: retryAgentDirectory,
       agentsService: helpers.agentDirectory,
       allAgentsPresentation: input.allAgentsPresentation,
       renderAgentsEmpty: input.renderAgentsEmpty,

@@ -676,6 +676,13 @@ test("shared tuttid client preserves target, turn, goal, and auth route contract
     } satisfies ListAgentTargetsResponse);
     assertRequest(requests[0]!, expected("GET", "/v1/agent-targets"));
   });
+  await t.test("list targets without availability", async () => {
+    await client.listAgentTargets({ resolveAvailability: false });
+    assertRequest(requests[1]!, {
+      ...expected("GET", "/v1/agent-targets"),
+      query: { resolveAvailability: "false" }
+    });
+  });
   await t.test("update target", async () => {
     assert.equal(
       (await client.setSystemAgentTargetEnabled("local:tutti-agent", false))
@@ -683,7 +690,7 @@ test("shared tuttid client preserves target, turn, goal, and auth route contract
       false
     );
     assertRequest(
-      requests[1]!,
+      requests[2]!,
       expected("PATCH", "/v1/agent-targets/local%3Atutti-agent/enabled", {
         enabled: false
       })
@@ -695,7 +702,7 @@ test("shared tuttid client preserves target, turn, goal, and auth route contract
       { cancel: { canceled: true, reason: "turn_canceled" } }
     );
     assertRequest(
-      requests[2]!,
+      requests[3]!,
       expected(
         "POST",
         "/v1/workspaces/ws-1/agent-sessions/session-1/turns/turn-1/cancel"
@@ -706,11 +713,11 @@ test("shared tuttid client preserves target, turn, goal, and auth route contract
     await client.getWorkspaceAgentSessionGoal("ws-1", "session-1");
     await client.reconcileWorkspaceAgentSessionGoal("ws-1", "session-1");
     assertRequest(
-      requests[3]!,
+      requests[4]!,
       expected("GET", "/v1/workspaces/ws-1/agent-sessions/session-1/goal")
     );
     assertRequest(
-      requests[4]!,
+      requests[5]!,
       expected(
         "POST",
         "/v1/workspaces/ws-1/agent-sessions/session-1/goal/reconcile"
@@ -719,7 +726,7 @@ test("shared tuttid client preserves target, turn, goal, and auth route contract
   });
   await t.test("health auth", async () => {
     await client.getHealth();
-    assertRequest(requests[5]!, expected("GET", "/v1/health"));
+    assertRequest(requests[6]!, expected("GET", "/v1/health"));
   });
 });
 

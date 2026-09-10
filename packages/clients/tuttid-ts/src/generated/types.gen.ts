@@ -6353,7 +6353,14 @@ export type AttachEventStreamResponses = {
 export type ListAgentTargetsData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * Resolve extension runtime availability before returning. Set false to read only the durable target catalog.
+     *
+     * @default true
+     */
+    resolveAvailability?: boolean;
+  };
   url: "/v1/agent-targets";
 };
 

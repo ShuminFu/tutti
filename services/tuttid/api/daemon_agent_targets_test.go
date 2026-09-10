@@ -14,13 +14,22 @@ import (
 
 func TestDaemonAPIGeneratedRoutesListAgentTargets(t *testing.T) {
 	mux := http.NewServeMux()
+	var captured agenttargetservice.ListOptions
 	RegisterRoutes(mux, NewRoutes(DaemonAPI{
-		AgentTargetService: stubAgentTargetService{},
+		AgentTargetService: stubAgentTargetService{
+			listWithOptionsFn: func(_ context.Context, options agenttargetservice.ListOptions) ([]agenttargetbiz.Target, error) {
+				captured = options
+				return agenttargetbiz.DefaultSystemTargets(1), nil
+			},
+		},
 	}))
 
 	recorder := performGeneratedRouteRequest(t, mux, http.MethodGet, "/v1/agent-targets", nil)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if !captured.ResolveAvailability {
+		t.Fatal("default request must resolve availability")
 	}
 
 	var response tuttigenerated.ListAgentTargetsResponse
@@ -42,6 +51,30 @@ func TestDaemonAPIGeneratedRoutesListAgentTargets(t *testing.T) {
 		if err != nil || target.Id != wantIDs[index] || launchRef.Type != tuttigenerated.AgentTargetBuiltinLocalLaunchRefTypeBuiltinLocal {
 			t.Fatalf("target[%d] = %#v, want id %q builtin_local", index, target, wantIDs[index])
 		}
+	}
+}
+
+func TestDaemonAPIGeneratedRoutesListAgentTargetsCanSkipAvailability(t *testing.T) {
+	mux := http.NewServeMux()
+	called := false
+	RegisterRoutes(mux, NewRoutes(DaemonAPI{
+		AgentTargetService: stubAgentTargetService{
+			listWithOptionsFn: func(_ context.Context, options agenttargetservice.ListOptions) ([]agenttargetbiz.Target, error) {
+				called = true
+				if options.ResolveAvailability {
+					t.Fatal("resolveAvailability = true, want false")
+				}
+				return agenttargetbiz.DefaultSystemTargets(1), nil
+			},
+		},
+	}))
+
+	recorder := performGeneratedRouteRequest(t, mux, http.MethodGet, "/v1/agent-targets?resolveAvailability=false", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if !called {
+		t.Fatal("agent target service was not called")
 	}
 }
 

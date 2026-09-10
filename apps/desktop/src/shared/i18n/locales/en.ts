@@ -165,6 +165,10 @@ export const en = {
       switchWorkspaceUnavailable: "Unable to load workspaces right now."
     },
     agentGui: {
+      agentDirectoryLoadFailed: "Could not load Agents. Try again",
+      agentDirectoryRefreshFailed:
+        "Agent availability could not be refreshed. Try again",
+      retryAgentDirectory: "Retry Agent directory",
       sessionReplay: {
         empty: "No recordings",
         failed: "Session recording or replay failed",

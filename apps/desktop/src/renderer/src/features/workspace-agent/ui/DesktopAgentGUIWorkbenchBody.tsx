@@ -118,6 +118,7 @@ function DesktopAgentGUISurfaceImpl({
   dockPreviewCache,
   onLinkAction,
   onCapabilitySettingsRequest,
+  onAgentDirectoryRetry,
   onOpenAgentConversationWindow,
   onStateChange,
   prefillPromptBootstrapRequest = null,
@@ -160,14 +161,64 @@ function DesktopAgentGUISurfaceImpl({
     [embeddedDintalDock, rawAgentDirectory]
   );
   const agents = agentDirectory.agents;
-  const effectiveDefaultAgentTargetId =
-    agents.some((agent) => agent.agentTargetId === defaultAgentTargetId)
-      ? defaultAgentTargetId
-      : (agents.find((agent) => agent.availability.status === "ready")
-          ?.agentTargetId ?? null);
+  const effectiveDefaultAgentTargetId = agents.some(
+    (agent) => agent.agentTargetId === defaultAgentTargetId
+  )
+    ? defaultAgentTargetId
+    : (agents.find((agent) => agent.availability.status === "ready")
+        ?.agentTargetId ?? null);
   const replayRuntimeActive =
     runtimeApi?.isAgentSessionReplayRuntime?.() === true;
   const { i18n, locale } = useTranslation();
+  const retryAgentDirectoryLabel = i18n.t(
+    "workspace.agentGui.retryAgentDirectory"
+  );
+  const agentDirectoryFailed =
+    embeddedDintalDock && agentDirectory.status === "error";
+  const renderAgentDirectoryError = useCallback(
+    () => (
+      <button
+        type="button"
+        aria-label={i18n.t("workspace.agentGui.agentDirectoryLoadFailed")}
+        className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--line-2)] text-sm text-[var(--state-danger)] hover:bg-[var(--transparency-hover)]"
+        data-testid="embedded-agent-directory-retry"
+        onClick={onAgentDirectoryRetry}
+        title={retryAgentDirectoryLabel}
+      >
+        ↻
+      </button>
+    ),
+    [i18n, onAgentDirectoryRetry, retryAgentDirectoryLabel]
+  );
+  const effectiveRenderAgentsEmpty =
+    agentDirectoryFailed && agentDirectory.agents.length === 0
+      ? renderAgentDirectoryError
+      : renderAgentsEmpty;
+  const showAgentDirectoryRefreshWarning =
+    agentDirectoryFailed && agentDirectory.agents.length > 0;
+  const effectiveRenderSidebarFooter = showAgentDirectoryRefreshWarning
+    ? (
+        context: Parameters<
+          NonNullable<AgentGUIProps["renderSlots"]["sidebarFooter"]>
+        >[0]
+      ) => (
+        <>
+          {renderSidebarFooter?.(context)}
+          <button
+            type="button"
+            aria-label={i18n.t(
+              "workspace.agentGui.agentDirectoryRefreshFailed"
+            )}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-sm text-[var(--state-warning)] hover:bg-[var(--transparency-hover)]"
+            data-testid="embedded-agent-directory-refresh-retry"
+            onClick={onAgentDirectoryRetry}
+            title={retryAgentDirectoryLabel}
+          >
+            !
+          </button>
+        </>
+      )
+    : renderSidebarFooter;
   const commerceEnabled = hasDesktopLocalTuttiAgent(agents);
   const { accountState, handleAgentConfigMenuOpen, renderAgentConfigAccount } =
     useDesktopAgentConfigCommerce(commerceEnabled);
@@ -202,8 +253,7 @@ function DesktopAgentGUISurfaceImpl({
     (agent) => agent.agentTargetId === persistedAgentTargetId
   )?.provider;
   const rawWorkbenchState =
-    embeddedDintalDock &&
-    persistedAgentProvider === "tutti-agent"
+    embeddedDintalDock && persistedAgentProvider === "tutti-agent"
       ? {
           ...persistedWorkbenchState,
           agentTargetId: effectiveDefaultAgentTargetId,
@@ -742,7 +792,7 @@ function DesktopAgentGUISurfaceImpl({
     renderSlots: {
       agentConfigAccount: renderAgentConfigAccount,
       composerFooterAccessory: renderComposerFooterAccessory,
-      sidebarFooter: renderSidebarFooter
+      sidebarFooter: effectiveRenderSidebarFooter
     }
   });
 
@@ -763,7 +813,7 @@ function DesktopAgentGUISurfaceImpl({
       <AgentGUI
         agentDirectory={agentDirectory}
         allAgentsPresentation={allAgentsPresentation}
-        renderAgentsEmpty={renderAgentsEmpty}
+        renderAgentsEmpty={effectiveRenderAgentsEmpty}
         agentActivityRuntime={agentActivityRuntime}
         agentHostApi={agentHostApiWithToast}
         tuttiModePlanReviewRuntime={

@@ -341,8 +341,9 @@ func (s stubAgentSessionService) SubmitInteractive(ctx context.Context, ref agen
 }
 
 type stubAgentTargetService struct {
-	listFn       func(context.Context) ([]agenttargetbiz.Target, error)
-	setEnabledFn func(context.Context, agenttargetservice.SetEnabledInput) (agenttargetbiz.Target, error)
+	listFn            func(context.Context) ([]agenttargetbiz.Target, error)
+	listWithOptionsFn func(context.Context, agenttargetservice.ListOptions) ([]agenttargetbiz.Target, error)
+	setEnabledFn      func(context.Context, agenttargetservice.SetEnabledInput) (agenttargetbiz.Target, error)
 }
 
 type stubTuttiAgentReadiness struct {
@@ -367,6 +368,13 @@ func (s stubAgentTargetService) List(ctx context.Context) ([]agenttargetbiz.Targ
 		return agenttargetbiz.DefaultSystemTargets(1), nil
 	}
 	return s.listFn(ctx)
+}
+
+func (s stubAgentTargetService) ListWithOptions(ctx context.Context, options agenttargetservice.ListOptions) ([]agenttargetbiz.Target, error) {
+	if s.listWithOptionsFn != nil {
+		return s.listWithOptionsFn(ctx, options)
+	}
+	return s.List(ctx)
 }
 
 func (s stubAgentTargetService) SetEnabled(ctx context.Context, input agenttargetservice.SetEnabledInput) (agenttargetbiz.Target, error) {

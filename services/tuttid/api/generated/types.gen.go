@@ -10161,6 +10161,12 @@ type GetAgentProviderStatusesParams struct {
 	RefreshUpdates *bool `form:"refreshUpdates,omitempty" json:"refreshUpdates,omitempty"`
 }
 
+// ListAgentTargetsParams defines parameters for ListAgentTargets.
+type ListAgentTargetsParams struct {
+	// ResolveAvailability Resolve extension runtime availability before returning. Set false to read only the durable target catalog.
+	ResolveAvailability *bool `form:"resolveAvailability,omitempty" json:"resolveAvailability,omitempty"`
+}
+
 // ListCliCapabilitiesParams defines parameters for ListCliCapabilities.
 type ListCliCapabilitiesParams struct {
 	// WorkspaceID Optional workspace context. When omitted, the daemon uses the startup workspace.

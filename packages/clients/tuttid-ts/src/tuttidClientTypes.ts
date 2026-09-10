@@ -211,6 +211,10 @@ export type AgentCommandRequestOptions = TuttidRequestOptions &
 export type TuttidTrackEvent = TrackEvent;
 export type TuttidTrackEventsRequest = TrackEventsRequest;
 
+export interface ListAgentTargetsOptions {
+  resolveAvailability?: boolean;
+}
+
 export interface MobileRemoteAccessClient {
   startMobileRemotePairing(): Promise<MobileRemotePairingStartResponse>;
   getMobileRemotePairingChallenge(
@@ -245,7 +249,9 @@ export interface TuttidClient
   moveAgentQuickPrompt(
     request: MoveAgentQuickPromptRequest
   ): Promise<AgentQuickPromptListResponse>;
-  listAgentTargets(): Promise<ListAgentTargetsResponse>;
+  listAgentTargets(
+    options?: ListAgentTargetsOptions
+  ): Promise<ListAgentTargetsResponse>;
   setSystemAgentTargetEnabled(
     agentTargetID: string,
     enabled: boolean

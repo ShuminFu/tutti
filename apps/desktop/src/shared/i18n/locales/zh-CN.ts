@@ -162,6 +162,9 @@ export const zhCN = {
       switchWorkspaceUnavailable: "暂时无法加载工作区列表。"
     },
     agentGui: {
+      agentDirectoryLoadFailed: "Agent 目录加载失败，请重试",
+      agentDirectoryRefreshFailed: "Agent 可用状态刷新失败，请重试",
+      retryAgentDirectory: "重试 Agent 目录",
       sessionReplay: {
         empty: "暂无录制",
         failed: "会话录制或回放失败",

@@ -782,6 +782,14 @@ paths:
         - agent-target
       summary: List daemon-owned Agent Targets
       description: Returns durable Agent Target records. The launch ref is a controlled union and not a free-form configuration blob.
+      parameters:
+        - name: resolveAvailability
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: Resolve extension runtime availability before returning. Set false to read only the durable target catalog.
       responses:
         "200":
           description: Agent Targets

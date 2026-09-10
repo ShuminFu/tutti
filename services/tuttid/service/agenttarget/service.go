@@ -37,12 +37,20 @@ type SetEnabledInput struct {
 	Enabled bool
 }
 
+type ListOptions struct {
+	ResolveAvailability bool
+}
+
 func (s Service) List(ctx context.Context) ([]agenttargetbiz.Target, error) {
+	return s.ListWithOptions(ctx, ListOptions{ResolveAvailability: true})
+}
+
+func (s Service) ListWithOptions(ctx context.Context, options ListOptions) ([]agenttargetbiz.Target, error) {
 	if s.Store == nil {
 		return nil, errors.New("agent target store is not configured")
 	}
 	targets, err := s.Store.ListAgentTargets(ctx)
-	if err != nil || s.AvailabilityResolver == nil {
+	if err != nil || !options.ResolveAvailability || s.AvailabilityResolver == nil {
 		return targets, err
 	}
 	for index := range targets {

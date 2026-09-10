@@ -1715,6 +1715,16 @@ idle | loading | ready | error
 
 `ready` may contain an authoritative empty list. `error` may retain the last successful snapshot. Components must not infer loading from `agents.length`.
 
+Embedded Desktop may split its first directory read into two phases. It first
+reads the durable Agent Target catalog without resolving extension runtime
+availability and publishes identity, ordering, and icons together with
+Workspace Agents. An extension target whose availability is omitted in this
+phase is unavailable, never ready. Desktop then refreshes the full directory
+in the background; loading and failure retain the catalog snapshot, while a
+failure is exposed as a non-blocking retry in the Provider Rail. Standalone
+Desktop keeps the single full read. Page readiness, directory readiness, and
+Agent runtime readiness remain separate contracts.
+
 One-shot Desktop surfaces that emit Agent identity, such as outcome
 notifications, start and await their own Agent Directory load attempt before
 resolving presentation. They must not depend on an AgentGUI or Workbench React

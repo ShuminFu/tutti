@@ -42,6 +42,7 @@ import {
 } from "./agentQuickPromptService.interface.ts";
 
 export interface WorkspaceAgentServiceRegistrationInput {
+  catalogFirstAgentDirectory?: boolean;
   accountLogin: { startLogin(): Promise<void> };
   clipboard: { writeText(text: string): Promise<void> };
   desktopPreferencesService: IDesktopPreferencesService;
@@ -130,6 +131,7 @@ export function registerWorkspaceAgentServices(
   startManagedAgentInstallBootstraps(agentProviderStatusService);
   const preferencesStore = input.desktopPreferencesService.store;
   const agentsService = new DesktopAgentsService({
+    catalogFirst: input.catalogFirstAgentDirectory,
     earlyAccessEnabled: isFeatureEnabled(
       preferencesStore.featureFlags,
       EARLY_ACCESS_AGENT_INTEGRATIONS_FLAG

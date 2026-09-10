@@ -49,6 +49,29 @@ func TestServiceListResolvesOnlyExtensionTargetAvailability(t *testing.T) {
 	}
 }
 
+func TestServiceListWithoutAvailabilityReturnsDurableCatalog(t *testing.T) {
+	resolver := &availabilityResolverStub{}
+	store := &agentTargetStoreStub{targets: map[string]agenttargetbiz.Target{
+		"extension": {
+			ID: "extension", Provider: "acp:gemini", LaunchRefJSON: `{"type":"agent_extension","extensionInstallationId":"gemini@1.0.0"}`,
+			Name: "Gemini", IconKey: "extension:gemini", IconURL: "data:image/svg+xml;base64,icon", Enabled: true, Source: agenttargetbiz.SourceSystem,
+		},
+	}}
+	targets, err := (Service{Store: store, AvailabilityResolver: resolver}).ListWithOptions(
+		context.Background(),
+		ListOptions{ResolveAvailability: false},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolver.resolved) != 0 {
+		t.Fatalf("resolved targets = %#v, want none", resolver.resolved)
+	}
+	if len(targets) != 1 || targets[0].IconURL != "data:image/svg+xml;base64,icon" || targets[0].IconKey != "extension:gemini" {
+		t.Fatalf("catalog targets = %#v", targets)
+	}
+}
+
 func (s *agentTargetStoreStub) ListAgentTargets(context.Context) ([]agenttargetbiz.Target, error) {
 	result := make([]agenttargetbiz.Target, 0, len(s.targets))
 	for _, target := range s.targets {
