@@ -1,4 +1,5 @@
 export {
+  agentGuiWorkbenchGoHomeActivationType as desktopAgentGUIGoHomeActivationType,
   agentGuiWorkbenchOpenSessionActivationType as desktopAgentGUIOpenSessionActivationType,
   agentGuiWorkbenchPrefillPromptActivationType as desktopAgentGUIPrefillPromptActivationType,
   type AgentGuiWorkbenchComposerOverridesByProvider as DesktopAgentGUIComposerOverridesByProvider,

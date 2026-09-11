@@ -89,6 +89,7 @@ export type {
   ResolveAgentGuiWorkbenchSessionTitleInput
 } from "./sessionTitle.ts";
 export {
+  agentGuiWorkbenchGoHomeActivationType,
   agentGuiWorkbenchOpenSessionActivationType,
   agentGuiWorkbenchPrefillPromptActivationType,
   type AgentGuiWorkbenchComposerOverrides,

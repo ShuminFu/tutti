@@ -41,6 +41,7 @@ import {
   projectDesktopAgentGUIWorkbenchState,
   type DesktopAgentGUINodeState
 } from "../desktopAgentGUINodeState";
+import { consumeDesktopAgentGUIGoHomeActivation } from "../services/desktopAgentGUIGoHomeActivation.ts";
 import { consumeDesktopAgentGUIOpenSessionActivation } from "../services/desktopAgentGUIOpenSessionActivation.ts";
 import type { DesktopAgentGUIOpenSessionComposerRequest } from "../services/desktopAgentGUIOpenSessionComposerActivation.ts";
 import {
@@ -406,6 +407,7 @@ function DesktopAgentGUISurfaceImpl({
     );
   const handledOpenSessionActivationSequenceRef = useRef<number | null>(null);
   const handledPrefillPromptActivationSequenceRef = useRef<number | null>(null);
+  const handledGoHomeActivationSequenceRef = useRef<number | null>(null);
   // onStateChange is recreated on every host render; pin it so the writer stays
   // referentially stable and effects don't resubscribe each render.
   const onStateChangeRef = useRef(onStateChange);
@@ -540,6 +542,32 @@ function DesktopAgentGUISurfaceImpl({
       }
       setPrefillPromptRequest(request);
     }
+  }, [surface.activation, surface.host, surface.nodeId, handleUpdateNode]);
+
+  // 宿主要求「回首页」（分栏覆盖层单栏态的 ✕）：只把当前会话清空，草稿 / provider /
+  // agentTarget 一概不动。清空这个字段就够了 —— 选择控制器盯着它，读到空会 unactivate
+  // 旧会话、退回落地页；顺带把它从工作台持久化状态里抹掉，重进不会再被恢复出来。
+  useEffect(() => {
+    const request = consumeDesktopAgentGUIGoHomeActivation({
+      activation: surface.activation,
+      clearNodeActivation: surface.host.clearNodeActivation?.bind(surface.host),
+      handledSequence: handledGoHomeActivationSequenceRef.current,
+      markHandled: (sequence) => {
+        handledGoHomeActivationSequenceRef.current = sequence;
+      },
+      nodeId: surface.nodeId
+    });
+    if (!request) {
+      return;
+    }
+    handleUpdateNode((current) =>
+      current.lastActiveAgentSessionId === null
+        ? current
+        : {
+            ...current,
+            lastActiveAgentSessionId: null
+          }
+    );
   }, [surface.activation, surface.host, surface.nodeId, handleUpdateNode]);
 
   const handleOpenConversationWindow = useDesktopAgentGUIOpenConversationWindow(

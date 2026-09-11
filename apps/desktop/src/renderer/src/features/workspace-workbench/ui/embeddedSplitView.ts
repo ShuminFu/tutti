@@ -29,6 +29,7 @@ import {
   type SplitSide
 } from "@tutti-os/agent-gui/conversation-rail-projection";
 import {
+  agentGuiWorkbenchGoHomeActivationType,
   agentGuiWorkbenchOpenSessionActivationType,
   workspaceAgentGuiNodeID
 } from "../services/workspaceAgentGuiLaunch.ts";
@@ -412,6 +413,11 @@ export function createEmbeddedSplitViewController(
   // 下一次 reduce 就会把右栏顶到左边、分栏整个塌掉。对外（栏头、配对、侧栏的
   // 「正在显示」标记）一律按空处理，等窗口报出新会话号再换槽。
   const freshNodeIds = new Set<string>();
+  // 已经发过「回首页」、还没看到窗口把会话号清掉的那些窗口：nodeId → 请它关掉的
+  // 那条会话号。窗口自己的 `lastActiveAgentSessionId` 要等宿主状态一来一回才会变空，
+  // 这中间 `syncFromNodes` 读到的仍是旧号，不挡就会把刚关掉的会话又认回槽里
+  // （表现：✕ 点了没反应，还停在这条会话）。
+  const goingHomeByNodeId = new Map<string, string>();
 
   function surfaceWidth(): number {
     const size =
@@ -571,6 +577,7 @@ export function createEmbeddedSplitViewController(
   }
 
   function activate(nodeId: string, agentSessionId: string): void {
+    goingHomeByNodeId.delete(nodeId);
     sessionIdByNodeId.set(nodeId, agentSessionId);
     host.activateNode(
       { nodeId },
@@ -679,6 +686,19 @@ export function createEmbeddedSplitViewController(
    * 空槽只表示「还没选会话」（首页态），绝不能因此把它关掉；只有右栏窗口由分栏
    * 自己起、自己关。
    */
+  /**
+   * 请这个窗口退回首页态（新建会话落地页）。单栏下栏头的 ✕ 关的是**会话**，可左栏
+   * 那个窗口是嵌入模式的锚、不能关，所以只能反过来告诉它「别再显示这条了」。
+   * 宿主这边先把自己记的会话号抹掉，免得下一次 applyLayout 以为窗口还停在旧会话上。
+   */
+  function goHome(nodeId: string): void {
+    const shown = sessionIdByNodeId.get(nodeId) ?? null;
+    if (shown === null) return;
+    goingHomeByNodeId.set(nodeId, shown);
+    sessionIdByNodeId.delete(nodeId);
+    host.activateNode({ nodeId }, { type: agentGuiWorkbenchGoHomeActivationType });
+  }
+
   function applyLayout(
     next: SplitLayoutState,
     options: { persist: boolean }
@@ -717,6 +737,10 @@ export function createEmbeddedSplitViewController(
       } else {
         launchPane("left");
       }
+    } else if (nodeIdBySide.left) {
+      // 左槽空 = 首页态。左栏窗口不能关（它是嵌入模式的锚），所以要显式请它回首页；
+      // 不请的话它照旧显示着刚关掉的那条会话，`syncFromNodes` 再把它认回槽里。
+      goHome(nodeIdBySide.left);
     }
 
     focusActivePane();
@@ -959,10 +983,13 @@ export function createEmbeddedSplitViewController(
       const observed = sessions.read(node);
       if (!observed) {
         // 报过真号之后又读成空 = 用户在这个窗口点了「新建会话」。只是刚起来还没
-        // 初始化的窗口不算（否则右栏刚 launch 就会被当成空栏，落下即配对那一步会被跳过）。
+        // 初始化的窗口不算（否则右栏刚 launch 就被当成空栏，落下即配对那一步会被跳过）。
+        goingHomeByNodeId.delete(nodeId);
         if (settledNodeIds.has(nodeId)) freshNodeIds.add(nodeId);
         continue;
       }
+      // 刚请它回首页、它还没把旧号清掉：这一拍读到的旧号不是「用户切了会话」。
+      if (goingHomeByNodeId.get(nodeId) === observed) continue;
       settledNodeIds.add(nodeId);
       freshNodeIds.delete(nodeId);
       if (observed === panes[side] || observed === panes[otherSide(side)]) continue;

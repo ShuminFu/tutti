@@ -129,7 +129,11 @@ function makeController(
 
 function activations(fake: FakeHost): { nodeId: string; sessionId: string }[] {
   return fake.calls
-    .filter((call) => call.kind === "activate")
+    .filter(
+      (call) =>
+        call.kind === "activate" &&
+        (call.args[1] as { type: string }).type === "agent-gui:open-session"
+    )
     .map((call) => ({
       nodeId: (call.args[0] as { nodeId: string }).nodeId,
       sessionId: (call.args[1] as { payload: { agentSessionId: string } })
@@ -1049,4 +1053,45 @@ test("dispose 之后不再响应配对表广播", async () => {
   await Promise.resolve();
 
   assert.equal(lists, listsBefore);
+});
+
+test("closing the only pane sends the window home instead of leaving it on the session", async () => {
+  // 真机：单栏栏头的 ✕ 点了像没反应 —— 栏头没了、正文还停在刚关掉的那条会话。
+  // 左栏窗口是嵌入模式的锚，不能关，所以要显式请它回首页；不请的话它照旧报着
+  // 旧会话号，syncFromNodes 下一拍就把那条认回左槽。
+  const fake = createFakeHost({ seed: ["agent-left"] });
+  const observedByNode = new Map<string, string>([["agent-left", "session-a"]]);
+  const controller = makeController(fake, {
+    sessions: { read: (node) => observedByNode.get(node.id) ?? null }
+  });
+  await controller.adopt(["agent-left"]);
+  assert.equal(controller.getSnapshot().panes.left?.sessionId, "session-a");
+  fake.calls.length = 0;
+
+  await controller.closePane("left");
+
+  assert.deepEqual(
+    fake.calls
+      .filter((call) => call.kind === "activate")
+      .map((call) => [
+        (call.args[0] as { nodeId: string }).nodeId,
+        (call.args[1] as { type: string }).type
+      ]),
+    [["agent-left", "agent-gui:go-home"]]
+  );
+  assert.equal(controller.getSnapshot().panes.left, null);
+  assert.deepEqual(
+    fake.calls.filter((call) => call.kind === "close").map((call) => call.args),
+    []
+  );
+
+  // 窗口还没把会话号清掉的那一拍：旧号不算「用户切了会话」。
+  fake.notify();
+  assert.equal(controller.getSnapshot().panes.left, null);
+
+  // 清掉之后仍然是首页态。
+  observedByNode.delete("agent-left");
+  fake.notify();
+  assert.equal(controller.getSnapshot().panes.left, null);
+  controller.dispose();
 });

@@ -7,6 +7,13 @@ export const agentGuiWorkbenchOpenSessionActivationType =
 export const agentGuiWorkbenchPrefillPromptActivationType =
   "agent-gui:prefill-prompt";
 
+/**
+ * 宿主要求这个窗口「回首页」：清掉当前会话，退回新建会话的落地页。
+ * 和 prefill-prompt 的区别是它不带草稿、不换 provider/target——纯粹是
+ * 「这个窗口现在不该再显示任何一条会话了」。分栏覆盖层的 ✕（单栏态）用它。
+ */
+export const agentGuiWorkbenchGoHomeActivationType = "agent-gui:go-home";
+
 export interface AgentGuiWorkbenchOpenSessionComposerAppend {
   draftPrompt: string;
   focusComposer?: boolean;
