@@ -365,41 +365,45 @@ export function WorkspaceSettingsTrigger({
   return (
     <>
       <WorkspaceConnectorMarketDialogHost />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            aria-label={t("workspace.settings.trigger")}
-            className="inline-flex"
-          >
-            <Button
-              data-dintaldock-settings-trigger={embedded ? "true" : undefined}
-              ref={triggerRef}
-              aria-expanded={settingsState.open}
+      {/* 嵌入态（DinTalDock）不画这枚齿轮：它原本浮在正文右上角，是那里唯一的
+          浮动按钮，既压着转录内容，也和分栏栏头右侧那排图标撞在一起。设置本身
+          没有被砍掉 —— provider 栏底部的 ⋯ 里就有一条 Settings，走的是下面
+          `useWorkspaceSettingsPanelRequest` 那条 deep-link 通道，所以这个组件
+          必须继续挂着（面板和请求桥都在它身上）。 */}
+      {embedded ? null : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
               aria-label={t("workspace.settings.trigger")}
-              className={cn(
-                "text-[var(--workbench-chrome-foreground)]",
-                settingsState.open &&
-                  "text-[var(--workbench-chrome-active-foreground)]"
-              )}
-              size="icon-sm"
-              title={t("workspace.settings.trigger")}
-              type="button"
-              variant="ghost"
-              onClick={() =>
-                settingsService.openPanel(
-                  { id: workspace.id },
-                  embedded
-                    ? { section: "agent", pane: "agents" }
-                    : { section: "general" }
-                )
-              }
+              className="inline-flex"
             >
-              <SettingsIcon className="size-4" />
-            </Button>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>{t("workspace.settings.trigger")}</TooltipContent>
-      </Tooltip>
+              <Button
+                ref={triggerRef}
+                aria-expanded={settingsState.open}
+                aria-label={t("workspace.settings.trigger")}
+                className={cn(
+                  "text-[var(--workbench-chrome-foreground)]",
+                  settingsState.open &&
+                    "text-[var(--workbench-chrome-active-foreground)]"
+                )}
+                size="icon-sm"
+                title={t("workspace.settings.trigger")}
+                type="button"
+                variant="ghost"
+                onClick={() =>
+                  settingsService.openPanel(
+                    { id: workspace.id },
+                    { section: "general" }
+                  )
+                }
+              >
+                <SettingsIcon className="size-4" />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{t("workspace.settings.trigger")}</TooltipContent>
+        </Tooltip>
+      )}
       <WorkspaceSettingsPanel
         embedded={embedded}
         onOpenExternalAgentImport={onOpenExternalAgentImport}

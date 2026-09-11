@@ -17,7 +17,7 @@ export interface EmbeddedSplitPaneHeaderMenuItem {
 }
 
 export interface EmbeddedSplitPaneHeaderModel {
-  /** ✕ 的无障碍名。 */
+  /** ✕ 的无障碍名：分栏时是「关闭此栏」，单栏时这一下关的是会话本身。 */
   closeLabel: string;
   /** 焦点栏：标题加重；非焦点栏的正文由 CSS 按 data 属性压暗，这里只给判据。 */
   focused: boolean;
@@ -43,6 +43,8 @@ export interface EmbeddedSplitPaneHeaderModel {
 
 export interface EmbeddedSplitPaneHeaderLabels {
   closePane: string;
+  /** 单栏的 ✕：关掉的是这条会话（退回首页），不是「这一栏」。 */
+  closeSession: string;
   menu: string;
   pair: string;
   resetRatio: string;
@@ -53,8 +55,15 @@ export interface EmbeddedSplitPaneHeaderLabels {
 }
 
 /**
- * 每栏一条栏头。没有分栏（右栏为空）时返回空数组——单栏时工作台自己的界面就够了，
- * 我们不该在上面再叠一条。折叠态（主区太窄，只显示焦点栏）只给焦点栏一条、占满整宽。
+ * 每栏一条栏头。左栏为空（首页态，还没选会话）时返回空数组——没有「这是谁」
+ * 可写，画一条空栏头只是白占 44px。
+ *
+ * 单栏（右栏为空）时给一条占满整宽的栏头：嵌入态里补丁 0106 已经把上游自己那条
+ * 44px 头行整条去掉，不补这一条的话顶上就没有任何地方写当前是哪条会话。它上面
+ * 只留 ✕（关掉当前会话、退回首页），链条与 ⋯ 都是「两栏之间」的动作，单栏下
+ * 无事可做，所以整枚不画（`pairingState: null` / `menuItems: []`）。
+ *
+ * 折叠态（主区太窄，只显示焦点栏）仍是两栏布局，只给焦点栏一条、占满整宽。
  */
 export function buildEmbeddedSplitPaneHeaders(
   snapshot: EmbeddedSplitViewSnapshot | null,
@@ -62,34 +71,41 @@ export function buildEmbeddedSplitPaneHeaders(
 ): readonly EmbeddedSplitPaneHeaderModel[] {
   if (snapshot === null) return [];
   const { left, right } = snapshot.panes;
-  if (left === null || right === null) return [];
+  if (left === null) return [];
+  const split = right !== null;
 
   const pairingState =
-    snapshot.pairing === "unsupported" ? null : snapshot.pairing;
+    !split || snapshot.pairing === "unsupported" ? null : snapshot.pairing;
   const pairingEnabled =
     snapshot.pairing !== "unsupported" && snapshot.pairing !== "pending";
   const pairingLabel =
     snapshot.pairing === "paired" ? labels.unpair : labels.pair;
-  // 「交换左右」只有两栏都在时才有意义；controller 真的有这个能力（swapPanes），
-  // 所以它是一个真入口，不是占位。
-  const menuItems: readonly EmbeddedSplitPaneHeaderMenuItem[] = [
-    { id: "resetRatio", label: labels.resetRatio },
-    { id: "swapPanes", label: labels.swapPanes }
-  ];
+  // 「重置比例」「交换左右」都要两栏才有对象，单栏下菜单为空 —— 组件据此整枚
+  // 不画 ⋯，而不是画一个点开来空无一物的菜单。
+  const menuItems: readonly EmbeddedSplitPaneHeaderMenuItem[] = split
+    ? [
+        { id: "resetRatio", label: labels.resetRatio },
+        { id: "swapPanes", label: labels.swapPanes }
+      ]
+    : [];
 
-  const sides: readonly SplitSide[] = snapshot.collapsed
-    ? [snapshot.focus]
-    : ["left", "right"];
+  const sides: readonly SplitSide[] = !split
+    ? ["left"]
+    : snapshot.collapsed
+      ? [snapshot.focus]
+      : ["left", "right"];
 
   return sides.map((side) => {
-    const pane = side === "left" ? left : right;
-    const geometry = snapshot.collapsed
-      ? { leftFraction: 0, widthFraction: 1 }
-      : side === "left"
-        ? { leftFraction: 0, widthFraction: snapshot.ratio }
-        : { leftFraction: snapshot.ratio, widthFraction: 1 - snapshot.ratio };
+    // 单栏时 sides 只有 "left"，right 为 null 的分支走不到；分栏时 right 非空。
+    const pane = side === "left" ? left : right!;
+    const geometry =
+      !split || snapshot.collapsed
+        ? { leftFraction: 0, widthFraction: 1 }
+        : side === "left"
+          ? { leftFraction: 0, widthFraction: snapshot.ratio }
+          : { leftFraction: snapshot.ratio, widthFraction: 1 - snapshot.ratio };
     return {
-      closeLabel: labels.closePane,
+      closeLabel: split ? labels.closePane : labels.closeSession,
       focused: snapshot.focus === side,
       iconUrl: pane.session?.iconUrl ?? null,
       leftFraction: geometry.leftFraction,

@@ -502,9 +502,13 @@
 /* 栏头压在窗口壳上面，所以正文必须让出这 44px。上游在
    `[data-window-header-layout="overlay"]` 下用 `--agent-gui-workbench-header-height`
    给三列一起留头部空间（补丁 0106 把它清成了 0，因为嵌入模式没有头部行）——
-   分栏时把这份预留还回来即可，三列（provider 栏 / 会话栏 / 详情）一次到位，
-   右栏那种「只剩详情」的网格也照样对。 */
-.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+   有栏头时把这份预留还回来即可，三列（provider 栏 / 会话栏 / 详情）一次到位，
+   右栏那种「只剩详情」的网格也照样对。
+
+   判据是 `data-rndmaster-pane-header`（覆盖层按「左栏有没有会话」写的），不是
+   `data-rndmaster-split`：单栏也画栏头，而首页态（还没选会话）两种都不画，
+   按分栏与否留空间会在首页态留下一条空白带。 */
+.rndmaster-dintaldock-embedded[data-rndmaster-pane-header="true"]
   .workbench-window-shell[data-rndmaster-pane]
   .workbench-window[data-window-header-layout="overlay"] {
   --agent-gui-workbench-header-height: var(--rndmaster-split-header-height);

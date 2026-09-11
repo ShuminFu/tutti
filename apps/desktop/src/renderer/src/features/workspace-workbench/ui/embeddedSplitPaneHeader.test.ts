@@ -8,6 +8,7 @@ import type {
 
 const labels = {
   closePane: "关闭此栏",
+  closeSession: "关闭会话",
   menu: "更多",
   pair: "配对",
   resetRatio: "重置分栏比例",
@@ -68,6 +69,8 @@ test("两栏各一条栏头，标题 / 项目胶囊 / 宽度都跟着快照走",
     ]
   );
   assert.equal(headers[0]?.iconUrl, "claude.png");
+  // 分栏的 ✕ 关的是「这一栏」，另一栏还在。
+  assert.equal(headers[0]?.closeLabel, "关闭此栏");
 });
 
 // 焦点只体现在「哪一栏的标题加重」上：票 04 拿掉了那条 2px 蓝横线，
@@ -140,13 +143,61 @@ test("⋯ 菜单只有重置比例与交换左右", () => {
   ]);
 });
 
-test("单栏时没有栏头；折叠时只有焦点栏那一条、占满整宽", () => {
+// 单栏也要有栏头：补丁 0106 把上游自己那条 44px 头行整条去掉了，不补这一条，
+// 嵌入态顶上就没有任何地方写「当前是哪条会话」。
+test("单栏一条占满整宽的栏头，标题照样跟着快照走", () => {
+  const single = buildEmbeddedSplitPaneHeaders(
+    snapshot({
+      panes: {
+        left: pane("session-a", {
+          iconUrl: "claude.png",
+          projectLabel: "rndmaster",
+          provider: "claude",
+          title: "改栏头"
+        }),
+        right: null
+      }
+    }),
+    labels
+  );
+
+  assert.equal(single.length, 1);
+  assert.equal(single[0]?.side, "left");
+  assert.equal(single[0]?.title, "改栏头");
+  assert.equal(single[0]?.projectLabel, "rndmaster");
+  assert.equal(single[0]?.iconUrl, "claude.png");
+  assert.equal(single[0]?.leftFraction, 0);
+  assert.equal(single[0]?.widthFraction, 1);
+  assert.equal(single[0]?.focused, true);
+});
+
+// 链条（配对）和 ⋯（重置比例 / 交换左右）都是「两栏之间」的动作，单栏下没有对象。
+// 画成灰的也不行：那是一个点开来空无一物的菜单。组件按这两个值整枚不画。
+test("单栏不给链条、也不给 ⋯ 菜单；✕ 照常在", () => {
   const single = buildEmbeddedSplitPaneHeaders(
     snapshot({ panes: { left: pane("session-a"), right: null } }),
     labels
   );
-  assert.deepEqual(single, []);
 
+  assert.equal(single[0]?.pairingState, null);
+  assert.deepEqual(single[0]?.menuItems, []);
+  // 单栏的 ✕ 关的是会话（退回首页），不是「这一栏」——文案要跟着换。
+  assert.equal(single[0]?.closeLabel, "关闭会话");
+});
+
+// 首页态（还没选会话）没有「这是谁」可写，画一条空栏头只是白占 44px，
+// 而且 CSS 会据此给正文留出那 44px，留下一条空白带。
+test("左栏为空时一条栏头都不给", () => {
+  assert.deepEqual(
+    buildEmbeddedSplitPaneHeaders(
+      snapshot({ panes: { left: null, right: null } }),
+      labels
+    ),
+    []
+  );
+});
+
+test("折叠时只有焦点栏那一条、占满整宽", () => {
   const collapsed = buildEmbeddedSplitPaneHeaders(
     snapshot({ collapsed: true, focus: "right" }),
     labels

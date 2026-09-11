@@ -24,6 +24,7 @@ export const zhCNAgentGuiSessionActions = {
   splitUnpair: "解除",
   splitPair: "配对",
   splitClosePane: "关闭此栏",
+  splitCloseSession: "关闭会话",
   // 票 04 的栏头：⋯ 菜单与「侧栏还没报过标题」时的兜底名。
   splitPaneMenu: "更多",
   splitResetRatio: "重置分栏比例",

@@ -41,6 +41,7 @@ import {
 
 const SPLIT_LABEL_KEYS = {
   closePane: "agentHost.agentGui.splitClosePane",
+  closeSession: "agentHost.agentGui.splitCloseSession",
   dropPair: "agentHost.agentGui.splitDropPair",
   dropRelaunch: "agentHost.agentGui.splitDropRelaunch",
   pair: "agentHost.agentGui.splitPair",
@@ -75,7 +76,9 @@ export function EmbeddedSplitChrome(): ReactNode {
   const ratio = snapshot?.ratio ?? 0.5;
   // 左栏会话栏展开时，两栏几何整体右移这么多（占比，票 05）。分隔线、栏头、
   // 壳的 left/width 全部要一起加，少加一处就会出现「线和栏错位」。
-  const railPush = snapshot?.railPushRatio ?? 0;
+  // 只有分栏时才推：推力的意义是「把会话栏的地方从右栏挤出来」，单栏没有右栏，
+  // 照加会让栏头宽出 100%（覆盖层比主区还宽，右边缘溢出视口）。
+  const railPush = snapshot?.panes.right ? (snapshot.railPushRatio ?? 0) : 0;
   const focus = snapshot?.focus ?? "left";
   const collapsed = snapshot?.collapsed === true;
 
@@ -88,6 +91,10 @@ export function EmbeddedSplitChrome(): ReactNode {
     const controller = embeddedSplitViewController();
     if (!main) return;
     main.dataset.rndmasterSplit = split ? "split" : "single";
+    // 栏头在不在，是「正文要不要让出 44px」的唯一判据。别拿分栏与否代替：单栏也有
+    // 栏头，而首页态（左栏空）两者都没有，留了就是一条空白带。
+    main.dataset.rndmasterPaneHeader =
+      snapshot !== null && snapshot.panes.left !== null ? "true" : "false";
     main.dataset.rndmasterCollapsed = collapsed ? "true" : "false";
     main.dataset.rndmasterFocus = focus;
     main.style.setProperty("--rndmaster-split-ratio", String(ratio));
@@ -280,6 +287,7 @@ export function EmbeddedSplitChrome(): ReactNode {
 
   const headers = buildEmbeddedSplitPaneHeaders(snapshot, {
     closePane: label(SPLIT_LABEL_KEYS.closePane),
+    closeSession: label(SPLIT_LABEL_KEYS.closeSession),
     menu: label(SPLIT_LABEL_KEYS.paneMenu),
     pair: label(SPLIT_LABEL_KEYS.pair),
     resetRatio: label(SPLIT_LABEL_KEYS.resetRatio),
@@ -409,22 +417,24 @@ export function EmbeddedSplitChrome(): ReactNode {
                 <LinkIcon size={14} />
               </button>
             ) : null}
-            <button
-              aria-expanded={menuSide === header.side}
-              aria-haspopup="menu"
-              aria-label={header.menuLabel}
-              className="rndmaster-split-pane-header__action"
-              data-action="menu"
-              onClick={() =>
-                setMenuSide((current) =>
-                  current === header.side ? null : header.side
-                )
-              }
-              title={header.menuLabel}
-              type="button"
-            >
-              <MoreHorizontalIcon aria-hidden="true" size={14} />
-            </button>
+            {header.menuItems.length > 0 ? (
+              <button
+                aria-expanded={menuSide === header.side}
+                aria-haspopup="menu"
+                aria-label={header.menuLabel}
+                className="rndmaster-split-pane-header__action"
+                data-action="menu"
+                onClick={() =>
+                  setMenuSide((current) =>
+                    current === header.side ? null : header.side
+                  )
+                }
+                title={header.menuLabel}
+                type="button"
+              >
+                <MoreHorizontalIcon aria-hidden="true" size={14} />
+              </button>
+            ) : null}
             <button
               aria-label={header.closeLabel}
               className="rndmaster-split-pane-header__action"

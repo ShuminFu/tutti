@@ -25,6 +25,7 @@ export const enAgentGuiSessionActions = {
   splitUnpair: "Unpair",
   splitPair: "Pair",
   splitClosePane: "Close pane",
+  splitCloseSession: "Close session",
   // 票 04 的栏头：⋯ 菜单与「侧栏还没报过标题」时的兜底名。
   splitPaneMenu: "Pane options",
   splitResetRatio: "Reset split width",

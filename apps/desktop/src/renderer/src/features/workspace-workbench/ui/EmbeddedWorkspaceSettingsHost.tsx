@@ -9,9 +9,12 @@ import type {
 } from "../services/workspaceWallpaper";
 
 /**
- * The embedded shell intentionally has no top chrome. Keep the existing
- * settings trigger/panel, but mount it beside WorkbenchHost so the top-chrome
- * suppression cannot hide the only entry point.
+ * The embedded shell intentionally has no top chrome. This mounts the settings
+ * PANEL (and the deep-link request bridge it owns) beside WorkbenchHost; the
+ * visible trigger is gone. It used to float a gear over the transcript's
+ * top-right corner, which collided with the split pane header's action icons
+ * and sat on top of the conversation. The entry point survives in the provider
+ * rail's own "..." menu, which publishes into the same request store.
  */
 export function EmbeddedWorkspaceSettingsHost({
   selectedWallpaperDisplayMode,
@@ -48,22 +51,15 @@ export function EmbeddedWorkspaceSettingsHost({
 
   return (
     <>
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 z-[var(--z-panel-popover)] flex justify-end p-2"
-        data-dintaldock-settings-host="true"
-      >
-        <div className="pointer-events-auto rounded-md bg-[color-mix(in_srgb,var(--background-fronted)_88%,transparent)] shadow-sm">
-          <WorkspaceSettingsTrigger
-            embedded
-            onOpenExternalAgentImport={openExternalAgentImport}
-            onSelectWallpaper={onSelectWallpaper}
-            onSelectWallpaperDisplayMode={onSelectWallpaperDisplayMode}
-            selectedWallpaperDisplayMode={selectedWallpaperDisplayMode}
-            selectedWallpaperID={selectedWallpaperID}
-            workspace={workspace}
-          />
-        </div>
-      </div>
+      <WorkspaceSettingsTrigger
+        embedded
+        onOpenExternalAgentImport={openExternalAgentImport}
+        onSelectWallpaper={onSelectWallpaper}
+        onSelectWallpaperDisplayMode={onSelectWallpaperDisplayMode}
+        selectedWallpaperDisplayMode={selectedWallpaperDisplayMode}
+        selectedWallpaperID={selectedWallpaperID}
+        workspace={workspace}
+      />
       <ExternalAgentSessionImportWizard
         open={externalImportOpen}
         workspace={workspace}

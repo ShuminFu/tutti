@@ -467,10 +467,13 @@ test("split panes opt out of the workbench occlusion optimisation", () => {
 
 // 栏头（票 04）压在窗口壳顶上 44px，正文必须让出同样的高度：上游用
 // `--agent-gui-workbench-header-height` 给三列一起留空间（补丁 0106 清成了 0），
-// 分栏时把这份预留还回来。少了它，栏头会直接盖住会话栏第一行与详情顶部。
-test("split panes give the content back the 44px the pane header takes", () => {
+// 有栏头时把这份预留还回来。少了它，栏头会直接盖住会话栏第一行与详情顶部。
+//
+// 判据钉在 `data-rndmaster-pane-header` 上，不是 `data-rndmaster-split`：单栏也画
+// 栏头（否则嵌入态顶上没有任何地方写当前是哪条会话），而首页态两种都不画。
+test("panes give the content back the 44px the pane header takes", () => {
   const reservation = embeddedDintalDockCss.match(
-    /\.rndmaster-dintaldock-embedded\[data-rndmaster-split="split"\]\s*\n\s*\.workbench-window-shell\[data-rndmaster-pane\]\s*\n\s*\.workbench-window\[data-window-header-layout="overlay"\] \{([^}]*)\}/
+    /\.rndmaster-dintaldock-embedded\[data-rndmaster-pane-header="true"\]\s*\n\s*\.workbench-window-shell\[data-rndmaster-pane\]\s*\n\s*\.workbench-window\[data-window-header-layout="overlay"\] \{([^}]*)\}/
   );
   assert.notEqual(reservation, null);
   assert.match(
