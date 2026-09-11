@@ -38,13 +38,15 @@ describe("agent GUI split layout state machine", () => {
   });
 
   describe("drop", () => {
-    it("drops a new id on the left of a single pane and replaces it", () => {
+    it("drops a new id on the left of a single pane and opens split", () => {
+      // The sitting conversation moves to the empty right slot instead of
+      // being overwritten: a drop on either half of a single pane splits.
       const next = reduceSplitLayout(single, {
         type: "drop",
         id: "sess-c",
         side: "left"
       });
-      expect(next.panes).toEqual({ left: "sess-c", right: null });
+      expect(next.panes).toEqual({ left: "sess-c", right: "sess-a" });
       expect(next.focus).toBe("left");
     });
 

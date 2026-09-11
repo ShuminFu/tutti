@@ -131,6 +131,25 @@ export function reduceSplitLayout(
       if (existing === event.side) {
         return normalizeSplitLayout({ ...state, focus: event.side });
       }
+      // Dropping onto an occupied side while the other side is empty means
+      // "split", not "replace": the sitting conversation moves across so the
+      // dropped one lands on the half the user pointed at. Without this, a
+      // drop on the left of a single pane overwrote the only pane and the
+      // drop read as "the dragged session took over the whole window".
+      // With both slots filled there is nowhere to move to, so that side is
+      // replaced as before.
+      const resident = state.panes[event.side];
+      const vacant = otherSide(event.side);
+      if (resident !== null && state.panes[vacant] === null) {
+        return normalizeSplitLayout({
+          ...state,
+          panes:
+            event.side === "left"
+              ? { left: event.id, right: resident }
+              : { left: resident, right: event.id },
+          focus: event.side
+        });
+      }
       // Dropping on the right of an empty layout still lands in left
       // (left-fill invariant); normalize handles the shift.
       const panes = { ...state.panes, [event.side]: event.id };

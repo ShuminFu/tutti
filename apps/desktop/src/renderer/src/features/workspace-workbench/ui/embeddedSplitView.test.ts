@@ -170,6 +170,29 @@ test("dropping onto a single pane launches a second window and activates it", as
   controller.dispose();
 });
 
+test("dropping onto the occupied left half splits instead of taking over", async () => {
+  // 真机（2026-09-11）：开着一条会话，把第二条拖到**左半边**，整个窗口被换成
+  // 刚拖的那条、右栏根本没出现 —— 状态机把「落在左半」当成了换掉这一栏。
+  // 左栏窗口是嵌入模式的锚（会话栏长在它上面），所以让会话对调而不是让窗口换边：
+  // 左窗口 activate 成刚放下的那条，原来那条去新起的右窗口。
+  const fake = createFakeHost();
+  const controller = makeController(fake);
+  await controller.adopt(["agent-left"]);
+  controller.select("session-a");
+  fake.calls.length = 0;
+
+  await controller.dropSession(dragSession("session-b"), "left");
+
+  assert.equal(fake.launched.length, 1);
+  const snapshot = controller.getSnapshot();
+  assert.equal(snapshot.panes.left?.nodeId, "agent-left");
+  assert.equal(snapshot.panes.left?.sessionId, "session-b");
+  assert.equal(snapshot.panes.right?.nodeId, fake.launched[0]);
+  assert.equal(snapshot.panes.right?.sessionId, "session-a");
+  assert.equal(snapshot.focus, "left");
+  controller.dispose();
+});
+
 test("dropping a session that is already shown only moves focus", async () => {
   const fake = createFakeHost();
   const controller = makeController(fake);
