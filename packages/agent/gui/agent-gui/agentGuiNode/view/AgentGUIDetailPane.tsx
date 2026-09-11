@@ -19,6 +19,7 @@ import {
 } from "./AgentGUIEmptyState";
 import { AgentGUIContentToast } from "./AgentGUIContentToast";
 import { AgentGUIDetailTimeline } from "./AgentGUIDetailTimeline";
+import { AgentMonitorPresenceBar } from "../../../shared/agentConversation/components/AgentMonitorPresenceBar";
 import {
   useOptionalStableEventCallback,
   useStableEventCallback
@@ -729,6 +730,10 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
           message={labels.goalRemoved}
         />
       ) : null}
+      <AgentMonitorPresenceBar
+        monitors={conversation?.monitors}
+        onStopMonitors={actions.stopBackgroundMonitors}
+      />
       <AgentGUIDetailTimeline
         availableSkills={viewModel.composer.availableSkills}
         conversation={conversation}

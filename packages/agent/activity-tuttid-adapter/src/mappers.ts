@@ -88,6 +88,7 @@ export function agentActivitySessionFromTuttidSession(
     imported: session.imported ?? false,
     visible: session.visible ?? true,
     resumable: session.resumable ?? false,
+    runtimeLive: session.runtimeLive ?? null,
     messageVersion: session.messageVersion,
     lastEventUnixMs: updatedAtUnixMs,
     pinnedAtUnixMs: session.pinnedAtUnixMs ?? null,

@@ -19,6 +19,10 @@ import {
 
 export interface BuildChildSessionLanesInput {
   rootSession: AgentActivitySession;
+  // Whether the host still holds a live agent process for this conversation.
+  // null/undefined means "unknown" - only an explicit false downgrades a
+  // never-settled child to "interrupted".
+  runtimeLive?: boolean | null;
   rootTimelineItems: readonly WorkspaceAgentActivityTimelineItem[];
   childSessions: readonly AgentActivitySession[];
   messagesBySessionId: Readonly<
@@ -62,6 +66,7 @@ export function buildChildSessionLanesByParentToolCallId(
         childrenByParentSessionId,
         messagesBySessionId: input.messagesBySessionId,
         parentTimelineItems: input.rootTimelineItems,
+        runtimeLive: input.runtimeLive ?? null,
         visited
       })
     );
@@ -111,11 +116,12 @@ function buildChildSessionLane(input: {
   childrenByParentSessionId: ReadonlyMap<string, AgentActivitySession[]>;
   messagesBySessionId: BuildChildSessionLanesInput["messagesBySessionId"];
   parentTimelineItems: readonly WorkspaceAgentActivityTimelineItem[];
+  runtimeLive: boolean | null;
   visited: Set<string>;
 }): AgentTaskSubAgentVM {
   const childSessionId = input.childSession.agentSessionId.trim();
   if (input.visited.has(childSessionId)) {
-    return emptyCycleLane(input.childSession);
+    return emptyCycleLane(input.childSession, input.runtimeLive);
   }
   input.visited.add(childSessionId);
   const childMessages = input.messagesBySessionId[childSessionId] ?? [];
@@ -135,6 +141,7 @@ function buildChildSessionLane(input: {
       childrenByParentSessionId: input.childrenByParentSessionId,
       messagesBySessionId: input.messagesBySessionId,
       parentTimelineItems: childTimelineItems,
+      runtimeLive: input.runtimeLive,
       visited: input.visited
     })
   );
@@ -148,7 +155,7 @@ function buildChildSessionLane(input: {
     0
   );
   const latestTurn = input.childSession.latestTurn;
-  const status = childSessionStatus(input.childSession);
+  const status = childSessionStatus(input.childSession, input.runtimeLive);
   const terminalAtUnixMs =
     status === "running"
       ? null
@@ -156,6 +163,7 @@ function buildChildSessionLane(input: {
   return {
     childSessionId,
     parentToolCallId,
+    parentToolName: parentCall?.toolName ?? null,
     status,
     name:
       normalizedString(input.childSession.title) ??
@@ -184,11 +192,15 @@ function buildChildSessionLane(input: {
   };
 }
 
-function emptyCycleLane(session: AgentActivitySession): AgentTaskSubAgentVM {
+function emptyCycleLane(
+  session: AgentActivitySession,
+  runtimeLive: boolean | null
+): AgentTaskSubAgentVM {
   return {
     childSessionId: session.agentSessionId,
     parentToolCallId: session.parentToolCallId ?? "",
-    status: childSessionStatus(session),
+    parentToolName: null,
+    status: childSessionStatus(session, runtimeLive),
     name: normalizedString(session.title),
     task: null,
     laneIndex: 1,
@@ -207,12 +219,19 @@ function emptyCycleLane(session: AgentActivitySession): AgentTaskSubAgentVM {
 }
 
 function childSessionStatus(
-  session: AgentActivitySession
+  session: AgentActivitySession,
+  runtimeLive: boolean | null = null
 ): AgentTaskSubAgentStatus {
+  // A child only settles when a terminal turn event arrives. When the agent
+  // process is killed - app restart, idle release - no such event ever comes,
+  // so "no settled turn" would read as "still running" forever. The host's
+  // liveness answer is the only thing that can close that gap.
+  const notSettled: AgentTaskSubAgentStatus =
+    runtimeLive === false ? "interrupted" : "running";
   const activeTurn = session.activeTurn;
-  if (activeTurn && activeTurn.phase !== "settled") return "running";
+  if (activeTurn && activeTurn.phase !== "settled") return notSettled;
   const latestTurn = session.latestTurn;
-  if (!latestTurn || latestTurn.phase !== "settled") return "running";
+  if (!latestTurn || latestTurn.phase !== "settled") return notSettled;
   switch (latestTurn.outcome) {
     case "failed":
       return "failed";
@@ -228,7 +247,7 @@ function childSessionStatus(
 function parentToolCall(
   timelineItems: readonly WorkspaceAgentActivityTimelineItem[],
   parentToolCallId: string
-): { task: string | null } | null {
+): { task: string | null; toolName: string | null } | null {
   if (!parentToolCallId) return null;
   for (const item of timelineItems) {
     if (!isWorkspaceAgentToolCallItem(item)) continue;
@@ -240,7 +259,8 @@ function parentToolCall(
         stringValue(input?.task),
         stringValue(input?.prompt),
         stringValue(input?.description)
-      )
+      ),
+      toolName: resolveWorkspaceAgentToolName(item)
     };
   }
   return null;

@@ -207,6 +207,7 @@ function subAgent(
   return {
     childSessionId: "child-session-1",
     parentToolCallId: "spawn-1",
+    parentToolName: "Agent",
     status: "running",
     name: "Repo smell analyst",
     task: "inspect the repository",

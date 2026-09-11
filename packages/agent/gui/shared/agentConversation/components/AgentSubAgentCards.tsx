@@ -57,6 +57,7 @@ function subAgentVMEquals(
     left.childSessionId === right.childSessionId &&
     left.parentToolCallId === right.parentToolCallId &&
     left.status === right.status &&
+    left.parentToolName === right.parentToolName &&
     left.name === right.name &&
     left.task === right.task &&
     left.laneIndex === right.laneIndex &&
@@ -129,7 +130,7 @@ function SubAgentHeader({
         .join(" ")}
     >
       <div className="workspace-agents-status-panel__detail-tool-row-icon tsh-inline-scanlight-icon">
-        {subAgent.status === "failed" ? (
+        {subAgent.status === "failed" || subAgent.status === "interrupted" ? (
           <AlertCircle size={16} strokeWidth={2} aria-hidden="true" />
         ) : (
           <AgentLinedIcon width={16} height={16} aria-hidden="true" />
@@ -219,7 +220,9 @@ function SubAgentProgress({
         ? "agentHost.agentTool.statusCompleted"
         : subAgent.status === "canceled"
           ? "agentHost.agentTool.statusCanceled"
-          : subAgent.status === "failed"
+          : subAgent.status === "interrupted"
+            ? "agentHost.agentTool.statusInterrupted"
+            : subAgent.status === "failed"
             ? "agentHost.agentTool.statusFailed"
             : subAgent.queued
               ? "agentHost.agentTool.details.subAgentQueued"
@@ -263,6 +266,8 @@ function subAgentStatusLabel(status: AgentTaskSubAgentVM["status"]): string {
       return translate("agentHost.agentTool.statusFailed");
     case "canceled":
       return translate("agentHost.agentTool.statusCanceled");
+    case "interrupted":
+      return translate("agentHost.agentTool.statusInterrupted");
     case "running":
     default:
       return translate("agentHost.agentTool.statusWorking");

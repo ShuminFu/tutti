@@ -699,6 +699,21 @@ export function useAgentGUISubmitInteractionActions(
     [sessionEngine]
   );
 
+  // Monitors live in their own child sessions, so stopping one is a turn
+  // cancel against that child - not against the conversation the user is
+  // looking at. The daemon maps a child-scoped cancel onto the SDK's targeted
+  // stopTask, leaving the root query and the other monitors alone.
+  const stopBackgroundMonitors = useCallback(
+    (agentSessionIds: readonly string[]) => {
+      for (const agentSessionId of agentSessionIds) {
+        const trimmed = agentSessionId.trim();
+        if (!trimmed) continue;
+        sessionEngine.stopSession({ agentSessionId: trimmed });
+      }
+    },
+    [sessionEngine]
+  );
+
   const updateDraftContent = useCallback(
     (draftContent: AgentComposerDraft, sourceScopeKey?: string) => {
       const agentSessionId = activeConversationIdRef.current;
@@ -722,6 +737,7 @@ export function useAgentGUISubmitInteractionActions(
   return {
     goalControl,
     interruptCurrentTurn,
+    stopBackgroundMonitors,
     retryActivation,
     showPromptImagesUnsupported,
     submitApprovalOption,

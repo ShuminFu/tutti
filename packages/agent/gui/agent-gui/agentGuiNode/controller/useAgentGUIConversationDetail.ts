@@ -179,7 +179,11 @@ export function useAgentGUIConversationDetail(
       childSessions: input.activeSessionFamily.childSessions,
       childMessagesBySessionId: input.projectedSessionMessagesById,
       workspaceRoot: input.workspacePath,
-      avoidGroupingEdits: input.avoidGroupingEdits
+      avoidGroupingEdits: input.avoidGroupingEdits,
+      // Liveness comes from the root session row: once the daemon stops
+      // holding a process for it, a child that never settled was cut off -
+      // not still working.
+      runtimeLive: input.activeSessionFamily.rootSession?.runtimeLive ?? null
     });
   }, [
     input.activeTimelineItems,

@@ -6,6 +6,7 @@ import type {
 } from "./agentApprovalItemVM";
 import type { AgentAskUserQuestionVM } from "./agentAskUserQuestionItemVM";
 import type { AgentTranscriptRowVM } from "./agentTranscriptRowVM";
+import type { AgentMonitorPresenceVM } from "../projection/monitorPresence";
 
 export interface AgentInteractionResponseInput {
   agentSessionId?: string;
@@ -58,4 +59,7 @@ export interface AgentConversationVM {
   workspaceRoot: string | null;
   sourceDetail: WorkspaceAgentSessionDetailViewModel;
   rows: AgentTranscriptRowVM[];
+  // Background watchers armed in this conversation. Absent when the caller
+  // builds a VM without child-session lanes (previews, tests).
+  monitors?: AgentMonitorPresenceVM;
 }

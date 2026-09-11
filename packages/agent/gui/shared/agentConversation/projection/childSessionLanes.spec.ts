@@ -41,6 +41,87 @@ describe("buildChildSessionLanesByParentToolCallId", () => {
     });
   });
 
+
+  it("carries the launching tool name so monitors can be told from sub-agents", () => {
+    const child = childSession({
+      id: "child-1",
+      parentSessionId: "root-1",
+      parentToolCallId: "monitor-1",
+      title: "errors in tuttid.log",
+      turn: turn("child-1", "running", null)
+    });
+    const lanes = buildChildSessionLanesByParentToolCallId({
+      rootSession: rootSession(),
+      rootTimelineItems: [
+        monitorCall("root-1", "monitor-1", "errors in tuttid.log")
+      ],
+      childSessions: [child],
+      messagesBySessionId: {}
+    });
+
+    expect(lanes.get("monitor-1")?.[0]).toMatchObject({
+      parentToolName: "Monitor",
+      status: "running"
+    });
+  });
+
+  it("settles a never-settled child as interrupted once the runtime is gone", () => {
+    const watching = childSession({
+      id: "child-1",
+      parentSessionId: "root-1",
+      parentToolCallId: "monitor-1",
+      turn: turn("child-1", "running", null)
+    });
+    const finished = childSession({
+      id: "child-2",
+      parentSessionId: "root-1",
+      parentToolCallId: "spawn-1",
+      turn: turn("child-2", "settled", "completed")
+    });
+    const lanes = buildChildSessionLanesByParentToolCallId({
+      rootSession: rootSession(),
+      rootTimelineItems: [
+        monitorCall("root-1", "monitor-1", "errors in tuttid.log"),
+        spawnCall("root-1", "spawn-1", "Review the API")
+      ],
+      childSessions: [watching, finished],
+      messagesBySessionId: {},
+      runtimeLive: false
+    });
+
+    expect(lanes.get("monitor-1")?.[0]?.status).toBe("interrupted");
+    // A child that did settle keeps its own outcome: liveness only closes the
+    // gap for children that could never report again.
+    expect(lanes.get("spawn-1")?.[0]?.status).toBe("completed");
+  });
+
+  it("keeps a running child running while the runtime is live or unknown", () => {
+    const child = childSession({
+      id: "child-1",
+      parentSessionId: "root-1",
+      parentToolCallId: "monitor-1",
+      turn: turn("child-1", "running", null)
+    });
+    const input = {
+      rootSession: rootSession(),
+      rootTimelineItems: [
+        monitorCall("root-1", "monitor-1", "errors in tuttid.log")
+      ],
+      childSessions: [child],
+      messagesBySessionId: {}
+    };
+
+    expect(
+      buildChildSessionLanesByParentToolCallId({ ...input, runtimeLive: true })
+        .get("monitor-1")?.[0]?.status
+    ).toBe("running");
+    expect(
+      buildChildSessionLanesByParentToolCallId(input).get("monitor-1")?.[0]
+        ?.status
+    ).toBe("running");
+  });
+
+
   it("uses the child turn outcome and keeps nested children under their direct parent", () => {
     const parent = childSession({
       id: "child-1",
@@ -217,6 +298,33 @@ function toolCallMessage(
       input: { task: "Inspect nested behavior" }
     },
     occurredAtUnixMs
+  };
+}
+
+function monitorCall(
+  agentSessionId: string,
+  callId: string,
+  description: string
+): WorkspaceAgentActivityTimelineItem {
+  return {
+    id: 2,
+    eventId: `${callId}-started`,
+    seq: 2,
+    agentSessionId,
+    actorType: "agent",
+    actorId: agentSessionId,
+    itemType: "call.started",
+    role: "assistant",
+    callType: "tool",
+    callId,
+    name: "Monitor",
+    status: "running",
+    payload: {
+      callId,
+      toolName: "Monitor",
+      input: { description }
+    },
+    occurredAtUnixMs: 10
   };
 }
 

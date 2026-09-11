@@ -631,6 +631,12 @@ export const zhCN = {
       unread: "{{name}} 已标记任务完成，请查看最新结果。",
       read: "{{name}} 已标记任务完成。"
     },
+    monitorPresence: {
+      running: "监控器运行中",
+      interrupted: "监控器已中断",
+      longestElapsed: "最久 {{elapsed}}",
+      stopAll: "全部停止"
+    },
     agentTool: {
       fallbackName: "使用工具",
       statusWorking: "进行中",
@@ -638,6 +644,7 @@ export const zhCN = {
       statusFailed: "失败",
       statusCanceled: "已取消",
       statusWaiting: "等待中",
+      statusInterrupted: "已中断",
       details: {
         summary: "摘要",
         input: "输入",

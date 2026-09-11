@@ -1392,6 +1392,7 @@ describe("AgentExpandedToolContent", () => {
       <AgentSubAgentCard
         subAgent={{
           childSessionId: "child-session-1",
+          parentToolName: "Agent",
           parentToolCallId: "spawn-1",
           status: "running",
           name: "Repo smell analyst",
@@ -1435,6 +1436,7 @@ describe("AgentExpandedToolContent", () => {
       <AgentSubAgentCard
         subAgent={{
           childSessionId: "child-session-1",
+          parentToolName: "Agent",
           parentToolCallId: "spawn-1",
           status: "running",
           name: null,

@@ -129,6 +129,10 @@ export interface AgentActivitySession {
   imported: boolean;
   visible: boolean;
   resumable: boolean;
+  // Whether the daemon still holds a live agent process for this session.
+  // null = the source did not say (older payloads, locally minted sessions);
+  // only an explicit false means "the process is gone".
+  runtimeLive?: boolean | null;
   /** Latest accepted durable message change cursor. */
   messageVersion: number;
   lastEventUnixMs: number;

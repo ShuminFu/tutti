@@ -670,6 +670,12 @@ export const en = {
       unread: "{{name}} marked the task as complete. Check the latest result.",
       read: "{{name}} marked the task as complete."
     },
+    monitorPresence: {
+      running: "Monitors running",
+      interrupted: "Monitors interrupted",
+      longestElapsed: "longest {{elapsed}}",
+      stopAll: "Stop all"
+    },
     agentTool: {
       fallbackName: "Use tool",
       statusWorking: "Running",
@@ -677,6 +683,7 @@ export const en = {
       statusFailed: "Failed",
       statusCanceled: "Canceled",
       statusWaiting: "Waiting",
+      statusInterrupted: "Interrupted",
       details: {
         summary: "Summary",
         input: "Input",

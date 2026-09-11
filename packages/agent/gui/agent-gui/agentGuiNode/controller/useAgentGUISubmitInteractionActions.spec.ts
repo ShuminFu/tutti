@@ -207,6 +207,33 @@ describe("conversation stop", () => {
       agentSessionId: "session-1"
     });
   });
+
+  it("stops each monitor against its own child session, skipping blanks", () => {
+    const goalControl = vi.fn(async () => undefined);
+    const { input, sessionEngine } = createGoalControlInput(
+      goalControl as never
+    );
+    const stopSession = vi.spyOn(sessionEngine, "stopSession");
+    const { result } = renderHook(() =>
+      useAgentGUISubmitInteractionActions(input)
+    );
+
+    act(() =>
+      result.current.stopBackgroundMonitors([
+        "monitor-a",
+        "  ",
+        " monitor-b "
+      ])
+    );
+
+    expect(stopSession).toHaveBeenCalledTimes(2);
+    expect(stopSession).toHaveBeenNthCalledWith(1, {
+      agentSessionId: "monitor-a"
+    });
+    expect(stopSession).toHaveBeenNthCalledWith(2, {
+      agentSessionId: "monitor-b"
+    });
+  });
 });
 
 describe("interaction submissions", () => {

@@ -4,7 +4,12 @@ export type AgentTaskSubAgentStatus =
   | "running"
   | "completed"
   | "failed"
-  | "canceled";
+  | "canceled"
+  // The runtime that owned this child is gone (host reports the agent process
+  // is no longer live), so a child that never settled cannot settle: it did
+  // not finish, it was cut off. Without this state such a child renders
+  // "running" forever - see childSessionStatus.
+  | "interrupted";
 
 // Live view of one delegated sub-agent thread (Codex collab child thread).
 // The child thread's transcript rows are segregated out of the parent
@@ -21,6 +26,10 @@ export interface AgentTaskSubAgentActivityVM {
 export interface AgentTaskSubAgentVM {
   childSessionId: string;
   parentToolCallId: string;
+  // Canonical tool name of the launching call ("Monitor", "Bash", "Agent"...).
+  // Monitors are background watchers that outlive the turn, so surfaces that
+  // count "still watching" filter on this rather than on every child lane.
+  parentToolName: string | null;
   status: AgentTaskSubAgentStatus;
   // The sub-agent's own identity: its child thread name when known (daemon
   // forwards child thread/name/updated as a subAgentName marker). Null until

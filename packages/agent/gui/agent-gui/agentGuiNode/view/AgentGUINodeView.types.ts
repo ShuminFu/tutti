@@ -693,6 +693,7 @@ export interface AgentGUINodeViewProps extends AgentGUIComposerExternalPromptPro
     submitApprovalOption: (input: AgentInteractionResponseInput) => boolean;
     submitInteractivePrompt: (input: AgentInteractionResponseInput) => boolean;
     interruptCurrentTurn: (noRunningResponseMessage: string) => void;
+    stopBackgroundMonitors: (agentSessionIds: readonly string[]) => void;
     updateDraftContent: (
       draftContent: AgentComposerDraft,
       sourceScopeKey?: string

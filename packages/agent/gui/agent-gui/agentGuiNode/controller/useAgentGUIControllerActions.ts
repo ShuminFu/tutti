@@ -47,6 +47,9 @@ export function useAgentGUIControllerActions(
   const interruptCurrentTurn = useStableControllerEventCallback(
     actions.interruptCurrentTurn
   );
+  const stopBackgroundMonitors = useStableControllerEventCallback(
+    actions.stopBackgroundMonitors
+  );
   const updateDraftContent = useStableControllerEventCallback(
     actions.updateDraftContent
   );
@@ -140,6 +143,7 @@ export function useAgentGUIControllerActions(
       submitApprovalOption,
       submitInteractivePrompt,
       interruptCurrentTurn,
+      stopBackgroundMonitors,
       updateDraftContent,
       updateSelectedProjectPath,
       updateComposerSettings,
@@ -178,6 +182,7 @@ export function useAgentGUIControllerActions(
       editQueuedPrompt,
       goalControl,
       interruptCurrentTurn,
+      stopBackgroundMonitors,
       loadOlderConversationMessages,
       markConversationUnread,
       removeProject,

@@ -15,6 +15,7 @@ import {
   attachChildSessionLanesToConversationVM,
   buildChildSessionLanesByParentToolCallId
 } from "../../../shared/agentConversation/projection/childSessionLanes";
+import { selectMonitorPresence } from "../../../shared/agentConversation/projection/monitorPresence";
 import {
   filterAgentGUIConversationSummaries,
   normalizeAgentGUIConversationFilter
@@ -246,12 +247,14 @@ export function buildAgentGUIConversationModels({
   childSessions = [],
   childMessagesBySessionId = {},
   workspaceRoot = null,
-  avoidGroupingEdits = false
+  avoidGroupingEdits = false,
+  runtimeLive = null
 }: {
   timelineItems: readonly WorkspaceAgentActivityTimelineItem[];
   conversation: AgentGUIConversationProjectionSource;
   canonicalSession?: AgentActivitySession | null;
   childSessions?: readonly AgentActivitySession[];
+  runtimeLive?: boolean | null;
   childMessagesBySessionId?: Readonly<
     Record<string, readonly AgentActivityMessage[] | undefined>
   >;
@@ -275,13 +278,16 @@ export function buildAgentGUIConversationModels({
       rootSession: detail.session,
       rootTimelineItems: timelineItems,
       childSessions,
-      messagesBySessionId: childMessagesBySessionId
+      messagesBySessionId: childMessagesBySessionId,
+      runtimeLive
     });
+  const conversationVM = attachChildSessionLanesToConversationVM(
+    projectAgentConversationVM(detail, { avoidGroupingEdits }),
+    childSessionLanesByParentToolCallId
+  );
+  const monitors = selectMonitorPresence(childSessionLanesByParentToolCallId);
   return {
-    conversation: attachChildSessionLanesToConversationVM(
-      projectAgentConversationVM(detail, { avoidGroupingEdits }),
-      childSessionLanesByParentToolCallId
-    ),
+    conversation: conversationVM ? { ...conversationVM, monitors } : null,
     detail
   };
 }

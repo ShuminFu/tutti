@@ -2591,6 +2591,11 @@ export type WorkspaceAgentSession = {
   settings: AgentSessionComposerSettings;
   permissionConfig: PermissionConfig;
   resumable: boolean;
+  /**
+   * Whether the daemon currently holds a live agent process for this session.
+   * Optional on the wire: older daemons omit it.
+   */
+  runtimeLive?: boolean;
   pinnedAtUnixMs: number | null;
   title: string | null;
   /**

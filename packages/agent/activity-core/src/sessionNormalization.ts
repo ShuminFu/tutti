@@ -103,6 +103,11 @@ export function normalizeAgentActivitySession(
     imported: source.imported ?? false,
     visible: source.visible ?? true,
     resumable: source.resumable ?? false,
+    // Absent stays absent: a session nobody asked the daemon about must not
+    // start claiming its runtime is unknown-but-present in equality checks.
+    ...(source.runtimeLive === undefined
+      ? {}
+      : { runtimeLive: source.runtimeLive }),
     messageVersion: source.messageVersion ?? 0,
     lastEventUnixMs: source.lastEventUnixMs ?? updatedAtUnixMs,
     startedAtUnixMs: source.startedAtUnixMs ?? createdAtUnixMs,
