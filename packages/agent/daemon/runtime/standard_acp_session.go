@@ -483,6 +483,79 @@ func (a *standardACPAdapter) Close(ctx context.Context, session Session) error {
 	return nil
 }
 
+var _ LiveSessionReleaseAdapter = (*standardACPAdapter)(nil)
+
+// ReleaseLiveSession 把一条闲置会话的 agent 进程还给系统，供空闲回收器
+// （Controller.ReleaseIdleLiveSessions）调用。没有它，走 standard ACP 的
+// provider（grok / deepseek-harness 等）会被回收器判成 skipped_unsupported，
+// 进程一直握到 tuttid 重启为止。
+//
+// 「释放 ≠ 关闭」：Close 会经 closeProviderSession 向 agent 发协议级
+// session/close，那是在告诉对端「这条会话到此为止」——对端据此丢掉会话状态，
+// 之后 session/load 就未必接得回来。空闲回收的意图恰恰相反：只想省掉闲着的
+// 进程，用户下次续聊必须原样接上。所以这里刻意不发协议关闭，只丢本地这一侧：
+// 本地工具租约、ACP 客户端（连带子进程）、以及 adapter 的 sessions 表项。
+// 会话记录与 providerSessionID 留在控制器里不动，CanResume 仍为真，
+// 下一次 Resume 会重新拉起进程并 load 回原会话。
+// 这与 codex 的释放路径同构：CodexAppServerAdapter.closeLiveSession 也只丢客户端。
+func (a *standardACPAdapter) ReleaseLiveSession(_ context.Context, session Session) error {
+	if a == nil {
+		return nil
+	}
+	agentSessionID := strings.TrimSpace(session.AgentSessionID)
+	// 复用既有的会话生命周期串行锁，和 Start / Resume / Close 排同一条队，
+	// 避免释放与重新拉起交错。
+	unlockLifecycle := a.lockSessionLifecycle(agentSessionID)
+	defer unlockLifecycle()
+	if a.hasLiveSessionWork(agentSessionID) {
+		return ErrLiveSessionBusy
+	}
+	a.mu.Lock()
+	acpSession := a.sessions[agentSessionID]
+	delete(a.sessions, agentSessionID)
+	a.mu.Unlock()
+	if acpSession == nil || acpSession.client == nil {
+		return nil
+	}
+	acpSession.releaseLocalTools()
+	if err := acpSession.client.Close(); err != nil {
+		a.logACPCloseDiagnostics("release.transport_close.failed", session, acpSession, err)
+		return err
+	}
+	a.logACPCloseDiagnostics("released", session, acpSession, nil)
+	return nil
+}
+
+// hasLiveSessionWork 判断这条会话此刻是不是还在干活：有挂起（或正在解析）的
+// 权限请求，或者 ACP 客户端上还有在飞的 JSON-RPC 调用——一个回合期间
+// session/prompt 会一路挂着，所以它同时覆盖「回合在飞」。判据形状照
+// CodexAppServerAdapter.hasLiveSessionWork 写，忙就返回 ErrLiveSessionBusy，
+// 绝不把用户正在用的会话掐掉。
+func (a *standardACPAdapter) hasLiveSessionWork(agentSessionID string) bool {
+	if a == nil {
+		return false
+	}
+	a.mu.Lock()
+	acpSession := a.sessions[strings.TrimSpace(agentSessionID)]
+	if acpSession == nil {
+		a.mu.Unlock()
+		return false
+	}
+	pending := make([]*pendingACPApproval, 0, len(acpSession.pendingApprovals))
+	for _, approval := range acpSession.pendingApprovals {
+		pending = append(pending, approval)
+	}
+	client := acpSession.client
+	a.mu.Unlock()
+	for _, approval := range pending {
+		state := approval.disposition()
+		if state == pendingInteractiveRequestStatePending || state == pendingInteractiveRequestStateResolving {
+			return true
+		}
+	}
+	return client.hasPendingCalls()
+}
+
 func (a *standardACPAdapter) closeProviderSession(ctx context.Context, session Session, acpSession *standardACPSession) {
 	if a == nil || acpSession == nil || acpSession.client == nil || !acpSession.sessionClose {
 		return

@@ -375,6 +375,18 @@ func (c *acpClient) registerCall(id int64, pending *acpPendingCall, active *acpA
 	c.mu.Unlock()
 }
 
+// hasPendingCalls 报告这条连接上还有没有在飞的 JSON-RPC 请求。空闲释放用它
+// 判「这一刻还在跟 agent 说话吗」：一个回合期间 session/prompt 会一直挂在
+// pending 里，直到 agent 给出结果。
+func (c *acpClient) hasPendingCalls() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.pending) > 0
+}
+
 func (c *acpClient) unregisterCall(id int64, active *acpActiveHandler) {
 	c.mu.Lock()
 	delete(c.pending, id)
