@@ -14,10 +14,12 @@ import {
   createEmptySplitLayout,
   isSplitLayoutSplit,
   loadSplitLayout,
+  notifyConversationRailPeerPairsChanged,
   reduceSplitLayout,
   registerConversationRailSplitHost,
   saveSplitLayout,
   splitLayoutStorageKey,
+  subscribeConversationRailPeerPairsChanged,
   type ConversationRailPeerPair,
   type ConversationRailPeerPairingHost,
   type ConversationRailSplitDragSession,
@@ -753,6 +755,26 @@ export function createEmbeddedSplitViewController(
     };
   }
 
+  // 侧栏右键菜单的配对/解除写的是它自己那份缓存（补丁 0130），本控制器这份
+  // 只在自己 pairPanes/unpairPanes 之后刷新 —— 不订阅的话，从侧栏解除后分栏
+  // 栏头还会一直显示「解除」。refreshPairs 自己不广播，所以不会绕成环。
+  // 自己广播时置位：本控制器也订阅着这条广播，不挡一下就会在刚 refreshPairs
+  // 完又拉一次（多一次 listPeerPairs，测试里的调用次数也对不上）。
+  let broadcastingOwnPairChange = false;
+  const unsubscribePeerPairs = subscribeConversationRailPeerPairsChanged(() => {
+    if (disposed || broadcastingOwnPairChange) return;
+    void refreshPairs();
+  });
+
+  function broadcastPeerPairsChanged(): void {
+    broadcastingOwnPairChange = true;
+    try {
+      notifyConversationRailPeerPairsChanged();
+    } finally {
+      broadcastingOwnPairChange = false;
+    }
+  }
+
   async function refreshPairs(): Promise<void> {
     const pairingHost = readPairingHost();
     if (!pairingHost) {
@@ -789,6 +811,8 @@ export function createEmbeddedSplitViewController(
         toast
       });
       if (result.pairs) pairs = result.pairs;
+      // 配好了就告诉侧栏那份缓存，否则右键菜单一直是 `Unpair (0)`（补丁 0130）。
+      if (result.outcome === "paired") broadcastPeerPairsChanged();
       if (result.outcome === "unsupported" && !pairingHost) {
         pairingUnsupported = true;
       }
@@ -852,6 +876,7 @@ export function createEmbeddedSplitViewController(
       emit();
     }
     await refreshPairs();
+    broadcastPeerPairsChanged();
   }
 
   /**
@@ -1070,6 +1095,7 @@ export function createEmbeddedSplitViewController(
       disposed = true;
       clearPendingRelaunch();
       unregisterSplitHost();
+      unsubscribePeerPairs();
       unsubscribeController();
       unsubscribeSessions();
       listeners.clear();

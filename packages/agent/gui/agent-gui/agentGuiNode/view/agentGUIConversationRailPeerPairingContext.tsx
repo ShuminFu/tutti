@@ -8,6 +8,8 @@ import {
 } from "../model/conversationRailPeerPairing";
 import {
   conversationRailPeerPairingHost,
+  notifyConversationRailPeerPairsChanged,
+  subscribeConversationRailPeerPairsChanged,
   type ConversationRailPeerPairingHost
 } from "../model/conversationRailPeerPairingHost";
 
@@ -129,6 +131,11 @@ export function useAgentGUIConversationRailPeerPairingState(input: {
     refresh();
   }, [input.activeConversationId, refresh]);
 
+  // 别人写了配对表也要跟着拉（补丁 0130）：分栏拖放配对/解除走的是嵌入层那份
+  // 缓存，不经过这里的 createPair/deletePair，光靠上面那个 effect 永远不刷新
+  // —— 当前会话没变，右键菜单就一直停在 `Unpair (0)`。
+  useEffect(() => subscribeConversationRailPeerPairsChanged(refresh), [refresh]);
+
   // 单标记：再标一条就替换；点同一条就取消。
   const toggleMarked = useCallback((mark: AgentGUIConversationRailPeerMark) => {
     setMarked((current) =>
@@ -160,7 +167,7 @@ export function useAgentGUIConversationRailPeerPairingState(input: {
           // 那一头，下一次 listPeerPairs 一定带上它，徽标与吸附随之出现。若侧栏
           // 的会话列表还没收到这条新会话，允许再下一轮刷新时才吸附。
           setMarked(null);
-          refresh();
+          notifyConversationRailPeerPairsChanged();
           agentHostApi?.toast?.success?.(
             input.labels.peerPairPaired(
               conversationRailPeerDisplayTitle(createInput.fromTitle),
@@ -175,7 +182,7 @@ export function useAgentGUIConversationRailPeerPairingState(input: {
           );
         });
     },
-    [agentHostApi, input.labels, refresh]
+    [agentHostApi, input.labels]
   );
 
   const deletePair = useCallback(
@@ -188,7 +195,7 @@ export function useAgentGUIConversationRailPeerPairingState(input: {
           taskId: deleteInput.taskId
         })
         .then(() => {
-          refresh();
+          notifyConversationRailPeerPairsChanged();
           // 解除也要有回执：没有 toast 时唯一的反馈是徽标数字变小，真机上看不出来（T6）。
           agentHostApi?.toast?.success?.(
             input.labels.peerUnpaired(
@@ -202,7 +209,7 @@ export function useAgentGUIConversationRailPeerPairingState(input: {
           );
         });
     },
-    [agentHostApi, input.labels, refresh]
+    [agentHostApi, input.labels]
   );
 
   const index = useMemo(() => conversationRailPeerPairIndex(pairs), [pairs]);

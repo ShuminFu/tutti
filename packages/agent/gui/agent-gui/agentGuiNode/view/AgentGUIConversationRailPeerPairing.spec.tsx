@@ -10,6 +10,7 @@ import type {
   AgentGUIConversationSummary
 } from "../model/agentGuiConversationModel";
 import type { ConversationRailPeerPair } from "../model/conversationRailPeerPairing";
+import { notifyConversationRailPeerPairsChanged } from "../model/conversationRailPeerPairingHost";
 import type { ConversationRailPeerPairingHost } from "../model/conversationRailPeerPairingHost";
 import type { AgentGUIViewLabels } from "./AgentGUINodeView.types";
 import { AgentGUIConversationRailItem } from "./AgentGUIConversationRailItem";
@@ -243,6 +244,37 @@ describe("conversation rail peer pairing item presentation", () => {
     const row = screen.getByTestId("agent-gui-conversation-item-session-a");
     expect(row).toHaveAttribute("data-peer-pair-marked", "true");
     expect(row).toHaveAttribute("data-peer-pair-slot", "chip");
+  });
+
+  // 补丁 0130：分栏拖放配对写的是嵌入层那份缓存，不经过这里的 createPair，
+  // 而当前会话又没变 —— 不听广播的话右键菜单永远停在 `Unpair (0)`。
+  it("picks up a pair created elsewhere when the pair table broadcasts", async () => {
+    const pairs: ConversationRailPeerPair[] = [];
+    const host = {
+      createPeerPair: vi.fn(async () => ({ pairId: "pair-1" })),
+      deletePeerPair: vi.fn(async () => ({ ok: true })),
+      listPeerPairs: vi.fn(async () => ({ pairs: [...pairs] }))
+    } as never as ConversationRailPeerPairingHost & {
+      listPeerPairs: ReturnType<typeof vi.fn>;
+    };
+    renderPairingRail({ host });
+    await waitFor(() => expect(host.listPeerPairs).toHaveBeenCalledTimes(1));
+    await openMenu("session-a");
+    expect(
+      await screen.findByRole("menuitem", { name: "Unpair (0)" })
+    ).toHaveAttribute("data-disabled");
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("menuitem")).toBeNull());
+
+    // 分栏那一头刚配好并广播。
+    pairs.push(PAIR_AB);
+    notifyConversationRailPeerPairsChanged();
+    await waitFor(() => expect(host.listPeerPairs).toHaveBeenCalledTimes(2));
+
+    await openMenu("session-a");
+    expect(
+      await screen.findByRole("menuitem", { name: /Unpair \(1\)/ })
+    ).not.toHaveAttribute("data-disabled");
   });
 });
 

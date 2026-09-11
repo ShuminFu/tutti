@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { conversationRailSplitHost } from "@tutti-os/agent-gui/conversation-rail-projection";
+import {
+  conversationRailSplitHost,
+  notifyConversationRailPeerPairsChanged,
+  subscribeConversationRailPeerPairsChanged
+} from "@tutti-os/agent-gui/conversation-rail-projection";
 import type { ConversationRailSplitDragSession } from "@tutti-os/agent-gui/conversation-rail-projection";
 import { activateEmbeddedDintalDockSession } from "./embeddedDintalDock.ts";
 import {
@@ -890,4 +894,108 @@ test("单栏与折叠态一律不推", async () => {
   assert.equal(controller.getSnapshot().collapsed, true);
   assert.equal(controller.getSnapshot().railPushRatio, 0);
   controller.dispose();
+});
+
+// 补丁 0130：配对表有两份缓存（侧栏右键菜单一份、本控制器一份），靠一条广播对齐。
+// 没有这条广播时，拖进分栏配好的对在侧栏右键里仍是 `Unpair (0)`。
+test("拖放配对成功后向侧栏那份缓存广播一次", async () => {
+  const fake = createFakeHost();
+  let broadcasts = 0;
+  const unsubscribe = subscribeConversationRailPeerPairsChanged(() => {
+    broadcasts += 1;
+  });
+  // 配对表一开始是空的，createPeerPair 之后才有那一条 —— 不这样写，落下那一刻
+  // 就已经「已配对」，pairPanes 会走 `already` 分支，钉不到广播。
+  let pairs: unknown[] = [];
+  const controller = makeController(fake, {
+    pairingHost: () =>
+      ({
+        createPeerPair: async () => {
+          pairs = [
+            {
+              a: { sessionId: "session-a", taskId: "ta", title: "a" },
+              b: { sessionId: "session-b", taskId: "tb", title: "b" },
+              pairId: "p1"
+            }
+          ];
+          return { pairId: "p1" };
+        },
+        deletePeerPair: async () => undefined,
+        listPeerPairs: async () => ({ pairs })
+      }) as never
+  });
+  await controller.adopt(["agent-left"]);
+  controller.select("session-a");
+  await controller.dropSession(dragSession("session-b"), "right");
+  controller.setFocus("left");
+
+  const result = await controller.pairPanes();
+
+  assert.equal(result.outcome, "paired");
+  assert.equal(controller.getSnapshot().pairing, "paired");
+  assert.equal(broadcasts, 1);
+  unsubscribe();
+  controller.dispose();
+});
+
+test("侧栏解除配对后本控制器跟着重拉配对表", async () => {
+  const fake = createFakeHost();
+  let lists = 0;
+  let pairs: unknown[] = [
+    {
+      a: { sessionId: "session-a", taskId: "ta", title: "a" },
+      b: { sessionId: "session-b", taskId: "tb", title: "b" },
+      pairId: "p1"
+    }
+  ];
+  const controller = makeController(fake, {
+    pairingHost: () => ({
+      createPeerPair: async () => ({ pairId: "p1" }),
+      deletePeerPair: async () => undefined,
+      listPeerPairs: async () => {
+        lists += 1;
+        return { pairs };
+      }
+    }) as never
+  });
+  await controller.adopt(["agent-left"]);
+  controller.select("session-a");
+  await controller.dropSession(dragSession("session-b"), "right");
+  controller.setFocus("left");
+  await controller.pairPanes();
+  assert.equal(controller.getSnapshot().pairing, "paired");
+  const listsBefore = lists;
+
+  // 用户在侧栏右键里解除：那一头写完只广播，不碰本控制器的缓存。
+  pairs = [];
+  notifyConversationRailPeerPairsChanged();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(lists, listsBefore + 1);
+  assert.equal(controller.getSnapshot().pairing, "unpaired");
+  controller.dispose();
+});
+
+test("dispose 之后不再响应配对表广播", async () => {
+  const fake = createFakeHost();
+  let lists = 0;
+  const controller = makeController(fake, {
+    pairingHost: () => ({
+      createPeerPair: async () => ({ pairId: "p1" }),
+      deletePeerPair: async () => undefined,
+      listPeerPairs: async () => {
+        lists += 1;
+        return { pairs: [] };
+      }
+    }) as never
+  });
+  await controller.adopt(["agent-left"]);
+  const listsBefore = lists;
+  controller.dispose();
+
+  notifyConversationRailPeerPairsChanged();
+  await Promise.resolve();
+
+  assert.equal(lists, listsBefore);
 });

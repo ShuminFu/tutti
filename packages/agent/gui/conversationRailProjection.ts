@@ -10,7 +10,9 @@ export {
 // conversation-rail-projection 子路径上，不新增 package exports 入口。
 export {
   conversationRailPeerPairingHost,
+  notifyConversationRailPeerPairsChanged,
   registerConversationRailPeerPairingHost,
+  subscribeConversationRailPeerPairsChanged,
   type ConversationRailCreatePeerPairInput,
   type ConversationRailCreatePeerPairResult,
   type ConversationRailPeerPairingHost
