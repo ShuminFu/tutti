@@ -313,9 +313,9 @@
 
 .rndmaster-split-divider {
   position: absolute;
-  /* 栏头（票 04）之后，分隔线必须从栏头**下方**起：`top: 0` 会让那条 1px 竖线
-     一直穿到栏头里，看着像把两个栏头也切开了（真机截图）。拖宽的命中带一起下移，
-     否则在栏头高度内拖会和栏头右侧的 Pair/⋯/✕ 抢事件。 */
+  /* 这里是**命中带**，必须从栏头下方起：在栏头高度内拖会和栏头右侧的
+     Pair/⋯/✕ 抢事件。画出来的那条线不受这个限制，见下面 ::after —— 中线要一路
+     贯到顶（原先连线一起下移，两栏在栏头那一段是断的，看着像两块拼板没对齐）。 */
   top: var(--rndmaster-split-header-height);
   bottom: 0;
   width: 10px;
@@ -327,12 +327,16 @@
 
 .rndmaster-split-divider::after {
   position: absolute;
-  top: 0;
+  /* 往上顶回一个栏头高度，让线从整个分栏区的最顶端起画，穿过两个栏头之间。
+     它超出了命中带的盒子，绝对定位的伪元素在盒外一样吃事件，所以显式关掉 —— 
+     否则栏头那一段又会把 Pair/⋯/✕ 的点击抢走。 */
+  top: calc(-1 * var(--rndmaster-split-header-height));
   bottom: 0;
   left: 4px;
   width: 1px;
   background: var(--line-2);
   content: "";
+  pointer-events: none;
 }
 
 /* ---- 每栏栏头（票 04）--------------------------------------------------
