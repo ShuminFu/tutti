@@ -13,6 +13,7 @@ import { registerEmbeddedHostCreatedSessionOpener } from "../../workspace-agent/
 import { installEmbeddedRailPeerPairingHost } from "./embeddedRailPeerPairingHost.ts";
 import { installEmbeddedPeerPairRequestHost } from "./embeddedPeerPairRequestHost.ts";
 import { installEmbeddedSessionLivenessHost } from "./embeddedSessionLivenessHost.ts";
+import { installEmbeddedMonitorAutomationHost } from "./embeddedMonitorAutomationHost.ts";
 import {
   embeddedSplitViewController,
   embeddedSplitViewPaneDescriptor,
@@ -123,9 +124,14 @@ export function installEmbeddedDintalDockSessionBridge(
   const unregisterPeerRequests = installEmbeddedPeerPairRequestHost();
   // 会话栏圆点按宿主任务行终态隐藏（补丁 0122）：同样只在嵌入 DinTalDock 时接上。
   const unregisterSessionLiveness = installEmbeddedSessionLivenessHost();
+  // 会话顶部「我起了 N 个监控器」胶囊（补丁 0135）：同样只在嵌入 DinTalDock 时接上。
+  // 数的是 cliagent-backend 的自动化项 preset=monitor —— Claude 的 Monitor 工具在
+  // 这个产品里被 disallowedTools 禁着，那条胶囊永远不会亮。
+  const unregisterMonitorAutomations = installEmbeddedMonitorAutomationHost();
   const uninstallBridge = installHostAgentSessionBridge(openSession, windowRef);
   return () => {
     uninstallBridge();
+    unregisterMonitorAutomations();
     unregisterSessionLiveness();
     unregisterPeerRequests();
     unregisterPeerPairing();

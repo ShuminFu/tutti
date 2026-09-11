@@ -20,6 +20,7 @@ import {
 import { AgentGUIContentToast } from "./AgentGUIContentToast";
 import { AgentGUIDetailTimeline } from "./AgentGUIDetailTimeline";
 import { AgentMonitorPresenceBar } from "../../../shared/agentConversation/components/AgentMonitorPresenceBar";
+import { useHostMonitorAutomations } from "../../../shared/agentConversation/useHostMonitorAutomations";
 import {
   useOptionalStableEventCallback,
   useStableEventCallback
@@ -685,6 +686,12 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     virtualScrollControllerRef,
     viewModel
   });
+  // 监控自动化（补丁 0135）：问宿主「这条会话起过哪些还启用着的监控器」。
+  // 与上面那条 Monitor 工具的胶囊并排显示，数据源和语义都不同 —— 自动化平时
+  // 没有进程在跑，只有下一次心跳。宿主没这组能力时 hook 恒回空，胶囊不显示。
+  const monitorAutomations = useHostMonitorAutomations(
+    viewModel.rail.activeConversationId
+  );
   const homeContent = !hasActiveConversation ? (
     <AgentGUIEmptyHomePane
       isActive={isActive}
@@ -733,6 +740,10 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       <AgentMonitorPresenceBar
         monitors={conversation?.monitors}
         onStopMonitors={actions.stopBackgroundMonitors}
+        automations={monitorAutomations.monitors}
+        onStopAutomations={
+          monitorAutomations.canStop ? monitorAutomations.stopAll : undefined
+        }
       />
       <AgentGUIDetailTimeline
         availableSkills={viewModel.composer.availableSkills}

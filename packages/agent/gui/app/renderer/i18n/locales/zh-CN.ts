@@ -635,7 +635,10 @@ export const zhCN = {
       running: "监控器运行中",
       interrupted: "监控器已中断",
       longestElapsed: "最久 {{elapsed}}",
-      stopAll: "全部停止"
+      stopAll: "全部停止",
+      automationsRunning: "我起了 {{count}} 个监控器",
+      nextFire: "下次 {{remaining}}",
+      stopAutomations: "停用"
     },
     agentTool: {
       fallbackName: "使用工具",

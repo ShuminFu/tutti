@@ -674,7 +674,10 @@ export const en = {
       running: "Monitors running",
       interrupted: "Monitors interrupted",
       longestElapsed: "longest {{elapsed}}",
-      stopAll: "Stop all"
+      stopAll: "Stop all",
+      automationsRunning: "{{count}} monitors started here",
+      nextFire: "next in {{remaining}}",
+      stopAutomations: "Disable"
     },
     agentTool: {
       fallbackName: "Use tool",

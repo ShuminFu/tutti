@@ -37,6 +37,15 @@
 //                 attached（补丁 0128）与 state 正交：state = tuttid 里有没有活的
 //                 ACP 进程（圆点看它），attached = rndmaster 有没有非终态任务行盯着
 //                 （补挂看它）。缺字段按 false 处理。
+//
+// 会话顶部「我起了 N 个监控器」胶囊（补丁 0135）：
+// listMonitorAutomations       args[0] = { creatorSessionIds: string[] }（≤200）
+//                              result  = { monitors: HostMonitorAutomation[] }
+// setMonitorAutomationsEnabled args[0] = { ids: string[], enabled: boolean }
+//                              result  = { updated: number }
+// 宿主只回「启用中、且确实由问到的那些会话起的」监控自动化；停用时也在宿主侧
+// 再核对一次归属，iframe 递来的 id 不能直接落到别的自动化项上。
+//
 // 别名由宿主算，iframe 传空串；后端拒绝时回 { error: <中文文案>, code }。
 
 import { writeWorkspaceFileDropData } from "@tutti-os/agent-gui/workspace-file-drop";
@@ -705,6 +714,84 @@ export function requestHostSessionLiveness(args: {
           : {}
     })
   );
+}
+
+/**
+ * 一条监控自动化（宿主侧 preset=monitor 的自动化项）在 iframe 这边的形状。
+ *
+ * 为什么不是 Monitor 工具：DinTalDock 的 Claude 运行时把 `Monitor` 放进了
+ * disallowedTools，这个产品里真正能用的「监控」只有自动化项。它住在
+ * cliagent-backend，会话投影里没有它，只能经宿主桥问。
+ */
+export interface HostMonitorAutomation {
+  /** 自动化项 id，停用时原样递回去。 */
+  id: string;
+  /** 人话名字，例如「盯 grok-8014」。 */
+  name: string;
+  /** 被盯的那条会话（task id 或配对别名），给 tooltip 用；宿主可能给空串。 */
+  peerTarget: string;
+  /**
+   * 下一次心跳的时刻（毫秒）。监控自动化平时**没有进程在跑**，只有一个闹钟，
+   * 所以胶囊显示的是「下次几点响」，不是「已经跑了多久」——后者对它不成立。
+   * 宿主解析不出时刻时给 null，界面就只显示条数，不编一个时间出来。
+   */
+  nextFireAtUnixMs: number | null;
+}
+
+/**
+ * 批量问宿主：这些会话各自起过哪些还启用着的监控自动化。
+ *
+ * 宿主已经按归属过滤过；这里只做形状兜底（回了不认识的东西当没这条，而不是崩）。
+ * 宿主没实现这个能力时桥抛 HostBridgeUnavailableError，胶囊整个不显示。
+ */
+export function requestHostMonitorAutomations(args: {
+  creatorSessionIds: string[];
+}): Promise<{ monitors: HostMonitorAutomation[] }> {
+  return requestHostCapability<{ monitors?: unknown }>(
+    "listMonitorAutomations",
+    [{ creatorSessionIds: args.creatorSessionIds }]
+  ).then((result) => ({
+    monitors: Array.isArray(result?.monitors)
+      ? result.monitors.flatMap((entry) => {
+          const id = String((entry as { id?: unknown })?.id ?? "").trim();
+          // 没有 id 的条目没法停用，留着只会让「全部停用」静默漏掉一条。
+          if (!id) return [];
+          const raw = (entry as { nextFireAtUnixMs?: unknown })
+            ?.nextFireAtUnixMs;
+          return [
+            {
+              id,
+              name: String((entry as { name?: unknown })?.name ?? ""),
+              peerTarget: String(
+                (entry as { peerTarget?: unknown })?.peerTarget ?? ""
+              ),
+              nextFireAtUnixMs: typeof raw === "number" && Number.isFinite(raw)
+                ? raw
+                : null
+            }
+          ];
+        })
+      : []
+  }));
+}
+
+/**
+ * 停用（或重新启用）一批监控自动化。宿主会再核对一次归属与 preset，
+ * 回的 updated 是**真正改到的条数**，可能少于递过去的 id 数。
+ */
+export function requestHostSetMonitorAutomationsEnabled(args: {
+  ids: string[];
+  enabled: boolean;
+}): Promise<{ updated: number }> {
+  return requestHostCapability<{ updated?: unknown }>(
+    "setMonitorAutomationsEnabled",
+    [{ ids: args.ids, enabled: args.enabled }]
+  ).then((result) => ({
+    updated:
+      typeof result?.updated === "number" && Number.isFinite(result.updated)
+        ? result.updated
+        : 0
+  }));
 }
 
 /**
