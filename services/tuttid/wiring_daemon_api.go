@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -259,6 +260,10 @@ func buildDaemonAPI(
 		},
 		ProviderCommandResolver:    agentProviderCommandResolver(&agentStatusService),
 		CommandNetworkAccessPolicy: tuttiDesktopCommandNetworkAccessPolicy,
+		LiveSessionReaper: agentdaemon.LiveSessionReaperConfig{
+			IdleAfter:     tuttiLiveSessionIdleAfter(),
+			SweepInterval: tuttiLiveSessionSweepInterval(),
+		},
 	}
 	agentRuntimeConfig = applyAgentReplayRuntimeComposition(agentRuntimeConfig, replayComposition)
 	agentRuntime, err := agentdaemon.NewRuntime(agentRuntimeConfig)
@@ -838,4 +843,32 @@ func buildDaemonAPI(
 			}
 		},
 	}, appCenterService, agentRuntime, providerAuthWatcher, nil
+}
+
+// 空闲会话回收的节奏。上游默认「闲 30 分钟、每 5 分钟扫一次」，实际熄灭时间落在
+// 30~35 分钟之间；而 RnDMaster 把「进程在不在」直接画成会话栏的在线圆点，等半小时
+// 才熄灭对用户来说等于没有信号。收紧成「闲 5 分钟、每分钟扫一次」：
+// 续聊的代价很小（真机实测 session/load 约 200ms，进程重新拉起对用户几乎无感），
+// 换来的是圆点真的跟着「最近还在不在用」走，顺带少养一堆闲置的 agent 进程。
+//
+// 两个环境变量只为调试与真机验证留口（单位分钟，<=0 或非法则用默认值）：
+// 想复现「释放后续聊」这条链路时不必真等 5 分钟。
+func tuttiLiveSessionIdleAfter() time.Duration {
+	return tuttiDurationFromEnvMinutes("TUTTI_LIVE_SESSION_IDLE_MINUTES", 5*time.Minute)
+}
+
+func tuttiLiveSessionSweepInterval() time.Duration {
+	return tuttiDurationFromEnvMinutes("TUTTI_LIVE_SESSION_SWEEP_MINUTES", time.Minute)
+}
+
+func tuttiDurationFromEnvMinutes(name string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	minutes, err := strconv.ParseFloat(raw, 64)
+	if err != nil || minutes <= 0 {
+		return fallback
+	}
+	return time.Duration(minutes * float64(time.Minute))
 }
