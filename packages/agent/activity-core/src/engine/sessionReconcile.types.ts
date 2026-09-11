@@ -34,6 +34,13 @@ export interface SessionReconcileRecord {
   inFlightLive: boolean;
   inFlightScope: SessionReconcileScope | null;
   messageRefreshScheduled: boolean;
+  /**
+   * Failed message-hydration attempts since the last successful one. Selection
+   * only asks for hydration at the moment a conversation is selected, so a
+   * single failure used to leave that conversation blank forever; this counter
+   * bounds the automatic retry that replaces the manual "click away and back".
+   */
+  messageHydrationRetries: number;
   messagesHydrated: boolean;
   pendingLive: boolean;
   pendingMessages: boolean;

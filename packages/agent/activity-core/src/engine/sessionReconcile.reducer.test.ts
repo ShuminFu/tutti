@@ -335,11 +335,14 @@ test("a timed-out reconcile releases merged demand into the next command", () =>
     outcome: "timedOut"
   });
   assert.equal(timedOut.commands[0]?.type, "session/reconcile");
+  // The merged state demand is released, and the messages the timed-out command
+  // never delivered are re-armed with it: nothing else asks again while the same
+  // conversation stays selected, so dropping them here left it blank forever.
   assert.equal(
     timedOut.commands[0]?.type === "session/reconcile"
       ? timedOut.commands[0].scope
       : null,
-    "state"
+    "state_and_messages"
   );
 });
 
@@ -369,10 +372,11 @@ test("failed reconcile preserves typed error details for exact recovery", () => 
     inFlightCommandId: null,
     inFlightLive: false,
     inFlightScope: null,
-    messageRefreshScheduled: false,
+    messageRefreshScheduled: true,
+    messageHydrationRetries: 1,
     messagesHydrated: false,
     pendingLive: false,
-    pendingMessages: false,
+    pendingMessages: true,
     pendingMessagesImmediate: false,
     pendingState: false,
     requiredHistoryRevision: null,
@@ -547,6 +551,7 @@ test("a history checkpoint initializes a complete inactive reconcile record", ()
     inFlightLive: false,
     inFlightScope: null,
     messageRefreshScheduled: false,
+    messageHydrationRetries: 0,
     messagesHydrated: false,
     pendingLive: false,
     pendingMessages: false,
@@ -607,3 +612,102 @@ function reduce(
 ) {
   return sessionReconcileReducer(state, intent);
 }
+
+test("a conversation that never hydrated retries on its own, up to the budget", () => {
+  // Selection asks for message hydration once, when the conversation is
+  // selected; re-selecting the same id is a no-op. Without this retry a single
+  // failure left the transcript permanently blank and the only recovery was
+  // selecting another conversation and coming back.
+  let result = reduce(createInitialSessionReconcileState(), {
+    type: "session/reconcileRequested",
+    agentSessionId: "session-1",
+    needsMessages: true,
+    needsState: true,
+    workspaceId: "workspace-1"
+  });
+  assert.equal(result.commands[0]?.type, "session/reconcile");
+
+  const expectedDelays = [250, 1_000, 4_000];
+  for (const [attempt, delayMs] of expectedDelays.entries()) {
+    result = reduce(result.state, {
+      type: "engine/commandResult",
+      commandId: `session:reconcile:session-1:${attempt + 1}`,
+      commandType: "session/reconcile",
+      errorMessage: "transient",
+      outcome: "failed"
+    });
+    assert.deepEqual(
+      result.commands,
+      [
+        {
+          delayMs,
+          expiryId: "session:streaming-message-reconcile:session-1",
+          type: "engine/scheduleExpiryAfter"
+        }
+      ],
+      `attempt ${attempt + 1} must schedule a backed-off retry`
+    );
+    result = reduce(result.state, {
+      dueAtUnixMs: delayMs,
+      expiryId: "session:streaming-message-reconcile:session-1",
+      type: "engine/intentExpired"
+    });
+    assert.equal(
+      result.commands[0]?.type,
+      "session/reconcile",
+      `attempt ${attempt + 1} must re-read the messages`
+    );
+    assert.equal(
+      result.commands[0]?.type === "session/reconcile"
+        ? result.commands[0].scope
+        : null,
+      "messages"
+    );
+  }
+
+  // Budget spent: a conversation that genuinely cannot hydrate stops asking.
+  result = reduce(result.state, {
+    type: "engine/commandResult",
+    commandId: "session:reconcile:session-1:4",
+    commandType: "session/reconcile",
+    errorMessage: "transient",
+    outcome: "failed"
+  });
+  assert.equal(result.commands.length, 0);
+  assert.equal(
+    result.state.recordsBySessionId["session-1"]?.messageHydrationRetries,
+    4
+  );
+});
+
+test("a successful hydration refunds the retry budget", () => {
+  let result = reduce(createInitialSessionReconcileState(), {
+    type: "session/reconcileRequested",
+    agentSessionId: "session-1",
+    needsMessages: true,
+    needsState: false,
+    workspaceId: "workspace-1"
+  });
+  result = reduce(result.state, {
+    type: "engine/commandResult",
+    commandId: "session:reconcile:session-1:1",
+    commandType: "session/reconcile",
+    errorMessage: "transient",
+    outcome: "failed"
+  });
+  result = reduce(result.state, {
+    dueAtUnixMs: 250,
+    expiryId: "session:streaming-message-reconcile:session-1",
+    type: "engine/intentExpired"
+  });
+  result = reduce(result.state, {
+    type: "engine/commandResult",
+    commandId: "session:reconcile:session-1:2",
+    commandType: "session/reconcile",
+    outcome: "succeeded"
+  });
+  const record = result.state.recordsBySessionId["session-1"];
+  assert.equal(record?.messagesHydrated, true);
+  assert.equal(record?.messageHydrationRetries, 0);
+  assert.equal(result.commands.length, 0);
+});

@@ -15,6 +15,25 @@ const NO_COMMANDS: readonly EngineCommand[] = [];
 // streaming-report coalescer. They run in separate processes, so this is a
 // shared timing contract rather than one shared timer.
 const STREAMING_MESSAGE_COALESCE_WINDOW_MS = 50;
+// Conversation selection asks for message hydration exactly once, at the moment
+// the conversation is selected; re-selecting the same id is a no-op. So a single
+// failed hydration used to leave that conversation permanently blank — the only
+// recovery was selecting another conversation and coming back, which is just a
+// manual retry. Retry it automatically instead, bounded so a conversation that
+// genuinely cannot hydrate does not spin.
+const MESSAGE_HYDRATION_RETRY_LIMIT = 3;
+const MESSAGE_HYDRATION_RETRY_DELAYS_MS = [250, 1_000, 4_000] as const;
+
+function messageHydrationRetryDelayMs(attempt: number): number {
+  const index = Math.min(
+    Math.max(attempt, 1),
+    MESSAGE_HYDRATION_RETRY_DELAYS_MS.length
+  );
+  return (
+    MESSAGE_HYDRATION_RETRY_DELAYS_MS[index - 1] ??
+    STREAMING_MESSAGE_COALESCE_WINDOW_MS
+  );
+}
 
 export function createInitialSessionReconcileState(): SessionReconcileState {
   return { nextCommandSequence: 1, recordsBySessionId: {} };
@@ -253,6 +272,7 @@ function requestReconcile(
     inFlightLive: false,
     inFlightScope: null,
     messageRefreshScheduled: false,
+    messageHydrationRetries: 0,
     messagesHydrated: false,
     pendingLive: false,
     pendingMessages: false,
@@ -343,6 +363,33 @@ function settleReconcile(
   if (!record) {
     return unchanged(state);
   }
+  const carriedMessages =
+    record.inFlightScope === "messages" ||
+    record.inFlightScope === "state_and_messages";
+  const messagesHydrated =
+    record.messagesHydrated ||
+    (intent.outcome === "succeeded" && carriedMessages);
+  // A failed reconcile that was carrying this conversation's first page leaves
+  // the transcript empty, and nothing else asks again while the same
+  // conversation stays selected. Re-arm the request ourselves, up to the retry
+  // budget; a success resets the budget.
+  // Scoped to plain first-page hydration on purpose: authoritative reads and
+  // history-revision waits carry their own retry contract (they must not spin
+  // on a revision that keeps moving), and that contract stays untouched.
+  const failedMessageHydration =
+    intent.outcome !== "succeeded" &&
+    carriedMessages &&
+    !messagesHydrated &&
+    !record.authoritativeMessagesRequired &&
+    !historyRevisionIsPending(record);
+  const messageHydrationRetries = messagesHydrated
+    ? 0
+    : failedMessageHydration
+      ? record.messageHydrationRetries + 1
+      : record.messageHydrationRetries;
+  const retryMessageHydration =
+    failedMessageHydration &&
+    messageHydrationRetries <= MESSAGE_HYDRATION_RETRY_LIMIT;
   const settled = {
     ...record,
     errorCode:
@@ -354,14 +401,12 @@ function settleReconcile(
     inFlightCommandId: null,
     inFlightLive: false,
     inFlightScope: null,
-    messagesHydrated:
-      record.messagesHydrated ||
-      (intent.outcome === "succeeded" &&
-        (record.inFlightScope === "messages" ||
-          record.inFlightScope === "state_and_messages")),
+    messageHydrationRetries,
+    messagesHydrated,
     pendingLive:
       record.pendingLive ||
-      (intent.outcome !== "succeeded" && record.inFlightLive)
+      (intent.outcome !== "succeeded" && record.inFlightLive),
+    pendingMessages: record.pendingMessages || retryMessageHydration
   };
   const next = replaceRecord(state, settled);
   const shouldContinue =
@@ -379,7 +424,15 @@ function settleReconcile(
     !settled.pendingLive &&
     !settled.authoritativeMessagesRequired &&
     !historyRevisionIsPending(settled)
-    ? scheduleStreamingMessageReconcile(next, settled)
+    ? scheduleStreamingMessageReconcile(
+        next,
+        settled,
+        // Only the retry path needs to back off; a coalesced streaming refresh
+        // keeps the daemon-aligned 50ms window.
+        retryMessageHydration
+          ? messageHydrationRetryDelayMs(messageHydrationRetries)
+          : undefined
+      )
     : startReconcile(next, settled);
 }
 
@@ -403,7 +456,8 @@ function expireStreamingMessageReconcile(
 
 function scheduleStreamingMessageReconcile(
   state: SessionReconcileState,
-  record: SessionReconcileRecord
+  record: SessionReconcileRecord,
+  delayMs: number = STREAMING_MESSAGE_COALESCE_WINDOW_MS
 ): EngineReducerResult<SessionReconcileState> {
   if (record.messageRefreshScheduled || record.inFlightCommandId) {
     return { commands: NO_COMMANDS, state };
@@ -412,7 +466,7 @@ function scheduleStreamingMessageReconcile(
   return {
     commands: [
       {
-        delayMs: STREAMING_MESSAGE_COALESCE_WINDOW_MS,
+        delayMs,
         expiryId: streamingMessageReconcileExpiryId(record.agentSessionId),
         type: "engine/scheduleExpiryAfter"
       }
@@ -512,6 +566,7 @@ function applyHistoryCheckpoint(
     inFlightLive: false,
     inFlightScope: null,
     messageRefreshScheduled: false,
+    messageHydrationRetries: 0,
     messagesHydrated: false,
     pendingLive: false,
     pendingMessages: false,
