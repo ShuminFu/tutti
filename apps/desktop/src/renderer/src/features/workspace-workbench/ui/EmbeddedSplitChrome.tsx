@@ -25,6 +25,11 @@ import {
 import { MoreHorizontalIcon } from "@tutti-os/ui-system/icons";
 import { useTranslation } from "@renderer/i18n";
 import {
+  beginEmbeddedSplitDividerDrag,
+  embeddedSplitDividerDragRatio,
+  type EmbeddedSplitDividerDrag
+} from "./embeddedSplitDividerDrag.ts";
+import {
   buildEmbeddedSplitPaneHeaders,
   type EmbeddedSplitPaneHeaderMenuItem
 } from "./embeddedSplitPaneHeader.ts";
@@ -64,7 +69,7 @@ export function EmbeddedSplitChrome(): ReactNode {
   );
   // ⋯ 菜单一次只开一栏；记的是「哪一栏开着」而不是布尔，免得两栏各开一个。
   const [menuSide, setMenuSide] = useState<"left" | "right" | null>(null);
-  const resizingRef = useRef(false);
+  const resizeDragRef = useRef<EmbeddedSplitDividerDrag | null>(null);
 
   const split = snapshot !== null && snapshot.panes.right !== null;
   const ratio = snapshot?.ratio ?? 0.5;
@@ -207,19 +212,35 @@ export function EmbeddedSplitChrome(): ReactNode {
         ".rndmaster-dintaldock-embedded"
       );
       if (!main) return;
-      resizingRef.current = true;
+      const rect = main.getBoundingClientRect();
+      // 按下这一刻的快照要现读：这个回调的依赖数组是空的，闭包里的 ratio/railPush
+      // 是第一次渲染的值。
+      const at = embeddedSplitViewSnapshot();
+      const drag = beginEmbeddedSplitDividerDrag({
+        clientX: event.clientX,
+        dividerRatio: (at?.ratio ?? 0.5) + (at?.railPushRatio ?? 0),
+        surfaceLeft: rect.left,
+        surfaceWidth: rect.width
+      });
+      if (!drag) return;
+      resizeDragRef.current = drag;
       event.currentTarget.setPointerCapture?.(event.pointerId);
       event.preventDefault();
-      const rect = main.getBoundingClientRect();
       const onMove = (move: PointerEvent): void => {
-        if (!resizingRef.current || rect.width <= 0) return;
+        const active = resizeDragRef.current;
+        if (!active) return;
         // 夹逼（每栏 >= 320px）在 controller 里做，这里只给原始比例。
-        embeddedSplitViewController()?.resize(
-          (move.clientX - rect.left) / rect.width
+        // railPush 每帧现读：会话栏宽度会被右栏下限夹逼，拖动中会变。
+        const next = embeddedSplitDividerDragRatio(
+          active,
+          move.clientX,
+          embeddedSplitViewSnapshot()?.railPushRatio ?? 0
         );
+        if (next === null) return;
+        embeddedSplitViewController()?.resize(next);
       };
       const onUp = (): void => {
-        resizingRef.current = false;
+        resizeDragRef.current = null;
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onUp);
