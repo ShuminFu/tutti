@@ -137,19 +137,45 @@ func (s Service) resolveProviderSpec(ctx context.Context, spec ProviderSpec, req
 }
 
 // withPreferredClaudeCodeRuntime makes a verified DinTalDock-managed Claude
-// binary win over a stale PATH shim. An explicit, valid operator override still
-// wins. Both the status probe and the ACP bridge receive the same selection.
+// binary win over a stale PATH shim. The host's projection (which the operator
+// rewrites on every save) wins over the process environment, and an explicit,
+// valid override still wins over discovery. Both the status probe and the ACP
+// bridge receive the same selection.
 func (s Service) withPreferredClaudeCodeRuntime(ctx context.Context, spec ProviderSpec) ProviderSpec {
 	if !isClaudeStatusSpec(spec) {
 		return spec
 	}
 	resolver := s.commandResolver()
 	env := resolver.Env(spec.AdapterEnv)
-	if preferred := s.validClaudeCodeExecutable(ctx, spec, envValueForKey(env, claudeCodeExecutableEnv), env); preferred != "" {
-		if claudeCodeAdapterExecutable(runtime.GOOS, spec, preferred) == preferred {
-			return spec
+
+	// The host projection is newer than this process's environment: the override
+	// below was frozen at spawn, so a path the operator saved afterwards is only
+	// visible here. A host that does not write the projection (or an older
+	// sidecar that does not know it) keeps the legacy chain, so upgrades have no
+	// cliff. See host_runtime_selection.go.
+	hostSelection, hostState := hostRuntimeSelection(spec.Provider)
+	skipInlineOverride := hostState == hostRuntimeSelectionCleared
+	if hostState == hostRuntimeSelectionSet {
+		// Only rewrite the spec when the projection actually moved: when it
+		// agrees with the inline override the value is already in the child's
+		// environment, and re-writing AdapterEnv/PATH would also move the ACP
+		// adapter's own PATH head for no reason.
+		if !sameExecutablePath(envValueForKey(env, claudeCodeExecutableEnv), hostSelection) {
+			if selected := s.validClaudeCodeExecutable(ctx, spec, hostSelection, env); selected != "" {
+				return preferClaudeCodeExecutable(spec, selected, env)
+			}
 		}
-		return preferClaudeCodeExecutable(spec, preferred, env)
+	}
+	// hostRuntimeSelectionCleared means the host says this provider has no
+	// selected runtime; the inline override is stale by definition, so skip it
+	// and let DinTalDock's managed binary or PATH discovery take over.
+	if !skipInlineOverride {
+		if preferred := s.validClaudeCodeExecutable(ctx, spec, envValueForKey(env, claudeCodeExecutableEnv), env); preferred != "" {
+			if claudeCodeAdapterExecutable(runtime.GOOS, spec, preferred) == preferred {
+				return spec
+			}
+			return preferClaudeCodeExecutable(spec, preferred, env)
+		}
 	}
 	if managed := s.managedClaudeCodeExecutable(); managed != "" {
 		return preferClaudeCodeExecutable(spec, managed, env)
@@ -160,6 +186,18 @@ func (s Service) withPreferredClaudeCodeRuntime(ctx context.Context, spec Provid
 		}
 	}
 	return spec
+}
+
+// sameExecutablePath compares two executable paths the way the host writes them
+// (host and sidecar share one source), so equivalent spellings are not mistaken
+// for a changed selection.
+func sameExecutablePath(left, right string) bool {
+	left = filepath.Clean(strings.TrimSpace(left))
+	right = filepath.Clean(strings.TrimSpace(right))
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(left, right)
+	}
+	return left == right
 }
 
 func preferClaudeCodeExecutable(spec ProviderSpec, executable string, env []string) ProviderSpec {
