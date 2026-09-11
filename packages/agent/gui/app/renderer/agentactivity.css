@@ -5909,6 +5909,22 @@ aside.workspace-agents-status-panel
   background: var(--agent-gui-session-flow-background);
 }
 
+/*
+ * 两列之间那条分界线要直上直下。会话栏并排展开时，会话流左边那条缝是列与列的
+ * 分界线，不是窗口外沿；16px 圆角会让缝的上下两端各拱出一个弧，读起来像两块浮卡。
+ * 把贴着缝的两个角拉直，缝就连成一条线。
+ *
+ * 窗口四周的圆角不动：会话栏收起、或窄屏下会话栏浮在会话流之上（overlay）时，
+ * 会话流自己贴到窗口左沿，那时左边两角就是外沿，所以这两种状态排除在外。
+ */
+.agent-gui-node__layout:not([data-agent-gui-conversation-rail-overlay="true"]):has(
+    > .agent-gui-node__rail-panel:not(.agent-gui-node__rail-panel--collapsed)
+  )
+  > .agent-gui-node__detail-panel {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+}
+
 .agent-gui-node__detail-panel > .agent-gui-node__detail {
   min-height: 0;
   border-radius: inherit;
