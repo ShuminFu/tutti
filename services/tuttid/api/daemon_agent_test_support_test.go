@@ -30,6 +30,7 @@ type stubAgentSessionService struct {
 	validImportPathsFn                func(context.Context, agentservice.ExternalImportInput) ([]string, error)
 	listFn                            func(context.Context, string, agentservice.ListSessionsInput) ([]agentservice.Session, error)
 	listPageFn                        func(context.Context, string, agentservice.ListSessionsInput) (agentservice.SessionListPage, error)
+	sessionLivenessFn                 func(context.Context, string, []string) (map[string]agentservice.SessionLivenessEntry, error)
 	listSessionSectionsFn             func(context.Context, string, agentservice.ListSessionSectionsInput) (agentservice.SessionSectionsPage, error)
 	listSessionSectionPageFn          func(context.Context, string, agentservice.ListSessionSectionPageInput) (agentservice.SessionSection, error)
 	listPinnedSessionPageFn           func(context.Context, string, agentservice.ListPinnedSessionPageInput) (agentservice.SessionPage, error)
@@ -74,6 +75,14 @@ func (s stubAgentSessionService) ListPage(ctx context.Context, workspaceID strin
 		return agentservice.SessionListPage{}, nil
 	}
 	return s.listPageFn(ctx, workspaceID, input)
+}
+
+// 补丁 0125：批量存活口的替身。
+func (s stubAgentSessionService) SessionLiveness(ctx context.Context, workspaceID string, ids []string) (map[string]agentservice.SessionLivenessEntry, error) {
+	if s.sessionLivenessFn == nil {
+		return map[string]agentservice.SessionLivenessEntry{}, nil
+	}
+	return s.sessionLivenessFn(ctx, workspaceID, ids)
 }
 
 func (s stubAgentSessionService) ListSessionSections(ctx context.Context, workspaceID string, input agentservice.ListSessionSectionsInput) (agentservice.SessionSectionsPage, error) {

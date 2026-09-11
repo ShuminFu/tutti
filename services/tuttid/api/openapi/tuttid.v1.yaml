@@ -3717,6 +3717,55 @@ paths:
           $ref: "#/components/responses/WorkspaceOperationError"
         "503":
           $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/agent-sessions/liveness:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: getWorkspaceAgentSessionLiveness
+      tags:
+        - agent-session
+      summary: Batch-read provider-process liveness for agent sessions
+      description: >-
+        Answers "does this session still own a live provider (ACP) process" for
+        many sessions in one call. Idle reclamation releases a provider process
+        without changing session status or emitting an event, so polling this
+        endpoint is the only way to observe it. Every requested id appears in
+        the response; unknown ids come back with found=false.
+      parameters:
+        - in: query
+          name: ids
+          required: true
+          description: >-
+            Agent session ids to probe. Repeat the parameter and/or use a
+            comma-separated list; both forms are accepted and merged. At least
+            one and at most 200 distinct ids.
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            items:
+              type: string
+              minLength: 1
+      responses:
+        "200":
+          description: Agent session liveness snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAgentSessionLivenessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
   /v1/workspaces/{workspaceID}/deleted-agent-sessions:
     parameters:
       - $ref: "#/components/parameters/WorkspaceID"
@@ -12669,6 +12718,40 @@ components:
           description: Caller-stable idempotency key for safe retries.
         point:
           $ref: "#/components/schemas/WorkspaceAgentSessionForkPoint"
+    WorkspaceAgentSessionLivenessResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - sessions
+      properties:
+        sessions:
+          type: object
+          description: >-
+            Keyed by the requested agent session id. Every requested id is
+            present, including ids this workspace does not know.
+          additionalProperties:
+            $ref: "#/components/schemas/WorkspaceAgentSessionLivenessEntry"
+    WorkspaceAgentSessionLivenessEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - found
+        - runtimeLive
+        - activeTurnId
+      properties:
+        found:
+          type: boolean
+          description: True when this workspace owns a session with that id.
+        runtimeLive:
+          type: boolean
+          description: >-
+            True when the session still owns a live provider (ACP) process.
+            Always false when found is false.
+        activeTurnId:
+          type: string
+          description: >-
+            Turn currently open on the session, or an empty string when no turn
+            is open (or the session is unknown).
     WorkspaceAgentSession:
       type: object
       additionalProperties: false
@@ -12708,6 +12791,7 @@ components:
         - goalSyncState
         - tuttiModeActivation
         - imported
+        - runtimeLive
       properties:
         id:
           type: string
@@ -12875,6 +12959,13 @@ components:
           description: >-
             Protocol v2. True when the session was imported from external
             provider history. Explicit field extracted from runtimeContext.
+        runtimeLive:
+          type: boolean
+          description: >-
+            True when this session still owns a live provider (ACP) process in
+            the daemon runtime registry. Point-in-time observation: idle
+            reclamation releases the process without changing session status or
+            emitting an event, so this field is the only way to learn it.
         visible:
           type: boolean
         settings:

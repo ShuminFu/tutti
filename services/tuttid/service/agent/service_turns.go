@@ -215,6 +215,20 @@ func (s *Service) projectSessionForResponse(ctx context.Context, workspaceID str
 	return s.withProtocolV2TurnState(ctx, strings.TrimSpace(workspaceID), session)
 }
 
+// withRuntimeLive 贴上「此刻还有没有活的 provider 进程」（补丁 0125）。
+// 放在统一投影的最后一步：单条与批量都经过这里，别的地方不要另算一份。
+func (s *Service) withRuntimeLive(workspaceID string, session Session) Session {
+	session.RuntimeLive = s.runtimeSessionLiveIfConfigured(workspaceID, session.ID)
+	return session
+}
+
+func (s *Service) withRuntimeLiveBatch(workspaceID string, sessions []Session) []Session {
+	for index := range sessions {
+		sessions[index] = s.withRuntimeLive(workspaceID, sessions[index])
+	}
+	return sessions
+}
+
 // projectSessionsForResponse is the batched form of
 // projectSessionForResponse. List and section responses must use the same
 // projection contract as single-session mutations.
@@ -237,7 +251,22 @@ func (s *Service) withProtocolV2TurnState(ctx context.Context, workspaceID strin
 	)
 }
 
+// withProtocolV2TurnStateProjectionOptions 是单条会话的统一投影出口；补丁 0125
+// 在这里、而不是在各个调用点，给会话贴上 RuntimeLive。
 func (s *Service) withProtocolV2TurnStateProjectionOptions(
+	ctx context.Context,
+	workspaceID string,
+	session Session,
+	resolveProviderCapabilities bool,
+) (Session, error) {
+	projected, err := s.protocolV2TurnStateProjection(ctx, workspaceID, session, resolveProviderCapabilities)
+	if err != nil {
+		return Session{}, err
+	}
+	return s.withRuntimeLive(workspaceID, projected), nil
+}
+
+func (s *Service) protocolV2TurnStateProjection(
 	ctx context.Context,
 	workspaceID string,
 	session Session,
@@ -332,7 +361,17 @@ func (s *Service) withProtocolV2TurnStateProjection(ctx context.Context, workspa
 	return session, nil
 }
 
+// withProtocolV2TurnStates 是批量会话的统一投影出口（补丁 0125 同样在这里贴
+// RuntimeLive）。
 func (s *Service) withProtocolV2TurnStates(ctx context.Context, workspaceID string, sessions []Session) ([]Session, error) {
+	projected, err := s.protocolV2TurnStatesProjection(ctx, workspaceID, sessions)
+	if err != nil {
+		return nil, err
+	}
+	return s.withRuntimeLiveBatch(workspaceID, projected), nil
+}
+
+func (s *Service) protocolV2TurnStatesProjection(ctx context.Context, workspaceID string, sessions []Session) ([]Session, error) {
 	if len(sessions) == 0 {
 		return sessions, nil
 	}

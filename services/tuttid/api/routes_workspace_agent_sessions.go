@@ -108,6 +108,17 @@ func registerWorkspaceAgentSessionRoutes(
 		wrapper.ImportWorkspaceExternalAgentSessions(w, r)
 	})
 
+	// 补丁 0125：批量存活口。字面量 "liveness" 段必须登记在通配的
+	// "{agentSessionID}" 之前 —— net/http 的 ServeMux 本来就让更具体的模式优先，
+	// 但这份路由表是手写的，顺序即可读性，别让后来人以为它会被吃掉。
+	mux.HandleFunc("/v1/workspaces/{workspaceID}/agent-sessions/liveness", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			tuttitypes.WriteMethodNotAllowed(w)
+			return
+		}
+		wrapper.GetWorkspaceAgentSessionLiveness(w, r)
+	})
+
 	mux.HandleFunc("/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

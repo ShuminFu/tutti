@@ -8835,9 +8835,12 @@ type WorkspaceAgentSession struct {
 	RootAgentSessionId *string `json:"rootAgentSessionId"`
 
 	// RootTurnId Root turn under which this child session was created. Null when kind is root.
-	RootTurnId *string                      `json:"rootTurnId"`
-	Settings   AgentSessionComposerSettings `json:"settings"`
-	Title      *string                      `json:"title"`
+	RootTurnId *string `json:"rootTurnId"`
+
+	// RuntimeLive True when this session still owns a live provider (ACP) process in the daemon runtime registry. Point-in-time observation: idle reclamation releases the process without changing session status or emitting an event, so this field is the only way to learn it.
+	RuntimeLive bool                         `json:"runtimeLive"`
+	Settings    AgentSessionComposerSettings `json:"settings"`
+	Title       *string                      `json:"title"`
 
 	// TuttiModeActivation Independent, session-scoped Tutti mode activation projection. Null until the first activation revision exists; capability references are audit records and never determine this state.
 	TuttiModeActivation *TuttiModeActivation `json:"tuttiModeActivation"`
@@ -9061,6 +9064,24 @@ type WorkspaceAgentSessionListResponse struct {
 	NextCursor  *string                 `json:"nextCursor,omitempty"`
 	Sessions    []WorkspaceAgentSession `json:"sessions"`
 	WorkspaceId string                  `json:"workspaceId"`
+}
+
+// WorkspaceAgentSessionLivenessEntry defines model for WorkspaceAgentSessionLivenessEntry.
+type WorkspaceAgentSessionLivenessEntry struct {
+	// ActiveTurnId Turn currently open on the session, or an empty string when no turn is open (or the session is unknown).
+	ActiveTurnId string `json:"activeTurnId"`
+
+	// Found True when this workspace owns a session with that id.
+	Found bool `json:"found"`
+
+	// RuntimeLive True when the session still owns a live provider (ACP) process. Always false when found is false.
+	RuntimeLive bool `json:"runtimeLive"`
+}
+
+// WorkspaceAgentSessionLivenessResponse defines model for WorkspaceAgentSessionLivenessResponse.
+type WorkspaceAgentSessionLivenessResponse struct {
+	// Sessions Keyed by the requested agent session id. Every requested id is present, including ids this workspace does not know.
+	Sessions map[string]WorkspaceAgentSessionLivenessEntry `json:"sessions"`
 }
 
 // WorkspaceAgentSessionMessage defines model for WorkspaceAgentSessionMessage.
@@ -10280,6 +10301,12 @@ type CreateWorkspaceAgentSessionParams struct {
 
 // CreateWorkspaceAgentSessionParamsXTuttiAgentCommandOrigin defines parameters for CreateWorkspaceAgentSession.
 type CreateWorkspaceAgentSessionParamsXTuttiAgentCommandOrigin string
+
+// GetWorkspaceAgentSessionLivenessParams defines parameters for GetWorkspaceAgentSessionLiveness.
+type GetWorkspaceAgentSessionLivenessParams struct {
+	// Ids Agent session ids to probe. Repeat the parameter and/or use a comma-separated list; both forms are accepted and merged. At least one and at most 200 distinct ids.
+	Ids []string `form:"ids" json:"ids"`
+}
 
 // GetWorkspaceAgentSessionParams defines parameters for GetWorkspaceAgentSession.
 type GetWorkspaceAgentSessionParams struct {

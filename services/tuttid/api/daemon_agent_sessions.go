@@ -56,6 +56,9 @@ type AgentSessionService interface {
 	UpdateVisible(context.Context, string, string, bool) (agentservice.Session, error)
 	UpdateSettings(context.Context, string, string, agentservice.ComposerSettingsPatch) (agentservice.Session, error)
 	SubmitInteractive(context.Context, agenthost.InteractionRef, agenthost.SubmitInteractiveInput) (agentservice.Session, error)
+	// SessionLiveness 是补丁 0125 的批量存活口：一次问一批会话号，
+	// 每个问到的 id 都必须出现在结果里（查不到就 Found=false）。
+	SessionLiveness(context.Context, string, []string) (map[string]agentservice.SessionLivenessEntry, error)
 }
 
 func (api DaemonAPI) ClearWorkspaceAgentSessions(ctx context.Context, request tuttigenerated.ClearWorkspaceAgentSessionsRequestObject) (tuttigenerated.ClearWorkspaceAgentSessionsResponseObject, error) {
@@ -776,14 +779,17 @@ func generatedAgentSession(session agentservice.Session) (tuttigenerated.Workspa
 		PinnedAtUnixMs:       int64Pointer(session.PinnedAtUnixMS),
 		RailSectionKey:       strings.TrimSpace(session.RailSectionKey),
 		Resumable:            session.Resumable,
-		RootAgentSessionId:   optionalStringPointer(strings.TrimSpace(session.RootAgentSessionID)),
-		RootTurnId:           optionalStringPointer(strings.TrimSpace(session.RootTurnID)),
-		Settings:             generatedSettings,
-		Title:                session.Title,
-		TuttiModeActivation:  tuttiModeActivation,
-		UpdatedAtUnixMs:      updatedAtUnixMS,
-		Usage:                generatedAgentSessionUsage(session.Metadata.Usage),
-		Visible:              session.Visible,
+		// 补丁 0125：会话此刻还有没有活的 provider（ACP）进程。值由 service 层的
+		// 统一投影边界贴上，这里只搬运，不另算一份判据。
+		RuntimeLive:         session.RuntimeLive,
+		RootAgentSessionId:  optionalStringPointer(strings.TrimSpace(session.RootAgentSessionID)),
+		RootTurnId:          optionalStringPointer(strings.TrimSpace(session.RootTurnID)),
+		Settings:            generatedSettings,
+		Title:               session.Title,
+		TuttiModeActivation: tuttiModeActivation,
+		UpdatedAtUnixMs:     updatedAtUnixMS,
+		Usage:               generatedAgentSessionUsage(session.Metadata.Usage),
+		Visible:             session.Visible,
 	}, nil
 }
 

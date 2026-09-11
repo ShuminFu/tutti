@@ -287,6 +287,9 @@ type ServerInterface interface {
 	// Scan local agent history or a supported provider export that can be imported into one workspace
 	// (POST /v1/workspaces/{workspaceID}/agent-sessions/external-imports/scan)
 	ScanWorkspaceExternalAgentSessionImports(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID)
+	// Batch-read provider-process liveness for agent sessions
+	// (GET /v1/workspaces/{workspaceID}/agent-sessions/liveness)
+	GetWorkspaceAgentSessionLiveness(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, params GetWorkspaceAgentSessionLivenessParams)
 	// Delete one workspace agent session
 	// (DELETE /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID})
 	DeleteWorkspaceAgentSession(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, agentSessionID AgentSessionID)
@@ -3852,6 +3855,54 @@ func (siw *ServerInterfaceWrapper) ScanWorkspaceExternalAgentSessionImports(w ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ScanWorkspaceExternalAgentSessionImports(w, r, workspaceID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWorkspaceAgentSessionLiveness operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkspaceAgentSessionLiveness(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspaceID" -------------
+	var workspaceID WorkspaceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspaceID", r.PathValue("workspaceID"), &workspaceID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspaceID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetWorkspaceAgentSessionLivenessParams
+
+	// ------------- Required query parameter "ids" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "ids", r.URL.Query(), &params.Ids, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ids"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ids", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkspaceAgentSessionLiveness(w, r, workspaceID, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11367,6 +11418,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/batch", wrapper.DeleteWorkspaceAgentSessionsBatch)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/external-imports/import", wrapper.ImportWorkspaceExternalAgentSessions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/external-imports/scan", wrapper.ScanWorkspaceExternalAgentSessionImports)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/liveness", wrapper.GetWorkspaceAgentSessionLiveness)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}", wrapper.DeleteWorkspaceAgentSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}", wrapper.GetWorkspaceAgentSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/acceptance", wrapper.GetAgentSessionAcceptance)
@@ -19547,6 +19599,123 @@ type ScanWorkspaceExternalAgentSessionImports503JSONResponse struct {
 }
 
 func (response ScanWorkspaceExternalAgentSessionImports503JSONResponse) VisitScanWorkspaceExternalAgentSessionImportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkspaceAgentSessionLivenessRequestObject struct {
+	WorkspaceID WorkspaceID `json:"workspaceID"`
+	Params      GetWorkspaceAgentSessionLivenessParams
+}
+
+type GetWorkspaceAgentSessionLivenessResponseObject interface {
+	VisitGetWorkspaceAgentSessionLivenessResponse(w http.ResponseWriter) error
+}
+
+type GetWorkspaceAgentSessionLiveness200JSONResponse WorkspaceAgentSessionLivenessResponse
+
+func (response GetWorkspaceAgentSessionLiveness200JSONResponse) VisitGetWorkspaceAgentSessionLivenessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkspaceAgentSessionLiveness400JSONResponse struct {
+	InvalidRequestErrorJSONResponse
+}
+
+func (response GetWorkspaceAgentSessionLiveness400JSONResponse) VisitGetWorkspaceAgentSessionLivenessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkspaceAgentSessionLiveness401JSONResponse struct{ UnauthorizedErrorJSONResponse }
+
+func (response GetWorkspaceAgentSessionLiveness401JSONResponse) VisitGetWorkspaceAgentSessionLivenessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkspaceAgentSessionLiveness404JSONResponse struct {
+	WorkspaceNotFoundErrorJSONResponse
+}
+
+func (response GetWorkspaceAgentSessionLiveness404JSONResponse) VisitGetWorkspaceAgentSessionLivenessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkspaceAgentSessionLiveness405JSONResponse struct {
+	MethodNotAllowedErrorJSONResponse
+}
+
+func (response GetWorkspaceAgentSessionLiveness405JSONResponse) VisitGetWorkspaceAgentSessionLivenessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkspaceAgentSessionLiveness502JSONResponse struct {
+	WorkspaceOperationErrorJSONResponse
+}
+
+func (response GetWorkspaceAgentSessionLiveness502JSONResponse) VisitGetWorkspaceAgentSessionLivenessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkspaceAgentSessionLiveness503JSONResponse struct {
+	ServiceUnavailableErrorJSONResponse
+}
+
+func (response GetWorkspaceAgentSessionLiveness503JSONResponse) VisitGetWorkspaceAgentSessionLivenessResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -39366,6 +39535,9 @@ type StrictServerInterface interface {
 	// Scan local agent history or a supported provider export that can be imported into one workspace
 	// (POST /v1/workspaces/{workspaceID}/agent-sessions/external-imports/scan)
 	ScanWorkspaceExternalAgentSessionImports(ctx context.Context, request ScanWorkspaceExternalAgentSessionImportsRequestObject) (ScanWorkspaceExternalAgentSessionImportsResponseObject, error)
+	// Batch-read provider-process liveness for agent sessions
+	// (GET /v1/workspaces/{workspaceID}/agent-sessions/liveness)
+	GetWorkspaceAgentSessionLiveness(ctx context.Context, request GetWorkspaceAgentSessionLivenessRequestObject) (GetWorkspaceAgentSessionLivenessResponseObject, error)
 	// Delete one workspace agent session
 	// (DELETE /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID})
 	DeleteWorkspaceAgentSession(ctx context.Context, request DeleteWorkspaceAgentSessionRequestObject) (DeleteWorkspaceAgentSessionResponseObject, error)
@@ -42474,6 +42646,33 @@ func (sh *strictHandler) ScanWorkspaceExternalAgentSessionImports(w http.Respons
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ScanWorkspaceExternalAgentSessionImportsResponseObject); ok {
 		if err := validResponse.VisitScanWorkspaceExternalAgentSessionImportsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWorkspaceAgentSessionLiveness operation middleware
+func (sh *strictHandler) GetWorkspaceAgentSessionLiveness(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, params GetWorkspaceAgentSessionLivenessParams) {
+	var request GetWorkspaceAgentSessionLivenessRequestObject
+
+	request.WorkspaceID = workspaceID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWorkspaceAgentSessionLiveness(ctx, request.(GetWorkspaceAgentSessionLivenessRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWorkspaceAgentSessionLiveness")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWorkspaceAgentSessionLivenessResponseObject); ok {
+		if err := validResponse.VisitGetWorkspaceAgentSessionLivenessResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

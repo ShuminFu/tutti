@@ -298,6 +298,11 @@ type Session struct {
 	TuttiModeActivation    *tuttimodeactivationbiz.Activation
 	LifecycleCapabilities  SessionLifecycleCapabilities
 	ForkedFrom             *SessionForkLineage
+	// RuntimeLive 是「这条会话此刻还有没有活的 provider（ACP）进程」（补丁 0125）。
+	// 空闲回收放掉进程时不改会话状态也不发事件，所以它只能靠查询得到；由
+	// projectSessionForResponse / projectSessionsForResponse 这条统一投影边界
+	// 贴上，是**读到那一刻**的观察，不进持久化。
+	RuntimeLive bool
 }
 
 // SessionGoalSyncState is the narrow durable Goal-operation evidence exposed
