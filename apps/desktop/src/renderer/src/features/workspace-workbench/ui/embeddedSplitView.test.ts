@@ -885,6 +885,34 @@ test("会话栏展开时左栏加宽、右栏同步变窄，两栏仍然铺满",
   controller.dispose();
 });
 
+// 放下区/命中判定与 CSS 画的分界线必须同源（`ratio + railPush`）。只按 ratio 算时，
+// 预览框把整片主区从正中切开、不跟分界线走，中间那条带子还会把会话丢进右栏。
+test("放下区与命中带跟着分界线走，不是主区中线", async () => {
+  const fake = createFakeHost();
+  const controller = makeController(fake);
+  await controller.adopt(["agent-left", "agent-right"]);
+  controller.select("session-a");
+  await controller.dropSession(dragSession("session-b"), "right");
+
+  // 1200 宽、比例 0.5：右栏 600px，让出 240px 后仍有 360px，没碰到夹逼。
+  controller.setRailPushPx(240);
+  assert.ok(Math.abs(controller.getSnapshot().railPushRatio - 0.2) < 1e-9);
+
+  // 分界线在 (0.5 + 0.2) * 1200 = 840；左栏放下区从会话栏右缘 300 起。
+  assert.deepEqual(controller.dropZoneRect("left"), { left: 300, width: 540 });
+  assert.deepEqual(controller.dropZoneRect("right"), { left: 840, width: 360 });
+
+  // 700 在主区中线右边、分界线左边——看着是左栏，就必须判成左栏。
+  const host = conversationRailSplitHost();
+  host?.onDragStart?.(dragSession("session-c"), { x: 700, y: 400 });
+  assert.equal(controller.getSnapshot().dragging?.hoverSide, "left");
+  host?.onDragMove?.({ x: 900, y: 400 });
+  assert.equal(controller.getSnapshot().dragging?.hoverSide, "right");
+  host?.onDragCancel?.();
+
+  controller.dispose();
+});
+
 // 右栏被推到 320px 以下就等于分栏被会话栏吃掉了；宁可推得少一点，也不能推没。
 test("推力被夹在右栏 320px 最小宽度上", async () => {
   const fake = createFakeHost({ surfaceWidth: 1000 });

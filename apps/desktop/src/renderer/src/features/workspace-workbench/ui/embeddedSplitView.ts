@@ -893,8 +893,12 @@ export function createEmbeddedSplitViewController(
 
   function dropBoundary(surface: EmbeddedSplitRect): number {
     const detailLeft = detailLeftOffset(surface);
+    // 两栏时的分界线画在 `ratio + railPush` 处（CSS 的壳几何、分隔线、栏头、
+    // 投给 agent-gui 的 fraction 全是这个和）。放下区与命中判定必须同源：
+    // 只用 ratio 会把整片主区从正中切开，预览框不跟分界线走，而中间那条
+    // 「看着是左栏、判成右栏」的带子还会把会话丢错栏（票 05 回归）。
     return isSplitLayoutSplit(layout)
-      ? surface.width * layout.ratio
+      ? surface.width * (layout.ratio + railPushRatio())
       : (detailLeft + surface.width) / 2;
   }
 
