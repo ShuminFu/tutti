@@ -187,6 +187,33 @@
   grid-column: 3 !important;
 }
 
+/* ---- 内缝拉直：圆角只留在最外两侧 --------------------------------------
+ *
+ * 会话流面板自带 16px 圆角（agentactivity.css）。补丁 0133 已经把它靠会话栏那
+ * 两个角拉直了，但那条规则只认「会话栏在网格里、且不是抽屉态」，管不到分栏：
+ *
+ *   1. 左栏的**右**边是分栏分隔线，不是窗口外沿。圆角留着，缝的上下两端各拱一个
+ *      弧，两栏看着像两块浮卡叠在一起（真机 2560 宽分栏实测）。
+ *   2. 分栏时左栏必然低于上游 630px 阈值而进抽屉态，上面「票 05」那段又把会话栏
+ *      恢复成真列 —— 缝是真的存在，0133 却因为 overlay 属性跳过了它。
+ *
+ * 规则统一成一句：缝两边都拉直，圆角只留给整窗最外侧的那两条边。
+ */
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  [data-rndmaster-pane="left"]
+  .agent-gui-node__detail-panel {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
+  [data-rndmaster-pane="left"]
+  .agent-gui-node__layout[data-agent-gui-conversation-rail-overlay="true"]
+  .agent-gui-node__detail-panel {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+}
+
 /* 工作台按**几何遮挡**给窗口打 `data-agent-gui-visible="false"`，再用
    `content-visibility: hidden` 把整棵子树的绘制、文本与命中测试全部跳过
    （上游 agentactivity.css，静态检查 agent-gui-presentation-performance-policy
