@@ -18,13 +18,17 @@ function installHost(host: SessionLivenessHost): void {
   unregister = registerSessionLivenessHost(host);
 }
 
+// attached 默认给 true：绝大多数用例只关心 state 那一维（补丁 0128 起 map 的
+// 值是 { state, attached } 小对象）。
 function entry(
-  state: HostSessionLivenessEntry["state"]
+  state: HostSessionLivenessEntry["state"],
+  attached = true
 ): HostSessionLivenessEntry {
   return {
     state,
     status: state === "closed" ? "failed" : "running",
-    taskId: "task-1"
+    taskId: "task-1",
+    attached
   };
 }
 
@@ -82,8 +86,16 @@ describe("useHostSessionLiveness", () => {
     expect(query.mock.calls[0]?.[0]).toEqual({
       agentSessionIds: ["sess-a", "sess-b"]
     });
-    await waitFor(() => expect(probe.latest().get("sess-a")).toBe("closed"));
-    expect(probe.latest().get("sess-b")).toBe("live");
+    await waitFor(() =>
+      expect(probe.latest().get("sess-a")).toEqual({
+        state: "closed",
+        attached: true
+      })
+    );
+    expect(probe.latest().get("sess-b")).toEqual({
+      state: "live",
+      attached: true
+    });
   });
 
   it("到点再拍一次；页面不可见那一拍跳过", async () => {
@@ -162,12 +174,53 @@ describe("useHostSessionLiveness", () => {
     installHost({ querySessionLiveness: query });
 
     const probe = renderProbe(["sess-a"]);
-    await waitFor(() => expect(probe.latest().get("sess-a")).toBe("live"));
+    await waitFor(() =>
+      expect(probe.latest().get("sess-a")?.state).toBe("live")
+    );
     const first = probe.latest();
 
     await vi.advanceTimersByTimeAsync(4000);
     await waitFor(() => expect(query).toHaveBeenCalledTimes(2));
     expect(probe.latest()).toBe(first);
+  });
+
+  it("宿主没回 attached 时兜成 false（老宿主：当它没在盯）", async () => {
+    const query = vi.fn(async () => ({
+      // 故意造一条老宿主的回包：只有 state，没有 attached。
+      sessions: {
+        "sess-a": { state: "live", status: "running", taskId: "t-1" }
+      } as unknown as Record<string, HostSessionLivenessEntry>
+    }));
+    installHost({ querySessionLiveness: query });
+
+    const probe = renderProbe(["sess-a"]);
+    await waitFor(() =>
+      expect(probe.latest().get("sess-a")).toEqual({
+        state: "live",
+        attached: false
+      })
+    );
+  });
+
+  it("只有 attached 变了也要换新 Map（不然补挂那条路看不见变化）", async () => {
+    let attached = false;
+    const query = vi.fn(async () => ({
+      sessions: { "sess-a": entry("live", attached) }
+    }));
+    installHost({ querySessionLiveness: query });
+
+    const probe = renderProbe(["sess-a"]);
+    await waitFor(() =>
+      expect(probe.latest().get("sess-a")?.attached).toBe(false)
+    );
+    const first = probe.latest();
+
+    attached = true;
+    await vi.advanceTimersByTimeAsync(4000);
+    await waitFor(() =>
+      expect(probe.latest().get("sess-a")?.attached).toBe(true)
+    );
+    expect(probe.latest()).not.toBe(first);
   });
 
   it("会话栏只是重排（同一批 id 换个顺序）不会多问一次", async () => {

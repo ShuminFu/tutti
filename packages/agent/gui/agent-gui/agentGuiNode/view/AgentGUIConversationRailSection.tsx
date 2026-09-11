@@ -380,7 +380,8 @@ export const AgentGUIConversationRailSection = memo(
                   pendingDeleteConversationId === item.id
                 }
                 isRailInteractionLocked={isRailInteractionLocked}
-                hostLiveness={hostLiveness?.get(item.id) ?? null}
+                // 圆点仍然只看 state：0128 只把 map 的值换成小对象，画法一字未改。
+                hostLiveness={hostLiveness?.get(item.id)?.state ?? null}
                 item={item}
                 labels={labels}
                 peerPairGrouped={peerPairGroupKind(

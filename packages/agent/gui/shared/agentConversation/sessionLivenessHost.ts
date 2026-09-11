@@ -27,6 +27,16 @@ export interface HostSessionLivenessEntry {
   taskId: string;
   /** 任务行原始状态串（running / failed / …），排查时用。 */
   status: string;
+  /**
+   * 「rndmaster 那边还有非终态任务行盯着这条会话吗」（补丁 0128）。
+   *
+   * 与 `state` 正交，两个字段回答的是两个不同的问题：
+   * - `state` = tuttid 里这条会话有没有活的 ACP 进程 → **只给圆点用**；
+   * - `attached` = rndmaster 有没有在记账 → **只给补挂用**。
+   *
+   * 老宿主不回这个字段，缺就当 `false`（没在盯）。
+   */
+  attached: boolean;
 }
 
 export interface SessionLivenessHost {
@@ -53,6 +63,8 @@ export interface SessionLivenessHost {
     state: HostSessionLivenessState;
     taskId: string;
     status: string;
+    /** 补挂之后宿主有没有在盯（补丁 0128）；缺字段按 false 处理。 */
+    attached: boolean;
   }>;
 }
 

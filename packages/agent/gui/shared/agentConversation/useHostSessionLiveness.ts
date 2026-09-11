@@ -11,9 +11,23 @@ const railHostLiveness = true;
 // 会话栏一直在眼前，4s 一拍与 0117 的审批卡同频；页面不可见时不拍。
 export const HOST_SESSION_LIVENESS_POLL_INTERVAL_MS = 4000;
 
+/**
+ * 宿主对一条会话的两句话（补丁 0128 起是两句，之前只有 `state` 一句）：
+ *
+ * - `state`：tuttid 里这条会话有没有活的 ACP 进程 —— **圆点只看它**。
+ * - `attached`：rndmaster 那边有没有非终态任务行盯着 —— **补挂只看它**。
+ *
+ * 两者正交，别互相推断：用户在聊天时 `state` 必然 `"live"`，可宿主的账早就被
+ * 后端重启打断了。
+ */
+export interface HostSessionLivenessRecord {
+  state: HostSessionLivenessState;
+  attached: boolean;
+}
+
 export type HostSessionLivenessMap = ReadonlyMap<
   string,
-  HostSessionLivenessState
+  HostSessionLivenessRecord
 >;
 
 const EMPTY_LIVENESS: HostSessionLivenessMap = new Map();
@@ -74,10 +88,15 @@ export function useHostSessionLiveness(
           agentSessionIds: ids
         });
         if (cancelled) return;
-        const next = new Map<string, HostSessionLivenessState>();
+        const next = new Map<string, HostSessionLivenessRecord>();
         for (const [id, entry] of Object.entries(result?.sessions ?? {})) {
           if (entry && typeof entry.state === "string") {
-            next.set(id, entry.state);
+            // attached 缺字段兜 false：老宿主只回 state，当「没在盯」处理，
+            // 补挂那条路自己会去把账挂上（补丁 0128）。
+            next.set(id, {
+              state: entry.state,
+              attached: entry.attached === true
+            });
           }
         }
         setLiveness((previous) =>
@@ -112,8 +131,13 @@ function livenessMapsEqual(
   right: HostSessionLivenessMap
 ): boolean {
   if (left.size !== right.size) return false;
-  for (const [id, state] of right) {
-    if (left.get(id) !== state) return false;
+  for (const [id, record] of right) {
+    // 值变成小对象后不能再用 !== 比：每一拍都是新对象，那样恒不相等，
+    // 会话栏那几层 memo 就全废了（补丁 0128）。
+    const previous = left.get(id);
+    if (!previous) return false;
+    if (previous.state !== record.state) return false;
+    if (previous.attached !== record.attached) return false;
   }
   return true;
 }

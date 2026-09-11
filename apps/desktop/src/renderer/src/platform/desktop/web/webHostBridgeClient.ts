@@ -32,8 +32,11 @@
 //
 // 会话栏圆点按宿主任务行终态隐藏（补丁 0122）：
 // sessionLiveness args[0] = { agentSessionIds: string[] }（≤200）
-//                 result  = { sessions: { [agentSessionId]: { state, taskId, status } } }
+//                 result  = { sessions: { [agentSessionId]: { state, taskId, status, attached } } }
 //                 state ∈ "live" | "closed" | "unknown"；每个问到的 id 都在结果里。
+//                 attached（补丁 0128）与 state 正交：state = tuttid 里有没有活的
+//                 ACP 进程（圆点看它），attached = rndmaster 有没有非终态任务行盯着
+//                 （补挂看它）。缺字段按 false 处理。
 // 别名由宿主算，iframe 传空串；后端拒绝时回 { error: <中文文案>, code }。
 
 import { writeWorkspaceFileDropData } from "@tutti-os/agent-gui/workspace-file-drop";
@@ -675,6 +678,14 @@ export interface HostSessionLivenessEntry {
   state: HostSessionLivenessState;
   status: string;
   taskId: string;
+  /**
+   * 「rndmaster 那边还有非终态任务行盯着这条会话吗」（补丁 0128）。
+   *
+   * 与 `state` 正交：`state` 问的是 tuttid 里这条会话有没有活的 ACP 进程，
+   * `attached` 问的是宿主自己有没有在记账。老宿主不回这个字段，缺就当 `false`
+   *（= 没在盯），补挂那条路自己会去把账挂上，幂等。
+   */
+  attached: boolean;
 }
 
 /**
@@ -719,6 +730,9 @@ export function requestHostSessionAttach(args: {
         ? result.state
         : "unknown",
     status: typeof result?.status === "string" ? result.status : "",
-    taskId: typeof result?.taskId === "string" ? result.taskId : ""
+    taskId: typeof result?.taskId === "string" ? result.taskId : "",
+    // 缺字段兜 false：老宿主不回 attached，当成「没在盯」比当成「盯着」安全 ——
+    // 前者最多多补挂一次（宿主幂等），后者会让补挂整档失效（补丁 0128）。
+    attached: result?.attached === true
   }));
 }

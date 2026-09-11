@@ -417,17 +417,20 @@ export const AgentGUIConversationRailPane = memo(
       [groupedConversations]
     );
     const railHostLiveness = useHostSessionLiveness(railHostLivenessIds);
-    // 补挂（补丁 0124）：看见「这一轮正在跑、宿主却说这条不活」就让宿主把账重新挂上。
+    // 补挂（补丁 0124）：看见「这一轮正在跑、宿主却没在盯这条」就让宿主把账重新挂上。
     // 「正在跑」用的就是画蓝点那份判据 —— 会话栏拿不到发送事件，但一轮跑起来它一定
     // 看得见，而这正是「用户又在这条会话里说话了」的可靠旁证。已结束的会话
     // （presence 为 null）自然不在其列，不会把用户主动关掉的会话拉回来。
+    //
+    // 传 `attached` 而不是 `state`（补丁 0128）：`state` 现在是 tuttid 里进程的死活，
+    // 用户一聊天必然 live，拿它当判据补挂就成了永不触发的死代码。
     const railHostAttachCandidates = useMemo(
       () =>
         groupedConversations.flatMap((section) =>
           section.items.map((item) => ({
             id: item.id,
             working: agentGUIConversationPresence(item) === "working",
-            hostLiveness: railHostLiveness.get(item.id)
+            hostAttached: railHostLiveness.get(item.id)?.attached
           }))
         ),
       [groupedConversations, railHostLiveness]
