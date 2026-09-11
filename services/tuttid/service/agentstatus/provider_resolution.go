@@ -60,7 +60,7 @@ func (s Service) ResolveProviderCommand(ctx context.Context, provider string) (P
 	if provider == agentprovider.Codex && os.Getenv(managedCodexRuntimeEnv) == "1" {
 		return resolveManagedCodexCommand()
 	}
-	specs, err := s.selectProviderSpecs(ctx, []string{provider}, true)
+	specs, err := s.selectProviderSpecs(ctx, []string{provider}, strings.TrimSpace(os.Getenv("RNDMASTER_DOCK_SETUP_BASE")) == "")
 	if err != nil {
 		return ProviderCommandResolution{}, err
 	}
@@ -525,6 +525,10 @@ func (s Service) resolveExternalRegistryNPMSpec(
 	var command []string
 	if binPath := s.installedNPMBinPath(prefixDir, packageDir, packageName); binPath != "" {
 		command = []string{binPath}
+	} else if strings.TrimSpace(os.Getenv("RNDMASTER_DOCK_SETUP_BASE")) != "" {
+		spec.AdapterCommand = nil
+		spec.AdapterUnavailableReasonCode = "acp_adapter_not_found"
+		return spec
 	} else {
 		command = []string{
 			appRuntime.NPM,
@@ -666,6 +670,15 @@ func resolvedExistingManagedNodeRuntime(root string, environ func() []string) (m
 
 func (s Service) resolveManagedRuntimeForProvider(ctx context.Context, require bool) (managedruntime.ResolvedRuntime, bool) {
 	resolver := s.managedRuntimeResolver()
+	if !require && strings.TrimSpace(os.Getenv("RNDMASTER_DOCK_SETUP_BASE")) != "" {
+		if managed, ok := resolver.(managedruntime.DefaultResolver); ok {
+			root := strings.TrimSpace(managed.RuntimeRoot)
+			if root == "" {
+				root = managed.DefaultRoot()
+			}
+			return resolvedExistingManagedNodeRuntime(root, s.Environ)
+		}
+	}
 	if !require {
 		if managed, ok := resolver.(managedruntime.DefaultResolver); ok {
 			root := strings.TrimSpace(managed.RuntimeRoot)

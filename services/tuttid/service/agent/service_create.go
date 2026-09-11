@@ -29,6 +29,15 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, input CreateSessionInput) (CreateSessionResult, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
 	input.AgentTargetID = strings.TrimSpace(input.AgentTargetID)
+	if len(input.InitialContent) > 0 && s.AgentTargetStore != nil {
+		// Old catalog visibility can be disabled independently of dependency
+		// setup. A real first send re-enables it before launch validation.
+		if target, lookupErr := s.AgentTargetStore.GetAgentTarget(ctx, input.AgentTargetID); lookupErr == nil {
+			if err := ensureEmbeddedDockProvider(ctx, target.Provider); err != nil {
+				return createSessionFailureResult(input, err)
+			}
+		}
+	}
 	launch, err := s.resolveCreateSessionLaunch(ctx, workspaceID, &input)
 	if err != nil {
 		return createSessionFailureResult(input, err)

@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -653,26 +655,28 @@ func buildDaemonAPI(
 		HostTuttiCapabilities: tuttitypes.ResolveAppCapabilities(),
 		Publisher:             eventstreamservice.WorkspaceAppPublisher{Service: events},
 	}
-	startManagedRuntimeProfilePreload(managedRuntimeResolver)
-	go func() {
-		// The packaged sidecar bundle no longer carries the native claude
-		// binary; provision it up front so the first Claude session does not
-		// pay the download. Sessions started before this completes fall back
-		// to a PATH-installed claude (see runtimeprep.ClaudeCodePreparer).
-		// The deadline bounds a stalled CDN/npm connection (the shared HTTP
-		// client deliberately has no timeout) while leaving room for a large
-		// fallback download through a slow proxy.
-		preloadCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-		defer cancel()
-		startedAt := time.Now()
-		slog.Info("claude code binary preload started", "event", "tutti.claude_code_binary.preload_started")
-		status, err := agentStatusService.EnsureClaudeCodeBinary(preloadCtx)
-		if err != nil {
-			slog.Warn("claude code binary preload failed", "event", "tutti.claude_code_binary.preload_failed", "durationMs", time.Since(startedAt).Milliseconds(), "error", err)
-			return
-		}
-		slog.Info("claude code binary preload completed", "event", "tutti.claude_code_binary.preload_completed", "source", status.Source, "version", status.Version, "path", status.Path, "durationMs", time.Since(startedAt).Milliseconds())
-	}()
+	if strings.TrimSpace(os.Getenv("RNDMASTER_DOCK_SETUP_BASE")) == "" {
+		startManagedRuntimeProfilePreload(managedRuntimeResolver)
+		go func() {
+			// The packaged sidecar bundle no longer carries the native claude
+			// binary; provision it up front so the first Claude session does not
+			// pay the download. Sessions started before this completes fall back
+			// to a PATH-installed claude (see runtimeprep.ClaudeCodePreparer).
+			// The deadline bounds a stalled CDN/npm connection (the shared HTTP
+			// client deliberately has no timeout) while leaving room for a large
+			// fallback download through a slow proxy.
+			preloadCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			defer cancel()
+			startedAt := time.Now()
+			slog.Info("claude code binary preload started", "event", "tutti.claude_code_binary.preload_started")
+			status, err := agentStatusService.EnsureClaudeCodeBinary(preloadCtx)
+			if err != nil {
+				slog.Warn("claude code binary preload failed", "event", "tutti.claude_code_binary.preload_failed", "durationMs", time.Since(startedAt).Milliseconds(), "error", err)
+				return
+			}
+			slog.Info("claude code binary preload completed", "event", "tutti.claude_code_binary.preload_completed", "source", status.Source, "version", status.Version, "path", status.Path, "durationMs", time.Since(startedAt).Milliseconds())
+		}()
+	}
 	appCLIRegistry := appclicli.NewRegistry(workspaceService, appCenterService)
 	appCenterService.AppCLIRegistry = appCLIRegistry
 	if err := appCenterService.InitBuiltinPackages(ctx); err != nil {
