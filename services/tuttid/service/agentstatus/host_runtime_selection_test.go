@@ -64,6 +64,20 @@ func TestHostRuntimeSelectionReadsSelectedProvider(t *testing.T) {
 	}
 }
 
+// 同一 provider 出现两种拼写（手改文件、或将来宿主多写一个别名键）时，规范名那一份必须稳定
+// 胜出：map 遍历无序，若按"后遍历到的赢"，连续两次解析可能选到不同二进制（状态探测与 ACP
+// 启动各读一次），而这正是这次要消灭的"两个答案"。
+func TestHostRuntimeSelectionPrefersTheCanonicalKeyDeterministically(t *testing.T) {
+	t.Setenv(HostRuntimeSelectionFileEnv, writeHostRuntimeSelection(t,
+		`{"version":1,"providers":{"claude":{"binPath":"/alias/claude"},"claude-code":{"binPath":"/canonical/claude"}}}`))
+	for i := range 20 {
+		selected, state := hostRuntimeSelection("claude-code")
+		if state != hostRuntimeSelectionSet || selected != "/canonical/claude" {
+			t.Fatalf("iteration %d: hostRuntimeSelection = %q, %v; want the canonical key's value", i, selected, state)
+		}
+	}
+}
+
 func TestHostRuntimeSelectionMatchesProviderAliases(t *testing.T) {
 	for name, document := range map[string]string{
 		"canonical key, alias query": `{"version":1,"providers":{"claude-code":{"binPath":"/host/claude"}}}`,

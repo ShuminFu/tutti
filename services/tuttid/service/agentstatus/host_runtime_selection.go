@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	canonical "github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
@@ -88,18 +89,39 @@ func hostRuntimeSelection(provider string) (string, hostRuntimeSelectionState) {
 // writing either the canonical id ("claude-code") or its alias ("claude")
 // resolves to the same entry.
 func (d hostRuntimeSelectionDocument) providers() map[string]hostRuntimeSelectionEntry {
-	indexed := make(map[string]hostRuntimeSelectionEntry, len(d.Providers))
-	for key, entry := range d.Providers {
-		id := canonicalProviderID(key)
-		if id == "" {
-			id = strings.ToLower(strings.TrimSpace(key))
+	keys := make([]string, 0, len(d.Providers))
+	for key := range d.Providers {
+		keys = append(keys, key)
+	}
+	// 排序 + 两趟：遍历 map 是无序的，同一 provider 出现两种拼写时"后遍历到的赢"会让连续两次
+	// 解析可能选到不同二进制（状态探测与 ACP 启动各读一次）。规范名那一份先落，别名只在缺位时补。
+	sort.Strings(keys)
+	indexed := make(map[string]hostRuntimeSelectionEntry, len(keys))
+	for _, key := range keys {
+		id := indexedProviderID(key)
+		if id == "" || key != id {
+			continue
 		}
+		indexed[id] = d.Providers[key]
+	}
+	for _, key := range keys {
+		id := indexedProviderID(key)
 		if id == "" {
 			continue
 		}
-		indexed[id] = entry
+		if _, exists := indexed[id]; !exists {
+			indexed[id] = d.Providers[key]
+		}
 	}
 	return indexed
+}
+
+// indexedProviderID 归一成规范 provider 名；认不出就退回小写原串（宿主写了别的拼写也不至于整份丢弃）。
+func indexedProviderID(key string) string {
+	if id := canonicalProviderID(key); id != "" {
+		return id
+	}
+	return strings.ToLower(strings.TrimSpace(key))
 }
 
 func canonicalProviderID(value string) string {

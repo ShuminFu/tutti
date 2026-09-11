@@ -22,6 +22,10 @@ const (
 	codexRuntimeCandidateSourcePNPMGlobal codexRuntimeCandidateSource = "pnpm_global"
 	codexRuntimeCandidateSourceNPMGlobal  codexRuntimeCandidateSource = "npm_global"
 	codexRuntimeCandidateSourceHomebrew   codexRuntimeCandidateSource = "homebrew"
+	// codexRuntimeCandidateSourceHost 是宿主投影里指定的一条绝对路径
+	// （RNDMASTER_CLI_RUNTIME_SELECTION_FILE），不是 discovery 枚举出来的：宿主的注册表已经
+	// 探测过它，这里只是把它送进同一条验证管线。
+	codexRuntimeCandidateSourceHost codexRuntimeCandidateSource = "host"
 )
 
 // codexRuntimeCandidate is discovery evidence only. Phase two adds version

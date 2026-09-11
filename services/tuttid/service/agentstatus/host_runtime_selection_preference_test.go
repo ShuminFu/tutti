@@ -4,6 +4,8 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+
+	agentproviderbiz "github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
 )
 
 // claudeSelectionService 造一个最小的 claude 服务：宿主投影走 env（本文件里由 t.Setenv 给），
@@ -13,6 +15,100 @@ func claudeSelectionService(t *testing.T, home string, environ []string) Service
 	service := probeTestService(home)
 	service.Environ = func() []string { return environ }
 	return service
+}
+
+// 宿主说用哪条 codex，Tutti 就用哪条——**即使它不在 Tutti 自己的 catalog 里**。
+//
+// 这是 codex 与 claude 对齐的关键：以前宿主的路径不在 catalog 里会被硬拒
+// （SelectCodexRuntime 报「not in the Tutti catalog」），codex 于是起不来，而宿主唯一的自救
+// 手段是「用 Tutti 探测到的路径回写注册行」——那正是把用户的选择悄悄换掉的那个动作。
+func TestHostSelectionProvidesCodexRuntimeOutsideTheCatalog(t *testing.T) {
+	home := t.TempDir()
+	hostCodex := writeCodexVersionFixture(t, filepath.Join(home, "nvm", "bin", "codex"), "0.145.0")
+	service := probeTestService(home)
+	// PATH 上没有 codex：discovery 一条候选都产不出来，只有宿主投影能给出这条路径。
+	service.Environ = func() []string { return []string{"PATH=" + filepath.Join(home, "empty")} }
+	service.CodexRuntimeSelectionStore = &memoryCodexRuntimeSelectionStore{}
+	service.CodexProtocolProbe = func(_ context.Context, _ []string, _ []string) CodexProbeEvidence {
+		return CodexProbeEvidence{CommandStarted: true, ProtocolReady: true}
+	}
+	t.Setenv(HostRuntimeSelectionFileEnv, writeHostRuntimeSelection(t,
+		`{"version":1,"providers":{"codex":{"binPath":"`+hostCodex+`"}}}`))
+
+	command, err := service.ResolveProviderCommand(context.Background(), agentproviderbiz.Codex)
+	if err != nil || len(command.Command) == 0 || command.Command[0] != hostCodex {
+		t.Fatalf("ResolveProviderCommand() = %#v, %v; want the host-selected launcher %q", command, err, hostCodex)
+	}
+	// 状态探测必须与执行同源：两处读的是同一次解析结果，否则又出现「探测一个、执行另一个」。
+	specs, err := service.selectProviderSpecs(context.Background(), []string{agentproviderbiz.Codex}, true)
+	if err != nil {
+		t.Fatalf("selectProviderSpecs() error = %v", err)
+	}
+	runtime := service.resolveProviderRuntime(context.Background(), specs[0])
+	if runtime.AdapterPath != hostCodex || len(runtime.AdapterCommand) == 0 || runtime.AdapterCommand[0] != hostCodex {
+		t.Fatalf("status runtime = %#v; want the host-selected launcher", runtime)
+	}
+	// 面板读的 catalog 也只有这一条：看到的就是要跑的那条。
+	catalog, err := service.GetCodexRuntimeCatalog(context.Background(), agentproviderbiz.Codex)
+	if err != nil {
+		t.Fatalf("GetCodexRuntimeCatalog() error = %v", err)
+	}
+	if catalog.Selection.State != CodexRuntimeSelectionSelected || catalog.Selection.LauncherPath != hostCodex {
+		t.Fatalf("catalog selection = %#v; want the host-selected launcher", catalog.Selection)
+	}
+	if len(catalog.Candidates) != 1 || catalog.Candidates[0].LauncherPath != hostCodex {
+		t.Fatalf("catalog candidates = %#v; want only the host-selected launcher", catalog.Candidates)
+	}
+}
+
+// 宿主给的路径不可用时**不吞掉**：落到 Tutti 自己的现发现 + 现验证，codex 还能起来。
+// （与 claude 侧刻意不同：claude 的 cleared 是让调用方跳过冻住的旧值，而 codex 的回落是活的。）
+func TestHostSelectionCodexFallsBackToTuttisOwnDiscovery(t *testing.T) {
+	home := t.TempDir()
+	discovered := writeCodexVersionFixture(t, filepath.Join(home, "bin", "codex"), "0.145.0")
+	service := probeTestService(home)
+	service.Environ = func() []string { return []string{"PATH=" + filepath.Dir(discovered)} }
+	service.CodexRuntimeSelectionStore = &memoryCodexRuntimeSelectionStore{}
+	// 桩要如实反映"只有真的那份二进制讲得通 ACP"：不分路径一律 ready 的话，一条不存在的路径
+	// 也会被判成可用，这个用例就测不到回落了。
+	service.CodexProtocolProbe = func(_ context.Context, command []string, _ []string) CodexProbeEvidence {
+		if len(command) > 0 && command[0] == discovered {
+			return CodexProbeEvidence{CommandStarted: true, ProtocolReady: true}
+		}
+		return CodexProbeEvidence{CommandStarted: true, Category: "acp_adapter_launch_failed"}
+	}
+	t.Setenv(HostRuntimeSelectionFileEnv, writeHostRuntimeSelection(t,
+		`{"version":1,"providers":{"codex":{"binPath":"`+filepath.Join(home, "gone", "codex")+`"}}}`))
+
+	command, err := service.ResolveProviderCommand(context.Background(), agentproviderbiz.Codex)
+	if err != nil || len(command.Command) == 0 || command.Command[0] != discovered {
+		t.Fatalf("ResolveProviderCommand() = %#v, %v; want Tutti's own discovery %q", command, err, discovered)
+	}
+}
+
+// 宿主说「没有选定项」（空 binPath）时，Tutti 自己持久化的那份选择照旧生效。
+func TestHostSelectionClearedLeavesTuttisOwnCodexChoiceAlone(t *testing.T) {
+	home := t.TempDir()
+	other := writeCodexVersionFixture(t, filepath.Join(home, "other", "codex"), "0.145.0")
+	chosen := writeCodexVersionFixture(t, filepath.Join(home, "chosen", "codex"), "0.145.0")
+	service := probeTestService(home)
+	service.Environ = func() []string {
+		return []string{"PATH=" + filepath.Dir(other) + string(filepath.ListSeparator) + filepath.Dir(chosen)}
+	}
+	service.CodexRuntimeSelectionStore = &memoryCodexRuntimeSelectionStore{
+		selection: agentproviderbiz.RuntimeSelection{Provider: agentproviderbiz.Codex, LauncherPath: chosen},
+		found:     true,
+	}
+	service.CodexProtocolProbe = func(_ context.Context, _ []string, _ []string) CodexProbeEvidence {
+		return CodexProbeEvidence{CommandStarted: true, ProtocolReady: true}
+	}
+	t.Setenv(HostRuntimeSelectionFileEnv, writeHostRuntimeSelection(t,
+		`{"version":1,"providers":{"codex":{"binPath":""}}}`))
+
+	command, err := service.ResolveProviderCommand(context.Background(), agentproviderbiz.Codex)
+	if err != nil || len(command.Command) == 0 || command.Command[0] != chosen {
+		t.Fatalf("ResolveProviderCommand() = %#v, %v; want the persisted choice %q", command, err, chosen)
+	}
 }
 
 func claudeSelectionSpec() ProviderSpec {

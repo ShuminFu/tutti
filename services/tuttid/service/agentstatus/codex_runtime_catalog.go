@@ -117,6 +117,32 @@ func (s Service) SetCodexRuntimeSelection(ctx context.Context, input SetCodexRun
 }
 
 func (s Service) resolveCodexRuntimeSelection(ctx context.Context, spec ProviderSpec) (codexRuntimeResolvedSelection, error) {
+	// 宿主投影（RNDMASTER_CLI_RUNTIME_SELECTION_FILE）排在 Tutti 自己的 catalog 与持久化选择
+	// 之前：它比进程环境新，而且**不要求**这条路径出现在 discovery 的结果里——宿主的注册表已经
+	// 探测过它（可执行 + 版本下限），这里再走一遍同样的验证（--version + app-server 握手 + 包
+	// 布局）就直接采用。这正是「宿主填的 codex 路径不在 catalog 里 → codex 起不来」那条硬失败
+	// 的解法，也是 codex 与 claude 对齐的关键：两者都由宿主说了算，而宿主的选择在**使用时**才读。
+	//
+	// 宿主说「没有选定项」（cleared）或这条路径验证不过时**不吞掉**：落到下面 Tutti 自己的逻辑。
+	// 这里与 claude 侧刻意不同——claude 的 cleared 让调用方跳过那个已经过期的内联值，而 codex 的
+	// 回落是一整套现发现 + 现验证（不是冻住的旧值），让它继续兜底严格更安全。
+	if hostPath, hostState := hostRuntimeSelection(spec.Provider); hostState == hostRuntimeSelectionSet {
+		validation := s.validateCodexRuntimeCandidate(ctx, spec, codexRuntimeCandidate{
+			LauncherPath: hostPath,
+			Sources:      []codexRuntimeCandidateSource{codexRuntimeCandidateSourceHost},
+		})
+		if validation.State == codexRuntimeCandidateValidationReady {
+			return codexRuntimeResolvedSelection{
+				Selection:   agentproviderbiz.RuntimeSelection{Provider: spec.Provider, LauncherPath: hostPath},
+				Explicit:    true,
+				Validations: []codexRuntimeCandidateValidation{validation},
+				Index:       0,
+				Launchable:  true,
+				ReasonCode:  "codex_runtime_host_selected",
+				State:       CodexRuntimeSelectionSelected,
+			}, nil
+		}
+	}
 	selection, explicit, err := s.codexRuntimeSelection(ctx, spec.Provider)
 	if err != nil {
 		return codexRuntimeResolvedSelection{}, err
