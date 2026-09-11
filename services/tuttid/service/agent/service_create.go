@@ -37,6 +37,11 @@ func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, inpu
 	if workspaceID == "" || provider == "" {
 		return createSessionFailureResult(input, ErrInvalidArgument)
 	}
+	if len(input.InitialContent) > 0 {
+		if err := ensureEmbeddedDockProvider(ctx, provider); err != nil {
+			return createSessionFailureResult(input, err)
+		}
+	}
 	input.Provider = provider
 	input.ProviderTargetRef = launch.ProviderTargetRef
 	isolationMode := strings.TrimSpace(input.Isolation)

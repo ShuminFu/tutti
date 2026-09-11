@@ -68,6 +68,15 @@ func (s *Service) SendInput(ctx context.Context, workspaceID string, agentSessio
 			preparedTurnID = existingCanonicalTurnID
 			hostInput.TurnID = existingCanonicalTurnID
 		} else {
+			if !input.Guidance {
+				session, getErr := s.get(ctx, workspaceID, agentSessionID, false)
+				if getErr != nil {
+					return SendInputResult{}, getErr
+				}
+				if setupErr := ensureEmbeddedDockProvider(ctx, session.Provider); setupErr != nil {
+					return SendInputResult{}, setupErr
+				}
+			}
 			preparedTurnID, preparedSnapshot, err = s.prepareTuttiModeExec(ctx, workspaceID, agentSessionID, input.Guidance, runtimeSession, input.TurnID)
 			if err != nil {
 				return SendInputResult{}, err
