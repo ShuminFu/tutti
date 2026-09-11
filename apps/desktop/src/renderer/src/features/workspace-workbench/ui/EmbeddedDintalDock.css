@@ -187,17 +187,17 @@
   grid-column: 3 !important;
 }
 
-/* ---- 内缝拉直：圆角只留在最外两侧 --------------------------------------
+/* ---- 只有分栏那条缝拉直 -------------------------------------------------
  *
- * 会话流面板自带 16px 圆角（agentactivity.css）。补丁 0133 已经把它靠会话栏那
- * 两个角拉直了，但那条规则只认「会话栏在网格里、且不是抽屉态」，管不到分栏：
+ * 会话流面板自带 16px 圆角（agentactivity.css）。两种缝要分开看：
  *
- *   1. 左栏的**右**边是分栏分隔线，不是窗口外沿。圆角留着，缝的上下两端各拱一个
- *      弧，两栏看着像两块浮卡叠在一起（真机 2560 宽分栏实测）。
- *   2. 分栏时左栏必然低于上游 630px 阈值而进抽屉态，上面「票 05」那段又把会话栏
- *      恢复成真列 —— 缝是真的存在，0133 却因为 overlay 属性跳过了它。
+ *   会话列表 ↔ 会话流：圆角**保留**。这条缝两边是同一栏里的两块内容，圆角是
+ *     上游的设计语言，拉直反而让会话列表像被切掉一块（真机看过两版后定的）。
+ *   左栏 ↔ 右栏（分栏分隔线）：拉直。这条缝两边是两个独立的栏，圆角会让缝的
+ *     上下两端各拱一个弧，两栏看着像两块浮卡叠在一起（真机 2560 宽分栏实测）。
  *
- * 规则统一成一句：缝两边都拉直，圆角只留给整窗最外侧的那两条边。
+ * 所以只动贴着分隔线的那两个角：左栏的右侧、右栏的左侧。右栏藏了会话列表，
+ * 它的左边就是分隔线本身。
  */
 .rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
   [data-rndmaster-pane="left"]
@@ -207,8 +207,7 @@
 }
 
 .rndmaster-dintaldock-embedded[data-rndmaster-split="split"]
-  [data-rndmaster-pane="left"]
-  .agent-gui-node__layout[data-agent-gui-conversation-rail-overlay="true"]
+  [data-rndmaster-pane="right"]
   .agent-gui-node__detail-panel {
   border-start-start-radius: 0;
   border-end-start-radius: 0;
