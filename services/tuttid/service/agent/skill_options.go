@@ -73,12 +73,7 @@ func (s *Service) discoverComposerSkillOptionsForLaunch(
 	if providerTargetRefKind(providerTargetRef) != "agent_extension" {
 		return s.discoverComposerSkillOptions(provider, cwd, env)
 	}
-	resolver := s.ExtensionComposerProfiles
-	installationID := strings.TrimSpace(stringFromAny(providerTargetRef["extensionInstallationId"]))
-	if resolver == nil || installationID == "" {
-		return nil
-	}
-	profile, err := resolver.ResolveExtensionComposerProfile(ctx, installationID)
+	profile, err := s.extensionComposerProfileForLaunch(ctx, providerTargetRef)
 	if err != nil || profile.Skills == nil {
 		return nil
 	}

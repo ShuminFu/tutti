@@ -19,7 +19,8 @@ Use the focused runtime index or open one area directly:
   metadata compatibility, and extension command/Skill palette hydration
   failures.
   Also covers uv-managed Extension installs that accidentally select an
-  incompatible system Python.
+  incompatible system Python, and first extension launches that reject
+  reasoning because a host model catalog skipped ACP capability discovery.
   Also covers Kimi Code ACP sessions that advertise no model or hide provider
   failures behind an empty `end_turn`.
   Also covers focus-driven provider CLI scans, repeated Extension Target version

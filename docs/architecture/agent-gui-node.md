@@ -225,6 +225,19 @@ daemon validates them against current product policy and resolved provider
 capability before runtime preparation; an active Session cannot reinterpret
 them through an in-place settings update.
 
+A host-provided model endpoint does not supply an extension's ACP reasoning
+or permission options. First-run extension composers still perform scoped ACP
+discovery, then apply the host model catalog last so discovery cannot replace
+an explicitly selected gateway model. Session creation allows two minutes for
+model and capability preparation while honoring caller cancellation. Extension
+discovery waits up to ninety seconds within that caller budget; an unfinished
+or failed probe remains a preparation error, not evidence that a requested
+reasoning option is unsupported. Within one Create or composer-options request,
+model, capability, skill and runtime preparation reads reuse the same verified
+extension profile for the exact installation. This request-scoped snapshot
+avoids repeated package hashing; later requests and runtime launch retain their
+normal verification.
+
 ### 2.4 Ownership map
 
 | Layer                           | Owns                                                                                          | Must not own                                      |

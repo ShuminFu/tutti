@@ -391,6 +391,8 @@ func TestExtensionResumePreservesRuntimeAdvertisedReasoningSelection(t *testing.
 
 func TestExtensionHiddenComposerDiscoveryIsSingleFlightAndClosesSession(t *testing.T) {
 	runtime := newFakeRuntime()
+	closed := make(chan struct{})
+	runtime.closeHook = func(RuntimeCloseInput) { close(closed) }
 	started := make(chan struct{})
 	release := make(chan struct{})
 	runtime.startHook = func(_ RuntimeStartInput, session ProviderRuntimeSession) ProviderRuntimeSession {
@@ -429,6 +431,11 @@ func TestExtensionHiddenComposerDiscoveryIsSingleFlightAndClosesSession(t *testi
 		if got.err != nil || len(got.models) != 1 || got.models[0].Value != "example-pro" {
 			t.Fatalf("discovery result = %#v, error = %v", got.models, got.err)
 		}
+	}
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for discovery cleanup")
 	}
 	if len(runtime.startCalls) != 1 || len(runtime.closeCalls) != 1 || len(runtime.sessions) != 0 {
 		t.Fatalf("start=%d close=%d sessions=%d, want one closed single-flight discovery", len(runtime.startCalls), len(runtime.closeCalls), len(runtime.sessions))
@@ -474,6 +481,8 @@ func TestExtensionHiddenComposerDiscoveryCleansUpOnTerminalFailureCancellationAn
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			runtime := newFakeRuntime()
+			closed := make(chan struct{})
+			runtime.closeHook = func(RuntimeCloseInput) { close(closed) }
 			runtime.startHook = tt.startHook
 			service := newIsolatedAgentService(runtime)
 			input := extensionComposerDiscoveryInput(t.TempDir())
@@ -484,6 +493,11 @@ func TestExtensionHiddenComposerDiscoveryCleansUpOnTerminalFailureCancellationAn
 			_, err := service.discoverLiveComposerModelsUncachedForScope(ctx, scope, input.providerTargetRef, ComposerSettings{})
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("discovery error = %v, want %v", err, tt.wantErr)
+			}
+			select {
+			case <-closed:
+			case <-time.After(5 * time.Second):
+				t.Fatal("timed out waiting for discovery cleanup")
 			}
 			if len(runtime.startCalls) != 1 || len(runtime.closeCalls) != 1 || len(runtime.sessions) != 0 {
 				t.Fatalf("start=%d close=%d sessions=%d, want failed discovery closed", len(runtime.startCalls), len(runtime.closeCalls), len(runtime.sessions))
@@ -555,5 +569,147 @@ func extensionComposerDiscoveryInput(cwd string) ComposerOptionsInput {
 			"kind":                    "agent_extension",
 			"extensionInstallationId": "example@1.0.0",
 		},
+	}
+}
+
+func TestHostEndpointExtensionDiscoversReasoningBeforeFirstCreate(t *testing.T) {
+	setHostModelEndpointContract(t, "acp:example", "openai", "chat")
+	runtime := newFakeRuntime()
+	runtime.startHook = func(input RuntimeStartInput, session ProviderRuntimeSession) ProviderRuntimeSession {
+		if input.Visible == nil || *input.Visible {
+			return session
+		}
+		runtimeContext := clonePayload(session.RuntimeContext)
+		runtimeContext["configOptions"] = []any{
+			map[string]any{
+				"id": "model-choice",
+				"options": []any{
+					map[string]any{"value": "example-pro", "name": "Example Pro"},
+				},
+			},
+			map[string]any{
+				"id": "thought-level",
+				"options": []any{
+					map[string]any{"value": "high", "name": "High"},
+				},
+			},
+		}
+		session.RuntimeContext = runtimeContext
+		return session
+	}
+	service := newIsolatedAgentService(runtime)
+	service.AgentTargetStore = fakeAgentTargetStore{targets: map[string]agenttargetbiz.Target{
+		"extension:example": {
+			ID: "extension:example", Name: "Example Agent", Provider: "acp:example", Enabled: true,
+			Source:        agenttargetbiz.SourceSystem,
+			LaunchRefJSON: `{"type":"agent_extension","extensionInstallationId":"example@1.0.0"}`,
+		},
+	}}
+	profileCalls := 0
+	service.ExtensionComposerProfiles = countingExtensionProfileResolver{calls: &profileCalls, delegate: extensionComposerProfileResolverStub{
+		profile: ExtensionComposerProfile{
+			RuntimePrep: &runtimeprep.ExtensionRuntimePrep{
+				ModelEndpoint: &runtimeprep.ExtensionModelEndpoint{Protocol: "openai", WireAPI: "chat"},
+			},
+			ModelConfigOptionID:     "model-choice",
+			ReasoningConfigOptionID: "thought-level",
+			PermissionModes: []ExtensionComposerPermissionMode{
+				{RuntimeID: "full-access", Semantic: PermissionModeSemanticFullAccess},
+			},
+		},
+	}}
+	permission := "full-access"
+	reasoning := "high"
+	model := "gateway-alt"
+	_, err := service.Create(context.Background(), "workspace-1", CreateSessionInput{
+		AgentTargetID:    "extension:example",
+		Provider:         "acp:example",
+		Cwd:              stringPointer(t.TempDir()),
+		PermissionModeID: &permission,
+		ReasoningEffort:  &reasoning,
+		Model:            &model,
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if profileCalls != 1 {
+		t.Fatalf("profile resolutions = %d, want one per create", profileCalls)
+	}
+	visibleStarts := visibleRuntimeStarts(runtime.startCalls)
+	if len(visibleStarts) != 1 {
+		t.Fatalf("visible start calls = %#v, want one", visibleStarts)
+	}
+	started := visibleStarts[0]
+	if started.PermissionModeID != permission || started.ReasoningEffort != reasoning || started.Model != model {
+		t.Fatalf("start settings = permission %q reasoning %q model %q", started.PermissionModeID, started.ReasoningEffort, started.Model)
+	}
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		AgentTargetID: "extension:example", Provider: "acp:example", WorkspaceID: "workspace-1",
+		Cwd: started.Cwd, Settings: ComposerSettings{Model: model, ReasoningEffort: reasoning, PermissionModeID: permission},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.EffectiveSettings.Model != model || !options.ReasoningConfig.Configurable {
+		t.Fatalf("effective model %q reasoning configurable %v", options.EffectiveSettings.Model, options.ReasoningConfig.Configurable)
+	}
+	values := []string{}
+	for _, option := range options.ModelConfig.Options {
+		values = append(values, option.Value)
+	}
+	if !slices.Equal(values, []string{"gateway-default", "gateway-alt", "gateway-default[1m]", "gateway-alt[1m]"}) {
+		t.Fatalf("models = %v, want host catalog", values)
+	}
+	if len(runtime.startCalls) != 2 {
+		t.Fatalf("start calls = %d, want one discovery plus real session", len(runtime.startCalls))
+	}
+
+	if profileCalls != 2 {
+		t.Fatalf("profile resolutions = %d, want fresh standalone composer resolution", profileCalls)
+	}
+	unsupported := "ultra"
+	_, err = service.Create(context.Background(), "workspace-1", CreateSessionInput{
+		AgentTargetID: "extension:example", Provider: "acp:example", Cwd: &started.Cwd,
+		Model: &model, PermissionModeID: &permission, ReasoningEffort: &unsupported,
+	})
+	if err == nil || !strings.Contains(err.Error(), "reasoningEffort") {
+		t.Fatalf("unsupported reasoning error = %v", err)
+	}
+}
+
+func TestExtensionComposerDiscoveryFailureIsNotMissingCapability(t *testing.T) {
+	runtime := newFakeRuntime()
+	runtime.startHook = func(_ RuntimeStartInput, session ProviderRuntimeSession) ProviderRuntimeSession {
+		session.Status = "failed"
+		session.LastError = "runtime stopped"
+		return session
+	}
+	service := newIsolatedAgentService(runtime)
+	input := extensionComposerDiscoveryInput(t.TempDir())
+	_, err := service.mergeLiveComposerModelsForComposerOptions(context.Background(), input, ComposerSettings{}, ComposerOptions{})
+	if !errors.Is(err, errLiveModelDiscoverySessionFailed) {
+		t.Fatalf("composer error = %v, want actual discovery failure", err)
+	}
+}
+
+type countingExtensionProfileResolver struct {
+	calls    *int
+	delegate extensionComposerProfileResolverStub
+}
+
+func (r countingExtensionProfileResolver) ResolveExtensionComposerProfile(ctx context.Context, id string) (ExtensionComposerProfile, error) {
+	*r.calls++
+	return r.delegate.ResolveExtensionComposerProfile(ctx, id)
+}
+
+func TestExtensionComposerRuntimeStartFailureIsNotMissingCapability(t *testing.T) {
+	runtime := newFakeRuntime()
+	failure := errors.New("compatible local runtime is not installed")
+	runtime.startErr = failure
+	service := newIsolatedAgentService(runtime)
+	input := extensionComposerDiscoveryInput(t.TempDir())
+	_, err := service.mergeLiveComposerModelsForComposerOptions(context.Background(), input, ComposerSettings{}, ComposerOptions{})
+	if !errors.Is(err, errLiveModelDiscoverySessionFailed) || !errors.Is(err, failure) {
+		t.Fatalf("composer error = %v, want original runtime start failure", err)
 	}
 }

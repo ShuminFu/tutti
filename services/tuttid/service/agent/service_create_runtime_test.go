@@ -1072,6 +1072,13 @@ func TestServiceCreatePassesExtraSkillsToRuntimePreparer(t *testing.T) {
 
 func TestServiceCreatePassesExtensionRuntimePrepToRuntimePreparer(t *testing.T) {
 	runtime := newFakeRuntime()
+	runtime.startHook = func(_ RuntimeStartInput, session ProviderRuntimeSession) ProviderRuntimeSession {
+		session.RuntimeContext["configOptions"] = []any{map[string]any{
+			"id": "model", "currentValue": "hermes-model",
+			"options": []any{map[string]any{"value": "hermes-model", "name": "Hermes Model"}},
+		}}
+		return session
+	}
 	var prepareInput runtimeprep.PrepareInput
 	service := newTestService(runtime)
 	service.RuntimePreparer = fakeRuntimePreparer{

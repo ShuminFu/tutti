@@ -14,6 +14,7 @@ import (
 	agentruntime "github.com/tutti-os/tutti/packages/agent/daemon/runtime"
 	"github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	agentextensionbiz "github.com/tutti-os/tutti/services/tuttid/biz/agentextension"
+	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
 )
 
 var (
@@ -121,11 +122,35 @@ func NewSetupService(workerParent context.Context) *SetupService {
 }
 
 func (s *SetupService) GetSetup(ctx context.Context, input InstallPlanInput) (SetupSnapshot, error) {
-	plan, err := s.Plans.GetInstallPlan(ctx, input)
-	if err != nil {
-		return SetupSnapshot{}, err
+	for {
+		if err := ctx.Err(); err != nil {
+			return SetupSnapshot{}, err
+		}
+		plan, err := s.Plans.GetInstallPlan(ctx, input)
+		if err != nil {
+			return SetupSnapshot{}, err
+		}
+		snapshot, err := s.snapshotForPlan(ctx, plan, input.WorkspaceID)
+		if err != nil {
+			return SetupSnapshot{}, err
+		}
+		if err := ctx.Err(); err != nil {
+			return SetupSnapshot{}, err
+		}
+		// Embedded startup can refresh the target while an older runtime is being
+		// probed. Do not return that older installation's readiness or install plan.
+		target, err := s.Plans.Targets.GetAgentTarget(ctx, strings.TrimSpace(input.AgentTargetID))
+		if err != nil {
+			return SetupSnapshot{}, err
+		}
+		ref, err := agenttargetbiz.RuntimeProviderTargetRef(target)
+		if err != nil {
+			return SetupSnapshot{}, err
+		}
+		if target.Enabled && ref["extensionInstallationId"] == plan.ExtensionInstallationID {
+			return snapshot, nil
+		}
 	}
-	return s.snapshotForPlan(ctx, plan, input.WorkspaceID)
 }
 
 func (s *SetupService) Install(ctx context.Context, input InstallInput) (SetupSnapshot, error) {

@@ -82,6 +82,30 @@ that directory, and `pnpm check:agent-host-boundary` ratchets against new
 `*Coordinator`/`*Worker`/`*Actor` orchestration surfaces landing in the
 adapter.
 
+## GPT orchestration and DeepSeek workers
+
+Encourage GPT (including Astra) to act as the orchestration layer: define goals,
+write precise worker instructions, integrate results and make the final decision.
+Prefer DeepSeek Flash for bounded implementation, research and peer review when
+delegation reduces total work. Keep trivial tasks local.
+
+Use DeepSeek Harness through the RnDMaster CLI (`deepseek-harness`) or the native
+Tutti CLI (`extension:deepseek-harness`), never a Claude Code or Codex Harness
+with a DeepSeek model substituted. The configured Dintal gateway currently uses
+`deepseek-flash`; prefer High reasoning and the `[1m]` model marker for a
+1,000,000-token context. Discover the actual target and model catalog before
+launch. RnDMaster CLI delegation defaults to Demo; validate changes with an
+explicit Test instance without restarting or updating running Demo work.
+See [DeepSeek worker delegation](docs/conventions/deepseek-workers.md).
+
+Worker prompts must state the goal, context, absolute working directory, allowed
+write scope, constraints, completion criteria and result delivery path. Workers
+inherit the caller's validation and publishing authorization. Do not recursively
+delegate unless requested. GPT must inspect delivered evidence before treating
+a worker as complete or a peer review as passing. Run peer review after the
+implementation is complete and authorized validation succeeds; do not dispatch
+a fresh review for every edit.
+
 ## Contribution Workflow
 
 Before preparing commits or pull requests, read `CONTRIBUTING.md` and follow it
