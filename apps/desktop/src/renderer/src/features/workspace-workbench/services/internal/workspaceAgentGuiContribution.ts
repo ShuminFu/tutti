@@ -221,6 +221,7 @@ export function createWorkspaceAgentGuiContribution(input: {
         agentGUIWorkbenchHostInput.resolveExternalPromptEntries,
       prepareExternalPromptFiles:
         agentGUIWorkbenchHostInput.prepareExternalPromptFiles,
+      resolvePastedPath: agentGUIWorkbenchHostInput.resolvePastedPath,
       onRequestGitBranches: agentGUIWorkbenchHostInput.onRequestGitBranches,
       referenceSourceAggregator:
         agentGUIWorkbenchHostInput.referenceSourceAggregator,

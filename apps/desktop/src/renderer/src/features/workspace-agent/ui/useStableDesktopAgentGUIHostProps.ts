@@ -10,6 +10,7 @@ export type DesktopAgentGUIHostProps = {
     | "selectProjectDirectory"
     | "resolveExternalPromptEntries"
     | "prepareExternalPromptFiles"
+    | "resolvePastedPath"
     | "promptAssetLimit"
     | "referenceSourceAggregator"
     | "resolveReferenceEntryIconUrl"
@@ -85,6 +86,7 @@ export function useStableDesktopAgentGUIHostProps({
       selectProjectDirectory: nextWorkspace.selectProjectDirectory,
       resolveExternalPromptEntries: nextWorkspace.resolveExternalPromptEntries,
       prepareExternalPromptFiles: nextWorkspace.prepareExternalPromptFiles,
+      resolvePastedPath: nextWorkspace.resolvePastedPath,
       promptAssetLimit: nextWorkspace.promptAssetLimit,
       referenceSourceAggregator: nextWorkspace.referenceSourceAggregator,
       resolveReferenceEntryIconUrl: nextWorkspace.resolveReferenceEntryIconUrl,

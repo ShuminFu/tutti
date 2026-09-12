@@ -56,6 +56,7 @@ import { translate } from "../../../i18n/appRuntime.ts";
 import { createDesktopAgentGeneratedFileMentionProvider } from "./internal/createDesktopAgentGeneratedFileMentionProvider.ts";
 import { createDesktopAgentExternalPromptFilePreparer } from "./internal/prepareDesktopAgentExternalPromptFiles.ts";
 import { createDesktopAgentExternalPromptEntryResolver } from "./internal/resolveDesktopAgentExternalPromptEntries.ts";
+import { createDesktopAgentPastedPathResolver } from "./internal/resolveDesktopAgentPastedPath.ts";
 import { createDesktopTuttiModePlanReviewRuntime } from "./internal/desktopWorkspaceWorkflowRuntime.ts";
 import type { AgentSessionReplayDesktopComposition } from "../../agent-session-replay/services/agentSessionReplayDesktopComposition.ts";
 import type { AgentSessionReplayService } from "../../agent-session-replay/services/agentSessionReplayService.ts";
@@ -82,6 +83,9 @@ export interface DesktopAgentGUIWorkbenchHostInput {
   >;
   prepareExternalPromptFiles: NonNullable<
     AgentGUIProps["workspace"]["prepareExternalPromptFiles"]
+  >;
+  resolvePastedPath: NonNullable<
+    AgentGUIProps["workspace"]["resolvePastedPath"]
   >;
   onRequestGitBranches: NonNullable<
     AgentGUIProps["workspace"]["onRequestGitBranches"]
@@ -266,6 +270,9 @@ export function createDesktopAgentGUIWorkbenchHostInput({
     });
   const resolveExternalPromptEntries =
     createDesktopAgentExternalPromptEntryResolver({ platformApi });
+  const resolvePastedPath = createDesktopAgentPastedPathResolver({
+    tuttidClient
+  });
   return {
     agentActivityRuntime,
     agentHostApi: resolvedAgentHostApi,
@@ -302,6 +309,7 @@ export function createDesktopAgentGUIWorkbenchHostInput({
     workspaceFileReferenceAdapter,
     resolveExternalPromptEntries,
     prepareExternalPromptFiles,
+    resolvePastedPath,
     onRequestGitBranches: async ({ agentSessionId, workingDirectory }) => {
       const result = agentSessionId
         ? await tuttidClient.listWorkspaceAgentSessionGitBranches(

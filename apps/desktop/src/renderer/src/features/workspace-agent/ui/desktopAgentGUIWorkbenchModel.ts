@@ -114,6 +114,9 @@ export interface DesktopAgentGUIWorkbenchBodyProps {
   prepareExternalPromptFiles: NonNullable<
     AgentGUIProps["workspace"]["prepareExternalPromptFiles"]
   >;
+  resolvePastedPath: NonNullable<
+    AgentGUIProps["workspace"]["resolvePastedPath"]
+  >;
   onRequestGitBranches: NonNullable<
     AgentGUIProps["workspace"]["onRequestGitBranches"]
   >;
@@ -209,6 +212,7 @@ export function areDesktopAgentGUIWorkbenchBodyPropsEqual(
     previous.resolveExternalPromptEntries ===
       next.resolveExternalPromptEntries &&
     previous.prepareExternalPromptFiles === next.prepareExternalPromptFiles &&
+    previous.resolvePastedPath === next.resolvePastedPath &&
     previous.onRequestGitBranches === next.onRequestGitBranches &&
     previous.referenceSourceAggregator === next.referenceSourceAggregator &&
     previous.renderSidebarFooter === next.renderSidebarFooter &&

@@ -10,21 +10,21 @@ import type { AgentRichTextEditorHandle } from "./AgentRichTextEditor.types";
 import { isAgentRichTextAbsolutePathPasteCandidate } from "./agentRichTextEditorSupport";
 
 describe("isAgentRichTextAbsolutePathPasteCandidate", () => {
-  it("accepts a single absolute path", () => {
+  it("accepts a single absolute path, including one with spaces", () => {
     expect(isAgentRichTextAbsolutePathPasteCandidate("/workspace/a.txt")).toBe(
       true
     );
     expect(
       isAgentRichTextAbsolutePathPasteCandidate(" /Users/me/a.txt\n")
     ).toBe(true);
+    expect(
+      isAgentRichTextAbsolutePathPasteCandidate("/workspace/My Folder")
+    ).toBe(true);
   });
 
-  it("rejects quoted, spaced, relative, and multi-path pastes", () => {
+  it("rejects quoted, relative, multi-line, and multi-path pastes", () => {
     expect(
-      isAgentRichTextAbsolutePathPasteCandidate('" /workspace/a.txt"')
-    ).toBe(false);
-    expect(
-      isAgentRichTextAbsolutePathPasteCandidate("/workspace/my file.txt")
+      isAgentRichTextAbsolutePathPasteCandidate('"/workspace/a.txt"')
     ).toBe(false);
     expect(isAgentRichTextAbsolutePathPasteCandidate("workspace/a.txt")).toBe(
       false
@@ -33,6 +33,9 @@ describe("isAgentRichTextAbsolutePathPasteCandidate", () => {
       isAgentRichTextAbsolutePathPasteCandidate(
         "/workspace/a.txt\n/workspace/b.txt"
       )
+    ).toBe(false);
+    expect(
+      isAgentRichTextAbsolutePathPasteCandidate("`/workspace/a.txt`")
     ).toBe(false);
   });
 });
@@ -195,6 +198,48 @@ describe("AgentRichTextEditor file paste", () => {
     );
     await waitFor(() =>
       expect(onChange.mock.calls.at(-1)?.[0]).toBe("/Users/me/demo.txt")
+    );
+  });
+
+  it("inserts a resolved folder path with spaces as a directory mention", async () => {
+    const onResolvePastedPath = vi.fn().mockResolvedValue({
+      kind: "folder",
+      path: "/Users/me/My Folder"
+    });
+    const onChange = vi.fn();
+    const rendered = render(
+      <AgentRichTextEditor
+        value=""
+        disabled={false}
+        placeholder="Prompt"
+        onChange={onChange}
+        onSubmit={vi.fn()}
+        onResolvePastedPath={onResolvePastedPath}
+      />
+    );
+
+    const editor = await waitFor(() => {
+      const element = rendered.container.querySelector<HTMLElement>(
+        '[contenteditable="true"]'
+      );
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    fireEvent.paste(editor, {
+      clipboardData: {
+        files: [],
+        getData: (type: string) =>
+          type === "text/plain" ? "/Users/me/My Folder" : ""
+      }
+    });
+
+    await waitFor(() =>
+      expect(onResolvePastedPath).toHaveBeenCalledWith("/Users/me/My Folder")
+    );
+    await waitFor(() =>
+      expect(onChange.mock.calls.at(-1)?.[0]).toContain(
+        "[@My Folder](/Users/me/My Folder/)"
+      )
     );
   });
 
