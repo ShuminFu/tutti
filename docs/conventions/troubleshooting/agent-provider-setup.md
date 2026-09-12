@@ -2380,3 +2380,27 @@ invalid_grant`. Search `tuttid.log` for
 - References:
   [standard_acp_setup.go](../../../packages/agent/daemon/runtime/standard_acp_setup.go)
   [desktopTerminalLoginReadinessMonitor.ts](../../../apps/desktop/src/renderer/src/features/workspace-agent/services/internal/desktopTerminalLoginReadinessMonitor.ts)
+
+## Bundled extension first sends spend seconds reading package files
+
+- Symptom: an already installed extension spends much longer preparing a new
+  session than generating the response. Setup and composer discovery repeat
+  the same disk reads.
+- Quick checks: compare submit trace timestamps with ACP process start and
+  sample the daemon during a setup request. Repeated
+  `validateInstallationWithLocalContent` / `packageContentSHA256` stacks identify
+  whole-package reads, including bundled runtime dependencies.
+- Root cause: each profile lookup rehashed the entire immutable installation
+  snapshot. A single session creation makes several profile lookups.
+- Fix: the extension Manager keeps a process-local digest cache for local
+  installation snapshots. Every lookup still scans all directory entries and
+  compares path, file identity, mode, size and modification time. Changed trees
+  are hashed again; concurrent readers share one check. Failed reads and trees
+  changing during hashing do not populate the cache. Signed release authority
+  and runtime executable validation retain their existing paths. The cache is
+  an optimization for ordinary filesystem changes, not a guarantee against
+  in-place edits that deliberately preserve all observed metadata.
+- Validation: unchanged and concurrent reads perform one hash; same-size edits,
+  additions, removals and atomic replacements trigger another; failed and
+  concurrently changing reads are retried. Run the agentextension package tests
+  and compare a real first-send trace before and after deployment.

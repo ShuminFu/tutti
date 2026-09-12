@@ -36,19 +36,20 @@ var safeKey = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$`)
 const runtimeVersionProbeTimeout = 90 * time.Second
 
 type Manager struct {
-	Sources           []tuttitypes.AgentExtensionSource
-	RuntimeInstallDir string
-	RuntimeBinDir     string
-	Store             workspacedata.AgentTargetStore
-	Installations     InstallationStore
-	Discovery         SetupDiscoveryDirectory
-	Preferences       workspacedata.PreferencesStore
-	Client            *http.Client
-	RuntimeResolver   runtimecmd.Resolver
-	UserPathAdapter   UserPathAdapter
-	reconcileMu       sync.Mutex
-	versionCacheOnce  sync.Once
-	runtimeVersions   *runtimeVersionCache
+	Sources            []tuttitypes.AgentExtensionSource
+	RuntimeInstallDir  string
+	RuntimeBinDir      string
+	Store              workspacedata.AgentTargetStore
+	Installations      InstallationStore
+	Discovery          SetupDiscoveryDirectory
+	Preferences        workspacedata.PreferencesStore
+	Client             *http.Client
+	RuntimeResolver    runtimecmd.Resolver
+	UserPathAdapter    UserPathAdapter
+	reconcileMu        sync.Mutex
+	versionCacheOnce   sync.Once
+	runtimeVersions    *runtimeVersionCache
+	localPackageChecks localPackageContentCache
 }
 
 type UserPathAdapter interface {
@@ -614,7 +615,7 @@ func (m *Manager) validateInstallationWithLocalContent(value Installation, verif
 			return Installation{}, errors.New("local extension installation content identity is missing or invalid")
 		}
 		if verifyLocalContent {
-			contentDigest, err := packageContentSHA256(expectedDir)
+			contentDigest, err := m.localPackageChecks.load(expectedDir, packageContentSHA256)
 			if err != nil {
 				return Installation{}, fmt.Errorf("fingerprint local extension package: %w", err)
 			}
