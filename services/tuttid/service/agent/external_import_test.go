@@ -567,6 +567,81 @@ func TestServiceImportedCodexWorktreeSessionGroupsUnderExistingMainCheckoutProje
 	}
 }
 
+// TestServiceImportsWorktreeSessionSelectedByTheWorktreePath is the mirror of
+// TestServiceImportedCodexWorktreeSessionGroupsUnderExistingMainCheckoutProject:
+// there the caller selected the main checkout, here it selects the ephemeral
+// worktree path the agent actually ran in — which is what an embedding host
+// sends, because it registers the directory it launched the agent in (its own
+// shared dev worktree). Every scanned session cwd is folded onto the main
+// checkout, so the selection has to be folded the same way; without it nothing
+// matches, the import quietly reports zero sessions, and the caller can only
+// surface "tutti did not import the native session".
+func TestServiceImportsWorktreeSessionSelectedByTheWorktreePath(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentServiceSQLiteStore(t)
+	if err := store.Create(ctx, workspacebiz.Summary{ID: "ws-1", Name: "Workspace One"}); err != nil {
+		t.Fatalf("Create workspace error = %v", err)
+	}
+	root := t.TempDir()
+	mainRoot, worktreeRoot := writeExternalImportGitWorktreeFixture(t, root, "rndmaster-dev")
+	// The session ran one directory below the worktree root so the fold has to
+	// preserve subdirectory depth on both sides.
+	nested := filepath.Join(worktreeRoot, "cliagent-backend")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatalf("create nested worktree dir error = %v", err)
+	}
+
+	home := filepath.Join(root, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("create home error = %v", err)
+	}
+	codexHome := filepath.Join(root, "codex-home")
+	t.Setenv("HOME", home)
+	t.Setenv("CODEX_HOME", codexHome)
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "worktree-selected.jsonl"),
+		map[string]any{
+			"timestamp": now,
+			"type":      "session_meta",
+			"payload":   map[string]any{"id": "worktree-selected", "cwd": nested},
+		},
+		map[string]any{"timestamp": now, "type": "response_item", "payload": map[string]any{
+			"type": "message", "id": "worktree-selected-1", "role": "user",
+			"content": []any{map[string]any{"type": "input_text", "text": "Import me from the worktree"}},
+		}},
+	)
+
+	service := newIsolatedAgentService(newFakeRuntime())
+	projection := NewActivityProjection(store)
+	service.SessionReader = projection
+	service.MessageReader = projection
+	service.ExternalImportStore = store
+
+	result, err := service.ImportExternalSessions(ctx, "ws-1", ExternalImportInput{
+		Projects: []ExternalImportProjectSelection{{Path: worktreeRoot}},
+	})
+	if err != nil {
+		t.Fatalf("ImportExternalSessions error = %v", err)
+	}
+	if result.ImportedSessions != 1 {
+		t.Fatalf("import result = %#v, want the worktree-run session imported", result)
+	}
+	if len(result.ProjectPaths) != 1 || result.ProjectPaths[0] != mainRoot {
+		t.Fatalf(
+			"import result ProjectPaths = %#v, want [%q] (the main checkout), not the ephemeral worktree path %q",
+			result.ProjectPaths, mainRoot, worktreeRoot,
+		)
+	}
+	session, err := service.Get(ctx, "ws-1", externalImportedSessionID("codex", "worktree-selected"))
+	if err != nil {
+		t.Fatalf("Get imported worktree session error = %v", err)
+	}
+	if want := filepath.Join(mainRoot, "cliagent-backend"); session.Cwd != want {
+		t.Fatalf("session.Cwd = %q, want %q (worktree folded onto the main checkout, depth preserved)", session.Cwd, want)
+	}
+}
+
 func TestServiceImportsHomeCwdAsNoProjectWithoutRegisteringUserHome(t *testing.T) {
 	ctx := context.Background()
 	store := openAgentServiceSQLiteStore(t)

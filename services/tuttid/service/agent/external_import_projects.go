@@ -265,17 +265,44 @@ func matchingExternalImportProject(session externalImportedSession, selections [
 		if len(selection.SessionIDs) > 0 && !externalSessionSelected(session, selection.SessionIDs) {
 			continue
 		}
-		if externalProjectPathContains(selection.Path, session.Cwd) {
-			selectionPath := agentactivitybiz.NormalizeProjectPath(selection.Path)
+		// The selection path needs the same worktree resolution the scanned cwd
+		// already went through (resolveExternalImportSessionCwd). A host that
+		// registers the ephemeral checkout its agent ran in — an embedding
+		// deployment whose project root is itself a linked worktree — otherwise
+		// sends a path the folded session cwd is never "within", so a perfectly
+		// importable conversation matches nothing and the caller sees
+		// importedSessions=0 with no error to explain it.
+		selectionPath, ok := resolveExternalImportSelectionPath(selection.Path)
+		if !ok {
+			continue
+		}
+		if externalProjectPathContains(selectionPath, session.Cwd) {
 			if agentactivitybiz.AreProjectPathsEqual(selectionPath, session.Cwd) {
-				return selection.Path, true
+				return selectionPath, true
 			}
 			if bestPath == "" || len(selectionPath) > len(agentactivitybiz.NormalizeProjectPath(bestPath)) {
-				bestPath = selection.Path
+				bestPath = selectionPath
 			}
 		}
 	}
 	return bestPath, bestPath != ""
+}
+
+// resolveExternalImportSelectionPath canonicalizes a selected project path and,
+// when it points inside a linked git worktree, folds it onto the equivalent path
+// under the main checkout — the same resolution already applied to every scanned
+// session cwd, so the two sides are comparable at all. Returns ok=false for a
+// path that cannot be resolved to an existing directory, which callers treat as
+// "this selection matches nothing" (the same outcome as before).
+func resolveExternalImportSelectionPath(path string) (string, bool) {
+	canonical, ok := canonicalExistingDir(path)
+	if !ok {
+		return "", false
+	}
+	if folded, ok := resolveExternalImportWorktreeCwd(canonical); ok {
+		return folded, true
+	}
+	return canonical, true
 }
 
 func externalSessionSelected(session externalImportedSession, sessionIDs []string) bool {
