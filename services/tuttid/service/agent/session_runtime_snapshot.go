@@ -8,6 +8,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 	agenthost "github.com/tutti-os/tutti/packages/agent/host"
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	"github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
@@ -336,7 +337,12 @@ func (s *Service) modelEndpointFromSessionRuntimeSnapshot(
 				return nil, err
 			}
 		}
-		resolution.Endpoint.Model = planModelComposerValue(snapshot.Provider, planModelIDFromComposerValue(snapshot.Provider, effectiveModel))
+		// The 1M marker is a window request, not part of the id the runtime is
+		// handed: it travels beside the model as a window, and the model goes out
+		// canonical. Resuming without this would write "X[1m]" into the runtime's
+		// config as a model id that does not exist.
+		resolution.Endpoint.ContextWindow = contextwindow.Window(effectiveModel)
+		resolution.Endpoint.Model = planModelComposerValue(snapshot.Provider, contextwindow.Bare(planModelIDFromComposerValue(snapshot.Provider, effectiveModel)))
 		return resolution.Endpoint, nil
 	}
 	runtime := s.modelPlanRuntime()
@@ -378,13 +384,17 @@ func (s *Service) modelEndpointFromSessionRuntimeSnapshot(
 	if err := validateModelAgainstPlan(snapshot.Provider, effectiveModel, plan.Models); err != nil {
 		return nil, err
 	}
+	// Same as the host-default branch above: window beside the model, bare id on
+	// the wire, so a resumed session keeps the 1M request it was created with.
+	contextWindow := contextwindow.Window(effectiveModel)
 	return &runtimeprep.ModelEndpointConfig{
 		PlanID:              plan.ID,
 		PlanName:            plan.Name,
 		Protocol:            string(plan.Protocol),
 		BaseURL:             plan.BaseURL,
 		APIKey:              plan.APIKey,
-		Model:               planModelComposerValue(snapshot.Provider, planModelIDFromComposerValue(snapshot.Provider, effectiveModel)),
+		Model:               planModelComposerValue(snapshot.Provider, contextwindow.Bare(planModelIDFromComposerValue(snapshot.Provider, effectiveModel))),
+		ContextWindow:       contextWindow,
 		Models:              modelEndpointModels(plan.Models),
 		PlanUpdatedAtUnixMS: plan.UpdatedAt.UnixMilli(),
 	}, nil
