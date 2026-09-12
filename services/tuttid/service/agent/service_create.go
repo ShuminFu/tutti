@@ -17,7 +17,9 @@ import (
 	modelgatewayservice "github.com/tutti-os/tutti/services/tuttid/service/modelgateway"
 )
 
-const sessionCreatePreparationTimeout = 15 * time.Second
+// Cold managed extensions resolve their runtime and discover ACP settings
+// before launch; this preparation can exceed an ordinary HTTP request budget.
+const sessionCreatePreparationTimeout = 2 * time.Minute
 
 func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSessionInput) (Session, error) {
 	result, err := s.CreateWithResult(ctx, workspaceID, input)
@@ -53,6 +55,13 @@ func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, inpu
 	}
 	input.Provider = provider
 	input.ProviderTargetRef = launch.ProviderTargetRef
+	if providerTargetRefKind(input.ProviderTargetRef) == "agent_extension" {
+		profile, err := s.extensionComposerProfileForLaunch(ctx, input.ProviderTargetRef)
+		if err != nil {
+			return createSessionFailureResult(input, err)
+		}
+		ctx = withResolvedExtensionComposerProfile(ctx, input.ProviderTargetRef, profile)
+	}
 	isolationMode := strings.TrimSpace(input.Isolation)
 	if isolationMode != "" && isolationMode != WorktreeIsolationMode {
 		return createSessionFailureResult(input, fmt.Errorf("%w: unsupported session isolation mode %q", ErrInvalidArgument, isolationMode))

@@ -9,6 +9,20 @@ import (
 	"github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
 )
 
+type extensionComposerProfileContextKey struct{}
+
+type resolvedExtensionComposerProfile struct {
+	installationID string
+	profile        ExtensionComposerProfile
+}
+
+func withResolvedExtensionComposerProfile(ctx context.Context, ref map[string]any, profile ExtensionComposerProfile) context.Context {
+	return context.WithValue(ctx, extensionComposerProfileContextKey{}, resolvedExtensionComposerProfile{
+		installationID: strings.TrimSpace(stringFromAny(ref["extensionInstallationId"])),
+		profile:        profile,
+	})
+}
+
 func (s *Service) extensionComposerProfileForLaunch(ctx context.Context, providerTargetRef map[string]any) (ExtensionComposerProfile, error) {
 	if providerTargetRefKind(providerTargetRef) != "agent_extension" {
 		return ExtensionComposerProfile{}, nil
@@ -16,6 +30,11 @@ func (s *Service) extensionComposerProfileForLaunch(ctx context.Context, provide
 	installationID := strings.TrimSpace(stringFromAny(providerTargetRef["extensionInstallationId"]))
 	if s.ExtensionComposerProfiles == nil || installationID == "" {
 		return ExtensionComposerProfile{}, nil
+	}
+	// A launch reads the same verified profile for models, capabilities, skills
+	// and runtime preparation. Reuse that request's snapshot, not a global cache.
+	if resolved, ok := ctx.Value(extensionComposerProfileContextKey{}).(resolvedExtensionComposerProfile); ok && resolved.installationID == installationID {
+		return resolved.profile, nil
 	}
 	return s.ExtensionComposerProfiles.ResolveExtensionComposerProfile(ctx, installationID)
 }

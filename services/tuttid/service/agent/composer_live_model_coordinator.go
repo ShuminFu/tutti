@@ -10,6 +10,8 @@ import (
 var errLiveModelDiscoveryPending = errors.New("live model discovery continues in background")
 var errLiveModelDiscoverySuperseded = errors.New("live model discovery auth scope was invalidated")
 
+const extensionComposerDiscoveryTimeout = 90 * time.Second
+
 type liveModelDiscoverySessionRef struct {
 	Provider       string
 	WorkspaceID    string
@@ -73,7 +75,12 @@ func (s *Service) discoverLiveComposerModels(
 		s.setLiveComposerModelOptionsForScope(scope, time.Now().UTC(), discovered)
 		return discovered, nil
 	})
-	waitTimer := time.NewTimer(liveModelDiscoveryTimeout)
+	waitTimeout := liveModelDiscoveryTimeout
+	if providerTargetRefKind(input.providerTargetRef) == "agent_extension" {
+		// Extension discovery also resolves its managed runtime before ACP starts.
+		waitTimeout = extensionComposerDiscoveryTimeout
+	}
+	waitTimer := time.NewTimer(waitTimeout)
 	defer waitTimer.Stop()
 	select {
 	case <-ctx.Done():

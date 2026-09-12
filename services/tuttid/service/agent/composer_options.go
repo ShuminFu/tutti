@@ -218,6 +218,7 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 			return ComposerOptions{}, err
 		}
 		input.extensionComposerProfile = extensionProfile
+		ctx = withResolvedExtensionComposerProfile(ctx, input.providerTargetRef, extensionProfile)
 	}
 	modelPlanResolution := modelPlanResolution{}
 	if input.IgnoreModelPlanBinding {
@@ -451,10 +452,10 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		Behavior:                composerProfileFor(provider).Behavior,
 		SlashCommandPolicy:      slashCommandPolicy,
 	}
-	if planEndpoint == nil && !s.ReplayMode && (composerProfileFor(provider).LiveModelDiscovery ||
-		providerTargetRefKind(input.providerTargetRef) == "agent_extension") {
-		// Host-backed extension catalogs already resolved above. Hidden ACP
-		// discovery is only for first-run composers that still have no endpoint.
+	if !s.ReplayMode && (providerTargetRefKind(input.providerTargetRef) == "agent_extension" ||
+		(planEndpoint == nil && composerProfileFor(provider).LiveModelDiscovery)) {
+		// A host endpoint supplies models, but extension reasoning and permission
+		// options still come from ACP. The endpoint model overlay remains last.
 		var err error
 		options, err = s.mergeLiveComposerModelsForComposerOptions(ctx, input, effectiveSettings, options)
 		if err != nil {
@@ -821,76 +822,4 @@ func normalizeSpeedForProvider(provider string, value string) string {
 		}
 	}
 	return strings.TrimSpace(composerProfileFor(provider).DefaultSpeed)
-}
-
-func composerSpeedOptionValues(provider string, locale string) []ComposerConfigOptionValue {
-	values := speedTierValuesForProvider(provider)
-	options := make([]ComposerConfigOptionValue, 0, len(values))
-	for _, value := range values {
-		label, description := speedDisplay(value, locale)
-		options = append(options, ComposerConfigOptionValue{
-			ID:          value,
-			Label:       label,
-			Value:       value,
-			Description: description,
-		})
-	}
-	return options
-}
-
-func composerSpeedConfigFromOptions(provider string, selected string, options []ComposerConfigOptionValue) ComposerConfigOption {
-	selected = strings.TrimSpace(selected)
-	return ComposerConfigOption{
-		Configurable: speedProviderSupportsSpeed(provider) && len(options) > 0,
-		CurrentValue: selected,
-		DefaultValue: selected,
-		Options:      cloneComposerConfigOptionValues(options),
-	}
-}
-
-func composerAdvertisedSpeedOptionValues(locale string, advertised []AgentModelSpeedOption) []ComposerConfigOptionValue {
-	options := make([]ComposerConfigOptionValue, 0, len(advertised))
-	for _, advertisedOption := range advertised {
-		value := strings.TrimSpace(advertisedOption.Value)
-		if value == "" {
-			continue
-		}
-		label, description := speedDisplay(value, locale)
-		if advertisedLabel := strings.TrimSpace(advertisedOption.Label); advertisedLabel != "" {
-			label = advertisedLabel
-		}
-		if advertisedDescription := strings.TrimSpace(advertisedOption.Description); advertisedDescription != "" {
-			description = advertisedDescription
-		}
-		options = append(options, ComposerConfigOptionValue{
-			ID: value, Label: label, Value: value, Description: description,
-		})
-	}
-	return options
-}
-
-func resolveAdvertisedSpeed(selected string, advertisedDefault string, advertised []AgentModelSpeedOption) string {
-	selected = strings.TrimSpace(selected)
-	advertisedDefault = strings.TrimSpace(advertisedDefault)
-	firstValue := ""
-	defaultSupported := false
-	for _, option := range advertised {
-		value := strings.TrimSpace(option.Value)
-		if value == "" {
-			continue
-		}
-		if firstValue == "" {
-			firstValue = value
-		}
-		if value == selected {
-			return selected
-		}
-		if value == advertisedDefault {
-			defaultSupported = true
-		}
-	}
-	if defaultSupported {
-		return advertisedDefault
-	}
-	return firstValue
 }

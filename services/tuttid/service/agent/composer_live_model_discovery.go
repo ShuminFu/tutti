@@ -270,6 +270,9 @@ func (s *Service) discoverLiveComposerModelsUncachedForScope(
 		Speed:             stringPointer(strings.TrimSpace(settings.Speed)),
 		Visible:           &visible,
 	}
+	if isExtension && strings.TrimSpace(settings.Model) != "" {
+		startInput.Model = stringPointer(strings.TrimSpace(settings.Model))
+	}
 	logHiddenModelDiscoveryTriggered(scope.provider, startInput.AgentSessionID)
 	session, err = func() (ProviderRuntimeSession, error) {
 		defer releaseStartup()
@@ -314,7 +317,7 @@ func (s *Service) discoverLiveComposerModelsUncachedForScope(
 		}
 		if isExtension {
 			go s.cleanupLiveModelDiscoverySession(scope.workspaceID, startInput.AgentSessionID)
-			return nil, err
+			return nil, errors.Join(errLiveModelDiscoverySessionFailed, err)
 		}
 		if cleanupErr := s.cleanupRuntime(ctx, scope.workspaceID, startInput.AgentSessionID); cleanupErr != nil {
 			return nil, errors.Join(err, cleanupErr)
@@ -562,6 +565,14 @@ func (s *Service) mergeLiveComposerModelsForComposerOptions(
 				discovered, err := s.discoverLiveComposerModels(ctx, input, effectiveSettings)
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return ComposerOptions{}, err
+				}
+				if providerTargetRefKind(input.providerTargetRef) == "agent_extension" {
+					if errors.Is(err, errLiveModelDiscoveryPending) {
+						return ComposerOptions{}, fmt.Errorf("extension capability discovery did not finish: %w", context.DeadlineExceeded)
+					}
+					if errors.Is(err, errLiveModelDiscoverySessionFailed) {
+						return ComposerOptions{}, err
+					}
 				}
 				if err == nil && len(discovered) > 0 {
 					liveModels = discovered

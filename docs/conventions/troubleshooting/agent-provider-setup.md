@@ -2404,3 +2404,34 @@ invalid_grant`. Search `tuttid.log` for
   additions, removals and atomic replacements trigger another; failed and
   concurrently changing reads are retried. Run the agentextension package tests
   and compare a real first-send trace before and after deployment.
+
+### First extension launch rejects reasoning with a host model catalog
+
+- Symptom: the host lists the requested model, but a first extension launch
+  rejects an explicit reasoning effort as not configurable.
+- Quick checks: inspect the exact Target's composer options and ACP discovery
+  logs. Confirm whether only the host model endpoint has populated the catalog.
+- Root cause: a host model catalog contains model routing information, not the
+  extension's ACP reasoning or permission controls. Skipping discovery leaves
+  the first launch without those controls.
+- Fix: perform scoped extension discovery even with a host endpoint, reuse its
+  runtime configuration, and apply the host model overlay last. Keep a bounded
+  preparation budget long enough for cold runtime resolution and ACP startup.
+  Reuse the verified profile within the exact request rather than repeatedly
+  hashing a bundled runtime for each capability or skill property.
+- Validation: cover a first launch with explicit reasoning and a host model
+  different from the runtime default; preserve the host catalog and reject
+  unsupported reasoning values.
+- References: `composer_options.go`, `composer_extension_scope_test.go`, and
+  `service_create.go` in `services/tuttid/service/agent`.
+
+## Setup reports ready while a refreshed extension has no runtime
+
+Embedded startup restores the last active target before asynchronously refreshing
+local extension packages. A long setup probe can straddle that refresh and finish
+against the older installation. `SetupService.GetSetup` rechecks the target's
+installation after probing and resolves the current plan again if it changed,
+within the original caller context. A normal unchanged target does not repeat
+package verification. This does not make setup and later session creation one
+transaction; a runtime start failure must retain its actual cause instead of
+being reported as an unsupported reasoning option.
