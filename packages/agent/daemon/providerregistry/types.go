@@ -352,6 +352,13 @@ type ExternalImportDescriptor struct {
 	UserTextCleanerKind      ExternalImportUserTextCleanerKind
 	TitleCatalogKind         ExternalImportTitleCatalogKind
 	NoProjectHomeRelativeDir string
+	// ExtraRootsEnvVar names an optional environment variable holding a
+	// path-list (os.PathListSeparator separated) of additional roots to scan
+	// alongside the provider's primary root. An embedding host uses it to keep
+	// its own managed config dir and the user's CLI root importable at the same
+	// time, when it redirects RootEnvVar for isolation. Duplicates of the
+	// primary root are ignored, and an unset variable means exactly one root.
+	ExtraRootsEnvVar string
 }
 
 type AuthWatchDescriptor struct {

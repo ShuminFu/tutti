@@ -590,7 +590,7 @@ func Validate(descriptor ProviderDescriptor) error {
 
 func validateExternalImportDescriptor(descriptor ExternalImportDescriptor) error {
 	if !descriptor.Enabled {
-		if descriptor.RootEnvVar != "" || descriptor.DefaultRoot != "" || len(descriptor.ScanDirectories) > 0 || len(descriptor.SkipDirectoryPrefixes) > 0 || descriptor.ParserKind != "" || descriptor.UserTextCleanerKind != "" || descriptor.TitleCatalogKind != "" || descriptor.NoProjectHomeRelativeDir != "" {
+		if descriptor.RootEnvVar != "" || descriptor.DefaultRoot != "" || descriptor.ExtraRootsEnvVar != "" || len(descriptor.ScanDirectories) > 0 || len(descriptor.SkipDirectoryPrefixes) > 0 || descriptor.ParserKind != "" || descriptor.UserTextCleanerKind != "" || descriptor.TitleCatalogKind != "" || descriptor.NoProjectHomeRelativeDir != "" {
 			return fmt.Errorf("disabled descriptor must not declare import strategies")
 		}
 		return nil

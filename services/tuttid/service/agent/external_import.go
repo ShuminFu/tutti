@@ -344,62 +344,111 @@ func scanExternalProviderSessions(provider string, cutoffUnixMS int64) ([]extern
 	if !ok || !descriptor.ExternalImport.Enabled {
 		return nil, ExternalImportProvider{Provider: provider}, nil
 	}
-	root := externalProviderRoot(descriptor.ExternalImport)
-	summary := ExternalImportProvider{Provider: provider, Root: root}
-	if root == "" {
-		return nil, summary, nil
+	roots := externalProviderRoots(descriptor.ExternalImport)
+	summary := ExternalImportProvider{Provider: provider}
+	if len(roots) > 0 {
+		summary.Root = roots[0]
 	}
-	if info, err := os.Stat(root); err != nil || !info.IsDir() {
-		return nil, summary, nil
-	}
-	summary.Available = true
-	files, err := externalProviderJSONLFiles(descriptor.ExternalImport, root)
-	if err != nil {
-		summary.Error = err.Error()
-		return nil, summary, []ExternalImportError{{Provider: provider, Message: err.Error()}}
-	}
-	// Codex stores the generated conversation title in its app-server SQLite
-	// state DB rather than in the rollout transcript, so resolve it up front and
-	// let it override the message-derived title.
-	var importedTitles map[string]string
-	if descriptor.ExternalImport.TitleCatalogKind == providerregistry.ExternalImportTitleCatalogKindCodexSQLite {
-		importedTitles = codexThreadTitles(root)
-	}
-	sessions := make([]externalImportedSession, 0, len(files))
+	sessions := make([]externalImportedSession, 0, 8)
 	errors := make([]ExternalImportError, 0)
-	for _, file := range files {
-		session, ok, err := parseExternalProviderJSONL(descriptor, file)
+	// The same provider session can sit under more than one root: a host that
+	// isolates its managed config dir and additionally declares the user's own
+	// CLI root ends up with the imported conversation in one and its continued
+	// copy in the other. Keep a single entry per provider session id — the most
+	// recently updated one — so nothing is counted or imported twice.
+	indexBySessionID := make(map[string]int)
+	for _, root := range roots {
+		if info, err := os.Stat(root); err != nil || !info.IsDir() {
+			continue
+		}
+		summary.Available = true
+		files, err := externalProviderJSONLFiles(descriptor.ExternalImport, root)
 		if err != nil {
-			errors = append(errors, ExternalImportError{Provider: provider, SourcePath: file, Message: err.Error()})
+			summary.Error = err.Error()
+			errors = append(errors, ExternalImportError{Provider: provider, Message: err.Error()})
 			continue
 		}
-		if !ok {
-			continue
+		// Codex stores the generated conversation title in its app-server SQLite
+		// state DB rather than in the rollout transcript, so resolve it up front and
+		// let it override the message-derived title.
+		var importedTitles map[string]string
+		if descriptor.ExternalImport.TitleCatalogKind == providerregistry.ExternalImportTitleCatalogKindCodexSQLite {
+			importedTitles = codexThreadTitles(root)
 		}
-		if session.UpdatedAtUnixMS < cutoffUnixMS {
-			continue
+		for _, file := range files {
+			session, ok, err := parseExternalProviderJSONL(descriptor, file)
+			if err != nil {
+				errors = append(errors, ExternalImportError{Provider: provider, SourcePath: file, Message: err.Error()})
+				continue
+			}
+			if !ok {
+				continue
+			}
+			if session.UpdatedAtUnixMS < cutoffUnixMS {
+				continue
+			}
+			if title := strings.TrimSpace(importedTitles[session.ProviderSessionID]); title != "" {
+				session.Title = truncateExternalTitle(title)
+			}
+			if index, exists := indexBySessionID[session.ProviderSessionID]; exists {
+				if session.UpdatedAtUnixMS > sessions[index].UpdatedAtUnixMS {
+					sessions[index] = session
+				}
+				continue
+			}
+			indexBySessionID[session.ProviderSessionID] = len(sessions)
+			sessions = append(sessions, session)
 		}
-		if title := strings.TrimSpace(importedTitles[session.ProviderSessionID]); title != "" {
-			session.Title = truncateExternalTitle(title)
-		}
-		sessions = append(sessions, session)
+	}
+	for _, session := range sessions {
 		summary.SessionCount++
 		summary.MessageCount += len(session.Messages)
 	}
 	return sessions, summary, errors
 }
 
-func externalProviderRoot(descriptor providerregistry.ExternalImportDescriptor) string {
-	home, _ := os.UserHomeDir()
+// externalProviderRoots returns the local transcript roots to scan, in priority
+// order: the env-var root the process was pointed at (falling back to the
+// descriptor's default root when it is unset), then any extra roots the
+// embedding host declared through ExtraRootsEnvVar.
+//
+// The extra roots exist because a host that redirects the primary variable for
+// isolation — an embedded deployment pointing CLAUDE_CONFIG_DIR at its own
+// managed config dir so the user's own ~/.claude is never touched — would
+// otherwise make the user's real CLI history invisible to import. Declaring the
+// user's root as an extra root keeps both sides importable at once. Unset means
+// exactly one root, i.e. the historical behaviour.
+func externalProviderRoots(descriptor providerregistry.ExternalImportDescriptor) []string {
+	roots := make([]string, 0, 4)
+	appendRoot := func(root string) {
+		root = strings.TrimSpace(root)
+		if root == "" {
+			return
+		}
+		for _, existing := range roots {
+			if existing == root {
+				return
+			}
+		}
+		roots = append(roots, root)
+	}
 	if descriptor.RootEnvVar != "" {
-		if root := strings.TrimSpace(os.Getenv(descriptor.RootEnvVar)); root != "" {
-			return root
+		appendRoot(os.Getenv(descriptor.RootEnvVar))
+	}
+	if len(roots) == 0 {
+		home, _ := os.UserHomeDir()
+		if home != "" && strings.HasPrefix(descriptor.DefaultRoot, "~/") {
+			appendRoot(filepath.Join(home, strings.TrimPrefix(descriptor.DefaultRoot, "~/")))
+		} else {
+			appendRoot(descriptor.DefaultRoot)
 		}
 	}
-	if home != "" && strings.HasPrefix(descriptor.DefaultRoot, "~/") {
-		return filepath.Join(home, strings.TrimPrefix(descriptor.DefaultRoot, "~/"))
+	if descriptor.ExtraRootsEnvVar != "" {
+		for _, root := range filepath.SplitList(os.Getenv(descriptor.ExtraRootsEnvVar)) {
+			appendRoot(root)
+		}
 	}
-	return strings.TrimSpace(descriptor.DefaultRoot)
+	return roots
 }
 
 func externalProviderJSONLFiles(descriptor providerregistry.ExternalImportDescriptor, root string) ([]string, error) {

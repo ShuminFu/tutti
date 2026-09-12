@@ -158,6 +158,7 @@ func claudeCodeDescriptor() ProviderDescriptor {
 			Enabled:               true,
 			RootEnvVar:            "CLAUDE_CONFIG_DIR",
 			DefaultRoot:           "~/.claude",
+			ExtraRootsEnvVar:      "TUTTI_CLAUDE_EXTRA_IMPORT_ROOTS",
 			ScanDirectories:       []string{"projects"},
 			SkipDirectoryPrefixes: []string{"agent-"},
 			ParserKind:            ExternalImportParserKindClaudeJSONL,

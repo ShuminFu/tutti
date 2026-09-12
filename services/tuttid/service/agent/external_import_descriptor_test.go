@@ -36,6 +36,11 @@ func TestExternalImportPoliciesAreDescriptorOwned(t *testing.T) {
 	if !claude.ExternalImport.Enabled || claude.ExternalImport.ParserKind != providerregistry.ExternalImportParserKindClaudeJSONL || claude.ExternalImport.UserTextCleanerKind != providerregistry.ExternalImportUserTextCleanerKindClaude {
 		t.Fatalf("claude external import = %#v", claude.ExternalImport)
 	}
+	// An embedding host that redirects CLAUDE_CONFIG_DIR at its own managed
+	// config dir declares the user's own root here, so both stay importable.
+	if claude.ExternalImport.ExtraRootsEnvVar != "TUTTI_CLAUDE_EXTRA_IMPORT_ROOTS" {
+		t.Fatalf("claude extra import roots env var = %q", claude.ExternalImport.ExtraRootsEnvVar)
+	}
 	opencode, ok := providerregistry.Find(providerregistry.OpenCodeProviderID)
 	if !ok {
 		t.Fatal("opencode descriptor missing")
