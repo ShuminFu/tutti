@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 	"github.com/tutti-os/tutti/packages/agent/daemon/modelcatalog"
 )
 
@@ -446,10 +447,19 @@ func stringPtrLogValue(value *string) string {
 	return strings.TrimSpace(*value)
 }
 
-func (*CodexAppServerAdapter) RequiresNewSessionForSettings(Session, SessionSettingsPatch) bool {
-	// The app-server supports per-turn model/effort overrides, so settings
-	// changes never require recreating the session.
-	return false
+func (*CodexAppServerAdapter) RequiresNewSessionForSettings(session Session, patch SessionSettingsPatch) bool {
+	// The app-server supports per-turn model/effort overrides, so most settings
+	// changes never require recreating the session. The 1M context window is the
+	// exception: it is thread config rather than a turn parameter, so a thread
+	// started without it cannot be widened later — and one started with it would
+	// keep sizing compaction against 1M after the user dropped back to a plain
+	// model. Either direction therefore needs a fresh thread. A plain model swap
+	// (both sides unmarked) still switches in place.
+	if patch.Model == nil {
+		return false
+	}
+	return contextwindow.RequestsOneMillion(*patch.Model) !=
+		contextwindow.RequestsOneMillion(session.SettingsValue().Model)
 }
 
 func (a *CodexAppServerAdapter) snapshotExecState(agentSessionID string) (codexAppServerExecState, bool) {

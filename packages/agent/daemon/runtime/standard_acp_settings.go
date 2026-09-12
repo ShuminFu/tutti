@@ -427,7 +427,10 @@ func (a *standardACPAdapter) ValidateSessionSettings(session Session, patch Sess
 		return nil
 	}
 	if patch.Model != nil {
-		model := strings.TrimSpace(*patch.Model)
+		// Runtimes advertise the canonical ids, so the 1M marker has to come off
+		// before the lookup: it is a window request, not part of the id. The error
+		// then names the bare model too, rather than leaking our spelling.
+		model := contextwindow.Bare(*patch.Model)
 		modelConfigID := a.effectiveModelConfigOptionID()
 		if model == "" || modelConfigID == "" || !a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, modelConfigID, model) {
 			return fmt.Errorf("agent session ACP model %q is not advertised", model)
@@ -520,7 +523,10 @@ func (a *standardACPAdapter) ApplySessionSettings(
 
 	modelSet := false
 	if patch.Model != nil {
-		model := strings.TrimSpace(*patch.Model)
+		// Same as the validation above: match and send the bare id. ACP has no
+		// context-window parameter, so a marked selection falls back to the plain
+		// model here; the window only travels on the channels that carry one.
+		model := contextwindow.Bare(*patch.Model)
 		// A model the live agent advertises as a selectable option can be
 		// switched in place via set_config_option, even if it is a concrete id
 		// (e.g. Opus 4.6) rather than one of the static aliases. Only models the

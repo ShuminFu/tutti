@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
 	modelbindingbiz "github.com/tutti-os/tutti/services/tuttid/biz/modelbinding"
@@ -202,6 +203,106 @@ func TestHostDefaultRuntimeSnapshotResumesWithCurrentHostCredential(t *testing.T
 	}
 	if endpoint == nil || endpoint.Model != "gateway-alt" {
 		t.Fatalf("qualified ACP model resume endpoint = %#v", endpoint)
+	}
+}
+
+// A session that asked for the 1M window keeps asking for it across a resume,
+// and the runtime is handed the bare model either way. The two halves have to
+// be split again here: the marker rides the persisted model value, but it is
+// not part of the id any runtime knows.
+func TestHostDefaultRuntimeSnapshotResumesWithTheContextWindowBesideTheModel(t *testing.T) {
+	setHostModelEndpointContract(t, "codex", "openai")
+	resolution, ok := hostDefaultModelResolution("codex", "local:codex", "gateway-alt")
+	if !ok {
+		t.Fatal("host default did not resolve")
+	}
+	model := "gateway-alt"
+	runtimeContext := runtimeContextWithSessionRuntimeSnapshot(nil, CreateSessionInput{
+		AgentTargetID: "local:codex", HarnessAgentTargetID: "local:codex", Model: &model,
+	}, "codex", resolution)
+	snapshot, exists, err := sessionRuntimeSnapshotFromContext(runtimeContext, "codex")
+	if err != nil || !exists {
+		t.Fatalf("snapshot = %#v, exists=%v, err=%v", snapshot, exists, err)
+	}
+
+	endpoint, err := (&Service{}).modelEndpointFromSessionRuntimeSnapshot(
+		context.Background(), "workspace", snapshot, contextwindow.WithMarker(model),
+	)
+	if err != nil {
+		t.Fatalf("marked resume error = %v", err)
+	}
+	if endpoint == nil || endpoint.Model != model {
+		t.Fatalf("marked resume endpoint = %#v, want the bare %q", endpoint, model)
+	}
+	if endpoint.ContextWindow != contextwindow.OneMillionTokens {
+		t.Fatalf("marked resume context window = %d, want %d", endpoint.ContextWindow, contextwindow.OneMillionTokens)
+	}
+
+	// The unmarked resume is unchanged: no window request, same bare model.
+	plain, err := (&Service{}).modelEndpointFromSessionRuntimeSnapshot(
+		context.Background(), "workspace", snapshot, model,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain == nil || plain.Model != model || plain.ContextWindow != 0 {
+		t.Fatalf("plain resume endpoint = %#v, want no window request", plain)
+	}
+}
+
+func TestModelPlanRuntimeSnapshotResumesWithTheContextWindowBesideTheModel(t *testing.T) {
+	t.Parallel()
+
+	plan := snapshotTestPlan(2, "https://relay.example/v1", "sk-secret")
+	plans := revisionPlanSource{current: plan, revisions: map[uint64]modelplanbiz.Plan{2: plan}}
+	service := &Service{}
+	service.ConfigureModelPlanBinding(staticBindingSource{binding: modelbindingbiz.Binding{
+		WorkspaceID:   "ws",
+		AgentTargetID: "workspace-agent:writer",
+		ModelPlanID:   plan.ID,
+		DefaultModel:  "gpt-new",
+	}}, plans)
+
+	resolution, err := resolveProvidedModelPlan("codex", "workspace-agent:writer", plan, "gpt-new", "gpt-new")
+	if err != nil {
+		t.Fatalf("resolveProvidedModelPlan() error = %v", err)
+	}
+	model := "gpt-new"
+	runtimeContext := runtimeContextWithSessionRuntimeSnapshot(nil, CreateSessionInput{
+		AgentTargetID:        "workspace-agent:writer",
+		HarnessAgentTargetID: "local:codex",
+		Model:                &model,
+	}, "codex", resolution)
+	snapshot, exists, err := sessionRuntimeSnapshotFromContext(runtimeContext, "codex")
+	if err != nil || !exists {
+		t.Fatalf("snapshot = %#v, exists=%v, err=%v", snapshot, exists, err)
+	}
+
+	endpoint, err := service.modelEndpointFromSessionRuntimeSnapshot(
+		context.Background(), "ws", snapshot, contextwindow.WithMarker(model),
+	)
+	if err != nil {
+		t.Fatalf("marked resume error = %v", err)
+	}
+	if endpoint == nil || endpoint.Model != model {
+		t.Fatalf("marked resume endpoint = %#v, want the bare %q", endpoint, model)
+	}
+	if endpoint.ContextWindow != contextwindow.OneMillionTokens {
+		t.Fatalf("marked resume context window = %d, want %d", endpoint.ContextWindow, contextwindow.OneMillionTokens)
+	}
+	// The plan revision, not the live plan, still owns the credentials.
+	if endpoint.BaseURL != plan.BaseURL || endpoint.APIKey != plan.APIKey {
+		t.Fatalf("marked resume endpoint credentials = %#v, want the snapshotted revision", endpoint)
+	}
+
+	plain, err := service.modelEndpointFromSessionRuntimeSnapshot(
+		context.Background(), "ws", snapshot, model,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain == nil || plain.Model != model || plain.ContextWindow != 0 {
+		t.Fatalf("plain resume endpoint = %#v, want no window request", plain)
 	}
 }
 

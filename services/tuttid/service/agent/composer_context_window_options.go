@@ -68,8 +68,8 @@ func appendRuntimeModelOptionVariants(
 	if len(runtimeContext) == 0 || len(variants) == 0 {
 		return runtimeContext
 	}
-	entries, ok := runtimeContext["configOptions"].([]map[string]any)
-	if !ok {
+	entries := runtimeConfigOptionsAsMapSlice(runtimeContext["configOptions"])
+	if len(entries) == 0 {
 		return runtimeContext
 	}
 	optionID := composerModelConfigOptionID(provider)
@@ -77,7 +77,7 @@ func appendRuntimeModelOptionVariants(
 		if strings.TrimSpace(stringFromAny(entry["id"])) != optionID {
 			continue
 		}
-		existing, _ := entry["options"].([]map[string]any)
+		existing := runtimeConfigOptionsAsMapSlice(entry["options"])
 		merged := make([]map[string]any, 0, len(existing)+len(variants))
 		merged = append(merged, existing...)
 		merged = append(merged, variants...)
