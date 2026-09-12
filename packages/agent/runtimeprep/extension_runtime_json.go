@@ -48,6 +48,8 @@ func mergeJSONExtensionRuntimeConfig(
 	if len(declaration.ConfigKeys.Models) > 0 {
 		catalog := make([]map[string]any, 0, len(endpoint.Models))
 		seen := map[string]struct{}{}
+		contextWindow := endpoint.ContextWindow
+		selectedModelID := strings.TrimSpace(endpoint.Model)
 		for _, model := range endpoint.Models {
 			id := strings.TrimSpace(model.ID)
 			if id == "" {
@@ -64,6 +66,12 @@ func mergeJSONExtensionRuntimeConfig(
 			entry := map[string]any{"id": id, "name": name}
 			if len(model.ReasoningEfforts) > 0 {
 				entry["reasoningEfforts"] = model.ReasoningEfforts
+			}
+			// The window belongs to the model this session selected: the
+			// runtime sizes its compaction against the entry it resolves, so
+			// only that entry carries it.
+			if contextWindow > 0 && id == selectedModelID {
+				entry["contextWindow"] = contextWindow
 			}
 			catalog = append(catalog, entry)
 		}

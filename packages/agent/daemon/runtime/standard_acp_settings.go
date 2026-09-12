@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
@@ -133,7 +134,7 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 	// with the provider request. Other non-identity settings remain best-effort.
 	modelConfigID := a.effectiveModelConfigOptionID()
 	modelSet := false
-	if model := strings.TrimSpace(settings.Model); model != "" && modelConfigID != "" &&
+	if model := contextwindow.Bare(settings.Model); model != "" && modelConfigID != "" &&
 		(supported[modelConfigID] || (modelConfigID == "model" && modelsAPI)) {
 		model = a.sessionModelIDForRequest(session.AgentSessionID, model)
 		modelAlreadySelected := modelsAPI && modelConfigID == "model" &&
@@ -154,7 +155,7 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 	}
 	if reasoning := strings.TrimSpace(settings.ReasoningEffort); reasoning != "" {
 		if a.config.setModelReasoningEffortMeta {
-			model := a.sessionModelIDForRequest(session.AgentSessionID, settings.Model)
+			model := a.sessionModelIDForRequest(session.AgentSessionID, contextwindow.Bare(settings.Model))
 			if model == "" {
 				model = a.sessionCurrentModelID(session.AgentSessionID)
 			}
@@ -452,9 +453,9 @@ func (a *standardACPAdapter) ValidateSessionSettings(session Session, patch Sess
 	if patch.ReasoningEffort != nil {
 		reasoning := strings.TrimSpace(*patch.ReasoningEffort)
 		if a.config.setModelReasoningEffortMeta {
-			model := strings.TrimSpace(session.SettingsValue().Model)
+			model := contextwindow.Bare(session.SettingsValue().Model)
 			if patch.Model != nil {
-				model = strings.TrimSpace(*patch.Model)
+				model = contextwindow.Bare(*patch.Model)
 			}
 			selected, advertised := a.sessionModelReasoningEffort(session.AgentSessionID, model, reasoning)
 			if reasoning == "" || !advertised || selected != reasoning {
@@ -548,7 +549,7 @@ func (a *standardACPAdapter) ApplySessionSettings(
 		if reasoning != "" {
 			if a.config.setModelReasoningEffortMeta {
 				if !modelSet {
-					model := strings.TrimSpace(session.SettingsValue().Model)
+					model := contextwindow.Bare(session.SettingsValue().Model)
 					if err := a.setSessionModel(ctx, acpSession.client, session, model); err != nil {
 						return fmt.Errorf("agent session ACP reasoning model metadata update failed: %w", err)
 					}

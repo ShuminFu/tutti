@@ -127,9 +127,9 @@ func TestGetComposerOptionsResolvesWorkspaceAgentModelPlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetComposerOptions() error = %v", err)
 	}
-	if options.EffectiveSettings.Model != "k3" ||
-		len(options.ModelConfig.Options) != 1 ||
-		options.ModelConfig.Options[0].ID != "k3" {
+	if bound := baseModelOptions(options.ModelConfig.Options); options.EffectiveSettings.Model != "k3" ||
+		len(bound) != 1 ||
+		bound[0].ID != "k3" {
 		t.Fatalf("GetComposerOptions() model config = %#v", options.ModelConfig)
 	}
 	configuration, ok := options.RuntimeContext["modelConfiguration"].(map[string]any)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 	"slices"
 	"testing"
 	"time"
@@ -743,5 +744,40 @@ func TestCodexAppServerAdapterReleaseLiveSessionSkipsPendingRequests(t *testing.
 	case <-execDone:
 	case <-time.After(5 * time.Second):
 		t.Fatal("exec did not finish after resolving pending approval")
+	}
+}
+
+// The 1M marker never reaches the wire: the app-server accepts any model string,
+// so a leaked marker would only fail later at the provider. The window travels
+// as thread config instead.
+func TestAppServerThreadStartParamsMovesTheOneMillionMarkerIntoConfig(t *testing.T) {
+	t.Parallel()
+
+	session := testAppServerSession()
+	session.Settings = &SessionSettings{Model: "gpt-5.6-sol[1m]"}
+	params := appServerThreadStartParams(session, "/workspace")
+
+	if got := asString(params["model"]); got != "gpt-5.6-sol" {
+		t.Fatalf("thread/start model = %q, want the bare gpt-5.6-sol", got)
+	}
+	config, _ := params["config"].(map[string]any)
+	if got := config["model_context_window"]; got != contextwindow.OneMillionTokens {
+		t.Fatalf("thread/start model_context_window = %#v, want %d", got, contextwindow.OneMillionTokens)
+	}
+}
+
+func TestAppServerThreadStartParamsLeavesTheWindowUnsetWithoutTheMarker(t *testing.T) {
+	t.Parallel()
+
+	session := testAppServerSession()
+	session.Settings = &SessionSettings{Model: "gpt-5.6-sol"}
+	params := appServerThreadStartParams(session, "/workspace")
+
+	if got := asString(params["model"]); got != "gpt-5.6-sol" {
+		t.Fatalf("thread/start model = %q, want gpt-5.6-sol", got)
+	}
+	config, _ := params["config"].(map[string]any)
+	if _, ok := config["model_context_window"]; ok {
+		t.Fatalf("thread/start advertised a window nobody asked for: %#v", config)
 	}
 }

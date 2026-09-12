@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 )
 
 // Protocol is the wire protocol family used to call the plan's models.
@@ -341,10 +343,21 @@ func NormalizeModels(models []Model) []Model {
 }
 
 // ModelsContain reports whether the model list includes the model id.
+//
+// A 1M context marker rides the model value as a window request rather than as
+// identity, and these lists enumerate catalog ids only — so "X[1m]" is present
+// exactly when "X" is. Matching the bare id keeps every caller that compares a
+// stored selection against a plan honest without each having to know the
+// convention.
 func ModelsContain(models []Model, modelID string) bool {
 	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return false
+	}
+	base, marked := contextwindow.Split(modelID)
 	for _, model := range models {
-		if model.ID == modelID {
+		id := strings.TrimSpace(model.ID)
+		if id == modelID || (marked && id == base) {
 			return true
 		}
 	}

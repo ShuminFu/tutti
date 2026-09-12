@@ -102,6 +102,33 @@ describe("collapseModelOptionsToLatest", () => {
     ]);
   });
 
+  it("keeps a model and its 1M context row as separate entries", () => {
+    // The marker is identity, not a run parameter: the collapsed list must
+    // still offer both windows, so it must not tie-break the marker away.
+    const collapsed = collapseModelOptionsToLatest([
+      option("claude-opus-5"),
+      option("claude-opus-5[1m]"),
+      option("claude-sonnet-5"),
+      option("claude-sonnet-5[1m]")
+    ]);
+    expect(collapsed.map((entry) => entry.value)).toEqual([
+      "claude-opus-5",
+      "claude-opus-5[1m]",
+      "claude-sonnet-5",
+      "claude-sonnet-5[1m]"
+    ]);
+  });
+
+  it("still collapses other bracketed suffixes into their family", () => {
+    // Only the context-window marker keys its own slot; a parameter suffix
+    // keeps collapsing into the family it parameterizes.
+    const collapsed = collapseModelOptionsToLatest([
+      option("claude-opus-5"),
+      option("claude-opus-5[fast=true]", "claude-opus-5")
+    ]);
+    expect(collapsed.map((entry) => entry.value)).toEqual(["claude-opus-5"]);
+  });
+
   it("prefers the first-advertised option on version ties", () => {
     const collapsed = collapseModelOptionsToLatest([
       option("gpt-5.3-codex"),

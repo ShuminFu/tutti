@@ -213,7 +213,7 @@ func TestServiceGetComposerOptionsPreservesGenericExtensionTargetAndProjectsSign
 	if options.RuntimeContext["agentTargetId"] != "extension:example" {
 		t.Fatalf("runtimeContext agentTargetId = %#v, want extension:example", options.RuntimeContext["agentTargetId"])
 	}
-	if !options.ModelConfig.Configurable || len(options.ModelConfig.Options) != 1 || options.ModelConfig.Options[0].Value != "example-pro" {
+	if bound := baseModelOptions(options.ModelConfig.Options); !options.ModelConfig.Configurable || len(bound) != 1 || bound[0].Value != "example-pro" {
 		t.Fatalf("modelConfig = %#v, want live extension model options", options.ModelConfig)
 	}
 	if !options.PermissionConfig.Configurable ||
@@ -588,7 +588,7 @@ func TestServiceGetsComposerOptionsFromTuttiAgentModelCatalog(t *testing.T) {
 	if options.EffectiveSettings.ReasoningEffort != "" || options.EffectiveSettings.Speed != "" {
 		t.Fatalf("provider-wide hidden controls leaked into effectiveSettings: %#v", options.EffectiveSettings)
 	}
-	if options.ModelConfig.CurrentValue != "gpt-5.4" || len(options.ModelConfig.Options) != 2 {
+	if options.ModelConfig.CurrentValue != "gpt-5.4" || len(baseModelOptions(options.ModelConfig.Options)) != 2 {
 		t.Fatalf("modelConfig = %#v, want catalog-backed tutti-agent models", options.ModelConfig)
 	}
 	configOptions, ok := options.RuntimeContext["configOptions"].([]map[string]any)

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 )
 
 func appServerThreadReasoningSummaryConfig(model string) string {
@@ -21,14 +22,21 @@ func appServerThreadStartParams(session Session, cwd string) map[string]any {
 	params := map[string]any{
 		"cwd": firstNonEmpty(cwd, "/"),
 	}
-	if model := strings.TrimSpace(settings.Model); model != "" {
+	// The 1M marker never goes on the wire: the app-server accepts any model
+	// string, so a leaked marker would only fail later at the provider. The
+	// window travels as thread config instead.
+	model, contextWindow := contextwindow.Split(settings.Model)
+	if model != "" {
 		params["model"] = model
 	}
 	config := map[string]any{}
+	if contextWindow {
+		config["model_context_window"] = contextwindow.OneMillionTokens
+	}
 	if reasoning := codexAppServerReasoningEffortValue(settings.ReasoningEffort); reasoning != "" {
 		config["model_reasoning_effort"] = reasoning
 	}
-	if summary := appServerThreadReasoningSummaryConfig(settings.Model); summary != "" {
+	if summary := appServerThreadReasoningSummaryConfig(model); summary != "" {
 		config[codexACPConfigModelReasoningSummary] = summary
 	}
 	if serviceTier := codexServiceTierValue(settings.Speed); serviceTier != "" {
@@ -99,13 +107,13 @@ func appServerTurnStartParams(
 			"text": hostContext,
 		})
 	}
-	if model := strings.TrimSpace(settings.Model); model != "" {
+	if model := contextwindow.Bare(settings.Model); model != "" {
 		params["model"] = model
 	}
 	if reasoning := codexAppServerReasoningEffortValue(settings.ReasoningEffort); reasoning != "" {
 		params["effort"] = reasoning
 	}
-	if summary := codexACPReasoningSummaryOverride(settings.Model); summary != "" {
+	if summary := codexACPReasoningSummaryOverride(contextwindow.Bare(settings.Model)); summary != "" {
 		params["summary"] = summary
 	}
 	if approvalPolicy := codexAppServerApprovalPolicy(session.PermissionModeID); approvalPolicy != "" {
@@ -147,7 +155,7 @@ func appServerCollaborationMode(
 		modeMask = planModeMask
 		mode = strings.ToLower(strings.TrimSpace(firstNonEmpty(asString(planModeMask["mode"]), "plan")))
 	}
-	model := strings.TrimSpace(firstNonEmpty(settings.Model, defaultModel, asString(modeMask["model"])))
+	model := contextwindow.Bare(firstNonEmpty(settings.Model, defaultModel, asString(modeMask["model"])))
 	if model == "" {
 		return nil
 	}

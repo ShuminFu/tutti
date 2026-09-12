@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	"github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
 )
@@ -52,8 +53,13 @@ func (s *Service) validateComposerModelForCreate(
 	if !ok || len(availableModels) == 0 {
 		return nil
 	}
+	// A 1M request is the catalog model wearing a context-window marker, so it
+	// is valid exactly when the bare id is: the catalogs these lists come from
+	// never enumerate the marker spelling.
+	base, _ := contextwindow.Split(model)
 	for _, candidate := range availableModels {
-		if strings.TrimSpace(candidate) == model {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == model || (base != model && candidate == base) {
 			return nil
 		}
 	}

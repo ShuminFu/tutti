@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 	"github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
@@ -281,7 +282,8 @@ func hostDefaultModelResolutionForProtocol(provider string, agentTargetID string
 	if model == "" && len(models) > 0 {
 		model = strings.TrimSpace(models[0].ID)
 	}
-	endpoint.Model = planModelComposerValue(provider, model)
+	endpoint.ContextWindow = contextwindow.Window(model)
+	endpoint.Model = planModelComposerValue(provider, contextwindow.Bare(model))
 	return modelPlanResolution{
 		Endpoint:           endpoint,
 		Models:             models,
@@ -358,6 +360,9 @@ func (s *Service) resolveModelPlan(ctx context.Context, workspaceID string, agen
 		return fallback
 	}
 	model := resolvePlanSessionModel(plan, binding, planModelIDFromComposerValue(provider, requestedModel))
+	// The marker is a window request, not part of the id the runtime is handed:
+	// the endpoint carries it as a window and the model goes out bare.
+	contextWindow := contextwindow.Window(model)
 	return modelPlanResolution{
 		Endpoint: &runtimeprep.ModelEndpointConfig{
 			PlanID:              plan.ID,
@@ -365,7 +370,8 @@ func (s *Service) resolveModelPlan(ctx context.Context, workspaceID string, agen
 			Protocol:            string(plan.Protocol),
 			BaseURL:             plan.BaseURL,
 			APIKey:              plan.APIKey,
-			Model:               planModelComposerValue(provider, model),
+			Model:               planModelComposerValue(provider, contextwindow.Bare(model)),
+			ContextWindow:       contextWindow,
 			Models:              modelEndpointModels(plan.Models),
 			PlanUpdatedAtUnixMS: plan.UpdatedAt.UnixMilli(),
 		},
@@ -575,6 +581,9 @@ func resolveProvidedModelPlan(provider string, agentTargetID string, plan modelp
 	}
 	binding := modelbindingbiz.Binding{DefaultModel: strings.TrimSpace(configuredDefaultModel)}
 	model := resolvePlanSessionModel(plan, binding, planModelIDFromComposerValue(provider, requestedModel))
+	// The marker is a window request, not part of the id the runtime is handed:
+	// the endpoint carries it as a window and the model goes out bare.
+	contextWindow := contextwindow.Window(model)
 	return modelPlanResolution{
 		Endpoint: &runtimeprep.ModelEndpointConfig{
 			PlanID:              plan.ID,
@@ -582,7 +591,8 @@ func resolveProvidedModelPlan(provider string, agentTargetID string, plan modelp
 			Protocol:            string(plan.Protocol),
 			BaseURL:             plan.BaseURL,
 			APIKey:              plan.APIKey,
-			Model:               planModelComposerValue(provider, model),
+			Model:               planModelComposerValue(provider, contextwindow.Bare(model)),
+			ContextWindow:       contextWindow,
 			Models:              modelEndpointModels(plan.Models),
 			PlanUpdatedAtUnixMS: plan.UpdatedAt.UnixMilli(),
 		},

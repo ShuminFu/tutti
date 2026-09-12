@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	modelbindingbiz "github.com/tutti-os/tutti/services/tuttid/biz/modelbinding"
 	modelplanbiz "github.com/tutti-os/tutti/services/tuttid/biz/modelplan"
@@ -479,7 +480,7 @@ func TestGetComposerOptionsBoundPlanSkipsProviderNativeModelCatalog(t *testing.T
 	if !options.CodexSaverModeSupported {
 		t.Fatal("Codex model-plan target must preserve subagent saver-mode support")
 	}
-	if len(options.ModelConfig.Options) != 2 || options.ModelConfig.Options[0].ID != "plan-default" {
+	if bound := baseModelOptions(options.ModelConfig.Options); len(bound) != 2 || bound[0].ID != "plan-default" {
 		t.Fatalf("model options = %#v, want bound plan models", options.ModelConfig.Options)
 	}
 	configOptions, ok := options.RuntimeContext["configOptions"].([]map[string]any)
@@ -487,7 +488,7 @@ func TestGetComposerOptionsBoundPlanSkipsProviderNativeModelCatalog(t *testing.T
 		t.Fatalf("runtime config options = %#v", options.RuntimeContext["configOptions"])
 	}
 	runtimeModelOptions, ok := configOptions[0]["options"].([]map[string]any)
-	if !ok || len(runtimeModelOptions) != 2 || runtimeModelOptions[0]["value"] != "plan-default" {
+	if bound := baseRuntimeModelOptions(runtimeModelOptions); !ok || len(bound) != 2 || bound[0]["value"] != "plan-default" {
 		t.Fatalf("runtime model options = %#v, want bound plan models", configOptions[0]["options"])
 	}
 	if _, ok := options.RuntimeContext["modelCatalogSource"]; ok {
@@ -647,5 +648,39 @@ func TestResolveModelPlanNamespacesOpenCodeModelValues(t *testing.T) {
 	if codexOptions.ModelConfig.CurrentValue != "plan-default" ||
 		codexOptions.ModelConfig.Options[0].Value != "plan-default" {
 		t.Fatalf("codex overlay = %#v", codexOptions.ModelConfig)
+	}
+}
+
+// The 1M spelling is a window request on top of a plan model, so it must both
+// resolve to that model and not fall back to the plan default.
+func TestResolveModelPlanEndpointCarriesTheSelectedContextWindow(t *testing.T) {
+	t.Parallel()
+	service := newPlanBoundService(modelplanbiz.ProtocolOpenAI, true)
+
+	endpoint, _ := service.resolveModelPlanEndpoint(context.Background(), "ws", "local:codex", "codex", "plan-alt[1m]")
+	if endpoint == nil {
+		t.Fatal("resolveModelPlanEndpoint() = nil, want the bound plan endpoint")
+	}
+	if endpoint.Model != "plan-alt" {
+		t.Fatalf("endpoint model = %q, want the bare plan-alt (not the plan default)", endpoint.Model)
+	}
+	if endpoint.ContextWindow != contextwindow.OneMillionTokens {
+		t.Fatalf("endpoint context window = %d, want %d", endpoint.ContextWindow, contextwindow.OneMillionTokens)
+	}
+}
+
+func TestResolveModelPlanEndpointLeavesTheWindowUnsetByDefault(t *testing.T) {
+	t.Parallel()
+	service := newPlanBoundService(modelplanbiz.ProtocolOpenAI, true)
+
+	endpoint, _ := service.resolveModelPlanEndpoint(context.Background(), "ws", "local:codex", "codex", "plan-alt")
+	if endpoint == nil {
+		t.Fatal("resolveModelPlanEndpoint() = nil, want the bound plan endpoint")
+	}
+	if endpoint.Model != "plan-alt" {
+		t.Fatalf("endpoint model = %q, want plan-alt", endpoint.Model)
+	}
+	if endpoint.ContextWindow != 0 {
+		t.Fatalf("endpoint context window = %d, want none", endpoint.ContextWindow)
 	}
 }

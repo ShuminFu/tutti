@@ -44,6 +44,11 @@ const modelVariantTokens = new Set([
   "max"
 ]);
 
+// A 1M context marker is identity rather than a run parameter: "X[1m]" and "X"
+// are two rows the user must be able to tell apart, so the marker keys its own
+// family slot instead of tying with the bare id and losing the tie.
+const contextWindowMarkerPattern = /\[1m\]$/iu;
+
 function normalizedModelName(
   option: Pick<AgentGUIComposerSettingOption, "value" | "label">
 ): string {
@@ -51,6 +56,17 @@ function normalizedModelName(
     .replace(/\[.*\]$/u, "")
     .trim()
     .toLowerCase();
+}
+
+// contextWindowFamilySuffix keeps the 1M marker in the family key. Every other
+// bracketed suffix (Cursor's "[fast=true]") describes how a model runs and is
+// stripped by normalizedModelName, so it collapses into the family it belongs
+// to.
+function contextWindowFamilySuffix(
+  option: Pick<AgentGUIComposerSettingOption, "value" | "label">
+): string {
+  const source = (option.label.trim() || option.value).trim();
+  return contextWindowMarkerPattern.test(source) ? "[1m]" : "";
 }
 
 // parseModelFamily derives the family key and comparable version from a model
@@ -81,7 +97,10 @@ export function parseModelFamily(
   if (familyTokens.length === 0 || version.length === 0) {
     return null;
   }
-  return { family: familyTokens.join("-"), version };
+  return {
+    family: familyTokens.join("-") + contextWindowFamilySuffix(option),
+    version
+  };
 }
 
 // modelVendorLabel derives the manufacturer group label from the model name's

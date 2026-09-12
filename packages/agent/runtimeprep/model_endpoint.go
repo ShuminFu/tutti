@@ -26,6 +26,12 @@ type ModelEndpointConfig struct {
 	// Model is the default model id for the session; providers may still
 	// switch models within the plan on later calls.
 	Model string `json:"model,omitempty"`
+	// ContextWindow is the token window the session's selected model asked
+	// for; 0 leaves the runtime its own default. Only runtimes whose session
+	// catalog carries a window per model (deepseek-harness) read this — every
+	// other runtime resolves the same request through its own protocol, so
+	// the field stays inert there.
+	ContextWindow int64 `json:"contextWindow,omitempty"`
 	// Models lists every model the plan authorizes (redaction-safe ids and
 	// display names). Providers that materialize a session-scoped catalog
 	// (OpenCode's provider block) need the full list, not just the default.
