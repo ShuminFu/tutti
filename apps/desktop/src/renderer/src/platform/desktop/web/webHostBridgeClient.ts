@@ -12,8 +12,23 @@
 //                              { type: "tutti-host-response", id, error: "unsupported" }
 //                              { type: "tutti-host-response", id, error: "<message>", code? }
 //
-// createAgentSession args[0] = { provider, cwd, prompt, model?, thinkingLevel? }
-// createAgentSession result  = { taskId, agentSessionId }
+// createAgentSession args[0] = {
+//   provider, cwd, prompt, model?, thinkingLevel?,       // 既有字段，形状不变
+//   permissionModeId?, planMode?,                        // 用户显式选的权限/计划模式
+//   isolation?, railPlacement?,                          // worktree 隔离 + 它要求的项目归属
+//   initialContent?, initialDisplayPrompt?               // 结构化首轮内容 + 仅展示文本
+// }
+//                          result = { taskId, agentSessionId }
+//
+// 后四组字段是「首轮执行意图」，全部可选：不带它们时请求体与老版本逐字节相同。带上时
+// 宿主原样透传到任务行，不准重算/降级（丢了权限 = 首轮跑在用户没选的高权限下；丢了
+// isolation = 以为隔离、实际改原项目；丢了 initialContent = 图片静默消失）：
+//   - planMode 的 false 也是有效选择，必须原样送到；
+//   - worktree 隔离必须配 kind=project 的 railPlacement（tuttid 建 worktree 的前置条件）；
+//   - 纯图片首轮的 prompt 可以是空串，展示文本另走 initialDisplayPrompt；
+//   - 块的字段集与 tuttid 的 AgentPromptContentBlock 同形（它 additionalProperties:false，
+//     多一个键整条请求会被拒收）；attachmentId 不在这条契约里——它按 workspace+session
+//     定位，跨到宿主新建的另一条会话只会指向查无此物的附件。
 //
 // 会话配对（补丁 0103，宿主票 03 实现）：
 // listPeerPairs   args[] = []
@@ -56,7 +71,8 @@ export const HOST_FOCUS_TYPE = "tutti-host-focus";
 export const HOST_FILE_DROP_TYPE = "tutti-host-file-drop";
 export const HOST_OPEN_AGENT_SESSION_TYPE = "tutti-host-open-agent-session";
 export const HOST_AGENT_SESSION_READY_TYPE = "tutti-host-agent-session-ready";
-export const HOST_OPEN_AGENT_SESSION_ACK_TYPE = "tutti-host-open-agent-session-ack";
+export const HOST_OPEN_AGENT_SESSION_ACK_TYPE =
+  "tutti-host-open-agent-session-ack";
 export const HOST_WORKBENCH_LAYOUT_TYPE = "tutti-host-workbench-layout";
 export const HOST_THEME_TYPE = "tutti-host-theme";
 const FULLSCREEN_WORKBENCH_WINDOW_SELECTOR =
@@ -77,9 +93,7 @@ export class HostBridgeUnavailableError extends Error {
 // True when running inside an iframe whose parent can receive host requests.
 export function isHostBridgeAvailable(): boolean {
   return (
-    typeof window !== "undefined" &&
-    !!window.parent &&
-    window.parent !== window
+    typeof window !== "undefined" && !!window.parent && window.parent !== window
   );
 }
 
@@ -102,11 +116,7 @@ export function installHostFocusRecovery(
   documentRef: Document = document
 ): () => void {
   const coordinates = bridgeCoordinates(windowRef.location.search);
-  if (
-    !coordinates ||
-    !windowRef.parent ||
-    windowRef.parent === windowRef
-  ) {
+  if (!coordinates || !windowRef.parent || windowRef.parent === windowRef) {
     return () => undefined;
   }
 
@@ -114,10 +124,7 @@ export function installHostFocusRecovery(
   const parent = windowRef.parent;
 
   const onFocusIn = (event: Event): void => {
-    if (
-      isFocusTarget(event.target) &&
-      event.target !== documentRef.body
-    ) {
+    if (isFocusTarget(event.target) && event.target !== documentRef.body) {
       lastFocusedElement = event.target;
     }
   };
@@ -461,19 +468,32 @@ export function requestHostCapability<T>(
   args: unknown[] = [],
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
-  const interactive = capability === "selectUploadFiles" || capability === "selectDirectory";
+  const interactive =
+    capability === "selectUploadFiles" || capability === "selectDirectory";
   const failure = (message: string, code: string): Error =>
     Object.assign(new HostBridgeUnavailableError(message), { code });
   const coordinates = isHostBridgeAvailable() ? bridgeCoordinates() : null;
   if (!coordinates) {
-    return Promise.reject(failure(interactive ? "宿主连接不可用，请重新打开工作台后重试" : "tutti host bridge: not embedded", "host_bridge_unavailable"));
+    return Promise.reject(
+      failure(
+        interactive
+          ? "宿主连接不可用，请重新打开工作台后重试"
+          : "tutti host bridge: not embedded",
+        "host_bridge_unavailable"
+      )
+    );
   }
   const id = nextRequestId();
   const startedAt = Date.now();
   const log = (stage: string, code?: string): void => {
-    if (interactive) console.debug("[DinTalDock picker]", {
-      requestId: id, capability, stage, elapsedMs: Date.now() - startedAt, code
-    });
+    if (interactive)
+      console.debug("[DinTalDock picker]", {
+        requestId: id,
+        capability,
+        stage,
+        elapsedMs: Date.now() - startedAt,
+        code
+      });
   };
   return new Promise<T>((resolve, reject) => {
     let settled = false;
@@ -488,20 +508,43 @@ export function requestHostCapability<T>(
       if (settled) return;
       settled = true;
       cleanup();
-      log(error.code === "host_request_cancelled" ? "cancelled" : "failed", error.code);
+      log(
+        error.code === "host_request_cancelled" ? "cancelled" : "failed",
+        error.code
+      );
       reject(error);
     };
-    const onPageHide = (): void => finishError(failure(
-      "文件选择页面已关闭，请重新打开后重试", "host_request_cancelled"
-    ));
+    const onPageHide = (): void =>
+      finishError(
+        failure(
+          "文件选择页面已关闭，请重新打开后重试",
+          "host_request_cancelled"
+        )
+      );
     const onMessage = (event: MessageEvent): void => {
       const data = event.data as
-        | { type?: unknown; id?: unknown; nonce?: unknown; result?: T; error?: unknown; code?: unknown }
-        | null | undefined;
-      if (!data || typeof data !== "object" ||
-          (data.type !== RESPONSE_TYPE && data.type !== "tutti-host-request-accepted") ||
-          data.id !== id || data.nonce !== coordinates.nonce ||
-          event.source !== window.parent || event.origin !== coordinates.hostOrigin || settled) return;
+        | {
+            type?: unknown;
+            id?: unknown;
+            nonce?: unknown;
+            result?: T;
+            error?: unknown;
+            code?: unknown;
+          }
+        | null
+        | undefined;
+      if (
+        !data ||
+        typeof data !== "object" ||
+        (data.type !== RESPONSE_TYPE &&
+          data.type !== "tutti-host-request-accepted") ||
+        data.id !== id ||
+        data.nonce !== coordinates.nonce ||
+        event.source !== window.parent ||
+        event.origin !== coordinates.hostOrigin ||
+        settled
+      )
+        return;
       if (data.type === "tutti-host-request-accepted") {
         if (interactive && !accepted) {
           accepted = true;
@@ -511,10 +554,17 @@ export function requestHostCapability<T>(
         return;
       }
       if (typeof data.error === "string") {
-        const error = data.error === "unsupported"
-          ? failure(interactive ? "宿主不支持此文件选择操作" : `tutti host bridge: ${capability} unsupported`, "host_capability_unsupported")
-          : new Error(data.error);
-        if (typeof data.code === "string" && data.code.trim()) Object.assign(error, { code: data.code.trim() });
+        const error =
+          data.error === "unsupported"
+            ? failure(
+                interactive
+                  ? "宿主不支持此文件选择操作"
+                  : `tutti host bridge: ${capability} unsupported`,
+                "host_capability_unsupported"
+              )
+            : new Error(data.error);
+        if (typeof data.code === "string" && data.code.trim())
+          Object.assign(error, { code: data.code.trim() });
         finishError(error);
         return;
       }
@@ -523,9 +573,18 @@ export function requestHostCapability<T>(
       log("completed");
       resolve(data.result as T);
     };
-    timer = window.setTimeout(() => finishError(failure(
-      interactive ? "宿主文件选择器未响应，请重试" : `tutti host bridge: ${capability} timed out`, "host_request_timeout"
-    )), timeoutMs);
+    timer = window.setTimeout(
+      () =>
+        finishError(
+          failure(
+            interactive
+              ? "宿主文件选择器未响应，请重试"
+              : `tutti host bridge: ${capability} timed out`,
+            "host_request_timeout"
+          )
+        ),
+      timeoutMs
+    );
     window.addEventListener("message", onMessage);
     if (interactive) window.addEventListener("pagehide", onPageHide);
     log("sent");
@@ -540,12 +599,54 @@ export function requestHostCapability<T>(
   });
 }
 
+/**
+ * 首轮内容块：tuttid 的 AgentPromptContentBlock 里这条桥允许过桥的子集（它的 schema 是
+ * additionalProperties:false，只列它承认的字段）。刻意不带 attachmentId：附件 id 按
+ * workspace + agentSession 定位，宿主新建的是另一条会话号，搬过去只会指向查无此物。
+ * 可搬运的是块的耐久载体——path（已归档进 tuttid 唯一接受的图片来源根）、url、data。
+ */
+export interface HostAgentPromptContentBlock {
+  connectorKey?: string;
+  data?: string;
+  mimeType?: string;
+  name?: string;
+  path?: string;
+  sizeBytes?: number;
+  text?: string;
+  type: "text" | "image" | "file" | "skill" | "mention" | "connector";
+  url?: string;
+}
+
+/**
+ * 会话栏归属。worktree 隔离的前置条件：tuttid 要求 kind=project 且 projectPath 非空，
+ * 否则在建 worktree 之前直接拒收。
+ */
+export interface HostAgentRailPlacement {
+  kind: "conversations" | "project";
+  projectPath?: string;
+  sectionKey?: string;
+  version?: number;
+}
+
 export interface HostCreateAgentSessionArgs {
   provider: string;
   cwd: string;
+  /** 首轮文本；纯图片首轮可以为空串（内容由 initialContent 承担）。 */
   prompt: string;
   model?: string;
   thinkingLevel?: string;
+  /** 用户显式选的权限模式；缺省 = 调用方没表态，宿主沿用既有默认策略。 */
+  permissionModeId?: string;
+  /** 用户显式选的计划模式；false 也是有效选择，必须原样送到宿主。 */
+  planMode?: boolean;
+  /** create-only 启动隔离模式。目前只有 worktree，且必须配 project 归属。 */
+  isolation?: "worktree";
+  /** 会话栏归属；worktree 隔离的必填前置。 */
+  railPlacement?: HostAgentRailPlacement;
+  /** 结构化首轮内容（文字 + 图片）。空数组/缺省 = 首轮内容仍由 prompt 承担。 */
+  initialContent?: HostAgentPromptContentBlock[];
+  /** 仅展示用的首轮文本（回显与标题），与喂给模型的真实内容分开。 */
+  initialDisplayPrompt?: string;
 }
 
 export interface HostCreateAgentSessionResult {
@@ -623,9 +724,12 @@ export function requestHostCreatePeerPair(
   return requestHostCapability<HostCreatePeerPairResult>("createPeerPair", [
     args
   ]).then((result) => {
-    const pairId = typeof result?.pairId === "string" ? result.pairId.trim() : "";
+    const pairId =
+      typeof result?.pairId === "string" ? result.pairId.trim() : "";
     if (!pairId) {
-      throw new Error("tutti host bridge: createPeerPair result missing pairId");
+      throw new Error(
+        "tutti host bridge: createPeerPair result missing pairId"
+      );
     }
     return {
       pairId,
@@ -675,7 +779,9 @@ export function requestHostDecidePeerRequest(args: {
     [args]
   ).then((result) => {
     if (!result?.request || typeof result.request.id !== "string") {
-      throw new Error("tutti host bridge: decidePeerRequest result missing request");
+      throw new Error(
+        "tutti host bridge: decidePeerRequest result missing request"
+      );
     }
     return { request: result.request };
   });
@@ -765,9 +871,8 @@ export function requestHostMonitorAutomations(args: {
               peerTarget: String(
                 (entry as { peerTarget?: unknown })?.peerTarget ?? ""
               ),
-              nextFireAtUnixMs: typeof raw === "number" && Number.isFinite(raw)
-                ? raw
-                : null
+              nextFireAtUnixMs:
+                typeof raw === "number" && Number.isFinite(raw) ? raw : null
             }
           ];
         })
