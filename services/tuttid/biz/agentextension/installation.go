@@ -14,6 +14,7 @@ type Installation struct {
 	Version                  string    `json:"version"`
 	Provider                 string    `json:"provider"`
 	PackageDir               string    `json:"packageDir"`
+	RuntimePackageDir        string    `json:"runtimePackageDir,omitempty"`
 	PackageContentSHA256     string    `json:"packageContentSha256"`
 	ReleaseArtifactSHA256    string    `json:"releaseArtifactSha256,omitempty"`
 	ReleaseArtifactSizeBytes int64     `json:"releaseArtifactSizeBytes,omitempty"`

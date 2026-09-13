@@ -1,14 +1,12 @@
 package agentextension
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -54,7 +52,7 @@ func (m *Manager) installLocalPackage(key, sourceDir string) (Installation, erro
 		return Installation{}, err
 	}
 	defer os.RemoveAll(staging)
-	digest, err := copyLocalPackage(sourceDir, staging)
+	revision, err := copyLocalPackage(sourceDir, staging)
 	if err != nil {
 		return Installation{}, err
 	}
@@ -67,7 +65,7 @@ func (m *Manager) installLocalPackage(key, sourceDir string) (Installation, erro
 	if manifest.AgentKey != key || !validSemver(manifest.Version) {
 		return Installation{}, errors.New("local extension manifest identity is invalid")
 	}
-	localVersion := localPackageVersion(manifest.Version, digest)
+	localVersion := localPackageVersion(manifest.Version, revision)
 	manifest.Version = localVersion
 	if err := writeJSONAtomic(manifestPath, manifest); err != nil {
 		return Installation{}, fmt.Errorf("stamp local extension snapshot version: %w", err)
@@ -76,32 +74,28 @@ func (m *Manager) installLocalPackage(key, sourceDir string) (Installation, erro
 	if err != nil {
 		return Installation{}, fmt.Errorf("validate local extension package: %w", err)
 	}
-	if installed, err := m.loadActive(key); err == nil && installed.Version == localVersion {
+	if installed, err := m.loadActive(key); err == nil && installed.Version == localVersion && installed.RuntimePackageDir == sourceDir {
 		return installed, nil
-	}
-	contentDigest, err := packageContentSHA256(staging)
-	if err != nil {
-		return Installation{}, fmt.Errorf("fingerprint local extension package: %w", err)
 	}
 
 	finalDir, err := m.Installations.PackageDir(key, localVersion)
 	if err != nil {
 		return Installation{}, err
 	}
-	if err := activateExtensionPackage(staging, finalDir, contentDigest); err != nil {
+	if err := activateExtensionPackage(staging, finalDir); err != nil {
 		return Installation{}, fmt.Errorf("activate local extension snapshot: %w", err)
 	}
 
 	installation := Installation{
-		SchemaVersion:        "tutti.agent.installation.v1",
-		ID:                   key + "@" + localVersion,
-		AgentKey:             key,
-		Version:              localVersion,
-		Provider:             "acp:" + key,
-		PackageDir:           finalDir,
-		PackageContentSHA256: contentDigest,
-		Manifest:             manifest,
-		InstalledAt:          time.Now().UTC(),
+		SchemaVersion:     "tutti.agent.installation.v1",
+		ID:                key + "@" + localVersion,
+		AgentKey:          key,
+		Version:           localVersion,
+		Provider:          "acp:" + key,
+		PackageDir:        finalDir,
+		RuntimePackageDir: sourceDir,
+		Manifest:          manifest,
+		InstalledAt:       time.Now().UTC(),
 	}
 	locales := map[string]string{}
 	if err := readJSON(filepath.Join(finalDir, filepath.FromSlash(manifest.LocalizationInfo.DefaultFile)), &locales); err != nil {
@@ -118,16 +112,23 @@ func (m *Manager) installLocalPackage(key, sourceDir string) (Installation, erro
 	return installation, nil
 }
 
+// Only snapshot extension metadata. Bundled executables stay in the host package;
+// the metadata revision is a refresh token, never a runtime admission check.
 func copyLocalPackage(sourceDir, destination string) (string, error) {
 	files := make([]string, 0, maxFiles)
 	entryCount := 0
 	var total int64
-	var bundledRuntimeTotal int64
+	var revision int64
 	err := filepath.WalkDir(sourceDir, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if path == sourceDir {
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			revision = info.ModTime().UnixNano()
 			return nil
 		}
 		entryCount++
@@ -142,6 +143,9 @@ func copyLocalPackage(sourceDir, destination string) (string, error) {
 			return fmt.Errorf("local extension package contains symlink: %s", relative)
 		}
 		if entry.IsDir() {
+			if relative == "runtime" || relative == "runtime-previous" {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if internalPackageRecord(relative) {
@@ -151,24 +155,20 @@ func copyLocalPackage(sourceDir, destination string) (string, error) {
 		if err != nil {
 			return err
 		}
-		bundledRuntime := isBundledRuntimePackagePath(relative)
-		if !info.Mode().IsRegular() || (!bundledRuntime && info.Mode()&0o111 != 0) {
+		if !info.Mode().IsRegular() || info.Mode()&0o111 != 0 {
 			return fmt.Errorf("local extension package contains forbidden file: %s", relative)
 		}
-		if !bundledRuntime && !allowedExtension(filepath.Ext(relative)) {
+		if !allowedExtension(filepath.Ext(relative)) {
 			return fmt.Errorf("local extension package contains forbidden file type: %s", relative)
 		}
-		if bundledRuntime {
-			bundledRuntimeTotal += info.Size()
-			if bundledRuntimeTotal > maxBundledRuntimeBytes {
-				return errors.New("local extension bundled runtime exceeds size limit")
-			}
-		} else {
-			total += info.Size()
-			if total > maxArtifact {
-				return errors.New("local extension package exceeds size limit")
-			}
+		total += info.Size()
+		if total > maxArtifact {
+			return errors.New("local extension package exceeds size limit")
 		}
+		if modified := info.ModTime().UnixNano(); modified > revision {
+			revision = modified
+		}
+
 		files = append(files, relative)
 		return nil
 	})
@@ -179,32 +179,22 @@ func copyLocalPackage(sourceDir, destination string) (string, error) {
 		return "", errors.New("local extension package is empty")
 	}
 	sort.Strings(files)
-	hash := sha256.New()
 	for _, relative := range files {
 		sourcePath := filepath.Join(sourceDir, relative)
 		data, err := os.ReadFile(sourcePath)
 		if err != nil {
 			return "", err
 		}
-		_, _ = io.WriteString(hash, filepath.ToSlash(relative))
-		_, _ = hash.Write([]byte{0})
-		_, _ = hash.Write(data)
-		_, _ = hash.Write([]byte{0})
 		targetPath := filepath.Join(destination, relative)
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 			return "", err
 		}
 		mode := os.FileMode(0o600)
-		if isBundledRuntimePackagePath(relative) {
-			if info, err := os.Stat(sourcePath); err == nil && info.Mode()&0o111 != 0 {
-				mode = 0o700
-			}
-		}
 		if err := os.WriteFile(targetPath, data, mode); err != nil {
 			return "", err
 		}
 	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
+	return strconv.FormatInt(revision, 36), nil
 }
 
 func isBundledRuntimePackagePath(relative string) bool {
@@ -212,7 +202,7 @@ func isBundledRuntimePackagePath(relative string) bool {
 	return strings.HasPrefix(relative, "runtime/") || strings.HasPrefix(relative, "runtime-previous/")
 }
 
-func localPackageVersion(version, digest string) string {
+func localPackageVersion(version, revision string) string {
 	base, _, _ := strings.Cut(version, "+")
-	return base + localPackageVersionMarker + digest[:12]
+	return base + localPackageVersionMarker + revision
 }

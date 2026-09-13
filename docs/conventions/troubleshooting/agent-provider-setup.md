@@ -4,6 +4,38 @@
 
 Provider discovery, installation, authentication, models, configuration, and runtime reachability.
 
+### A host-bundled runtime becomes unavailable after an extension package update
+
+Local bundled runtimes now launch directly from the host package at
+`runtime/<os>-<arch>`, or `runtime-previous/<os>-<arch>` when the existing channel
+setting selects it. Adding another architecture or changing extension metadata
+cannot invalidate the current platform runtime through a package digest.
+
+Local extension installations snapshot metadata only and record the host source
+in `runtimePackageDir`. The local version suffix is a metadata mtime refresh
+token. It is not a runtime compatibility or integrity check. Existing local
+records without the source field use their original full package directory;
+normal host reconciliation writes the new source field without migrating or
+removing managed runtimes, credentials, or sessions.
+
+Bundled availability uses the selected executable, path containment, executable
+permissions, the declared version constraint, and the existing ACP/auth probe.
+There is no SHA256SUMS scan, runtime copy/install, activation identity matching,
+or local package content rehash. Missing or broken host executables report
+`runtime_unavailable`, preserve the underlying diagnostic, and do not expose a
+redundant install action. Setup uses an internal action token; it never publishes
+a bundled install plan through the API.
+
+Signed remote extension packages and externally downloaded binary artifacts keep
+their integrity and authority checks. The per-resolution integrity advice below
+applies to those paths, not host-bundled local extensions.
+
+Manual acceptance: upgrade an ARM64 package by adding the AMD64 payload; change
+only a locale; restart with existing legacy local records; select the previous
+channel; remove the launcher; and exercise Windows `.exe` launch. Confirm normal
+ACP/auth behavior and useful diagnostics without checksum files or managed
+runtime activation records. These checks were not executed for this change.
+
 ### Focusing a workspace repeatedly starts provider CLIs and raises CPU usage
 
 - Symptom:
