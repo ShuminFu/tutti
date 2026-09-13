@@ -541,8 +541,10 @@ func agentRuntimeSession(session agentruntime.Session) agentservice.ProviderRunt
 		InitialTitleEstablished: session.InitialTitleEstablished,
 		LastError:               session.LastError,
 		RuntimeContext:          cloneRuntimeContext(session.RuntimeContext),
-		CreatedAtUnixMS:         session.CreatedAtUnixMS,
-		UpdatedAtUnixMS:         session.UpdatedAtUnixMS,
+		// Extension resume eligibility needs the binding held by this live session.
+		ProviderTargetRef: cloneRuntimeContext(session.ProviderTargetRef),
+		CreatedAtUnixMS:   session.CreatedAtUnixMS,
+		UpdatedAtUnixMS:   session.UpdatedAtUnixMS,
 	}
 }
 

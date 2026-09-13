@@ -2524,3 +2524,20 @@ provider readiness. A faster setup endpoint alone does not prove preserved
 focus or IME composition. Cover refresh with an existing live session and a new
 session on the next installation, independent cancellation of coalesced setup
 requests, and a setup failure/retry while a draft is being edited.
+
+### Live extension session incorrectly reports that it cannot resume
+
+When session detail reports `runtimeLive: true` and `resumable: false`, compare
+the live observation with its cold persisted projection before investigating
+provider storage. A valid provider session ID and working process can be hidden
+by a missing `ProviderTargetRef`: dynamic extension adapters are resolved by
+their exact launch binding, rather than the ordinary provider map.
+
+Both observation conversions must clone that binding: daemon runtime Session
+to `ProviderRuntimeSession`, then `runtimeResumeInputFromRuntimeSession` to the
+resume probe. Use the running session's binding even when the installed target
+has moved to a newer installation. Do not force resumability globally, replace
+the provider session ID or rebuild model context to repair this projection.
+
+Regression coverage exercises the real runtime-to-list chain, live list/detail
+queries, cold persisted target reconstruction and nested binding copy isolation.

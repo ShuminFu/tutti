@@ -29,6 +29,8 @@ func runtimeResumeInputFromRuntimeSession(session ProviderRuntimeSession) Runtim
 		UpdatedAtUnixMS:   session.UpdatedAtUnixMS,
 		Visible:           boolPointer(session.Visible),
 		RuntimeContext:    clonePayload(session.RuntimeContext),
+		// Keep the live binding; the installed target may already point at a newer build.
+		ProviderTargetRef: clonePayload(session.ProviderTargetRef),
 	}
 }
 
