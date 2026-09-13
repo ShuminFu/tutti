@@ -2170,6 +2170,15 @@ icon assertion is not sufficient coverage: presentation changes require both a
 projection assertion and a consuming-row DOM assertion so an intermediate
 view-model cannot silently discard the icon.
 
+Embedded desktop hosts enable `AgentHostApi.clipboard.useNativeContextMenu`
+so the composer leaves the native edit menu in control. Native Paste delivers
+one trusted clipboard event to the existing text, mention, large-text, and
+attachment handlers; it must not first call `navigator.clipboard.readText()`,
+which introduces a second WebKit paste confirmation. Hosts that omit this
+optional capability retain the custom editor menu. The native context-menu
+event stops propagation without cancelling the browser default, so outer
+workbench menus cannot replace it.
+
 Composer copy and cut write both the canonical prompt Markdown as
 `text/plain` and schema-serialized mention markup as `text/html`. Pasting that
 markup reparses it through the AgentGUI editor schema, so built-in and

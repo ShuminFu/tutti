@@ -16,6 +16,8 @@ type AgentHostRecord = Record<string, unknown>;
 type AgentHostUnsubscribe = () => void;
 
 export type AgentHostClipboardApi = {
+  /** Let the host's native edit menu dispatch trusted clipboard events. */
+  useNativeContextMenu?: boolean;
   writeImage?: (input: {
     data: string;
     mimeType: "image/png";

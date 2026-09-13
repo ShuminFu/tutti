@@ -31,6 +31,7 @@ import {
 import type { WorkspaceUserProject } from "@tutti-os/workspace-user-project";
 import type { IWorkspaceAgentActivityService } from "./workspaceAgentActivityService.interface.ts";
 import { requestWorkspaceTerminalLoginLaunch } from "./workspaceTerminalLoginLaunchCoordinator.ts";
+import { isHostBridgeAvailable } from "../../../platform/desktop/web/webHostBridgeClient.ts";
 
 interface CreateDesktopAgentHostApiInput {
   agentQuickPromptService?: AgentHostQuickPromptsApi;
@@ -193,6 +194,7 @@ export function createDesktopAgentHostApi({
       windowsPty: null
     },
     clipboard: {
+      useNativeContextMenu: isHostBridgeAvailable(),
       writeImage: (input: { data: string; mimeType: "image/png" }) =>
         hostFilesApi.copyImageToClipboard(input),
       writeText: (text: string) => navigator.clipboard.writeText(text)

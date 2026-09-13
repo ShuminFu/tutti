@@ -11,6 +11,7 @@ import type { Editor } from "@tiptap/core";
 import { useEditor } from "@tiptap/react";
 import { cn } from "../../../app/renderer/lib/utils";
 import { useTranslation } from "../../../i18n/index";
+import { useOptionalAgentHostApi } from "../../../agentActivityHost";
 import { createAgentRichTextInputExtensions } from "./agentRichTextExtensions";
 import {
   agentRichTextContentToPromptText,
@@ -109,6 +110,8 @@ export const AgentRichTextEditor = forwardRef<
 ): React.JSX.Element {
   "use memo";
   const { t } = useTranslation();
+  const useNativeContextMenu =
+    useOptionalAgentHostApi()?.clipboard.useNativeContextMenu === true;
   const lastEmittedPromptRef = useRef<string | null>(value);
   const controlledValueTrackerRef = useRef(
     createAgentRichTextControlledValueTracker(contentScopeKey)
@@ -343,6 +346,11 @@ export const AgentRichTextEditor = forwardRef<
           return true;
         },
         contextmenu: (_view, event) => {
+          if (useNativeContextMenu) {
+            // Native Paste supplies clipboardData without a second WebKit prompt.
+            event.stopPropagation();
+            return false;
+          }
           const currentEditor = editorRef.current;
           if (!currentEditor || currentEditor.isDestroyed) {
             return false;
