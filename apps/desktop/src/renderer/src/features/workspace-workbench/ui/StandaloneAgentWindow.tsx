@@ -918,6 +918,7 @@ export function StandaloneAgentWindow({
               prepareExternalPromptFiles={
                 agentGuiHostInput.prepareExternalPromptFiles
               }
+              resolvePastedPath={agentGuiHostInput.resolvePastedPath}
               onRequestGitBranches={agentGuiHostInput.onRequestGitBranches}
               referenceSourceAggregator={
                 agentGuiHostInput.referenceSourceAggregator
