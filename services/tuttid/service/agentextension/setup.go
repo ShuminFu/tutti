@@ -108,6 +108,7 @@ type SetupService struct {
 
 	mu           sync.Mutex
 	active       map[string]struct{}
+	detections   map[setupDetectionKey]*setupDetection
 	workerCtx    context.Context
 	workerCancel context.CancelFunc
 	workers      sync.WaitGroup
@@ -122,7 +123,7 @@ func NewSetupService(workerParent context.Context) *SetupService {
 	return &SetupService{workerCtx: workerCtx, workerCancel: workerCancel}
 }
 
-func (s *SetupService) GetSetup(ctx context.Context, input InstallPlanInput) (snapshot SetupSnapshot, err error) {
+func (s *SetupService) detectSetup(ctx context.Context, input InstallPlanInput) (snapshot SetupSnapshot, err error) {
 	startedAt := time.Now()
 	var planDuration time.Duration
 	defer func() {

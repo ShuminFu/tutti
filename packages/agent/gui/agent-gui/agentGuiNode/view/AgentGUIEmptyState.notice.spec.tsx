@@ -5,8 +5,8 @@ import type { AgentComposerProps } from "../AgentComposer";
 import type { AgentGUIViewLabels } from "../AgentGUINodeView";
 import { AgentGUIEmptyHomePane } from "./AgentGUIEmptyState";
 
-vi.mock("../AgentComposer", () => ({
-  AgentComposer: () => <div data-testid="agent-composer" />
+vi.mock("./AgentHomeSetupComposer.tsx", () => ({
+  AgentHomeSetupComposer: () => <div data-testid="agent-composer" />
 }));
 
 vi.mock("./AgentGUIEmptyHeroCarouselStage", () => ({

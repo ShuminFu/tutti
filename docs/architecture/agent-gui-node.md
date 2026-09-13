@@ -2951,3 +2951,15 @@ Any change to an owner, data flow, public contract, or recurring trap requires d
 - [Desktop Layering](../conventions/desktop-layering.md)
 - [Agent Runtime Troubleshooting](../conventions/troubleshooting/agent-runtime.md)
 - [Agent GUI Refactor History](./agent-gui-refactor-plan.md)
+
+### Home composer during Agent Target setup
+
+The Home editor stays mounted while target runtime detection, installation or
+sign-in is pending. `AgentHomeSetupComposer` consumes the existing target setup
+controller and adds a presentation-only submission lock; it never manufactures
+runtime readiness or sends a queued first turn automatically. Typing, IME
+composition, selection and attachment drafts remain owned by the same Composer.
+A reserved inline status row communicates preparation or offers the existing
+retry/setup action. Setup errors must not replace or clear the draft editor.
+Canonical Composer/runtime gates continue to apply, including read-only access
+and missing-project constraints. The setup dialog remains mounted at the root.

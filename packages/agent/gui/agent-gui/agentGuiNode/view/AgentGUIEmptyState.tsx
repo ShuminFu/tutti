@@ -21,7 +21,8 @@ import type {
 } from "../../../types";
 import { AgentGUIHeroAgentCarousel } from "../AgentGUIHeroAgentCarousel";
 import { AgentSessionChrome } from "../AgentSessionChrome";
-import { AgentComposer, type AgentComposerProps } from "../AgentComposer";
+import type { AgentComposerProps } from "../AgentComposer";
+import { AgentHomeSetupComposer } from "./AgentHomeSetupComposer.tsx";
 import { AgentHomeSuggestions } from "../AgentHomeSuggestions";
 import {
   createFallbackAgentGUIAgentAvatar,
@@ -170,6 +171,7 @@ export const AgentGUIEmptyHomePane = memo(function AgentGUIEmptyHomePane({
     >
       <AgentTargetSetupGate
         carouselMountedExternally={carouselMountedExternally}
+        gateVisible={false}
       >
         {providerReadinessGate ? (
           <AgentGUIProviderReadinessGatePane
@@ -331,7 +333,7 @@ export const AgentGUIEmptyHeroPane = memo(function AgentGUIEmptyHeroPane({
             labels={chromeLabels}
           />
         ) : null}
-        <AgentComposer {...composerProps} />
+        <AgentHomeSetupComposer {...composerProps} />
         <AgentHomeSuggestions
           categories={suggestions}
           onSelectSuggestion={onSelectSuggestion}

@@ -63,7 +63,7 @@ func (c *Controller) ReleaseIdleLiveSessions(ctx context.Context, input ReleaseI
 		c.sessions[key] = session
 		candidates = append(candidates, candidate{
 			session: session,
-			adapter: c.adapters[session.Provider],
+			adapter: c.adapterForSessionLocked(session),
 		})
 	}
 	c.mu.Unlock()
@@ -188,7 +188,7 @@ func (c *Controller) CloseAllLiveSessions(ctx context.Context) CloseAllLiveSessi
 	for _, session := range c.sessions {
 		candidates = append(candidates, candidate{
 			session: session,
-			adapter: c.adapters[session.Provider],
+			adapter: c.adapterForSessionLocked(session),
 		})
 	}
 	c.mu.Unlock()

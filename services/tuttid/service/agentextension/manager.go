@@ -50,6 +50,7 @@ type Manager struct {
 	versionCacheOnce   sync.Once
 	runtimeVersions    *runtimeVersionCache
 	localPackageChecks localPackageContentCache
+	packageSnapshots   packageSnapshotCache
 }
 
 type UserPathAdapter interface {
@@ -154,6 +155,11 @@ func (m *Manager) RestoreActive(ctx context.Context) (bool, []error) {
 				}
 			}
 			continue
+		}
+		if deferLocalReconcile && installation.HasLocalPackageProvenance() {
+			// RestoreActive already trusts the verified installation record. Carry
+			// that same snapshot through foreground reads while refresh runs.
+			m.packageSnapshots.remember(installation.PackageDir, installation.PackageContentSHA256)
 		}
 		if err := m.registerTarget(ctx, installation); err != nil {
 			errs = append(errs, fmt.Errorf("register active agent extension %s: %w", source.Key, err))
@@ -595,6 +601,9 @@ func (m *Manager) loadInstallationByID(id string) (Installation, error) {
 	if value.ID != id || value.AgentKey != parts[0] || value.Version != parts[1] {
 		return Installation{}, errors.New("extension installation identity mismatch")
 	}
+	if os.Getenv("RNDMASTER_TUTTI_EMBEDDED") == "1" && value.HasLocalPackageProvenance() && m.packageSnapshots.matches(value.PackageDir, value.PackageContentSHA256) {
+		return m.validateInstallationWithLocalContent(value, false)
+	}
 	return m.validateInstallation(value)
 }
 
@@ -621,11 +630,14 @@ func (m *Manager) validateInstallationWithLocalContent(value Installation, verif
 		if verifyLocalContent {
 			contentDigest, err := m.localPackageChecks.load(expectedDir, packageContentSHA256)
 			if err != nil {
+				m.packageSnapshots.forget(expectedDir)
 				return Installation{}, fmt.Errorf("fingerprint local extension package: %w", err)
 			}
 			if contentDigest != value.PackageContentSHA256 {
+				m.packageSnapshots.forget(expectedDir)
 				return Installation{}, errors.New("local extension installation content does not match snapshot")
 			}
+			m.packageSnapshots.remember(expectedDir, contentDigest)
 		}
 		manifest, err = validateInstalledPackage(expectedDir, value.AgentKey, value.Version)
 		if err != nil {

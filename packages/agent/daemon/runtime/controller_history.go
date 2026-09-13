@@ -22,18 +22,16 @@ func (c *Controller) SupportsEffectiveHistory(
 		return false, nil
 	}
 	provider := strings.TrimSpace(input.Provider)
-	if provider == "" {
-		if session, found := c.get(
-			strings.TrimSpace(input.RoomID),
-			strings.TrimSpace(input.AgentSessionID),
-		); found {
-			provider = strings.TrimSpace(session.Provider)
+	var adapter Adapter
+	if session, found := c.get(strings.TrimSpace(input.RoomID), strings.TrimSpace(input.AgentSessionID)); found {
+		if provider != "" && provider != session.Provider {
+			return false, nil
 		}
+		adapter = c.adapterForSession(session)
+	} else {
+		adapter = c.adapter(provider)
 	}
-	if provider == "" {
-		return false, nil
-	}
-	_, supported := c.adapter(provider).(EffectiveHistoryAdapter)
+	_, supported := adapter.(EffectiveHistoryAdapter)
 	return supported, nil
 }
 

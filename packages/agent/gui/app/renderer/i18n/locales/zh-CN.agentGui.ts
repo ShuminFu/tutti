@@ -48,6 +48,8 @@ export const zhCNAgentGui = {
   providerGatePendingInstall: "正在连接…",
   providerGatePendingLogin: "正在打开登录…",
   providerGatePendingRefresh: "正在检测…",
+  targetSetupDraftPreparing: "正在准备，您可以先输入",
+  targetSetupDraftNeedsAttention: "草稿已保留，完成准备后即可发送",
   targetSetupTitle: "设置 {{provider}}",
   targetSetupDescription:
     "优先使用兼容的本地运行时，也可由 Tutti 安装并验证固定版本",

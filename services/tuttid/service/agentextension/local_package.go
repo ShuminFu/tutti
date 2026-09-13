@@ -43,6 +43,17 @@ func (m *Manager) installLocalPackage(key, sourceDir string) (Installation, erro
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return Installation{}, err
 	}
+	// Compare the source before copying thousands of bundled runtime files.
+	// Source directories are mutable, so always fingerprint the actual content.
+	if active, err := m.loadActive(key); err == nil {
+		digest, err := copyLocalPackage(sourceDir, "")
+		if err != nil {
+			return Installation{}, err
+		}
+		if active.HasLocalPackageProvenance() && active.Version == localPackageVersion(active.Version, digest) {
+			return active, nil
+		}
+	}
 	stale, _ := filepath.Glob(filepath.Join(root, ".local-*"))
 	for _, path := range stale {
 		if err := os.RemoveAll(path); err != nil {
@@ -115,6 +126,7 @@ func (m *Manager) installLocalPackage(key, sourceDir string) (Installation, erro
 	if err := m.Installations.PutActive(installation); err != nil {
 		return Installation{}, err
 	}
+	m.packageSnapshots.remember(finalDir, contentDigest)
 	return installation, nil
 }
 
@@ -190,6 +202,9 @@ func copyLocalPackage(sourceDir, destination string) (string, error) {
 		_, _ = hash.Write([]byte{0})
 		_, _ = hash.Write(data)
 		_, _ = hash.Write([]byte{0})
+		if destination == "" {
+			continue
+		}
 		targetPath := filepath.Join(destination, relative)
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 			return "", err

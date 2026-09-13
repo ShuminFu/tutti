@@ -2453,3 +2453,48 @@ status timeout is a different path; the setup screen alone does not establish
 that this timeout is responsible. Compare cold open and repeated open timings
 after deploying the daemon. The setup fixture also checks one installation read
 per request and fresh validation on the next request.
+
+### Extension refresh while a Home draft or session is open
+
+A dynamic adapter cache must include the provider, exact Agent Target and
+extension installation identity. A provider-only cache can bind the first model
+discovery to an old installation, then reject every new session with
+`cached adapter binding mismatch` after background refresh activates a new one.
+Resolve each session's adapter from its durable launch reference, including
+command publication, resume, history, idle release and shutdown. Keep old and
+new adapters available together; replacing the provider entry would orphan
+sessions that still use the old runtime. Do not remove the binding check.
+
+Embedded startup restores previously verified immutable local installation
+snapshots. Foreground setup/composer/runtime reads reuse that verification with
+an installation digest and directory identity check, while manifest/profile
+validation still runs. Background reconciliation retains full content checks
+and invalidates the foreground proof on failure. An atomically replaced
+installation directory or a different digest cannot reuse the proof. This is
+not a general cache for mutable source directories: source reconciliation still
+reads their content and now compares the version before copying the bundle.
+In-place editing of an installed snapshot is not supported; edits belong in the
+source package and are activated as a new installation. Full background
+validation remains responsible for detecting payload changes within a snapshot.
+Standalone mutable extension overrides retain their synchronous content checks.
+
+Concurrent setup queries for the same workspace, target and installation share
+one in-flight detection. Results are not cached as permanent readiness: manual
+retry probes again and requests for another installation do not join the old
+probe. Each caller can cancel its wait independently. Shared detection has a
+90-second bound and is cancelled with the setup service at daemon shutdown.
+The existing final target check still prevents publishing the readiness of an
+installation superseded during the probe.
+
+Home setup no longer replaces the editor. Preparing and failed setup states
+block submission through the existing Composer presentation lock while leaving
+the draft editable. Capability/model discovery keeps its existing workspace,
+project, settings, installation and auth scopes; setup probe results are not
+reused across those scopes just to avoid a process launch.
+
+For verification, keep separate measurements for setup `planMs`, runtime
+resolution and `probeMs`, and measure Home editor availability independently of
+provider readiness. A faster setup endpoint alone does not prove preserved
+focus or IME composition. Cover refresh with an existing live session and a new
+session on the next installation, independent cancellation of coalesced setup
+requests, and a setup failure/retry while a draft is being edited.

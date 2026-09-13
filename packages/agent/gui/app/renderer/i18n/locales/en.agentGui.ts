@@ -48,6 +48,9 @@ export const enAgentGui = {
   providerGatePendingInstall: "Connecting…",
   providerGatePendingLogin: "Opening sign in…",
   providerGatePendingRefresh: "Checking…",
+  targetSetupDraftPreparing: "Preparing the agent — you can keep typing",
+  targetSetupDraftNeedsAttention:
+    "Your draft is kept. Finish agent setup to send",
   targetSetupTitle: "Set up {{provider}}",
   targetSetupDescription:
     "Use a compatible local runtime, or let Tutti install and verify the pinned runtime.",

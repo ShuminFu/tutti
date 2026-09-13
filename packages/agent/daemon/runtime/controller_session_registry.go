@@ -71,7 +71,7 @@ func (c *Controller) CanResume(input ResumeInput) bool {
 			return true
 		}
 	}
-	adapter := c.adapter(provider)
+	adapter := c.adapterForSession(Session{Provider: provider, AgentTargetID: input.AgentTargetID, ProviderTargetRef: input.ProviderTargetRef})
 	if adapter == nil {
 		return false
 	}
@@ -150,45 +150,12 @@ func (c *Controller) adapter(provider string) Adapter {
 	return c.adapters[provider]
 }
 
-func (c *Controller) resolveAdapter(ctx context.Context, input AdapterResolveInput) (Adapter, error) {
-	provider := strings.TrimSpace(input.Provider)
-	if adapter := c.adapter(provider); adapter != nil {
-		if bound, ok := adapter.(ResolveInputBoundAdapter); ok && !bound.MatchesAdapterResolveInput(input) {
-			return nil, fmt.Errorf("cached adapter binding mismatch for %q", provider)
-		}
-		return adapter, nil
-	}
-	if c == nil || c.adapterResolver == nil {
-		return nil, nil
-	}
-	adapter, err := c.adapterResolver.ResolveAdapter(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-	if adapter == nil || strings.TrimSpace(adapter.Provider()) != provider {
-		return nil, fmt.Errorf("resolved adapter provider mismatch for %q", provider)
-	}
-	c.configureAdapter(adapter)
-	c.mu.Lock()
-	if existing := c.adapters[provider]; existing != nil {
-		if bound, ok := existing.(ResolveInputBoundAdapter); ok && !bound.MatchesAdapterResolveInput(input) {
-			c.mu.Unlock()
-			return nil, fmt.Errorf("cached adapter binding mismatch for %q", provider)
-		}
-		adapter = existing
-	} else {
-		c.adapters[provider] = adapter
-	}
-	c.mu.Unlock()
-	return adapter, nil
-}
-
 func (c *Controller) sessionAndAdapter(roomID, agentSessionID string) (Session, Adapter, error) {
 	session, ok := c.get(strings.TrimSpace(roomID), strings.TrimSpace(agentSessionID))
 	if !ok {
 		return Session{}, nil, ErrSessionNotFound
 	}
-	adapter := c.adapter(session.Provider)
+	adapter := c.adapterForSession(session)
 	if adapter == nil {
 		return Session{}, nil, fmt.Errorf("unsupported agent session provider %q", session.Provider)
 	}

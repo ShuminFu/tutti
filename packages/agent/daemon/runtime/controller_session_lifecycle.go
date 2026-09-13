@@ -219,7 +219,7 @@ func (c *Controller) PublishSessionInitialization(
 		if hasCommandSnapshot {
 			c.applyCommandSnapshot(session, commandSnapshot)
 		} else if resolveAdapterCommandSnapshot {
-			if adapter := c.adapter(session.Provider); adapter != nil {
+			if adapter := c.adapterForSession(session); adapter != nil {
 				c.publishAdapterCommandSnapshot(session, adapter)
 			}
 		}
