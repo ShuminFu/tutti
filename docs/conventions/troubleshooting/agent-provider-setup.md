@@ -2435,3 +2435,21 @@ within the original caller context. A normal unchanged target does not repeat
 package verification. This does not make setup and later session creation one
 transaction; a runtime start failure must retain its actual cause instead of
 being reported as an unsupported reasoning option.
+
+### Setup requests still repeat package validation
+
+A setup request should verify its extension installation once and pass that
+request-local value through install-plan construction, runtime resolution and
+composer-profile loading. Loading the installation again at each step repeats
+the full tree scan even when the content digest is cached. Reuse does not cross
+requests: subsequent setup requests validate again, and asynchronous install and
+authentication workers still resolve their own installation/runtime. Runtime
+executable integrity checks and the ACP readiness probe remain in place.
+
+Use `agent_target.setup.detection.completed` (`durationMs`, `planMs`) and
+`agent_target.setup.runtime_detection.completed` (`runtimeResolutionMs`, `probeMs`)
+to separate package/plan work from runtime discovery and ACP startup. A provider
+status timeout is a different path; the setup screen alone does not establish
+that this timeout is responsible. Compare cold open and repeated open timings
+after deploying the daemon. The setup fixture also checks one installation read
+per request and fresh validation on the next request.

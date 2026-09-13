@@ -235,6 +235,10 @@ func (m *Manager) resolveRuntime(ctx context.Context, installationID, cwd string
 	if err != nil {
 		return RuntimeBinding{}, err
 	}
+	return m.resolveRuntimeForInstallation(ctx, installation, cwd)
+}
+
+func (m *Manager) resolveRuntimeForInstallation(ctx context.Context, installation Installation, cwd string) (RuntimeBinding, error) {
 	var profile DiscoveryProfile
 	if err := readJSON(filepath.Join(installation.PackageDir, installation.Manifest.Profiles.Discovery), &profile); err != nil {
 		return RuntimeBinding{}, fmt.Errorf("read discovery profile: %w", err)
@@ -335,7 +339,7 @@ func (m *Manager) runtimeBinding(installation Installation, command []string, ve
 	if err != nil {
 		return RuntimeBinding{}, err
 	}
-	composerProfile, err := m.LoadComposerProfile(installation.ID)
+	composerProfile, err := loadComposerProfile(installation)
 	if err != nil {
 		return RuntimeBinding{}, err
 	}

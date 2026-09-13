@@ -77,12 +77,23 @@ func TestAgentTargetSetupInstallsGenericExtensionRuntime(t *testing.T) {
 		t.Fatalf("user executable entry = %q, want %q", resolvedEntry, resolvedWantEntry)
 	}
 	t.Setenv("PATH", service.Plans.Manager.RuntimeBinDir)
+	installationReads := &setupInstallationReadCounter{InstallationStore: service.Plans.Manager.Installations}
+	service.Plans.Manager.Installations = installationReads
 	resolvedSetup, err := service.GetSetup(context.Background(), InstallPlanInput{WorkspaceID: "workspace-1", AgentTargetID: targetID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if resolvedSetup.RuntimeSource != "managed" {
 		t.Fatalf("published user executable bypassed managed integrity checks: %#v", resolvedSetup)
+	}
+	if installationReads.reads != 1 {
+		t.Fatalf("one setup request read installation %d times, want 1", installationReads.reads)
+	}
+	if _, err := service.GetSetup(context.Background(), InstallPlanInput{WorkspaceID: "workspace-1", AgentTargetID: targetID}); err != nil {
+		t.Fatal(err)
+	}
+	if installationReads.reads != 2 {
+		t.Fatalf("next setup request must validate again: reads = %d, want 2", installationReads.reads)
 	}
 	if !pathWithin(runner.cwd, service.Plans.Manager.RuntimeInstallDir) {
 		t.Fatalf("installer cwd = %q, want user-local Tutti runtime scratch", runner.cwd)
@@ -1186,4 +1197,15 @@ func (c *probeConnection) Recv() (agentruntime.ProcessFrame, error) {
 func (c *probeConnection) Close() error {
 	c.once.Do(func() { close(c.frames) })
 	return nil
+}
+
+// Count installation reads after the fixture's installation worker has settled.
+type setupInstallationReadCounter struct {
+	InstallationStore
+	reads int
+}
+
+func (s *setupInstallationReadCounter) ReadInstallation(id string) (Installation, error) {
+	s.reads++
+	return s.InstallationStore.ReadInstallation(id)
 }

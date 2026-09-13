@@ -67,41 +67,49 @@ type InstallPlan struct {
 type RuntimeBinaryArtifact = agentextensionbiz.RuntimeBinaryArtifact
 
 func (s InstallPlanService) GetInstallPlan(ctx context.Context, input InstallPlanInput) (InstallPlan, error) {
+	plan, _, err := s.getInstallPlanWithInstallation(ctx, input)
+	return plan, err
+}
+
+// Setup keeps the verified installation within this request, so resolving the
+// runtime and its profiles does not rescan the bundled package for each step.
+func (s InstallPlanService) getInstallPlanWithInstallation(ctx context.Context, input InstallPlanInput) (InstallPlan, Installation, error) {
 	workspaceID := strings.TrimSpace(input.WorkspaceID)
 	targetID := strings.TrimSpace(input.AgentTargetID)
 	if workspaceID == "" || targetID == "" {
-		return InstallPlan{}, ErrInvalidInstallPlanRequest
+		return InstallPlan{}, Installation{}, ErrInvalidInstallPlanRequest
 	}
 	if s.Manager == nil || s.Workspaces == nil || s.Targets == nil {
-		return InstallPlan{}, errors.New("agent target install plan service is not configured")
+		return InstallPlan{}, Installation{}, errors.New("agent target install plan service is not configured")
 	}
 	if _, err := s.Workspaces.Get(ctx, workspaceID); err != nil {
-		return InstallPlan{}, err
+		return InstallPlan{}, Installation{}, err
 	}
 	target, err := s.Targets.GetAgentTarget(ctx, targetID)
 	if err != nil {
-		return InstallPlan{}, err
+		return InstallPlan{}, Installation{}, err
 	}
 	target, err = agenttargetbiz.NormalizeTarget(target)
 	if err != nil {
-		return InstallPlan{}, fmt.Errorf("%w: %w", ErrUnsupportedInstallTarget, err)
+		return InstallPlan{}, Installation{}, fmt.Errorf("%w: %w", ErrUnsupportedInstallTarget, err)
 	}
 	if !target.Enabled {
-		return InstallPlan{}, fmt.Errorf("%w: agent target is disabled", ErrUnsupportedInstallTarget)
+		return InstallPlan{}, Installation{}, fmt.Errorf("%w: agent target is disabled", ErrUnsupportedInstallTarget)
 	}
 	launchRef, err := agenttargetbiz.RuntimeProviderTargetRef(target)
 	if err != nil || launchRef["kind"] != agenttargetbiz.LaunchRefTypeAgentExtension {
-		return InstallPlan{}, ErrUnsupportedInstallTarget
+		return InstallPlan{}, Installation{}, ErrUnsupportedInstallTarget
 	}
 	installationID, _ := launchRef["extensionInstallationId"].(string)
 	installation, err := s.Manager.loadInstallationByID(installationID)
 	if err != nil {
-		return InstallPlan{}, fmt.Errorf("load agent extension installation: %w", err)
+		return InstallPlan{}, Installation{}, fmt.Errorf("load agent extension installation: %w", err)
 	}
 	if installation.Provider != target.Provider {
-		return InstallPlan{}, fmt.Errorf("%w: target provider does not match extension installation", ErrUnsupportedInstallTarget)
+		return InstallPlan{}, Installation{}, fmt.Errorf("%w: target provider does not match extension installation", ErrUnsupportedInstallTarget)
 	}
-	return buildInstallPlan(target.ID, s.Manager.RuntimeInstallDir, installation)
+	plan, err := buildInstallPlan(target.ID, s.Manager.RuntimeInstallDir, installation)
+	return plan, installation, err
 }
 
 func buildInstallPlan(targetID, runtimeInstallDir string, installation Installation) (InstallPlan, error) {

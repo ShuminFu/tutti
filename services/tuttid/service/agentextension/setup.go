@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"sync"
@@ -121,16 +122,28 @@ func NewSetupService(workerParent context.Context) *SetupService {
 	return &SetupService{workerCtx: workerCtx, workerCancel: workerCancel}
 }
 
-func (s *SetupService) GetSetup(ctx context.Context, input InstallPlanInput) (SetupSnapshot, error) {
+func (s *SetupService) GetSetup(ctx context.Context, input InstallPlanInput) (snapshot SetupSnapshot, err error) {
+	startedAt := time.Now()
+	var planDuration time.Duration
+	defer func() {
+		slog.Info("agent target setup detection completed",
+			"event", "agent_target.setup.detection.completed",
+			"agentTargetId", input.AgentTargetID,
+			"durationMs", time.Since(startedAt).Milliseconds(),
+			"planMs", planDuration.Milliseconds(),
+			"status", snapshot.Status, "success", err == nil)
+	}()
 	for {
 		if err := ctx.Err(); err != nil {
 			return SetupSnapshot{}, err
 		}
-		plan, err := s.Plans.GetInstallPlan(ctx, input)
+		planStartedAt := time.Now()
+		plan, installation, err := s.Plans.getInstallPlanWithInstallation(ctx, input)
+		planDuration += time.Since(planStartedAt)
 		if err != nil {
 			return SetupSnapshot{}, err
 		}
-		snapshot, err := s.snapshotForPlan(ctx, plan, input.WorkspaceID)
+		snapshot, err = s.snapshotForPlan(ctx, plan, input.WorkspaceID, installation)
 		if err != nil {
 			return SetupSnapshot{}, err
 		}
@@ -158,7 +171,7 @@ func (s *SetupService) Install(ctx context.Context, input InstallInput) (SetupSn
 	if !clientActionIDPattern.MatchString(clientActionID) {
 		return SetupSnapshot{}, fmt.Errorf("%w: invalid client action id", ErrInvalidInstallPlanRequest)
 	}
-	plan, err := s.Plans.GetInstallPlan(ctx, InstallPlanInput{
+	plan, installation, err := s.Plans.getInstallPlanWithInstallation(ctx, InstallPlanInput{
 		WorkspaceID: input.WorkspaceID, AgentTargetID: input.AgentTargetID,
 	})
 	if err != nil {
@@ -167,7 +180,7 @@ func (s *SetupService) Install(ctx context.Context, input InstallInput) (SetupSn
 	if strings.TrimSpace(input.PlanDigest) != plan.PlanDigest {
 		return SetupSnapshot{}, ErrInstallPlanChanged
 	}
-	current, err := s.snapshotForPlan(ctx, plan, input.WorkspaceID)
+	current, err := s.snapshotForPlan(ctx, plan, input.WorkspaceID, installation)
 	if err != nil {
 		return SetupSnapshot{}, err
 	}
@@ -221,13 +234,13 @@ func (s *SetupService) Authenticate(ctx context.Context, input AuthenticateInput
 	if !clientActionIDPattern.MatchString(clientActionID) || methodID == "" || len(methodID) > 128 {
 		return SetupSnapshot{}, fmt.Errorf("%w: invalid authenticate request", ErrInvalidInstallPlanRequest)
 	}
-	plan, err := s.Plans.GetInstallPlan(ctx, InstallPlanInput{
+	plan, installation, err := s.Plans.getInstallPlanWithInstallation(ctx, InstallPlanInput{
 		WorkspaceID: input.WorkspaceID, AgentTargetID: input.AgentTargetID,
 	})
 	if err != nil {
 		return SetupSnapshot{}, err
 	}
-	current, err := s.snapshotForPlan(ctx, plan, input.WorkspaceID)
+	current, err := s.snapshotForPlan(ctx, plan, input.WorkspaceID, installation)
 	if err != nil {
 		return SetupSnapshot{}, err
 	}
@@ -281,7 +294,7 @@ func (s *SetupService) Authenticate(ctx context.Context, input AuthenticateInput
 	return current, nil
 }
 
-func (s *SetupService) snapshotForPlan(ctx context.Context, plan InstallPlan, workspaceID string) (SetupSnapshot, error) {
+func (s *SetupService) snapshotForPlan(ctx context.Context, plan InstallPlan, workspaceID string, installation Installation) (SetupSnapshot, error) {
 	snapshot := SetupSnapshot{
 		WorkspaceID: workspaceID, AgentTargetID: plan.AgentTargetID,
 		Status: SetupNotInstalled, Reason: "compatible_runtime_not_installed", Plan: &plan,
@@ -312,7 +325,17 @@ func (s *SetupService) snapshotForPlan(ctx context.Context, plan InstallPlan, wo
 	if discoveryErr != nil {
 		return SetupSnapshot{}, discoveryErr
 	}
-	binding, err := s.Plans.Manager.ResolveRuntimeForCWD(ctx, plan.ExtensionInstallationID, discoveryRoot)
+	resolutionStartedAt := time.Now()
+	binding, err := s.Plans.Manager.resolveRuntimeForInstallation(ctx, installation, discoveryRoot)
+	resolutionDuration := time.Since(resolutionStartedAt)
+	var probeDuration time.Duration
+	defer func() {
+		slog.Info("agent target setup runtime detection completed",
+			"event", "agent_target.setup.runtime_detection.completed",
+			"agentTargetId", plan.AgentTargetID,
+			"runtimeResolutionMs", resolutionDuration.Milliseconds(),
+			"probeMs", probeDuration.Milliseconds())
+	}()
 	if err == nil {
 		snapshot.RuntimeSource = binding.Source
 		snapshot.RuntimeVersion = binding.Version
@@ -322,7 +345,9 @@ func (s *SetupService) snapshotForPlan(ctx context.Context, plan InstallPlan, wo
 			snapshot.Reason = ""
 			return snapshot, nil
 		}
+		probeStartedAt := time.Now()
 		probe, probeErr := ProbeRuntime(ctx, binding, plan.AgentTargetID, discoveryRoot, s.Transport, s.Host)
+		probeDuration = time.Since(probeStartedAt)
 		if probeErr != nil {
 			snapshot.Status = SetupFailed
 			snapshot.Reason = agentruntime.ClassifyAccountFailure(probeErr)
@@ -333,11 +358,8 @@ func (s *SetupService) snapshotForPlan(ctx context.Context, plan InstallPlan, wo
 		}
 		snapshot.Status = SetupStatus(probe.Status)
 		snapshot.AuthMethods = probe.AuthMethods
-		if snapshot.Status == SetupAuthRequired && s.Plans.Manager != nil {
-			profile, profileErr := s.Plans.Manager.LoadComposerProfile(binding.Installation.ID)
-			if profileErr == nil && extensionHostModelEndpointAvailable(binding.Installation.Provider, profile.RuntimePrep) {
-				snapshot.Status = SetupReady
-			}
+		if snapshot.Status == SetupAuthRequired && extensionHostModelEndpointAvailable(binding.Installation.Provider, binding.RuntimePrep) {
+			snapshot.Status = SetupReady
 		}
 		if snapshot.Status == SetupReady && s.AuthInvalidation != nil &&
 			s.AuthInvalidation.AuthInvalidated(binding.Installation.Provider) {

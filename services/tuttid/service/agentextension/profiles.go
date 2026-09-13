@@ -193,6 +193,10 @@ func (m *Manager) LoadComposerProfile(installationID string) (ComposerProfile, e
 	if err != nil {
 		return ComposerProfile{}, err
 	}
+	return loadComposerProfile(installation)
+}
+
+func loadComposerProfile(installation Installation) (ComposerProfile, error) {
 	if installation.Manifest.Profiles.Composer == "" {
 		return ComposerProfile{}, nil
 	}
