@@ -113,17 +113,14 @@ func (s InstallPlanService) getInstallPlanWithInstallation(ctx context.Context, 
 }
 
 func buildInstallPlan(targetID, runtimeInstallDir string, installation Installation) (InstallPlan, error) {
+	if installation.Manifest.Runtime.Install.Runner == "bundled" {
+		return buildBundledRuntimePlan(targetID, installation)
+	}
 	manifest := installation.Manifest
 	platform := runtime.GOOS + "-" + runtime.GOARCH
 	packageName, packageVersion, artifact, err := runtimeInstallIdentity(manifest, platform)
 	if err != nil {
 		return InstallPlan{}, err
-	}
-	if manifest.Runtime.Install.Runner == "bundled" {
-		if !installation.HasLocalPackageProvenance() {
-			return InstallPlan{}, errors.New("bundled runtime requires a trusted local extension package")
-		}
-		packageName = selectedBundledRuntimePackageName(installation)
 	}
 	var profile DiscoveryProfile
 	if err := readJSON(filepath.Join(installation.PackageDir, installation.Manifest.Profiles.Discovery), &profile); err != nil {
@@ -151,13 +148,7 @@ func buildInstallPlan(targetID, runtimeInstallDir string, installation Installat
 		}
 		installCommand = append([]string{manifest.Runtime.Install.Runner}, installArgs...)
 	}
-	executable := filepath.Clean(resolve(manifest.Runtime.Launch.Executable))
-	// uv creates Windows console-script launchers with an .exe suffix. Extension
-	// manifests keep the portable executable name extensionless, so normalize
-	// the managed path before staging and verifying the runtime on Windows.
-	if runtime.GOOS == "windows" && (manifest.Runtime.Install.Runner == "uv" || manifest.Runtime.Install.Runner == "bundled") && filepath.Ext(executable) == "" {
-		executable += ".exe"
-	}
+	executable := runtimeLaunchExecutable(manifest, installRoot, platform)
 	if !pathWithin(executable, installRoot) {
 		return InstallPlan{}, errors.New("extension runtime executable escapes install root")
 	}
@@ -237,12 +228,6 @@ func runtimeBinaryArtifactForPlatform(manifest Manifest, platform string) (Runti
 }
 
 func runtimeInstallIdentity(manifest Manifest, platform string) (string, string, *RuntimeBinaryArtifact, error) {
-	if manifest.Runtime.Install.Runner == "bundled" {
-		if !validSemver(manifest.Version) {
-			return "", "", nil, errors.New("extension bundled runtime version is invalid")
-		}
-		return "bundled-runtime", manifest.Version, nil, nil
-	}
 	if manifest.Runtime.Install.Runner != "binary" {
 		name, version, err := exactRuntimePackage(manifest.Runtime.Install.Runner, manifest.Runtime.Install.Args)
 		return name, version, nil, err
@@ -417,4 +402,13 @@ func rejectManagedRuntimeSymlinkAncestors(path string) error {
 		}
 	}
 	return nil
+}
+
+// Keep extensionless platform launchers consistent for install and bundled paths.
+func runtimeLaunchExecutable(manifest Manifest, root, platform string) string {
+	executable := filepath.Clean(strings.NewReplacer("${installRoot}", root, "${platform}", platform).Replace(manifest.Runtime.Launch.Executable))
+	if strings.HasPrefix(platform, "windows-") && (manifest.Runtime.Install.Runner == "uv" || manifest.Runtime.Install.Runner == "bundled") && filepath.Ext(executable) == "" {
+		executable += ".exe"
+	}
+	return executable
 }

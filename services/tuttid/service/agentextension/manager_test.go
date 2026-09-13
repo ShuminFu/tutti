@@ -336,12 +336,19 @@ func TestManagerReconcileSnapshotsDevelopmentLocalPackage(t *testing.T) {
 	if first.PackageDir == sourceDir || !strings.HasPrefix(first.PackageDir, filepath.Join(stateDir, "agent", "extensions", "gemini")) {
 		t.Fatalf("local package was not snapshotted into daemon state: %q", first.PackageDir)
 	}
+	if first.RuntimePackageDir != sourceDir || first.PackageContentSHA256 != "" {
+		t.Fatalf("local package should use host runtime without a digest: %#v", first)
+	}
 	if target := store.targets["extension:gemini"]; !strings.Contains(target.LaunchRefJSON, first.ID) {
 		t.Fatalf("registered target = %#v, want installation %q", target, first.ID)
 	}
 
 	localePath := filepath.Join(sourceDir, "locales", "en.json")
 	if err := os.WriteFile(localePath, []byte(`{"agent.name":"Local Gemini"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	modified := time.Now().Add(time.Second)
+	if err := os.Chtimes(localePath, modified, modified); err != nil {
 		t.Fatal(err)
 	}
 	if errs := manager.Reconcile(context.Background()); len(errs) != 0 {
@@ -470,7 +477,7 @@ func TestManagerRestoreActiveDefersEmbeddedLocalPackageReconcile(t *testing.T) {
 	}
 }
 
-func TestManagerRestoreActiveTrustsEmbeddedLocalSnapshotWithoutRehash(t *testing.T) {
+func TestManagerRestoreActiveAndRuntimeLoadUseHostRuntimeWithoutRehash(t *testing.T) {
 	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "1")
 	sourceDir := t.TempDir()
 	if err := extractPackage(testPackageZIP(t), sourceDir); err != nil {
@@ -497,7 +504,10 @@ func TestManagerRestoreActiveTrustsEmbeddedLocalSnapshotWithoutRehash(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(installation.PackageDir, "runtime", "payload.bin"), []byte("changed"), 0o600); err != nil {
+	if _, err := os.Stat(filepath.Join(installation.PackageDir, "runtime")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("local metadata snapshot copied runtime: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(installation.RuntimePackageDir, "runtime", "payload.bin"), []byte("changed"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	targets.targets = map[string]agenttargetbiz.Target{}
@@ -509,8 +519,8 @@ func TestManagerRestoreActiveTrustsEmbeddedLocalSnapshotWithoutRehash(t *testing
 	if target := targets.targets["extension:gemini"]; target.Provider != "acp:gemini" {
 		t.Fatalf("RestoreActive() target = %#v, want cached local snapshot", target)
 	}
-	if _, err := manager.loadInstallationByID(installation.ID); err == nil || !strings.Contains(err.Error(), "content does not match snapshot") {
-		t.Fatalf("strict local snapshot validation error = %v", err)
+	if _, err := manager.loadInstallationByID(installation.ID); err != nil {
+		t.Fatalf("host runtime update blocked local metadata load: %v", err)
 	}
 }
 

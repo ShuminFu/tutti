@@ -36,21 +36,19 @@ var safeKey = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$`)
 const runtimeVersionProbeTimeout = 90 * time.Second
 
 type Manager struct {
-	Sources            []tuttitypes.AgentExtensionSource
-	RuntimeInstallDir  string
-	RuntimeBinDir      string
-	Store              workspacedata.AgentTargetStore
-	Installations      InstallationStore
-	Discovery          SetupDiscoveryDirectory
-	Preferences        workspacedata.PreferencesStore
-	Client             *http.Client
-	RuntimeResolver    runtimecmd.Resolver
-	UserPathAdapter    UserPathAdapter
-	reconcileMu        sync.Mutex
-	versionCacheOnce   sync.Once
-	runtimeVersions    *runtimeVersionCache
-	localPackageChecks localPackageContentCache
-	packageSnapshots   packageSnapshotCache
+	Sources           []tuttitypes.AgentExtensionSource
+	RuntimeInstallDir string
+	RuntimeBinDir     string
+	Store             workspacedata.AgentTargetStore
+	Installations     InstallationStore
+	Discovery         SetupDiscoveryDirectory
+	Preferences       workspacedata.PreferencesStore
+	Client            *http.Client
+	RuntimeResolver   runtimecmd.Resolver
+	UserPathAdapter   UserPathAdapter
+	reconcileMu       sync.Mutex
+	versionCacheOnce  sync.Once
+	runtimeVersions   *runtimeVersionCache
 }
 
 type UserPathAdapter interface {
@@ -139,7 +137,7 @@ func (m *Manager) RestoreActive(ctx context.Context) (bool, []error) {
 			continue
 		}
 
-		installation, err := m.loadActiveForStartup(source.Key, deferLocalReconcile)
+		installation, err := m.loadActive(source.Key)
 		if err != nil {
 			requiresSynchronousReconcile = requiresSynchronousReconcile || !deferLocalReconcile
 			if !errors.Is(err, os.ErrNotExist) {
@@ -155,11 +153,6 @@ func (m *Manager) RestoreActive(ctx context.Context) (bool, []error) {
 				}
 			}
 			continue
-		}
-		if deferLocalReconcile && installation.HasLocalPackageProvenance() {
-			// RestoreActive already trusts the verified installation record. Carry
-			// that same snapshot through foreground reads while refresh runs.
-			m.packageSnapshots.remember(installation.PackageDir, installation.PackageContentSHA256)
 		}
 		if err := m.registerTarget(ctx, installation); err != nil {
 			errs = append(errs, fmt.Errorf("register active agent extension %s: %w", source.Key, err))
@@ -251,6 +244,9 @@ func (m *Manager) resolveRuntimeForInstallation(ctx context.Context, installatio
 	}
 	if profile.SchemaVersion != "tutti.agent.discovery.v1" {
 		return RuntimeBinding{}, errors.New("unsupported discovery profile schema")
+	}
+	if installation.Manifest.Runtime.Install.Runner == "bundled" {
+		return m.resolveBundledRuntime(ctx, installation, profile, cwd)
 	}
 	for _, candidate := range profile.Candidates {
 		env, err := m.discoveryRuntimeEnv(candidate)
@@ -482,7 +478,7 @@ func (m *Manager) installVerifiedRelease(release Release, artifact []byte, sourc
 	if err != nil || signedContentDigest != contentDigest {
 		return Installation{}, errors.New("extracted extension package does not match signed artifact content")
 	}
-	if err := activateExtensionPackage(staging, finalDir, contentDigest); err != nil {
+	if err := activateExtensionPackage(staging, finalDir); err != nil {
 		return Installation{}, err
 	}
 	authorityManifest, authorityDigest, authorityRelease, err := m.verifySignedPackageAuthority(finalDir, release.AgentKey, release.Version)
@@ -559,10 +555,6 @@ func (m *Manager) registerTarget(ctx context.Context, installation Installation)
 }
 
 func (m *Manager) loadActive(key string) (Installation, error) {
-	return m.loadActiveForStartup(key, false)
-}
-
-func (m *Manager) loadActiveForStartup(key string, trustLocalSnapshot bool) (Installation, error) {
 	if m.Installations == nil {
 		return Installation{}, errors.New("agent extension installation store is not configured")
 	}
@@ -574,7 +566,7 @@ func (m *Manager) loadActiveForStartup(key string, trustLocalSnapshot bool) (Ins
 		return Installation{}, errors.New("active installation identity is invalid")
 	}
 	legacy := legacyRemoteInstallationRecord(value)
-	validated, err := m.validateInstallationWithLocalContent(value, !trustLocalSnapshot)
+	validated, err := m.validateInstallation(value)
 	if err != nil {
 		return Installation{}, err
 	}
@@ -601,17 +593,10 @@ func (m *Manager) loadInstallationByID(id string) (Installation, error) {
 	if value.ID != id || value.AgentKey != parts[0] || value.Version != parts[1] {
 		return Installation{}, errors.New("extension installation identity mismatch")
 	}
-	if os.Getenv("RNDMASTER_TUTTI_EMBEDDED") == "1" && value.HasLocalPackageProvenance() && m.packageSnapshots.matches(value.PackageDir, value.PackageContentSHA256) {
-		return m.validateInstallationWithLocalContent(value, false)
-	}
 	return m.validateInstallation(value)
 }
 
 func (m *Manager) validateInstallation(value Installation) (Installation, error) {
-	return m.validateInstallationWithLocalContent(value, true)
-}
-
-func (m *Manager) validateInstallationWithLocalContent(value Installation, verifyLocalContent bool) (Installation, error) {
 	if m.Installations == nil {
 		return Installation{}, errors.New("agent extension installation store is not configured")
 	}
@@ -624,21 +609,6 @@ func (m *Manager) validateInstallationWithLocalContent(value Installation, verif
 	}
 	var manifest Manifest
 	if value.HasLocalPackageProvenance() {
-		if !validPackageContentSHA256(value.PackageContentSHA256) {
-			return Installation{}, errors.New("local extension installation content identity is missing or invalid")
-		}
-		if verifyLocalContent {
-			contentDigest, err := m.localPackageChecks.load(expectedDir, packageContentSHA256)
-			if err != nil {
-				m.packageSnapshots.forget(expectedDir)
-				return Installation{}, fmt.Errorf("fingerprint local extension package: %w", err)
-			}
-			if contentDigest != value.PackageContentSHA256 {
-				m.packageSnapshots.forget(expectedDir)
-				return Installation{}, errors.New("local extension installation content does not match snapshot")
-			}
-			m.packageSnapshots.remember(expectedDir, contentDigest)
-		}
 		manifest, err = validateInstalledPackage(expectedDir, value.AgentKey, value.Version)
 		if err != nil {
 			return Installation{}, err
@@ -711,12 +681,15 @@ func validateLegacyRemoteInstallation(root string, value Installation) (Manifest
 	return manifest, after, nil
 }
 
-func activateExtensionPackage(staging, finalDir, expectedDigest string) error {
-	if _, err := packageContentSHA256(finalDir); err != nil && !errors.Is(err, os.ErrNotExist) {
-		if info, statErr := os.Lstat(finalDir); statErr != nil || info.Mode()&os.ModeSymlink != 0 {
+func activateExtensionPackage(staging, finalDir string) error {
+	if info, err := os.Lstat(finalDir); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 			return errors.New("existing extension package root is unsafe")
 		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
+
 	backup := finalDir + ".previous"
 	if err := os.RemoveAll(backup); err != nil {
 		return err
@@ -735,17 +708,6 @@ func activateExtensionPackage(staging, finalDir, expectedDigest string) error {
 			_ = os.Rename(backup, finalDir)
 		}
 		return err
-	}
-	installedDigest, err := packageContentSHA256(finalDir)
-	if err != nil || installedDigest != expectedDigest {
-		_ = os.RemoveAll(finalDir)
-		if hadPrevious {
-			_ = os.Rename(backup, finalDir)
-		}
-		if err != nil {
-			return err
-		}
-		return errors.New("activated extension package content identity changed")
 	}
 	_ = os.RemoveAll(backup)
 	return nil

@@ -185,7 +185,7 @@ func (s *SetupService) Install(ctx context.Context, input InstallInput) (SetupSn
 	if err != nil {
 		return SetupSnapshot{}, err
 	}
-	if current.Status == SetupReady || current.Status == SetupAuthRequired {
+	if plan.Runner == "bundled" || current.Status == SetupReady || current.Status == SetupAuthRequired {
 		return current, nil
 	}
 
@@ -372,6 +372,13 @@ func (s *SetupService) snapshotForPlan(ctx context.Context, plan InstallPlan, wo
 			snapshot.Account = action.Account
 		}
 		snapshot.Reason = ""
+		return snapshot, nil
+	}
+	if plan.Runner == "bundled" {
+		snapshot.Status = SetupFailed
+		snapshot.Plan = nil
+		snapshot.Reason = "runtime_unavailable"
+		slog.Warn("bundled agent runtime unavailable", "agentTargetId", plan.AgentTargetID, "error", err)
 		return snapshot, nil
 	}
 	if errors.Is(err, ErrManagedRuntimeIntegrity) {

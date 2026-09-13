@@ -255,10 +255,6 @@ func TestValidateRuntimeContractAcceptsBundledRuntimeWithoutInstaller(t *testing
 	if err := validateRuntimeContract(manifest); err != nil {
 		t.Fatalf("validateRuntimeContract(bundled) error = %v", err)
 	}
-	name, version, artifact, err := runtimeInstallIdentity(manifest, runtimePlatform())
-	if err != nil || name != "bundled-runtime" || version != manifest.Version || artifact != nil {
-		t.Fatalf("bundled identity = %q@%q %#v, %v", name, version, artifact, err)
-	}
 	packageDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(packageDir, "profiles"), 0o700); err != nil {
 		t.Fatal(err)
@@ -275,7 +271,7 @@ func TestValidateRuntimeContractAcceptsBundledRuntimeWithoutInstaller(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(plan.InstallCommand, []string{"bundled"}) || plan.Runner != "bundled" {
+	if len(plan.InstallCommand) != 0 || plan.Runner != "bundled" {
 		t.Fatalf("bundled plan = %#v", plan)
 	}
 	t.Setenv(deepSeekHarnessRuntimeChannelEnv, "previous")
@@ -289,7 +285,7 @@ func TestValidateRuntimeContractAcceptsBundledRuntimeWithoutInstaller(t *testing
 	remote := installation
 	remote.Version = "0.1.0"
 	remote.Manifest.Version = remote.Version
-	if _, err := buildInstallPlan("extension:deepseek-harness", testResolvedTempDir(t), remote); err == nil || !strings.Contains(err.Error(), "trusted local") {
+	if _, err := buildInstallPlan("extension:deepseek-harness", testResolvedTempDir(t), remote); err == nil || !strings.Contains(err.Error(), "local extension package") {
 		t.Fatalf("remote bundled package error = %v", err)
 	}
 

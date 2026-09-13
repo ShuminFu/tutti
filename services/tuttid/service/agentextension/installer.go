@@ -80,6 +80,9 @@ func (s *SetupService) executeInstall(
 	if err != nil {
 		return err
 	}
+	if plan.Runner == "bundled" {
+		return fmt.Errorf("%w: bundled runtime is supplied by the host package", ErrRuntimeInstallFailed)
+	}
 	if plan.Runner != installation.Manifest.Runtime.Install.Runner ||
 		plan.PublishUserCommand != publishesUserCommand(installation.Manifest) {
 		return fmt.Errorf("%w: runtime install contract changed", ErrRuntimeInstallFailed)
@@ -152,13 +155,6 @@ func (s *SetupService) executeInstall(
 		}
 		if err := validateNativeExecutablePlatform(stagedExecutable, plan.Platform); err != nil {
 			return fmt.Errorf("%w: %w", ErrRuntimeVerifyFailed, err)
-		}
-	} else if plan.Runner == "bundled" {
-		if len(plan.InstallCommand) != 1 || plan.InstallCommand[0] != "bundled" {
-			return fmt.Errorf("%w: bundled runtime plan changed", ErrRuntimeInstallFailed)
-		}
-		if err := copyBundledRuntime(installation, plan, stagingDir); err != nil {
-			return fmt.Errorf("%w: %w", ErrRuntimeInstallFailed, err)
 		}
 	} else {
 		command := replaceInstallRoot(plan.InstallCommand, plan.InstallRoot, staging)
