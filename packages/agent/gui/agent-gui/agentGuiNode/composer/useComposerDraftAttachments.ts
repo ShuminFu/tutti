@@ -52,6 +52,7 @@ import {
   goalDraftObjectiveFromPrompt
 } from "./composerDraftUtils";
 import { reportAgentComposerDiagnostic } from "./agentComposerDiagnostics";
+import { settleWithTimeout } from "./composerAssetUploadTimeout";
 import type { AgentGUIComposerContentType } from "../engagement/agentGUIEngagement.types";
 
 export interface WorkspaceReferencePickResult {
@@ -162,7 +163,20 @@ export function useComposerDraftAttachments({
       update: (current: AgentComposerDraft) => AgentComposerDraft
     ): AgentComposerDraft | null => {
       const current = draftByScopeKeyRef.current[sourceScopeKey];
-      if (!current) return null;
+      if (!current) {
+        // The scope has no registered draft any more (for example the session
+        // was closed while an upload was in flight). Dropping the write is
+        // correct, but it must not be invisible: a silently discarded result is
+        // how an attachment once stayed `uploading` forever.
+        reportAgentComposerDiagnostic(agentActivityRuntime, {
+          details: { sourceScopeKey },
+          event: "agent.gui.composer.draft_update.dropped_missing_scope",
+          level: "debug",
+          source: "agent-gui",
+          workspaceId
+        });
+        return null;
+      }
       const next = update(current);
       publishScopedDraft(sourceScopeKey, next);
       return next;
@@ -289,17 +303,19 @@ export function useComposerDraftAttachments({
         return;
       }
       for (const draftImage of nextImages) {
-        void uploadPromptContent({
-          workspaceId,
-          content: [
-            {
-              type: "image",
-              mimeType: draftImage.mimeType,
-              data: draftImage.data,
-              name: draftImage.name
-            }
-          ]
-        })
+        void settleWithTimeout(
+          uploadPromptContent({
+            workspaceId,
+            content: [
+              {
+                type: "image",
+                mimeType: draftImage.mimeType,
+                data: draftImage.data,
+                name: draftImage.name
+              }
+            ]
+          })
+        )
           .then((result) => {
             const uploadedImage = result.content.find(
               (block) => block.type === "image"
@@ -668,11 +684,13 @@ export function useComposerDraftAttachments({
       if (!stagePastedText) {
         return;
       }
-      void stagePastedText({
-        workspaceId,
-        text: normalizedText,
-        name
-      })
+      void settleWithTimeout(
+        stagePastedText({
+          workspaceId,
+          text: normalizedText,
+          name
+        })
+      )
         .then((result) => {
           updateScopedDraft(draftScopeKey, (currentDraft) =>
             updateAgentComposerDraft(currentDraft, {

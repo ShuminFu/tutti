@@ -757,6 +757,44 @@ be resent`). The app never opens.
   verify the HTTP boundary sees the activation, the activation revision is
   `active`, and the first Turn snapshot retains its source and intensity.
 
+### A composer send with an unsettled image silently does nothing
+
+- **Symptom:** In an existing Session, sending a new reply that carries an image
+  appears to flash and then nothing happens: neither the text nor the image is
+  sent. Removing the image and sending again works. The behavior is identical
+  for every provider (Claude Code, Codex, DeepSeek Harness), which rules out a
+  provider-specific cause.
+- **Quick checks:** Look for
+  `agent.gui.composer.image_upload.requested` without a matching
+  `agent.gui.composer.image_upload.resolved` or `..._failed`, and confirm the
+  draft image chip renders `data-uploading="true"` and never clears. A
+  `agent.gui.composer.draft_update.dropped_missing_scope` diagnostic means an
+  in-flight upload result was discarded because its draft scope was gone.
+- **Root cause:** Two defects compounded. The composer submit guard refused the
+  whole submit while any draft image was `uploading` or `uploadError`, and it
+  returned without any toast, diagnostic, or visible state change — so the click
+  looked like a no-op. That guard was unnecessary, because the submit projection
+  already drops unsettled and failed attachments. Secondly, an image upload that
+  never settled kept `uploading: true` forever: the flag was only cleared by the
+  upload's own `then`/`catch`, so a hung or lost upload wedged every later send
+  in that Session until the image was deleted by hand.
+- **Fix:** Do not let attachment readiness block the rest of the draft. Send the
+  text and every ready attachment, and surface one explicit message naming what
+  was left out. Keep only the genuine submit gates (disabled, missing project,
+  busy Turn) as refusals. Bound every prompt-asset upload with a timeout so an
+  unsettled upload becomes an ordinary visible failure instead of a permanent
+  `uploading` state, and report a discarded in-flight draft update instead of
+  dropping it silently.
+- **Validation:** With an image still uploading, submitting must call
+  `onSubmit` with the text block, drop the image block, and emit the skip
+  notice. With an image that failed, submitting must send and report the
+  failure. An upload that never resolves must time out into `uploadError` with
+  `uploading: false`. Genuine gates must still refuse.
+- **References:**
+  [useComposerSlashActions.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/composer/useComposerSlashActions.ts)
+  [useComposerDraftAttachments.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/composer/useComposerDraftAttachments.ts)
+  [composerAssetUploadTimeout.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/composer/composerAssetUploadTimeout.ts)
+
 ### A new Tutti conversation briefly reports session not found after submit
 
 - **Symptom:** The optimistic conversation appears after the first submit and

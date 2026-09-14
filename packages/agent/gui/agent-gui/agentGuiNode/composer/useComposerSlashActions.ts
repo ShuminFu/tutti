@@ -18,6 +18,8 @@ import type {
 import type { AgentRichTextEditorHandle } from "../agentRichText/AgentRichTextEditor";
 import { agentComposerFileMentionReferences } from "../agentRichText/agentMentionMarkdown";
 import { useOptionalAgentGUIRuntime } from "../../../agentActivityRuntime";
+import { useOptionalAgentHostApi } from "../../../agentActivityHost";
+import { translate } from "../../../i18n/index";
 import type { AgentSlashPaletteEntry } from "../AgentSlashCommandPalette";
 import type {
   AgentSlashCommand,
@@ -46,6 +48,7 @@ import { resolvePermissionModeControlsDisabled } from "../model/composerModeSele
 import { GOAL_MODE_SLASH_COMMAND } from "./AgentComposerChrome";
 import type { AgentComposerProps } from "./AgentComposer.types";
 import { reportAgentComposerDiagnostic } from "./agentComposerDiagnostics";
+import { selectComposerDraftUnavailableAttachments } from "./composerDraftAttachmentReadiness";
 
 type TriggerMatch = ReturnType<typeof getAgentComposerTriggerQueryMatch>;
 
@@ -114,6 +117,7 @@ function useStableEventCallback<Args extends unknown[], Result>(
 
 export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
   const agentActivityRuntime = useOptionalAgentGUIRuntime();
+  const agentHostApi = useOptionalAgentHostApi();
   const {
     workspaceId,
     provider,
@@ -468,35 +472,49 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
       const currentDraftImages = draftImagesRef.current;
       const currentDraftFiles = draftFilesRef.current;
       const currentDraftLargeTexts = draftLargeTextsRef.current;
-      const hasUploadingImages = currentDraftImages.some(
-        (image) => image.uploading
-      );
-      const hasFailedImages = currentDraftImages.some(
-        (image) => image.uploadError
-      );
-      const hasUploadingFiles = currentDraftFiles.some(
-        (file) => file.uploading
-      );
-      const hasFailedFiles = currentDraftFiles.some((file) => file.uploadError);
-      const hasUploadingLargeTexts = currentDraftLargeTexts.some(
-        (item) => item.uploading
-      );
-      const hasFailedLargeTexts = currentDraftLargeTexts.some(
-        (item) => item.uploadError
-      );
       if (
         isSelectedProjectMissing ||
         submitDisabled ||
-        hasUploadingImages ||
-        hasFailedImages ||
-        hasUploadingFiles ||
-        hasFailedFiles ||
-        hasUploadingLargeTexts ||
-        hasFailedLargeTexts ||
         (disabled && !canQueueWhileBusy) ||
         (isSendingTurn && !canSubmitWhileSending)
       ) {
         return;
+      }
+      // Attachments that are still uploading or that failed are already dropped
+      // from the submit projection, so they must not block the rest of the
+      // draft. A degraded send is strictly better than a silent no-op: the
+      // projection keeps the text and every ready attachment, and the user gets
+      // one explicit message about what was left out. The previous behavior
+      // returned without feedback, which read as "send does nothing".
+      const attachmentsPendingOrFailed =
+        selectComposerDraftUnavailableAttachments({
+          images: currentDraftImages,
+          files: currentDraftFiles,
+          largeTexts: currentDraftLargeTexts
+        });
+      if (attachmentsPendingOrFailed.hasUnavailable) {
+        reportAgentComposerDiagnostic(agentActivityRuntime, {
+          details: {
+            failedCount: attachmentsPendingOrFailed.failedCount,
+            imageFailedCount: currentDraftImages.filter((image) =>
+              Boolean(image.uploadError)
+            ).length,
+            imageUploadingCount: currentDraftImages.filter(
+              (image) => image.uploading
+            ).length,
+            uploadingCount: attachmentsPendingOrFailed.uploadingCount
+          },
+          event: "agent.gui.composer.submit.degraded",
+          level: "warn",
+          source: "agent-gui",
+          workspaceId
+        });
+        const notice = translate(
+          attachmentsPendingOrFailed.failedCount > 0
+            ? "agentHost.agentGui.composerAttachmentSendSkippedFailed"
+            : "agentHost.agentGui.composerAttachmentSendSkippedPreparing"
+        );
+        (agentHostApi?.toast?.info ?? agentHostApi?.toast?.error)?.(notice);
       }
       const nextPrompt = draftPromptRef.current;
       const nextDraftContent = buildAgentComposerDraft({

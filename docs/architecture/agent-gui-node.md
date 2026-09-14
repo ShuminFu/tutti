@@ -2215,6 +2215,18 @@ identity without a host DOM event interceptor.
 
 External OS file paste and drop enter one host-injected classification boundary before draft attachment creation. The synchronous `resolveExternalPromptEntries` port classifies each source index as a live `WorkspaceFileReference` or a snapshot requiring preparation. AgentGUI owns ordered mention insertion and draft reconciliation: references become ordinary file/folder mentions and never consume prompt-asset slots, while only `prepare` entries create pending attachment state and enter `prepareExternalPromptFiles`. A host without the resolver prepares every external entry. The preparer owns native-path or byte lookup, size enforcement, persistence, and remote transport; each prepared input has one `sourceIndex` result, one failure must not fail siblings, successful results include a provider-readable `path` or `url`, and failures carry typed error codes. Hosts that classify path-backed entries as references must reject any such entry that unexpectedly reaches preparation, so classification failure cannot silently create a duplicate snapshot.
 
+Attachment readiness is not a submit gate. The submit projection drops every
+attachment that is still uploading or that failed, so those attachments must
+never refuse the whole draft: the text and every ready attachment are sent, and
+the user receives one explicit notice naming what was left out. Only genuine
+composer gates (disabled controls, a missing selected project, or a busy Turn)
+may refuse a submit, and every refusal carries a visible reason rather than
+returning silently. Each prompt-asset upload is bounded by a timeout so an
+unsettled upload becomes an ordinary visible failure, never a permanent
+`uploading` attachment that quietly blocks later sends in the same Session. A
+draft update that cannot be applied because its draft scope disappeared is
+reported as a diagnostic instead of being discarded silently.
+
 Plain-text absolute path paste may enter an optional host-owned
 `workspace.resolvePastedPath` boundary. AgentGUI applies only a strict sync
 candidate gate (one trimmed absolute path with no whitespace or quotes). The

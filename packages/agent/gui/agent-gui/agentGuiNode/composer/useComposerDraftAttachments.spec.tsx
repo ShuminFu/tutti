@@ -455,6 +455,58 @@ describe("useComposerDraftAttachments", () => {
       "This attachment failed to prepare. Remove it and add the file again."
     );
   });
+
+  // Regression: an image upload that never settled left the attachment marked
+  // `uploading` forever, which silently blocked every later submit in that
+  // session until the user deleted the image by hand.
+  it("settles an image upload that never completes", async () => {
+    vi.useFakeTimers();
+    try {
+      const uploadPromptContent = vi.fn(() => new Promise<never>(() => {}));
+      const runtime = {
+        origin: "test",
+        promptContentUploadSupport: { image: true },
+        uploadPromptContent
+      } as unknown as AgentGUIRuntime;
+      const wrapper = ({ children }: PropsWithChildren) => (
+        <AgentGUIRuntimeProvider runtime={runtime}>
+          {children}
+        </AgentGUIRuntimeProvider>
+      );
+      const input = createInput({
+        draft: buildAgentComposerDraft({ prompt: "" }),
+        prepareExternalPromptFiles: vi.fn(async () => [])
+      });
+      const rendered = renderHook(() => useComposerDraftAttachments(input), {
+        wrapper
+      });
+
+      act(() =>
+        rendered.result.current.addDraftImages([
+          { data: "aGVsbG8=", mimeType: "image/png", name: "shot.png" }
+        ])
+      );
+      // The image is published immediately as an in-flight attachment.
+      expect(input.draftImagesRef.current).toEqual([
+        expect.objectContaining({ name: "shot.png", uploading: true })
+      ]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(130_000);
+      });
+
+      // It must not stay in flight once the deadline passes.
+      expect(input.draftImagesRef.current).toEqual([
+        expect.objectContaining({
+          name: "shot.png",
+          uploadError: "Prompt asset upload timed out.",
+          uploading: false
+        })
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 function createInput(input: {
