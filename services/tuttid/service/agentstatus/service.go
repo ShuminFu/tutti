@@ -523,7 +523,15 @@ func (s Service) cachedStatusForSpec(ctx context.Context, spec ProviderSpec, for
 				return cached, nil
 			}
 		}
-		status := s.detectStatusForSpec(ctx, spec, forceRefresh)
+		// 探测一旦开跑就与调用方解绑。singleflight 把同一 provider 的所有并发调用方并到这一次
+		// 执行上，沿用「先到者」的 ctx 会让任何短预算调用方把长预算调用方一起拖死：诊断端点
+		// （曾经 1s）取消 → 探针 probe_canceled → 结果 not_installed，而这条结果会广播给同时段
+		// 所有等待者，包括那个本来有 5s 预算、完全跑得完的状态轮询。表现就是同一个 provider
+		// 时而 ready 时而 not_installed，取决于哪个调用方先到。
+		//
+		// 解绑后探测只受自己的内部预算约束（probeTimeoutForSpec）；调用方超时只是它自己等不到
+		// 结果，不会再污染别人。
+		status := s.detectStatusForSpec(context.WithoutCancel(baseContext(ctx)), spec, forceRefresh)
 		completedAt := s.now()
 		status.Availability.CheckedAt = &completedAt
 		// Codex repair authorization is deliberately derived from a fresh failed
