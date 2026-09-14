@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/runtimecmd"
 	agentextensiondata "github.com/tutti-os/tutti/services/tuttid/data/agentextension"
 )
 
@@ -136,4 +137,101 @@ func writeBundledRuntimeFixture(t *testing.T, path string) {
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf '0.50.0\\n'\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// Grok ships only the extension shell: the manifest still declares a bundled
+// runner but runtime/<platform>/ is absent. The user's own install must then be
+// discovered through the profile, while a present-but-broken bundle stays
+// fail-closed and never silently swaps in a different binary.
+func TestBundledRunnerFallsBackToUserRuntimeOnlyWhenBundleIsAbsent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("version probe fixture uses a POSIX shell")
+	}
+	t.Setenv(bundledRuntimeChannelEnv("gemini"), "")
+	newManager := func(home string) *Manager {
+		return &Manager{
+			Installations:     agentextensiondata.NewFileInstallationStore(testResolvedTempDir(t)),
+			RuntimeInstallDir: filepath.Join(testResolvedTempDir(t), "unused-managed-runtime"),
+			RuntimeResolver: runtimecmd.Resolver{
+				Environ: func() []string { return []string{"PATH=/usr/bin:/bin"} },
+				HomeDir: func() (string, error) { return home, nil },
+			},
+		}
+	}
+	install := func(t *testing.T, manager *Manager) (Installation, string) {
+		t.Helper()
+		source := testResolvedTempDir(t)
+		manifest := testManifest()
+		manifest.Runtime.Install.Runner = "bundled"
+		manifest.Runtime.Install.Args = nil
+		manifest.Runtime.Launch.Executable = "${installRoot}/bin/gemini"
+		manifest.Runtime.Launch.Args = []string{"--acp"}
+		metadata := testPackageZIPFor(t, manifest, `{"schemaVersion":"tutti.agent.discovery.v1","candidates":[{"binaryNames":["gemini"],"searchPaths":[{"scope":"user","path":".gemini/bin"}],"version":{"args":["--version"],"constraint":">=0.50.0 <1.0.0"},"launchArgs":["agent","stdio"],"probe":{"kind":"acp-initialize","timeoutMs":5000}}]}`)
+		if err := extractPackage(metadata, source); err != nil {
+			t.Fatal(err)
+		}
+		installation, err := manager.installLocalPackage("gemini", source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return installation, source
+	}
+	writeLocal := func(t *testing.T, home, version string) string {
+		t.Helper()
+		path := filepath.Join(home, ".gemini", "bin", "gemini")
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf '"+version+"\\n'\n"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	cwd := testResolvedTempDir(t)
+
+	t.Run("absent bundle uses compatible user runtime", func(t *testing.T) {
+		home := testResolvedTempDir(t)
+		local := writeLocal(t, home, "0.50.0")
+		manager := newManager(home)
+		installation, _ := install(t, manager)
+		binding, err := manager.ResolveRuntimeForCWD(context.Background(), installation.ID, cwd)
+		if err != nil {
+			t.Fatalf("bundle absent with compatible user runtime: %v", err)
+		}
+		if len(binding.Command) != 3 || binding.Command[0] != local || binding.Command[1] != "agent" || binding.Command[2] != "stdio" {
+			t.Fatalf("binding command = %#v, want user runtime %s with discovery launch args", binding.Command, local)
+		}
+		if binding.Source != "local" || binding.Version != "0.50.0" {
+			t.Fatalf("binding source/version = %q/%q, want local/0.50.0", binding.Source, binding.Version)
+		}
+	})
+
+	t.Run("absent bundle with incompatible user runtime keeps bundled error", func(t *testing.T) {
+		home := testResolvedTempDir(t)
+		writeLocal(t, home, "0.10.0")
+		manager := newManager(home)
+		installation, _ := install(t, manager)
+		_, err := manager.ResolveRuntimeForCWD(context.Background(), installation.ID, cwd)
+		if err == nil || !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("err = %v, want the bundled not-exist error", err)
+		}
+	})
+
+	t.Run("present but broken bundle never falls back", func(t *testing.T) {
+		home := testResolvedTempDir(t)
+		writeLocal(t, home, "0.50.0")
+		manager := newManager(home)
+		installation, source := install(t, manager)
+		bundled := filepath.Join(source, "runtime", runtimePlatform(), "bin", "gemini")
+		if err := os.MkdirAll(filepath.Dir(bundled), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(bundled, []byte("not executable"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		binding, err := manager.ResolveRuntimeForCWD(context.Background(), installation.ID, cwd)
+		if err == nil {
+			t.Fatalf("broken bundle resolved to %#v; want fail-closed", binding.Command)
+		}
+	})
 }

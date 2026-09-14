@@ -246,12 +246,45 @@ func (m *Manager) resolveRuntimeForInstallation(ctx context.Context, installatio
 		return RuntimeBinding{}, errors.New("unsupported discovery profile schema")
 	}
 	if installation.Manifest.Runtime.Install.Runner == "bundled" {
-		return m.resolveBundledRuntime(ctx, installation, profile, cwd)
+		binding, err := m.resolveBundledRuntime(ctx, installation, profile, cwd)
+		// A host package may ship only the extension shell and leave the runtime
+		// to the user's own install (Grok: the 116 MB binary is not bundled).
+		// Only "the bundled executable is not there" falls back to the discovery
+		// profile; a present-but-broken bundle (escapes its directory, not
+		// executable, fails the version probe) stays fail-closed.
+		if err == nil || !errors.Is(err, os.ErrNotExist) {
+			return binding, err
+		}
+		local, found, localErr := m.resolveDiscoveredLocalRuntime(ctx, installation, profile)
+		if localErr != nil {
+			return RuntimeBinding{}, localErr
+		}
+		if found {
+			return local, nil
+		}
+		return RuntimeBinding{}, err
 	}
+	if binding, found, err := m.resolveDiscoveredLocalRuntime(ctx, installation, profile); err != nil {
+		return RuntimeBinding{}, err
+	} else if found {
+		return binding, nil
+	}
+	if binding, err := m.resolveInstalledManagedRuntime(ctx, installation, profile, cwd); err == nil {
+		return binding, nil
+	} else if errors.Is(err, ErrManagedRuntimeIntegrity) {
+		return RuntimeBinding{}, err
+	}
+	return RuntimeBinding{}, fmt.Errorf("compatible local runtime for %s is not installed", installation.AgentKey)
+}
+
+// resolveDiscoveredLocalRuntime walks the discovery profile for a user-installed
+// runtime (user search paths first, then PATH) whose version satisfies the
+// candidate constraint. found=false with a nil error means none qualified.
+func (m *Manager) resolveDiscoveredLocalRuntime(ctx context.Context, installation Installation, profile DiscoveryProfile) (RuntimeBinding, bool, error) {
 	for _, candidate := range profile.Candidates {
 		env, err := m.discoveryRuntimeEnv(candidate)
 		if err != nil {
-			return RuntimeBinding{}, err
+			return RuntimeBinding{}, false, err
 		}
 		for _, name := range candidate.BinaryNames {
 			path := m.RuntimeResolver.ResolveBinary([]string{name}, pathOverrideFromEnv(env))
@@ -265,15 +298,11 @@ func (m *Manager) resolveRuntimeForInstallation(ctx context.Context, installatio
 			if err != nil {
 				continue
 			}
-			return m.runtimeBinding(installation, append([]string{path}, candidate.LaunchArgs...), version, "local")
+			binding, err := m.runtimeBinding(installation, append([]string{path}, candidate.LaunchArgs...), version, "local")
+			return binding, err == nil, err
 		}
 	}
-	if binding, err := m.resolveInstalledManagedRuntime(ctx, installation, profile, cwd); err == nil {
-		return binding, nil
-	} else if errors.Is(err, ErrManagedRuntimeIntegrity) {
-		return RuntimeBinding{}, err
-	}
-	return RuntimeBinding{}, fmt.Errorf("compatible local runtime for %s is not installed", installation.AgentKey)
+	return RuntimeBinding{}, false, nil
 }
 
 func (m *Manager) discoveryRuntimeEnv(candidate DiscoveryCandidate) ([]string, error) {
