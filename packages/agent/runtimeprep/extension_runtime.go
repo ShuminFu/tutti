@@ -84,6 +84,10 @@ func writeExtensionSessionInstructions(ctx context.Context, input ProviderPrepar
 }
 
 func writeExtensionRuntimeInstructions(input ProviderPrepareInput) error {
+	if runtimeInstructionsCwdWriteDisabled() {
+		logRuntimePrepareTrace("runtime_prepare.instructions.cwd_write_skipped", input.PrepareInput, nil)
+		return nil
+	}
 	fileName := strings.TrimSpace(input.ExtensionRuntimePrep.InstructionsFile)
 	if fileName == "" {
 		fileName = "AGENTS.md"

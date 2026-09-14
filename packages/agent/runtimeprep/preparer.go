@@ -153,6 +153,13 @@ func (p *DefaultPreparer) Prepare(ctx context.Context, input PrepareInput) (Prep
 	if result.Cwd == "" {
 		result.Cwd = cwd
 	}
+	instructionsPath, err := writeSessionRuntimeInstructions(input, runtimeRoot, manifest)
+	if err != nil {
+		return PreparedRuntime{}, err
+	}
+	if instructionsPath != "" {
+		result.Env = append(result.Env, runtimeInstructionsFileEnv+"="+instructionsPath)
+	}
 	result.Env = append(defaultRuntimeEnv(input, p.StateDir), result.Env...)
 	logRuntimePrepareTrace("runtime_prepare.env_prepared", input, map[string]any{
 		"env_count": len(result.Env),
