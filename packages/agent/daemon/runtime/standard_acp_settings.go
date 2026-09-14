@@ -134,7 +134,7 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 	// with the provider request. Other non-identity settings remain best-effort.
 	modelConfigID := a.effectiveModelConfigOptionID()
 	modelSet := false
-	if model := contextwindow.Bare(settings.Model); model != "" && modelConfigID != "" &&
+	if model := a.modelValueForRuntime(settings.Model); model != "" && modelConfigID != "" &&
 		(supported[modelConfigID] || (modelConfigID == "model" && modelsAPI)) {
 		model = a.sessionModelIDForRequest(session.AgentSessionID, model)
 		modelAlreadySelected := modelsAPI && modelConfigID == "model" &&
@@ -155,7 +155,7 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 	}
 	if reasoning := strings.TrimSpace(settings.ReasoningEffort); reasoning != "" {
 		if a.config.setModelReasoningEffortMeta {
-			model := a.sessionModelIDForRequest(session.AgentSessionID, contextwindow.Bare(settings.Model))
+			model := a.sessionModelIDForRequest(session.AgentSessionID, a.modelValueForRuntime(settings.Model))
 			if model == "" {
 				model = a.sessionCurrentModelID(session.AgentSessionID)
 			}
@@ -239,6 +239,34 @@ func acpModelsResultPresent(raw json.RawMessage) bool {
 		Models json.RawMessage `json:"models"`
 	}
 	return json.Unmarshal(raw, &payload) == nil && len(payload.Models) > 0 && string(payload.Models) != "null"
+}
+
+// modelValueForRuntime converts a session/composer model value into the
+// spelling this runtime expects on the wire.
+//
+// The `[1m]` marker is a *window request* riding on the model value, not part
+// of the model id, and ACP has no context-window parameter. So whether the
+// marker may survive depends on the runtime:
+//
+//   - Claude Code reads it off the value (its adapter strips the marker and
+//     adds the context-1m beta) — see standardACPConfig
+//     .modelValueCarriesContextWindow. Dropping the marker here is exactly the
+//     "DinTalDock cc falls back to 200k" defect: the composer and the session
+//     keep `X[1m]`, but the runtime is told `X`.
+//   - Every other standard ACP runtime advertises canonical bare ids, so the
+//     marker comes off before the lookup and before the request.
+//
+// The window is *preserved, never added*: an unmarked value stays unmarked even
+// on a marker-carrying runtime. Forcing the marker on would collapse the two
+// lanes — a user who selected the 200k entry would silently be upgraded to 1M.
+// The marker's own spelling is canonicalized (case/whitespace), so a
+// hand-typed `X[1M]` matches the advertised `X[1m]` entry.
+func (a *standardACPAdapter) modelValueForRuntime(value string) string {
+	base, marked := contextwindow.Split(value)
+	if a != nil && marked && a.config.modelValueCarriesContextWindow {
+		return contextwindow.WithMarker(base)
+	}
+	return base
 }
 
 func (a *standardACPAdapter) setSessionModel(
@@ -427,10 +455,11 @@ func (a *standardACPAdapter) ValidateSessionSettings(session Session, patch Sess
 		return nil
 	}
 	if patch.Model != nil {
-		// Runtimes advertise the canonical ids, so the 1M marker has to come off
-		// before the lookup: it is a window request, not part of the id. The error
-		// then names the bare model too, rather than leaking our spelling.
-		model := contextwindow.Bare(*patch.Model)
+		// Match the value the way this runtime spells it (marked for Claude Code,
+		// bare for everyone else) — that is what the runtime advertises and what
+		// the request below will carry. The error then names that same spelling,
+		// which for every runtime that can fail here is the bare id.
+		model := a.modelValueForRuntime(*patch.Model)
 		modelConfigID := a.effectiveModelConfigOptionID()
 		if model == "" || modelConfigID == "" || !a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, modelConfigID, model) {
 			return fmt.Errorf("agent session ACP model %q is not advertised", model)
@@ -456,9 +485,9 @@ func (a *standardACPAdapter) ValidateSessionSettings(session Session, patch Sess
 	if patch.ReasoningEffort != nil {
 		reasoning := strings.TrimSpace(*patch.ReasoningEffort)
 		if a.config.setModelReasoningEffortMeta {
-			model := contextwindow.Bare(session.SettingsValue().Model)
+			model := a.modelValueForRuntime(session.SettingsValue().Model)
 			if patch.Model != nil {
-				model = contextwindow.Bare(*patch.Model)
+				model = a.modelValueForRuntime(*patch.Model)
 			}
 			selected, advertised := a.sessionModelReasoningEffort(session.AgentSessionID, model, reasoning)
 			if reasoning == "" || !advertised || selected != reasoning {
@@ -523,10 +552,12 @@ func (a *standardACPAdapter) ApplySessionSettings(
 
 	modelSet := false
 	if patch.Model != nil {
-		// Same as the validation above: match and send the bare id. ACP has no
-		// context-window parameter, so a marked selection falls back to the plain
-		// model here; the window only travels on the channels that carry one.
-		model := contextwindow.Bare(*patch.Model)
+		// Match and send the value in this runtime's own spelling. For Claude Code
+		// that means the `[1m]` marker stays on: ACP has no context-window
+		// parameter, so the model value *is* the window request — stripping it
+		// here would silently drop the session back to 200k on every in-place
+		// model switch.
+		model := a.modelValueForRuntime(*patch.Model)
 		// A model the live agent advertises as a selectable option can be
 		// switched in place via set_config_option, even if it is a concrete id
 		// (e.g. Opus 4.6) rather than one of the static aliases. Only models the
@@ -555,7 +586,7 @@ func (a *standardACPAdapter) ApplySessionSettings(
 		if reasoning != "" {
 			if a.config.setModelReasoningEffortMeta {
 				if !modelSet {
-					model := contextwindow.Bare(session.SettingsValue().Model)
+					model := a.modelValueForRuntime(session.SettingsValue().Model)
 					if err := a.setSessionModel(ctx, acpSession.client, session, model); err != nil {
 						return fmt.Errorf("agent session ACP reasoning model metadata update failed: %w", err)
 					}

@@ -44,6 +44,14 @@ func newClaudeCodeACPAdapterFromProviderDescriptor(
 				return append(standardACPEnv(session, host), "IS_SANDBOX=1")
 			},
 			commandResolver: commandResolver,
+			// Claude Code is the one standard ACP runtime that reads the 1M
+			// context-window request off the model value: claude-agent-acp strips
+			// the `[1m]` marker before the request leaves for the API and adds the
+			// context-1m beta instead. The marker therefore has to survive every
+			// outbound model value — see modelValueForRuntime. Every other runtime
+			// (dsh takes the window via ModelEndpointConfig.ContextWindow) keeps
+			// the bare spelling.
+			modelValueCarriesContextWindow: true,
 		},
 		transport:  transport,
 		host:       host,
