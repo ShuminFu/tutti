@@ -690,6 +690,7 @@ export function AgentComposerView(input: Props): React.JSX.Element {
             </ComposerFloatingMenuSurface>
           </Popover>
           <ComposerFooter
+            modelHistoryTargetId={input.props.selectedAgentTarget?.targetId}
             workspaceId={workspaceId}
             labels={labels}
             provider={provider}

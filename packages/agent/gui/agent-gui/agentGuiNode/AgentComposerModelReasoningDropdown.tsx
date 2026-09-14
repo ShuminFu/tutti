@@ -1,7 +1,6 @@
 import {
   Fragment,
   cloneElement,
-  useCallback,
   useState,
   type HTMLAttributes,
   type ReactElement
@@ -32,14 +31,7 @@ import {
   type AgentComposerSettingsMenuLabels,
   type ComposerMenuOption
 } from "./model/composerSettingsMenuModel";
-import {
-  composerModelFavoritesStorageKey,
-  composerModelRecentsStorageKey,
-  parseComposerModelIdList,
-  recordRecentComposerModel,
-  serializeComposerModelIdList,
-  toggleFavoriteComposerModel
-} from "./model/composerModelChoiceHistory";
+import { useComposerModelHistory } from "../../shared/composerModelHistory/useComposerModelHistory";
 import { translate } from "../../i18n/index";
 import styles from "./AgentGUINode.styles";
 
@@ -92,8 +84,10 @@ export function AgentModelReasoningDropdown({
   disabled?: boolean;
   labels: AgentComposerSettingsMenuLabels;
   /**
-   * Stable per-target key for the recents/favorites localStorage chrome
-   * state; omit to fall back to one shared "default" bucket.
+   * Stable per-target key for the recents/favorites chrome state. Omitting it
+   * falls back to one shared "default" bucket. The shared store persists it in
+   * the host's durable per-target record when the embedding host provides the
+   * composer model history port, and in localStorage otherwise.
    */
   modelHistoryTargetId?: string | null;
   onRetryComposerOptions?: () => void;
@@ -106,42 +100,24 @@ export function AgentModelReasoningDropdown({
   "use memo";
   const [menuOpen, setMenuOpen] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
-  const [favoriteModelIds, setFavoriteModelIds] = useState<readonly string[]>(
-    () =>
-      parseComposerModelIdList(
-        readComposerLocalStorage(
-          composerModelFavoritesStorageKey(modelHistoryTargetId)
-        )
-      )
-  );
-  const [recentModelIds, setRecentModelIds] = useState<readonly string[]>(() =>
-    parseComposerModelIdList(
-      readComposerLocalStorage(
-        composerModelRecentsStorageKey(modelHistoryTargetId)
-      )
-    )
-  );
-  const reloadModelHistory = useCallback(() => {
-    setFavoriteModelIds(
-      parseComposerModelIdList(
-        readComposerLocalStorage(
-          composerModelFavoritesStorageKey(modelHistoryTargetId)
-        )
-      )
-    );
-    setRecentModelIds(
-      parseComposerModelIdList(
-        readComposerLocalStorage(
-          composerModelRecentsStorageKey(modelHistoryTargetId)
-        )
-      )
-    );
-  }, [modelHistoryTargetId]);
+  // Shared per-target store: durable when the embedding host provides the
+  // composer model history port, localStorage otherwise. The store owns read
+  // ordering, optimistic edits, and confirmation/rollback, so both model menus
+  // show the same lists.
+  const {
+    favoriteModelIds,
+    recentModelIds,
+    refreshModelHistory,
+    recordRecent,
+    toggleFavorite
+  } = useComposerModelHistory(modelHistoryTargetId);
   const handleMenuOpenChange = (open: boolean): void => {
     if (open) {
       refreshEmbeddedModelCatalog();
-      // Pick up writes from other windows and clear the previous filter.
-      reloadModelHistory();
+      // Re-read the authoritative history (host record or localStorage). This
+      // also picks up another menu's or window's writes, retries a failed read or
+      // write, and clears the previous filter.
+      refreshModelHistory();
       setModelSearchQuery("");
     }
     setMenuOpen(open);
@@ -176,24 +152,11 @@ export function AgentModelReasoningDropdown({
     setMenuOpen(false);
   };
   const applyModelSelection = (value: string): void => {
-    const nextRecentIds = recordRecentComposerModel(recentModelIds, value);
-    setRecentModelIds(nextRecentIds);
-    writeComposerLocalStorage(
-      composerModelRecentsStorageKey(modelHistoryTargetId),
-      serializeComposerModelIdList(nextRecentIds)
-    );
+    recordRecent(value);
     applySettingsChange({ model: value });
   };
   const handleToggleFavoriteModel = (value: string): void => {
-    const nextFavoriteIds = toggleFavoriteComposerModel(
-      favoriteModelIds,
-      value
-    );
-    setFavoriteModelIds(nextFavoriteIds);
-    writeComposerLocalStorage(
-      composerModelFavoritesStorageKey(modelHistoryTargetId),
-      serializeComposerModelIdList(nextFavoriteIds)
-    );
+    toggleFavorite(value);
   };
   const favoriteValueSet = new Set(menu.model.favoriteValues);
   const modelDescriptionPresentation = menu.model.optionDescriptionInline
@@ -546,29 +509,6 @@ function refreshEmbeddedModelCatalog(): void {
     void fetch(endpoint, { method: "POST" }).catch(() => undefined);
   } catch {
     // Non-embedded/invalid bootstrap URLs keep the current catalog untouched.
-  }
-}
-
-function readComposerLocalStorage(key: string): string | null {
-  try {
-    if (typeof window === "undefined" || !window.localStorage) {
-      return null;
-    }
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeComposerLocalStorage(key: string, value: string): void {
-  try {
-    if (typeof window === "undefined" || !window.localStorage) {
-      return;
-    }
-    window.localStorage.setItem(key, value);
-  } catch {
-    // Chrome-state persistence is best-effort; never break the menu.
-    return;
   }
 }
 

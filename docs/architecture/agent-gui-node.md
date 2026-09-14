@@ -72,6 +72,34 @@ mutable settings.
 
 Use the closed-surface test when assigning ownership: if state must survive or continue progressing after every Agent GUI surface closes, it belongs to Host/store or the workspace engine. State that should disappear with the surface belongs to UI.
 
+Composer model favorites and recent choices are per-Agent-Target preferences,
+not Session settings. Both model menus consume the same model-history store.
+The optional `composer-model-history` host port owns durable persistence in
+embedded DinTalDock: RnDMaster stores records in its instance data directory,
+independent of the iframe's changing loopback port. Reads and membership writes
+are serialized per target; only confirmed host snapshots are mirrored into
+localStorage. Failed writes roll back optimistic display and the next menu-open
+read reconciles with the host. Target switches select a different record, and
+catalog filtering never deletes persisted IDs. Plain desktop/web clients and
+hosts explicitly reporting unsupported retain browser-local persistence.
+
+The exact selected Agent Target is passed through the Composer footer without
+using the provider-menu catalog fallback. The shared selector binding subscribes
+to each preference record and starts hydration on subscription; it does not
+store preferences in the Session engine. Unmounted records are released after
+pending I/O settles.
+
+The first host read may import the current origin's legacy favorites and
+recents only when no durable record exists. An explicitly empty saved record
+must suppress re-import so removed favorites do not reappear. Older production
+menus used a shared `default` browser bucket: when a target has no browser
+record, that legacy list seeds the target without deleting the original. Its
+original target ownership cannot be inferred, so inherited lists separate on
+subsequent edits. Browser storage
+from abandoned origins cannot be read by the new iframe and is outside this
+migration. This preference flow does not change Session/Turn lifecycle or
+selected model settings.
+
 ### 1.2 Semantics before screens
 
 Session, Turn, Interaction, Goal, and operation are domain facts. Rail, timeline, dock, toast, and Message Center are projections of those facts; they do not define lifecycle.

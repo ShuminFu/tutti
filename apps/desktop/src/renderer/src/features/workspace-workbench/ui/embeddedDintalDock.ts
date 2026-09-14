@@ -14,6 +14,7 @@ import { installEmbeddedRailPeerPairingHost } from "./embeddedRailPeerPairingHos
 import { installEmbeddedPeerPairRequestHost } from "./embeddedPeerPairRequestHost.ts";
 import { installEmbeddedSessionLivenessHost } from "./embeddedSessionLivenessHost.ts";
 import { installEmbeddedMonitorAutomationHost } from "./embeddedMonitorAutomationHost.ts";
+import { installEmbeddedComposerModelHistoryHost } from "./embeddedComposerModelHistoryHost.ts";
 import {
   embeddedSplitViewController,
   embeddedSplitViewPaneDescriptor,
@@ -117,7 +118,8 @@ export function installEmbeddedDintalDockSessionBridge(
 ): () => void {
   const openSession = (agentSessionId: string): boolean =>
     activateEmbeddedDintalDockSession(host, agentSessionId);
-  const unregisterOpener = registerEmbeddedHostCreatedSessionOpener(openSession);
+  const unregisterOpener =
+    registerEmbeddedHostCreatedSessionOpener(openSession);
   // 只在嵌入 DinTalDock 时接上配对能力；普通 web 构建里侧栏没有这组 UI。
   const unregisterPeerPairing = installEmbeddedRailPeerPairingHost();
   // 配对请求就地审批（补丁 0116）：同样只在嵌入 DinTalDock 时接上。
@@ -128,9 +130,15 @@ export function installEmbeddedDintalDockSessionBridge(
   // 数的是 cliagent-backend 的自动化项 preset=monitor —— Claude 的 Monitor 工具在
   // 这个产品里被 disallowedTools 禁着，那条胶囊永远不会亮。
   const unregisterMonitorAutomations = installEmbeddedMonitorAutomationHost();
+  // 模型收藏/最近使用的耐久副本：同样只在嵌入 DinTalDock 时接上。iframe 的 origin 是
+  // 随机回环端口、每次重启都换，只写 localStorage 的话收藏会跟着 origin 一起「丢」；
+  // 接上之后由宿主按 target 落盘。老宿主没这个能力时 gui 侧自动退回 localStorage。
+  const unregisterComposerModelHistory =
+    installEmbeddedComposerModelHistoryHost();
   const uninstallBridge = installHostAgentSessionBridge(openSession, windowRef);
   return () => {
     uninstallBridge();
+    unregisterComposerModelHistory();
     unregisterMonitorAutomations();
     unregisterSessionLiveness();
     unregisterPeerRequests();
@@ -153,9 +161,11 @@ export function activateEmbeddedDintalDockSession(
   const snapshot = host.getSnapshot();
   const nodeId = [...snapshot.nodeStack]
     .reverse()
-    .find((id) => snapshot.nodes.some(
-      (node) => node.id === id && node.data.typeId === workspaceAgentGuiNodeID
-    ));
+    .find((id) =>
+      snapshot.nodes.some(
+        (node) => node.id === id && node.data.typeId === workspaceAgentGuiNodeID
+      )
+    );
   if (!nodeId) return false;
   host.activateNode(
     { nodeId },
@@ -443,7 +453,9 @@ export async function reconcileEmbeddedDintalDock(
     .filter((id) => agents.some((node) => node.id === id));
   const ordered = [
     ...frontmostFirst,
-    ...agents.map((node) => node.id).filter((id) => !frontmostFirst.includes(id))
+    ...agents
+      .map((node) => node.id)
+      .filter((id) => !frontmostFirst.includes(id))
   ];
   const keepIds = ordered.slice(0, 2);
   const keepId = keepIds[0] ?? null;

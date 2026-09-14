@@ -61,6 +61,21 @@
 // 宿主只回「启用中、且确实由问到的那些会话起的」监控自动化；停用时也在宿主侧
 // 再核对一次归属，iframe 递来的 id 不能直接落到别的自动化项上。
 //
+// 模型收藏/最近使用（composer 菜单那两个星星与「最近」分组）的耐久副本：
+// getComposerModelHistory    args[0] = { targetId, legacyFavorites, legacyRecents }
+//                            result  = { favorites: string[], recents: string[] }
+// updateComposerModelHistory args[0] = { targetId, kind: "favorite" | "recent",
+//                                        modelId, favorite? }
+//                            result  = 同上（写后的权威快照）
+// 为什么必须落宿主：这两个列表原先只写在 iframe 的 localStorage 里，而嵌入
+// DinTalDock 的 iframe origin 是**随机回环端口**，宿主每次重启/重装都会换一个，
+// 于是 localStorage 跟着换 origin —— 用户看到的是「收藏自己没了」。数据按 target
+// 落宿主，与会话/版本/端口无关：读只在**没有**耐久记录时用递上来的 legacy 列表播种
+//（显式空记录也算有记录），已有记录一律以宿主为准；favorite 是「目标成员关系」而不是
+// 取反，recent 最多留 5 条，写由宿主做 read-modify-write 串行 + 原子落盘。
+// 当前 origin 里的老值会在第一次读时自动迁移；换过 origin 的旧值 iframe 读不到，
+// 无法自动找回。
+//
 // 别名由宿主算，iframe 传空串；后端拒绝时回 { error: <中文文案>, code }。
 
 import { writeWorkspaceFileDropData } from "@tutti-os/agent-gui/workspace-file-drop";
@@ -897,6 +912,82 @@ export function requestHostSetMonitorAutomationsEnabled(args: {
         ? result.updated
         : 0
   }));
+}
+
+/**
+ * 一个 agent target 的模型收藏/最近使用（composer 菜单那两个星星与「最近」分组）
+ * 在 iframe 这边的形状。权威副本在宿主那边，与 iframe 端口、会话、版本都无关。
+ */
+export interface HostComposerModelHistorySnapshot {
+  favorites: string[];
+  recents: string[];
+}
+
+export type HostComposerModelHistoryKind = "favorite" | "recent";
+
+/**
+ * 宿主回的快照只做形状兜底（数组里不是字符串的条目丢掉），但**缺数组不算空快照**：
+ * `{}` 这类回包要当失败抛出，否则会被下游当成「这个人把收藏全删了」的显式空记录，
+ * 把界面上还在的收藏抹掉。老宿主没实现这个能力时桥抛 HostBridgeUnavailableError。
+ */
+function hostComposerModelHistorySnapshot(
+  result: { favorites?: unknown; recents?: unknown } | null | undefined,
+  capability: string
+): HostComposerModelHistorySnapshot {
+  if (!Array.isArray(result?.favorites) || !Array.isArray(result?.recents)) {
+    throw new Error(
+      `tutti host bridge: ${capability} result missing favorites or recents`
+    );
+  }
+  return {
+    favorites: result.favorites.flatMap((entry) =>
+      typeof entry === "string" ? [entry] : []
+    ),
+    recents: result.recents.flatMap((entry) =>
+      typeof entry === "string" ? [entry] : []
+    )
+  };
+}
+
+/**
+ * 问宿主拿某个 target 的权威收藏/最近使用。`legacy*` 是**当前 origin** 里 localStorage
+ * 的老值：宿主只在没有耐久记录时用它播种，已有记录以宿主为准（显式空记录也算有记录）。
+ *
+ * 读不到旧 origin 的值是必然的：iframe 读不了别的 origin 的 localStorage，换过 origin
+ * 的那份旧数据无法自动找回。
+ */
+export function requestHostComposerModelHistory(args: {
+  targetId: string;
+  legacyFavorites: string[];
+  legacyRecents: string[];
+}): Promise<HostComposerModelHistorySnapshot> {
+  return requestHostCapability<{ favorites?: unknown; recents?: unknown }>(
+    "getComposerModelHistory",
+    [args]
+  ).then((result) =>
+    hostComposerModelHistorySnapshot(result, "getComposerModelHistory")
+  );
+}
+
+/**
+ * 让宿主改一条收藏或最近使用，回写后的权威快照。
+ *
+ * `favorite` 是**目标成员关系**（true = 应该在收藏里），不是取反：宿主那边是
+ * read-modify-write + 原子落盘，这里递过去的是「用户看到并想要的结果」，重复调不会
+ * 把状态翻回去。`recent` 不带 favorite 字段，宿主自己按最多 5 条、最新在前收敛。
+ */
+export function requestHostUpdateComposerModelHistory(args: {
+  targetId: string;
+  kind: HostComposerModelHistoryKind;
+  modelId: string;
+  favorite?: boolean;
+}): Promise<HostComposerModelHistorySnapshot> {
+  return requestHostCapability<{ favorites?: unknown; recents?: unknown }>(
+    "updateComposerModelHistory",
+    [args]
+  ).then((result) =>
+    hostComposerModelHistorySnapshot(result, "updateComposerModelHistory")
+  );
 }
 
 /**

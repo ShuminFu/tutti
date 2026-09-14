@@ -36,6 +36,7 @@ import { ComposerPrimaryCapabilityControl } from "./ComposerPrimaryCapabilityCon
 
 interface Props {
   workspaceId: string;
+  modelHistoryTargetId?: string | null;
   labels: AgentComposerProps["labels"];
   provider: AgentComposerProps["provider"];
   composerSettings: AgentComposerProps["composerSettings"];
@@ -93,6 +94,7 @@ interface Props {
 
 export function ComposerFooter({
   workspaceId: _workspaceId,
+  modelHistoryTargetId,
   labels,
   provider,
   composerSettings,
@@ -486,6 +488,7 @@ export function ComposerFooter({
           composerSettings.supportsReasoningEffort ||
           composerSettings.composerOptionsError ? (
             <AgentModelReasoningDropdown
+              modelHistoryTargetId={modelHistoryTargetId}
               composerSettings={composerSettings}
               disabled={settingsControlsDisabled}
               onRetryComposerOptions={onRetryComposerOptions}

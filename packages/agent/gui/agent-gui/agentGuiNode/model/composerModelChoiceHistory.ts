@@ -1,8 +1,9 @@
 /**
  * UI-local chrome state for the composer model menu: per-agent-target recent
  * model picks and favorite toggles, persisted in browser localStorage (same
- * pattern as agent rail ordering). This never enters controller state, session
- * state, or durable AgentGUI node data.
+ * pattern as agent rail ordering) or, when the embedding host exposes the
+ * composer model history port, in that host's durable per-target record. This
+ * never enters controller state, session state, or durable AgentGUI node data.
  */
 
 const COMPOSER_MODEL_RECENTS_STORAGE_PREFIX =
@@ -15,13 +16,13 @@ export const MAX_RECENT_COMPOSER_MODELS = 5;
 export function composerModelRecentsStorageKey(
   agentTargetId: string | null | undefined
 ): string {
-  return `${COMPOSER_MODEL_RECENTS_STORAGE_PREFIX}${normalizeTargetId(agentTargetId)}`;
+  return `${COMPOSER_MODEL_RECENTS_STORAGE_PREFIX}${normalizeComposerModelTargetId(agentTargetId)}`;
 }
 
 export function composerModelFavoritesStorageKey(
   agentTargetId: string | null | undefined
 ): string {
-  return `${COMPOSER_MODEL_FAVORITES_STORAGE_PREFIX}${normalizeTargetId(agentTargetId)}`;
+  return `${COMPOSER_MODEL_FAVORITES_STORAGE_PREFIX}${normalizeComposerModelTargetId(agentTargetId)}`;
 }
 
 export function parseComposerModelIdList(
@@ -96,6 +97,12 @@ export function toggleFavoriteComposerModel(
   return [...sanitized, normalized];
 }
 
-function normalizeTargetId(agentTargetId: string | null | undefined): string {
+/**
+ * Stable per-target key shared by the localStorage keys and the host history
+ * port's `targetId`, so both addresses for one target can never drift apart.
+ */
+export function normalizeComposerModelTargetId(
+  agentTargetId: string | null | undefined
+): string {
   return agentTargetId?.trim() || "default";
 }

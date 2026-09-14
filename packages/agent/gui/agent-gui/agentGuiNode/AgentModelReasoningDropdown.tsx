@@ -5,7 +5,6 @@ import { CheckIcon, ChevronDown, Star, ZapIcon } from "lucide-react";
 import {
   Fragment,
   cloneElement,
-  useMemo,
   useState,
   type HTMLAttributes,
   type ReactElement
@@ -34,14 +33,7 @@ import {
   buildComposerModelMenuModel,
   type ComposerMenuOption
 } from "./model/composerSettingsMenuModel";
-import {
-  composerModelFavoritesStorageKey,
-  composerModelRecentsStorageKey,
-  parseComposerModelIdList,
-  recordRecentComposerModel,
-  serializeComposerModelIdList,
-  toggleFavoriteComposerModel
-} from "./model/composerModelChoiceHistory";
+import { useComposerModelHistory } from "../../shared/composerModelHistory/useComposerModelHistory";
 
 export function AgentModelReasoningDropdown({
   composerSettings,
@@ -54,8 +46,10 @@ export function AgentModelReasoningDropdown({
   disabled?: boolean;
   labels: AgentComposerSettingsMenuLabels;
   /**
-   * Stable per-target key for the recents/favorites localStorage chrome
-   * state; omit to fall back to one shared "default" bucket.
+   * Stable per-target key for the recents/favorites chrome state. Omitting it
+   * falls back to one shared "default" bucket. The shared store persists it in
+   * the host's durable per-target record when the embedding host provides the
+   * composer model history port, and in localStorage otherwise.
    */
   modelHistoryTargetId?: string | null;
   onSettingsChange: (patch: {
@@ -67,31 +61,23 @@ export function AgentModelReasoningDropdown({
   "use memo";
   const [menuOpen, setMenuOpen] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
-  // localStorage is not reactive, so history re-derives only when the
-  // target changes or a local write/menu-open bumps the refresh counter.
-  const [historyRefresh, setHistoryRefresh] = useState(0);
-  const favoriteModelIds = useMemo(
-    () =>
-      parseComposerModelIdList(
-        readComposerLocalStorage(
-          composerModelFavoritesStorageKey(modelHistoryTargetId)
-        )
-      ),
-    [modelHistoryTargetId, historyRefresh]
-  );
-  const recentModelIds = useMemo(
-    () =>
-      parseComposerModelIdList(
-        readComposerLocalStorage(
-          composerModelRecentsStorageKey(modelHistoryTargetId)
-        )
-      ),
-    [modelHistoryTargetId, historyRefresh]
-  );
+  // Shared per-target store: durable when the embedding host provides the
+  // composer model history port, localStorage otherwise. The store owns read
+  // ordering, optimistic edits, and confirmation/rollback, so both model menus
+  // show the same lists.
+  const {
+    favoriteModelIds,
+    recentModelIds,
+    refreshModelHistory,
+    recordRecent,
+    toggleFavorite
+  } = useComposerModelHistory(modelHistoryTargetId);
   const handleMenuOpenChange = (open: boolean): void => {
     if (open) {
-      // Pick up writes from other windows and clear the previous filter.
-      setHistoryRefresh((value) => value + 1);
+      // Re-read the authoritative history (host record or localStorage). This
+      // also picks up another menu's or window's writes, retries a failed read or
+      // write, and clears the previous filter.
+      refreshModelHistory();
       setModelSearchQuery("");
     }
     setMenuOpen(open);
@@ -117,24 +103,11 @@ export function AgentModelReasoningDropdown({
     setMenuOpen(false);
   };
   const applyModelSelection = (value: string): void => {
-    const nextRecentIds = recordRecentComposerModel(recentModelIds, value);
-    setHistoryRefresh((refresh) => refresh + 1);
-    writeComposerLocalStorage(
-      composerModelRecentsStorageKey(modelHistoryTargetId),
-      serializeComposerModelIdList(nextRecentIds)
-    );
+    recordRecent(value);
     applySettingsChange({ model: value });
   };
   const handleToggleFavoriteModel = (value: string): void => {
-    const nextFavoriteIds = toggleFavoriteComposerModel(
-      favoriteModelIds,
-      value
-    );
-    setHistoryRefresh((refresh) => refresh + 1);
-    writeComposerLocalStorage(
-      composerModelFavoritesStorageKey(modelHistoryTargetId),
-      serializeComposerModelIdList(nextFavoriteIds)
-    );
+    toggleFavorite(value);
   };
   const favoriteValueSet = new Set(menu.model.favoriteValues);
   const modelDescriptionPresentation = menu.model.optionDescriptionInline
@@ -406,29 +379,6 @@ export function AgentModelReasoningDropdown({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-function readComposerLocalStorage(key: string): string | null {
-  try {
-    if (typeof window === "undefined" || !window.localStorage) {
-      return null;
-    }
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeComposerLocalStorage(key: string, value: string): void {
-  try {
-    if (typeof window === "undefined" || !window.localStorage) {
-      return;
-    }
-    window.localStorage.setItem(key, value);
-  } catch {
-    // Chrome-state persistence is best-effort; never break the menu.
-    return;
-  }
 }
 
 // Renders a list of pick-to-apply menu items. Pointer activation applies
