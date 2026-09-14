@@ -237,3 +237,18 @@ home/config/Skills preparation lives in this module.
 
 Provider-specific runtime protocol and session control belong to
 `packages/agent/daemon`, not this module.
+
+## Session Runtime Instructions
+
+Non-`claude-code` providers write the rendered tutti runtime policy to a
+session-private `<runtimeRoot>/runtime-instructions.md` and export
+`TUTTI_RUNTIME_INSTRUCTIONS_FILE` on `PreparedRuntime.Env`. Hosts copy that
+variable onto stdio MCP server entries so an MCP `initialize` `instructions`
+field can carry the policy without writing `AGENTS.md` into the user
+repository. `claude-code` already injects the same policy through
+`claude-system-prompt.md` and does not write `runtime-instructions.md`.
+
+Set `TUTTI_RUNTIME_INSTRUCTIONS_CWD_WRITE=off` to skip the cwd
+`AGENTS.md` / `CLAUDE.md` managed-block write from `InstructionFilePreparer`
+and extension runtime instructions. Skills and other prepare branches stay
+unchanged. Unset or any other value keeps the current cwd write.

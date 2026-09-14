@@ -21,16 +21,20 @@ func (p InstructionFilePreparer) Prepare(_ context.Context, input ProviderPrepar
 		fileName = "AGENTS.md"
 	}
 	path := filepath.Join(input.Cwd, fileName)
-	policy, err := tuttiCLIPolicy(input.PrepareInput)
-	if err != nil {
-		return ProviderPrepareResult{}, err
-	}
-	writeResult, err := input.Store.WriteManagedBlock(path, policy)
-	if err != nil {
-		return ProviderPrepareResult{}, err
-	}
-	if input.Manifest != nil {
-		input.Manifest.RecordManagedFile(path, "provider-instructions", writeResult.Created)
+	if runtimeInstructionsCwdWriteDisabled() {
+		logRuntimePrepareTrace("runtime_prepare.instructions.cwd_write_skipped", input.PrepareInput, nil)
+	} else {
+		policy, err := tuttiCLIPolicy(input.PrepareInput)
+		if err != nil {
+			return ProviderPrepareResult{}, err
+		}
+		writeResult, err := input.Store.WriteManagedBlock(path, policy)
+		if err != nil {
+			return ProviderPrepareResult{}, err
+		}
+		if input.Manifest != nil {
+			input.Manifest.RecordManagedFile(path, "provider-instructions", writeResult.Created)
+		}
 	}
 	skillRoots, err := cwdExtensionSkillRoots(input.ExtensionSkillRoots)
 	if err != nil {

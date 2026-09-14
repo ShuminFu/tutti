@@ -52,7 +52,7 @@ func claudeCodeSDKStartOptions(
 	if prompt := strings.TrimSpace(contract.SystemPrompt); prompt != "" {
 		options["systemPromptAppend"] = prompt
 	}
-	if servers, configured := rndmasterMCPServers(contract); configured {
+	if servers, configured := rndmasterMCPServers(contract, session.Env); configured {
 		options["mcpServers"] = servers
 	}
 	if gateHookURL := strings.TrimSpace(contract.GateHookURL); gateHookURL != "" {
