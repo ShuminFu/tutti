@@ -573,7 +573,13 @@ func extensionComposerDiscoveryInput(cwd string) ComposerOptionsInput {
 }
 
 func TestHostEndpointExtensionDiscoversReasoningBeforeFirstCreate(t *testing.T) {
-	setHostModelEndpointContract(t, "acp:example", "openai", "chat")
+	// The host declares both gateway models as 1M contexts: the marked rows below
+	// are offered because the window table covers them, not because the composer
+	// guessed -- a model the table does not cover would have no `X[1m]` row.
+	setHostModelEndpointContractWithModelContext(t, "acp:example", "openai", map[string]int64{
+		"gateway-default": 1_000_000,
+		"gateway-alt":     1_000_000,
+	}, "chat")
 	runtime := newFakeRuntime()
 	runtime.startHook = func(input RuntimeStartInput, session ProviderRuntimeSession) ProviderRuntimeSession {
 		if input.Visible == nil || *input.Visible {

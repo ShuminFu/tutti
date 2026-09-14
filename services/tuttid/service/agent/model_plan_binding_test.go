@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,12 +17,37 @@ import (
 
 func setHostModelEndpointContract(t *testing.T, provider string, protocol string, wireAPIs ...string) {
 	t.Helper()
+	setHostModelEndpointContractWithModelContext(t, provider, protocol, nil, wireAPIs...)
+}
+
+// setHostModelEndpointContractWithModelContext is the same fixture plus the host
+// `modelContext` window table. That table is what the composer's 1M rows are
+// gated on (withContextWindowModelVariants): a model absent from it -- including
+// every model when windows is nil -- has an unknown window and never earns a
+// `X[1m]` row, so a test that wants to see marked rows has to declare the
+// windows here.
+func setHostModelEndpointContractWithModelContext(
+	t *testing.T,
+	provider string,
+	protocol string,
+	windows map[string]int64,
+	wireAPIs ...string,
+) {
+	t.Helper()
 	wireAPI := "responses"
 	if len(wireAPIs) > 0 {
 		wireAPI = wireAPIs[0]
 	}
+	contextPayload := ""
+	if len(windows) > 0 {
+		encoded, err := json.Marshal(windows)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contextPayload = `,"modelContext":` + string(encoded)
+	}
 	path := filepath.Join(t.TempDir(), "host-model-endpoints.json")
-	payload := `{"version":1,"providers":{"` + provider + `":{"planName":"DinTal Runtime LLM Proxy","protocol":"` + protocol + `","baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback","wireAPI":"` + wireAPI + `","model":"gateway-default","models":[{"id":"gateway-default","name":"Gateway Default"},{"id":"gateway-alt","name":"Gateway Alt"}]}}}`
+	payload := `{"version":1` + contextPayload + `,"providers":{"` + provider + `":{"planName":"DinTal Runtime LLM Proxy","protocol":"` + protocol + `","baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback","wireAPI":"` + wireAPI + `","model":"gateway-default","models":[{"id":"gateway-default","name":"Gateway Default"},{"id":"gateway-alt","name":"Gateway Alt"}]}}}`
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatal(err)
 	}

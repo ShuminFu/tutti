@@ -306,6 +306,66 @@ func TestModelPlanRuntimeSnapshotResumesWithTheContextWindowBesideTheModel(t *te
 	}
 }
 
+// The create → persist → resume round trip, driven by the value the session
+// actually stored. The siblings above hand the resume a mark they build by hand,
+// which cannot fail when the create path drops the marker -- they assert the
+// resume half in isolation. This one starts where the user does (a marked
+// composer value through create) and feeds the persisted row back in, so
+// reverting the persistence fix turns it red for the reason the bug existed: a
+// resumed session would come back on the default window. That includes dsh,
+// whose window rides the endpoint rather than the model value.
+func TestCreateThenResumeKeepsTheContextWindowFromThePersistedModel(t *testing.T) {
+	t.Parallel()
+
+	plan := snapshotTestPlan(2, "https://relay.example/v1", "sk-secret")
+	plans := revisionPlanSource{current: plan, revisions: map[uint64]modelplanbiz.Plan{2: plan}}
+	service := &Service{}
+	service.ConfigureModelPlanBinding(staticBindingSource{binding: modelbindingbiz.Binding{
+		WorkspaceID:   "ws",
+		AgentTargetID: "workspace-agent:writer",
+		ModelPlanID:   plan.ID,
+		DefaultModel:  "gpt-new",
+	}}, plans)
+
+	create := CreateSessionInput{AgentTargetID: "workspace-agent:writer", HarnessAgentTargetID: "local:codex"}
+	resolution, err := service.resolveCreateSessionModelForPlanOrProvider(
+		context.Background(), "ws", "codex", "gpt-new[1m]", &create,
+	)
+	if err != nil {
+		t.Fatalf("resolveCreateSessionModelForPlanOrProvider() error = %v", err)
+	}
+	persisted := value(create.Model)
+	if persisted != "gpt-new[1m]" {
+		t.Fatalf("persisted model = %q, want the marked gpt-new[1m]", persisted)
+	}
+
+	runtimeContext := runtimeContextWithSessionRuntimeSnapshot(nil, CreateSessionInput{
+		AgentTargetID:        "workspace-agent:writer",
+		HarnessAgentTargetID: "local:codex",
+		Model:                create.Model,
+	}, "codex", resolution)
+	snapshot, exists, err := sessionRuntimeSnapshotFromContext(runtimeContext, "codex")
+	if err != nil || !exists {
+		t.Fatalf("snapshot = %#v, exists=%v, err=%v", snapshot, exists, err)
+	}
+	if snapshot.Model != persisted {
+		t.Fatalf("snapshot model = %q, want the persisted %q", snapshot.Model, persisted)
+	}
+
+	endpoint, err := service.modelEndpointFromSessionRuntimeSnapshot(
+		context.Background(), "ws", snapshot, snapshot.Model,
+	)
+	if err != nil {
+		t.Fatalf("resume error = %v", err)
+	}
+	if endpoint == nil || endpoint.Model != "gpt-new" {
+		t.Fatalf("resumed endpoint = %#v, want the bare gpt-new", endpoint)
+	}
+	if endpoint.ContextWindow != contextwindow.OneMillionTokens {
+		t.Fatalf("resumed context window = %d, want %d", endpoint.ContextWindow, contextwindow.OneMillionTokens)
+	}
+}
+
 func TestSessionRuntimeSnapshotPreservesOpenProviderIdentity(t *testing.T) {
 	t.Parallel()
 

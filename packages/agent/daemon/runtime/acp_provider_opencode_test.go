@@ -145,6 +145,37 @@ func TestOpenCodeACPEnvRejectsInvalidUserConfig(t *testing.T) {
 	}
 }
 
+func TestOpenCodeACPEnvStripsOneMillionMarker(t *testing.T) {
+	t.Parallel()
+
+	// OpenCode resolves the id against its own provider catalog, so the Claude
+	// Code 1M spelling would name a model it does not have. The window request is
+	// Claude Code's own convention and travels the ACP config-option path; here
+	// the model must arrive bare.
+	session := standardTestSession(ProviderOpenCode)
+	session.Settings = &SessionSettings{Model: "anthropic/claude-sonnet-4-5[1m]"}
+
+	adapter := newOpenCodeTestAdapter(nil)
+	env, err := adapter.config.finalizeEnv(adapter.config.env(session), session)
+	if err != nil {
+		t.Fatalf("finalize OpenCode env: %v", err)
+	}
+	for _, item := range env {
+		if !strings.HasPrefix(item, "OPENCODE_CONFIG_CONTENT=") {
+			continue
+		}
+		var config map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(item, "OPENCODE_CONFIG_CONTENT=")), &config); err != nil {
+			t.Fatalf("decode OPENCODE_CONFIG_CONTENT: %v", err)
+		}
+		if config["model"] != "anthropic/claude-sonnet-4-5" {
+			t.Fatalf("model config = %#v, want the bare id", config["model"])
+		}
+		return
+	}
+	t.Fatalf("env = %#v, want OPENCODE_CONFIG_CONTENT", env)
+}
+
 func TestOpenCodePermissionTiersResolveACPRequestsIndependentlyFromPlanMode(t *testing.T) {
 	t.Parallel()
 
