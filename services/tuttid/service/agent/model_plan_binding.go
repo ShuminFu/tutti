@@ -77,8 +77,20 @@ func (configuration modelConfigurationRuntimeContext) runtimeContext() map[strin
 // modelPlanResolution keeps endpoint selection and the redaction-safe
 // composer configuration derived from the same binding/plan read.
 type modelPlanResolution struct {
-	Endpoint           *runtimeprep.ModelEndpointConfig
-	Models             []modelplanbiz.Model
+	Endpoint *runtimeprep.ModelEndpointConfig
+	Models   []modelplanbiz.Model
+	// SessionModel is the spelling the SESSION keeps: composer value form
+	// (provider-prefixed where the provider needs it) with the user's `[1m]`
+	// window request intact. It is what lands in the session row and in
+	// settings_json, so a resume can tell "asked for 1M" from "asked for the
+	// default window".
+	//
+	// Endpoint.Model is the other half of the pair and is deliberately NOT the
+	// same string: the runtime is handed a bare id (see the marker notes at the
+	// construction sites). The two must never overwrite each other — that
+	// overwrite is exactly what silently downgraded every `X[1m]` session to the
+	// 200k default before 2026-09-14.
+	SessionModel       string
 	ModelConfiguration modelConfigurationRuntimeContext
 }
 
@@ -287,6 +299,7 @@ func hostDefaultModelResolutionForProtocol(provider string, agentTargetID string
 	return modelPlanResolution{
 		Endpoint:           endpoint,
 		Models:             models,
+		SessionModel:       planModelComposerValue(provider, model),
 		ModelConfiguration: newHostDefaultModelConfiguration(provider, agentTargetID, endpoint.Protocol, defaultModel),
 	}, true
 }
@@ -361,7 +374,9 @@ func (s *Service) resolveModelPlan(ctx context.Context, workspaceID string, agen
 	}
 	model := resolvePlanSessionModel(plan, binding, planModelIDFromComposerValue(provider, requestedModel))
 	// The marker is a window request, not part of the id the runtime is handed:
-	// the endpoint carries it as a window and the model goes out bare.
+	// the endpoint carries it as a window and the model goes out bare. The
+	// session, by contrast, keeps `model` verbatim through SessionModel — a
+	// resume has to be able to tell the two spellings apart.
 	contextWindow := contextwindow.Window(model)
 	return modelPlanResolution{
 		Endpoint: &runtimeprep.ModelEndpointConfig{
@@ -376,6 +391,7 @@ func (s *Service) resolveModelPlan(ctx context.Context, workspaceID string, agen
 			PlanUpdatedAtUnixMS: plan.UpdatedAt.UnixMilli(),
 		},
 		Models:             modelplanbiz.CloneModels(plan.Models),
+		SessionModel:       planModelComposerValue(provider, model),
 		ModelConfiguration: newModelPlanModelConfiguration(provider, agentTargetID, binding, plan),
 	}
 }
@@ -545,7 +561,17 @@ func (s *Service) resolveCreateSessionModelForPlanOrProvider(ctx context.Context
 				return modelPlanResolution{}, err
 			}
 		}
-		if strings.TrimSpace(resolution.Endpoint.Model) != "" {
+		// The session keeps the requested spelling; the runtime gets the bare id
+		// through resolution.Endpoint. Writing Endpoint.Model here (the 2026-07
+		// behaviour) silently dropped every `X[1m]` window request at persistence
+		// time: the row came back bare, `contextwindow.Window(bare)` is 0, and
+		// claude — the one runtime that carries the window on the model value
+		// itself — started at its 200k default. Fall back to Endpoint.Model only
+		// for resolutions that predate SessionModel (provider-native/extension
+		// endpoints), where the two spellings are the same string anyway.
+		if sessionModel := strings.TrimSpace(resolution.SessionModel); sessionModel != "" {
+			input.Model = &sessionModel
+		} else if strings.TrimSpace(resolution.Endpoint.Model) != "" {
 			resolvedModel := resolution.Endpoint.Model
 			input.Model = &resolvedModel
 		}
@@ -582,7 +608,9 @@ func resolveProvidedModelPlan(provider string, agentTargetID string, plan modelp
 	binding := modelbindingbiz.Binding{DefaultModel: strings.TrimSpace(configuredDefaultModel)}
 	model := resolvePlanSessionModel(plan, binding, planModelIDFromComposerValue(provider, requestedModel))
 	// The marker is a window request, not part of the id the runtime is handed:
-	// the endpoint carries it as a window and the model goes out bare.
+	// the endpoint carries it as a window and the model goes out bare. The
+	// session, by contrast, keeps `model` verbatim through SessionModel — a
+	// resume has to be able to tell the two spellings apart.
 	contextWindow := contextwindow.Window(model)
 	return modelPlanResolution{
 		Endpoint: &runtimeprep.ModelEndpointConfig{
@@ -597,6 +625,7 @@ func resolveProvidedModelPlan(provider string, agentTargetID string, plan modelp
 			PlanUpdatedAtUnixMS: plan.UpdatedAt.UnixMilli(),
 		},
 		Models:             modelplanbiz.CloneModels(plan.Models),
+		SessionModel:       planModelComposerValue(provider, model),
 		ModelConfiguration: newModelPlanModelConfiguration(provider, agentTargetID, binding, plan),
 	}, nil
 }
