@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	agentruntime "github.com/tutti-os/tutti/packages/agent/daemon/runtime"
 	agentactivitybiz "github.com/tutti-os/tutti/packages/agent/store-sqlite"
 )
 
@@ -52,6 +53,60 @@ func TestGeneratedWorkspaceAgentTurnOmitsErrorForCanceledOutcome(t *testing.T) {
 		t.Fatalf("canceled turn error = %#v, want omitted transport-only error", projected.Error)
 	}
 }
+
+// A Turn that settled before the runtime could classify a tool-protocol
+// rejection keeps a coarse stored code with the raw upstream text. The
+// read-side projection must refine the code and expose the raw detail so the
+// conversation card can explain it without a database migration.
+func TestGeneratedWorkspaceAgentTurnRefinesStoredProtocolIncompatibility(t *testing.T) {
+	t.Parallel()
+
+	projected := generatedWorkspaceAgentTurn(agentactivitybiz.Turn{
+		AgentSessionID: "session-1",
+		TurnID:         "turn-1",
+		Phase:          agentactivitybiz.TurnPhaseSettled,
+		Outcome:        agentactivitybiz.TurnOutcomeFailed,
+		ErrorCode:      "provider_error",
+		ErrorMessage:   storedProtocolIncompatibilityDetail,
+	})
+	if projected.Error == nil {
+		t.Fatal("projected turn error = nil, want the stored failure")
+	}
+	if got := stringValue(projected.Error.Code); got != agentruntime.FailureCodeProviderProtocolIncompatible {
+		t.Fatalf("projected code = %q, want %q", got, agentruntime.FailureCodeProviderProtocolIncompatible)
+	}
+	if projected.Error.Message != storedProtocolIncompatibilityDetail {
+		t.Fatalf("projected message = %q, want the stored text", projected.Error.Message)
+	}
+	if got := stringValue(projected.Error.Detail); got != storedProtocolIncompatibilityDetail {
+		t.Fatalf("projected detail = %q, want the raw upstream text", got)
+	}
+}
+
+func TestGeneratedWorkspaceAgentTurnLeavesOtherStoredErrorsAlone(t *testing.T) {
+	t.Parallel()
+
+	projected := generatedWorkspaceAgentTurn(agentactivitybiz.Turn{
+		AgentSessionID: "session-1",
+		TurnID:         "turn-1",
+		Phase:          agentactivitybiz.TurnPhaseSettled,
+		Outcome:        agentactivitybiz.TurnOutcomeFailed,
+		ErrorCode:      "auth_required",
+		ErrorMessage:   "401 Unauthorized: invalid authentication credentials",
+	})
+	if projected.Error == nil {
+		t.Fatal("projected turn error = nil, want the stored failure")
+	}
+	if got := stringValue(projected.Error.Code); got != "auth_required" {
+		t.Fatalf("projected code = %q, want auth_required", got)
+	}
+	if projected.Error.Detail != nil {
+		t.Fatalf("projected detail = %#v, want omitted for a non-protocol failure", projected.Error.Detail)
+	}
+}
+
+const storedProtocolIncompatibilityDetail = "Failed to deserialize the JSON body into the target type: " +
+	"tools[7].type: unknown variant `custom`, expected `function`"
 
 func TestGeneratedWorkspaceAgentTurnProjectsProviderForkBindingState(t *testing.T) {
 	t.Parallel()

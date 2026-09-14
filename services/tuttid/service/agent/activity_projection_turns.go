@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	agentruntime "github.com/tutti-os/tutti/packages/agent/daemon/runtime"
 	agenthost "github.com/tutti-os/tutti/packages/agent/host"
 	agentactivitybiz "github.com/tutti-os/tutti/packages/agent/store-sqlite"
 	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
@@ -239,9 +240,15 @@ func GeneratedWorkspaceAgentTurn(turn agentactivitybiz.Turn) tuttigenerated.Work
 	var turnError *tuttigenerated.WorkspaceAgentTurnError
 	if message := strings.TrimSpace(turn.ErrorMessage); message != "" &&
 		(turn.Outcome == agentactivitybiz.TurnOutcomeFailed || turn.Outcome == agentactivitybiz.TurnOutcomeInterrupted) {
+		// Read-side refinement: a Turn that settled before the runtime learned a
+		// narrower code keeps its coarse stored code, so re-derive the effective
+		// code and the raw detail now instead of rewriting stored rows. Every
+		// other code keeps its stored value and an empty detail.
+		code, detail := agentruntime.ProjectStoredTurnError(turn.ErrorCode, message)
 		turnError = &tuttigenerated.WorkspaceAgentTurnError{
 			Message: message,
-			Code:    optionalStringPointerValue(turn.ErrorCode),
+			Code:    optionalStringPointerValue(code),
+			Detail:  optionalStringPointerValue(detail),
 		}
 	}
 	var completedCommand *tuttigenerated.WorkspaceAgentCompletedCommand

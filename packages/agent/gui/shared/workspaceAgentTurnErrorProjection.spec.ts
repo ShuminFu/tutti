@@ -210,6 +210,159 @@ describe("canonical Turn error projection", () => {
     );
   });
 
+  it("refines a card persisted before the tool-protocol classification existed", () => {
+    // A session that failed before the runtime learned the narrow code stored a
+    // coarse visible-error payload. The canonical Turn now carries the refined
+    // code and its raw detail, so the stored card must adopt both.
+    const failed = failedTurn({
+      error: {
+        code: "provider_protocol_incompatible",
+        message: "Codex request failed",
+        detail: "tools[7].type: unknown variant `custom`, expected `function`"
+      }
+    });
+    const detail = buildCanonicalWorkspaceAgentDetailView({
+      activity: activity(),
+      session: session({ latestTurn: failed }),
+      sessionTurns: [failed],
+      workspaceRoot: "/workspace/demo",
+      timelineItems: [
+        userMessage("turn-1", 1, "Ship the patch"),
+        {
+          ...assistantMessage("turn-1", 2, "Codex request failed", "failed"),
+          payload: {
+            kind: "agent_visible_error",
+            code: "provider_error",
+            phase: "turn",
+            provider: "codex",
+            detail: "Codex request failed",
+            retryable: false
+          }
+        }
+      ]
+    });
+
+    expect(detail.turns[0]?.agentMessages).toHaveLength(1);
+    expect(detail.turns[0]?.agentMessages[0]?.visibleError).toEqual(
+      expect.objectContaining({
+        code: "provider_protocol_incompatible",
+        detail: "tools[7].type: unknown variant `custom`, expected `function`",
+        detailAvailable: true
+      })
+    );
+  });
+
+  it.each([
+    {
+      code: "provider_protocol_incompatible",
+      expected: "provider_protocol_incompatible"
+    },
+    { code: "auth_required", expected: "provider_error" }
+  ])(
+    "limits historical refinement and preserves full protocol detail: $code",
+    ({ code, expected }) => {
+      const raw =
+        "tools[7].type: unknown variant custom, expected function " +
+        "diagnostic ".repeat(40);
+      const failed = failedTurn({
+        error: { code, message: raw, detail: raw.slice(0, 237) + "..." }
+      });
+      const view = buildCanonicalWorkspaceAgentDetailView({
+        activity: activity(),
+        session: session({ latestTurn: failed }),
+        sessionTurns: [failed],
+        workspaceRoot: "/workspace/demo",
+        timelineItems: [
+          userMessage("turn-1", 1, "Ship the patch"),
+          {
+            ...assistantMessage("turn-1", 2, "Codex request failed", "failed"),
+            payload: {
+              kind: "agent_visible_error",
+              code: "provider_error",
+              phase: "turn",
+              provider: "codex",
+              detail: raw,
+              detailAvailable: true,
+              retryable: false
+            }
+          }
+        ]
+      });
+      expect(view.turns[0]?.agentMessages[0]?.visibleError?.code).toBe(
+        expected
+      );
+      if (code === "provider_protocol_incompatible") {
+        expect(view.turns[0]?.agentMessages[0]?.visibleError?.detail).toBe(raw.trim());
+      }
+    }
+  );
+
+  it("never downgrades a stored card that already carries a specific code", () => {
+    const failed = failedTurn({
+      error: { code: "provider_error", message: "Canonical provider failure" }
+    });
+    const detail = buildCanonicalWorkspaceAgentDetailView({
+      activity: activity(),
+      session: session({ latestTurn: failed }),
+      sessionTurns: [failed],
+      workspaceRoot: "/workspace/demo",
+      timelineItems: [
+        userMessage("turn-1", 1, "Ship the patch"),
+        {
+          ...assistantMessage("turn-1", 2, "Sign-in required", "failed"),
+          payload: {
+            kind: "agent_visible_error",
+            code: "auth_required",
+            phase: "turn",
+            provider: "codex",
+            detail: "401 Unauthorized",
+            retryable: false
+          }
+        }
+      ]
+    });
+
+    expect(detail.turns[0]?.agentMessages[0]?.visibleError).toEqual(
+      expect.objectContaining({ code: "auth_required" })
+    );
+  });
+
+  it("honors an explicit detailAvailable flag from a stored error payload", () => {
+    const conversation = projectWorkspaceAgentTimelineToConversationVM({
+      activity: activity(),
+      session: session(),
+      workspaceRoot: "/workspace/demo",
+      timelineItems: [
+        userMessage("turn-1", 1, "Ship the patch"),
+        {
+          ...assistantMessage("turn-1", 2, "Codex request failed", "failed"),
+          payload: {
+            kind: "agent_visible_error",
+            code: "provider_protocol_incompatible",
+            phase: "turn",
+            provider: "codex",
+            detail:
+              "tools[7].type: unknown variant `custom`, expected `function`",
+            detailAvailable: true,
+            retryable: false
+          }
+        }
+      ]
+    });
+    const messages = conversation.rows.flatMap((row) =>
+      row.kind === "message" && row.speaker === "assistant" ? row.messages : []
+    );
+
+    expect(messages[0]?.visibleError).toEqual({
+      code: "provider_protocol_incompatible",
+      phase: "turn",
+      provider: "codex",
+      detail: "tools[7].type: unknown variant `custom`, expected `function`",
+      detailAvailable: true,
+      retryable: false
+    });
+  });
+
   it("attaches a historical error to its owning Turn after that Turn is hydrated", () => {
     const failed = failedTurn();
     const completed = completedTurn({

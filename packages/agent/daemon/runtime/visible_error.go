@@ -102,6 +102,14 @@ func projectVisibleFailure(source canonical.EventSource, event activityshared.Ev
 	}
 	if detail != "" {
 		payload["detail"] = detail
+		if code == FailureCodeProviderProtocolIncompatible {
+			// This failure has no environment call-to-action: no sign-in, detect,
+			// or reinstall step can change an endpoint's tool vocabulary. The raw
+			// upstream text is therefore the only place the concrete reason —
+			// which tool declaration the endpoint rejected — can be read, so this
+			// code alone marks it expandable. Other codes keep the card they had.
+			payload["detailAvailable"] = true
+		}
 	}
 	return visibleFailureProjection{eventID: eventID, content: content, payload: payload}, true
 }
@@ -252,6 +260,16 @@ func visibleFailureCode(detail string) string {
 		return "plugin_unavailable"
 	case strings.Contains(normalized, "provider_empty_response"):
 		return "provider_empty_response"
+	// An endpoint that cannot represent a tool declaration the Agent sent
+	// answers with a structured declaration error naming the offending slot
+	// (see ProviderToolProtocolIncompatible). That is a protocol mismatch the
+	// user can only resolve by choosing another model, so it must not share the
+	// generic provider_error bucket. It is matched before the account and auth
+	// checks because a verbose upstream body can mention credentials while the
+	// real cause is still the rejected tool declaration; the match itself stays
+	// narrow, so a plain invalid_request_error for another reason is untouched.
+	case ProviderToolProtocolIncompatible(detail):
+		return FailureCodeProviderProtocolIncompatible
 	// HTTP 402 is an account payment state even when the provider wraps the
 	// response in text that also mentions credentials. Provider-specific
 	// membership wording is handled above.
@@ -484,6 +502,8 @@ func visibleFailureContent(provider string, phase string, code string) string {
 			return fmt.Sprintf("%s could not start because its CLI was not found. Set it up to continue.", name)
 		case "cli_version_unsupported":
 			return fmt.Sprintf("%s could not start because its installed version is unsupported. Upgrade to continue.", name)
+		case FailureCodeProviderProtocolIncompatible:
+			return fmt.Sprintf("%s could not start because the current model endpoint does not accept this tool protocol.", name)
 		case "network_error":
 			return fmt.Sprintf("%s could not start because the network is unreachable.", name)
 		case "provider_concurrency_limit":
@@ -529,6 +549,8 @@ func visibleFailureContent(provider string, phase string, code string) string {
 		return fmt.Sprintf("%s response was interrupted before it completed. Try again in a moment.", name)
 	case "provider_empty_response":
 		return fmt.Sprintf("%s returned no response. Check the provider settings or try again.", name)
+	case FailureCodeProviderProtocolIncompatible:
+		return fmt.Sprintf("%s could not complete this request because the current model endpoint does not accept this tool protocol.", name)
 	case "session_interrupted":
 		return fmt.Sprintf("%s stopped unexpectedly before it finished responding. Try again.", name)
 	case "request_timed_out":

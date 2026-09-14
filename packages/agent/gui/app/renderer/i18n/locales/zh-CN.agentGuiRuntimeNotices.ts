@@ -33,6 +33,8 @@ export const zhCNAgentGuiRuntimeNotices = {
     "{{provider}} 没有返回响应，请检查提供商设置或重试",
   visibleErrorConcurrencyLimit:
     "{{provider}} 当前处理的请求过多。请在其他任务完成后再试。",
+  visibleErrorProtocolIncompatible:
+    "{{provider}} 无法完成此请求：当前模型接口不支持本次工具协议，请换用其他模型",
   visibleErrorInsufficientCreditsUnknown:
     "{{provider}} 的积分或账户余额不足，无法继续",
   visibleErrorActionInstall: "去连接",

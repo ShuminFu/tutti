@@ -2192,6 +2192,16 @@ invalid_grant`. Search `tuttid.log` for
 
 ### Codex Model Plan turns fail or stay waiting against a Chat-only endpoint
 
+A rejection naming `tools[<index>].type` and an unsupported variant is classified
+as `provider_protocol_incompatible`. Inspect the gateway tool declaration and
+history conversion first: custom tools must travel upstream as function wrappers
+with a required string `input`, then be restored on JSON and SSE responses.
+The error card exposes the provider detail without a sign-in or setup action.
+Historical canonical Turn errors receive the same classification on read;
+stored rows do not need migration. The existing transport detail limit still
+applies, so use the canonical error message when a longer diagnostic is needed.
+
+
 - Symptom:
   A Codex session bound to an OpenAI-protocol Model Plan fails immediately,
   stays working without output, or loses tool-call messages. The Plan's

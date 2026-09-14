@@ -19,6 +19,7 @@ export type AgentRunErrorCode =
   | "provider_stream_disconnected"
   | "provider_empty_response"
   | "provider_concurrency_limit"
+  | "provider_protocol_incompatible"
   | "insufficient_credits"
   | "model_not_allowed"
   | "plugin_unavailable"
@@ -126,6 +127,14 @@ const PRESENTATIONS: Record<AgentRunErrorCode, AgentErrorPresentation> = {
   },
   provider_concurrency_limit: {
     messageKey: "agentHost.agentGui.visibleErrorConcurrencyLimit",
+    ...NO_CTA
+  },
+  // A model endpoint that rejects the tool protocol the request declared is a
+  // routing/model capability mismatch: the env wizard cannot change an
+  // endpoint's tool vocabulary, so this code gets accurate copy and no CTA
+  // rather than the sign-in/detect/reinstall escape hatch.
+  provider_protocol_incompatible: {
+    messageKey: "agentHost.agentGui.visibleErrorProtocolIncompatible",
     ...NO_CTA
   },
   insufficient_credits: {
@@ -244,6 +253,45 @@ const FAILED_MESSAGE_CODE_MARKERS: ReadonlyArray<
 ];
 
 /**
+ * A model endpoint that cannot represent a declared tool answers with a
+ * structured declaration error naming the offending slot, for example:
+ *
+ *   invalid_request_error: tools[7].type: unknown variant `custom`,
+ *   expected `function`
+ *
+ * The daemon classifies that shape as `provider_protocol_incompatible` (see
+ * `ProviderToolProtocolIncompatible` in
+ * packages/agent/daemon/runtime/provider_protocol_error.go). Keep the two
+ * predicates aligned: both require a numbered tool-declaration slot *and* its
+ * rejection verdict, so a plain `invalid_request_error` raised for another
+ * reason is never reinterpreted as a tool-protocol mismatch.
+ */
+const PROVIDER_TOOL_DECLARATION_TYPE_PATTERN =
+  /tools(?:\[\d+\]|\.\d+)\s*\.\s*type/;
+const PROVIDER_TOOL_TYPE_REJECTION_MARKERS: readonly string[] = [
+  "unknown variant",
+  "unsupported variant",
+  "invalid tool type",
+  "unsupported tool type",
+  "not supported for tool type"
+];
+
+export function isProviderToolProtocolIncompatibleText(
+  body: string | null | undefined
+): boolean {
+  if (!body) {
+    return false;
+  }
+  const lower = body.toLowerCase();
+  return (
+    PROVIDER_TOOL_DECLARATION_TYPE_PATTERN.test(lower) &&
+    PROVIDER_TOOL_TYPE_REJECTION_MARKERS.some((marker) =>
+      lower.includes(marker)
+    )
+  );
+}
+
+/**
  * Some providers (notably Claude Code) report an environment failure — e.g. a
  * dropped login (401) — as a plain failed assistant message rather than a
  * structured visibleError, so it never gets the remediation card. This recovers
@@ -256,6 +304,11 @@ export function classifyFailedAgentMessage(
 ): AgentRunErrorCode | null {
   if (!body) {
     return null;
+  }
+  // Checked before the marker table: the tool-declaration shape is structural,
+  // while a verbose upstream body can also mention an account or auth keyword.
+  if (isProviderToolProtocolIncompatibleText(body)) {
+    return "provider_protocol_incompatible";
   }
   const lower = body.toLowerCase();
   for (const [code, markers] of FAILED_MESSAGE_CODE_MARKERS) {

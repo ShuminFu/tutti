@@ -40,6 +40,8 @@ export const enAgentGuiRuntimeNotices = {
     "{{provider}} returned no response. Check the provider settings or try again.",
   visibleErrorConcurrencyLimit:
     "{{provider}} is handling too many requests right now. Try again after another task finishes.",
+  visibleErrorProtocolIncompatible:
+    "{{provider}} couldn't complete this request because the current model endpoint doesn't accept this tool protocol. Try a different model.",
   visibleErrorInsufficientCreditsUnknown:
     "{{provider}} has insufficient credits or account balance to continue",
   visibleErrorActionInstall: "Connect",

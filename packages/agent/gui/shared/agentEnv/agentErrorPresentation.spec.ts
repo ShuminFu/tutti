@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyFailedAgentMessage,
   classifyRecoverableAgentMessage,
+  isProviderToolProtocolIncompatibleText,
   resolveAgentErrorPresentation
 } from "./agentErrorPresentation";
 
@@ -12,6 +13,30 @@ describe("classifyFailedAgentMessage", () => {
         "Failed to authenticate. API Error: 401 Invalid authentication credentials"
       )
     ).toBe("auth_required");
+  });
+
+  it("recovers a tool-protocol rejection from a plain failed message", () => {
+    // The 2026-09-14 field shape: a function-only endpoint rejects a custom tool
+    // declaration that the Responses to Chat gateway forwarded unchanged.
+    expect(
+      classifyFailedAgentMessage(
+        "Failed to deserialize the JSON body into the target type: " +
+          "tools[7].type: unknown variant `custom`, expected `function`"
+      )
+    ).toBe("provider_protocol_incompatible");
+  });
+
+  it("does not reinterpret a plain invalid_request_error as a protocol mismatch", () => {
+    for (const body of [
+      "invalid_request_error: missing required parameter: 'model'",
+      "invalid_request_error: messages[3].role: unknown variant `developer`",
+      "invalid_request_error: tools[7] is not an object",
+      "tools[7].type: missing",
+      "unknown variant `custom`, expected `function`"
+    ]) {
+      expect(isProviderToolProtocolIncompatibleText(body), body).toBe(false);
+      expect(classifyFailedAgentMessage(body), body).toBeNull();
+    }
   });
 
   it("recovers cli/version/network codes from text", () => {
@@ -149,6 +174,7 @@ describe("resolveAgentErrorPresentation", () => {
       "provider_config_timeout",
       "provider_stream_disconnected",
       "provider_concurrency_limit",
+      "provider_protocol_incompatible",
       "insufficient_credits",
       "model_not_allowed",
       "plugin_unavailable",
@@ -162,6 +188,18 @@ describe("resolveAgentErrorPresentation", () => {
       expect(presentation?.actionKey, code).toBeNull();
       expect(presentation?.messageKey, code).toBeTruthy();
     }
+  });
+
+  it("gives a tool-protocol mismatch its own reason and no environment CTA", () => {
+    // No wizard step can change a model endpoint's tool vocabulary, so this code
+    // must never fall back to the sign-in/detect/reinstall escape hatch.
+    expect(
+      resolveAgentErrorPresentation("provider_protocol_incompatible")
+    ).toEqual({
+      messageKey: "agentHost.agentGui.visibleErrorProtocolIncompatible",
+      focus: null,
+      actionKey: null
+    });
   });
 
   it("keeps insufficient-credit product semantics out of AgentGUI", () => {

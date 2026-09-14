@@ -147,11 +147,18 @@ export function visibleErrorFromPayload(
   payload: Record<string, unknown> | null
 ): WorkspaceAgentSessionDetailMessage["visibleError"] {
   if (stringRecordValue(payload, "kind") !== "agent_visible_error") return null;
+  // `detailAvailable` is the daemon's explicit statement that this failure's
+  // detail is additional raw provider text worth an explicit disclosure. The
+  // runtime marks it only for codes that have no environment call-to-action,
+  // and a payload stored before the field existed never carries it, so an
+  // absent flag keeps the card exactly as it was.
+  const detailAvailable = booleanRecordValue(payload, "detailAvailable");
   return {
     code: stringRecordValue(payload, "code"),
     phase: stringRecordValue(payload, "phase"),
     provider: stringRecordValue(payload, "provider"),
     detail: stringRecordValue(payload, "detail"),
+    ...(detailAvailable ? { detailAvailable: true } : {}),
     retryable: booleanRecordValue(payload, "retryable")
   };
 }

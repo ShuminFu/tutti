@@ -239,6 +239,37 @@ describe("AgentVisibleErrorMessage", () => {
     expect(queryByText("Sign in")).toBeNull();
   });
 
+  it("explains a tool-protocol mismatch with raw details and no wizard CTA", () => {
+    const { getByRole, getByText, queryByText } = renderBlock(
+      buildRow({
+        code: "provider_protocol_incompatible",
+        phase: "turn",
+        provider: "codex",
+        detail: "tools[7].type: unknown variant `custom`, expected `function`",
+        detailAvailable: true,
+        retryable: false
+      })
+    );
+
+    expect(
+      getByText(
+        "Codex couldn't complete this request because the current model endpoint doesn't accept this tool protocol. Try a different model."
+      )
+    ).toBeTruthy();
+    // No environment call-to-action: no wizard step can change a model
+    // endpoint's tool vocabulary.
+    expect(queryByText("Sign in")).toBeNull();
+    expect(queryByText("Open setup")).toBeNull();
+    expect(queryByText("Connect")).toBeNull();
+
+    const disclosure = getByRole("button", { name: "Raw error" });
+    expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(disclosure);
+    expect(
+      getByText("tools[7].type: unknown variant `custom`, expected `function`")
+    ).toBeTruthy();
+  });
+
   it("fails closed without Host Commerce context", () => {
     const onLinkAction = vi.fn();
     const { getByText, queryByText } = renderBlock(

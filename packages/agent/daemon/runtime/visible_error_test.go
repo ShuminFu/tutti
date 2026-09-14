@@ -2,8 +2,11 @@ package agentruntime
 
 import (
 	"errors"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
+	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
 	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
 
@@ -337,6 +340,249 @@ func TestVisibleFailureRetryableForNetworkButNotMissingCli(t *testing.T) {
 	}
 	if visibleFailureRetryable("cli_not_found", "ENOENT") {
 		t.Fatal("cli_not_found should not be retryable")
+	}
+}
+
+// The 2026-09-14 Demo failure: Codex registered a custom tool, the Responses to
+// Chat gateway forwarded it unchanged, and the function-only upstream rejected
+// the declaration. The observed error_json is reproduced verbatim here.
+const demoProviderToolProtocolFailureDetail = "Failed to deserialize the JSON body into the target type: " +
+	"tools[7].type: unknown variant `custom`, expected `function`"
+
+func TestVisibleFailureCodeClassifiesProviderToolProtocolIncompatibility(t *testing.T) {
+	for _, detail := range []string{
+		demoProviderToolProtocolFailureDetail,
+		`{"error":{"type":"invalid_request_error","message":"` + demoProviderToolProtocolFailureDetail + `"}}`,
+		`unexpected status 400 Bad Request: invalid_request_error: tools.3.type: unsupported variant`,
+		`invalid_request_error: tools[0].type: invalid tool type`,
+	} {
+		if got := visibleFailureCode(detail); got != FailureCodeProviderProtocolIncompatible {
+			t.Fatalf(
+				"visibleFailureCode(%q) = %q, want %q",
+				detail,
+				got,
+				FailureCodeProviderProtocolIncompatible,
+			)
+		}
+	}
+}
+
+func TestVisibleFailureCodeKeepsOtherInvalidRequestErrorsGeneric(t *testing.T) {
+	// The classification must stay narrow: a plain invalid_request_error — or any
+	// other declaration problem — is not a tool-protocol mismatch and keeps the
+	// generic bucket.
+	for _, detail := range []string{
+		`invalid_request_error: missing required parameter: 'model'`,
+		`invalid_request_error: messages[3].role: unknown variant ` + "`developer`" + `, expected ` + "`system`" + `, ` + "`user`",
+		`invalid_request_error: tools[7] is not an object`,
+		`tools[7].type: missing`,
+		`400 Bad Request: no such tool type configured`,
+	} {
+		if got := visibleFailureCode(detail); got != "provider_error" {
+			t.Fatalf("visibleFailureCode(%q) = %q, want provider_error", detail, got)
+		}
+	}
+	// The classifications the new case sits between still win for their own
+	// failures, so the narrow match cannot absorb account or auth errors.
+	if got := visibleFailureCode("401 Unauthorized: invalid authentication credentials"); got != "auth_required" {
+		t.Fatalf("visibleFailureCode() = %q, want auth_required", got)
+	}
+	if got := visibleFailureCode("API Error: 403 Key limit exceeded (total limit)"); got != "quota_or_rate_limit" {
+		t.Fatalf("visibleFailureCode() = %q, want quota_or_rate_limit", got)
+	}
+	if got := visibleFailureCode("You've hit your usage limit. Upgrade to Pro"); got != "quota_or_rate_limit" {
+		t.Fatalf("visibleFailureCode() = %q, want quota_or_rate_limit", got)
+	}
+}
+
+func TestProviderToolProtocolIncompatibleRequiresToolSlotAndVerdict(t *testing.T) {
+	// A numbered tool-declaration slot plus a rejection verdict is the whole
+	// contract. Either half alone must not match.
+	for _, detail := range []string{
+		demoProviderToolProtocolFailureDetail,
+		"tools[12].type: unsupported tool type",
+		"tools.0.type: unknown variant",
+		"tools[7].type: unknown variant",
+	} {
+		if !ProviderToolProtocolIncompatible(detail) {
+			t.Fatalf("ProviderToolProtocolIncompatible(%q) = false, want true", detail)
+		}
+	}
+	for _, detail := range []string{
+		"unknown variant `custom`, expected `function`",
+		"invalid_request_error",
+		"tools: unknown variant",
+		"tools[7]: unknown variant",
+		"tools[7].name: unknown variant",
+		"tools[] .type unknown variant",
+		"",
+	} {
+		if ProviderToolProtocolIncompatible(detail) {
+			t.Fatalf("ProviderToolProtocolIncompatible(%q) = true, want false", detail)
+		}
+	}
+}
+
+func TestVisibleFailureCodeDoesNotReadProtocolMismatchAsAuth(t *testing.T) {
+	// A verbose upstream body can mention credentials while the actual cause is
+	// the rejected tool declaration; the protocol code must win so the card never
+	// offers a sign-in or reinstall call-to-action.
+	detail := `invalid_request_error: tools[7].type: unknown variant ` + "`custom`" +
+		`, expected ` + "`function`" + `; request included an access token for the upstream endpoint`
+	if got := visibleFailureCode(detail); got != FailureCodeProviderProtocolIncompatible {
+		t.Fatalf(
+			"visibleFailureCode(%q) = %q, want %q",
+			detail,
+			got,
+			FailureCodeProviderProtocolIncompatible,
+		)
+	}
+}
+
+func TestVisibleFailureContentDescribesProviderToolProtocolIncompatibility(t *testing.T) {
+	turn := visibleFailureContent(ProviderCodex, "turn", FailureCodeProviderProtocolIncompatible)
+	wantTurn := "Codex could not complete this request because the current model endpoint does not accept this tool protocol."
+	if turn != wantTurn {
+		t.Fatalf("visibleFailureContent() = %q, want %q", turn, wantTurn)
+	}
+	start := visibleFailureContent(ProviderCodex, "start", FailureCodeProviderProtocolIncompatible)
+	wantStart := "Codex could not start because the current model endpoint does not accept this tool protocol."
+	if start != wantStart {
+		t.Fatalf("visibleFailureContent() = %q, want %q", start, wantStart)
+	}
+	if visibleFailureRetryable(FailureCodeProviderProtocolIncompatible, demoProviderToolProtocolFailureDetail) {
+		t.Fatal("a tool-protocol mismatch must not be advertised as retryable")
+	}
+}
+
+func TestProjectVisibleFailureMarksOnlyProtocolDetailExpandable(t *testing.T) {
+	protocol, ok := projectVisibleFailure(canonical.EventSource{}, failedTurnEvent(
+		"event-protocol",
+		demoProviderToolProtocolFailureDetail,
+	))
+	if !ok {
+		t.Fatal("protocol failure projection was not produced")
+	}
+	if protocol.payload["code"] != FailureCodeProviderProtocolIncompatible {
+		t.Fatalf("projected code = %v, want %q", protocol.payload["code"], FailureCodeProviderProtocolIncompatible)
+	}
+	if protocol.payload["detailAvailable"] != true {
+		t.Fatalf("projected detailAvailable = %v, want true", protocol.payload["detailAvailable"])
+	}
+	if protocol.payload["detail"] != demoProviderToolProtocolFailureDetail {
+		t.Fatalf("projected detail = %v, want the raw upstream text", protocol.payload["detail"])
+	}
+
+	// Every other code keeps the card it had: the raw text stays in the payload
+	// for the canonical model, but the card does not invite expanding it.
+	other, ok := projectVisibleFailure(canonical.EventSource{}, failedTurnEvent(
+		"event-auth",
+		"401 Unauthorized: invalid authentication credentials",
+	))
+	if !ok {
+		t.Fatal("auth failure projection was not produced")
+	}
+	if other.payload["code"] != "auth_required" {
+		t.Fatalf("projected code = %v, want auth_required", other.payload["code"])
+	}
+	if _, present := other.payload["detailAvailable"]; present {
+		t.Fatalf("projected detailAvailable = %v, want absent", other.payload["detailAvailable"])
+	}
+}
+
+func TestProjectStoredTurnErrorRefinesLegacyProtocolFailure(t *testing.T) {
+	code, detail := ProjectStoredTurnError("provider_error", demoProviderToolProtocolFailureDetail)
+	if code != FailureCodeProviderProtocolIncompatible {
+		t.Fatalf("ProjectStoredTurnError() code = %q, want %q", code, FailureCodeProviderProtocolIncompatible)
+	}
+	if detail != demoProviderToolProtocolFailureDetail {
+		t.Fatalf("ProjectStoredTurnError() detail = %q, want the stored raw text", detail)
+	}
+
+	// A stored row written by the fixed runtime already carries the narrow code;
+	// the read-side projection must still hand back the raw detail.
+	code, detail = ProjectStoredTurnError(FailureCodeProviderProtocolIncompatible, demoProviderToolProtocolFailureDetail)
+	if code != FailureCodeProviderProtocolIncompatible || detail != demoProviderToolProtocolFailureDetail {
+		t.Fatalf("ProjectStoredTurnError() = (%q, %q), want the narrow code with its detail", code, detail)
+	}
+}
+
+func TestProjectStoredTurnErrorPreservesUnrelatedErrors(t *testing.T) {
+	assertPreserved := func(code string, message string) {
+		t.Helper()
+		gotCode, gotDetail := ProjectStoredTurnError(code, message)
+		if gotCode != code {
+			t.Fatalf(
+				"ProjectStoredTurnError(%q, %q) code = %q, want the stored code unchanged",
+				code,
+				message,
+				gotCode,
+			)
+		}
+		if gotDetail != "" {
+			t.Fatalf(
+				"ProjectStoredTurnError(%q, %q) detail = %q, want empty",
+				code,
+				message,
+				gotDetail,
+			)
+		}
+	}
+	assertPreserved("provider_error", "provider available but exploded")
+	assertPreserved("", "codex process exited with code 1")
+	assertPreserved("cli_not_found", "spawn codex ENOENT")
+	assertPreserved("auth_required", demoProviderToolProtocolFailureDetail)
+	assertPreserved("auth_required", "401 Unauthorized: invalid authentication credentials")
+	assertPreserved("quota_or_rate_limit", "You've hit your usage limit")
+}
+
+func TestProjectStoredTurnErrorCapsDetailAtPublishedLimit(t *testing.T) {
+	message := demoProviderToolProtocolFailureDetail + strings.Repeat(" y", 400)
+	_, detail := ProjectStoredTurnError("provider_error", message)
+	if len(detail) > CanonicalTurnErrorDetailLimit {
+		t.Fatalf(
+			"detail length = %d, want at most %d",
+			len(detail),
+			CanonicalTurnErrorDetailLimit,
+		)
+	}
+	if !strings.HasPrefix(detail, "Failed to deserialize the JSON body into the target type") {
+		t.Fatalf("detail = %q, want the beginning of the stored message", detail)
+	}
+	if !strings.HasSuffix(detail, "...") {
+		t.Fatalf("detail = %q, want an explicit truncation marker", detail)
+	}
+}
+
+func TestLimitCanonicalTurnErrorDetailCutsOnARuneBoundary(t *testing.T) {
+	// The byte limit lands two bytes inside a three-byte rune, so a plain byte
+	// slice would put invalid UTF-8 into the transport projection.
+	value := strings.Repeat("a", 100) + strings.Repeat("中", 100)
+	got := limitCanonicalTurnErrorDetail(value)
+	if len(got) > CanonicalTurnErrorDetailLimit {
+		t.Fatalf(
+			"detail length = %d, want at most %d",
+			len(got),
+			CanonicalTurnErrorDetailLimit,
+		)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("detail is not valid UTF-8: %q", got)
+	}
+	if !strings.HasPrefix(got, strings.Repeat("a", 100)) {
+		t.Fatalf("detail = %q, want the text that fits before the cut", got)
+	}
+}
+
+func failedTurnEvent(eventID string, detail string) activityshared.Event {
+	return activityshared.Event{
+		EventID:  eventID,
+		Type:     activityshared.EventTurnFailed,
+		Provider: activityshared.Provider(ProviderCodex),
+		Payload: activityshared.EventPayload{
+			TurnID:   "turn-1",
+			Metadata: map[string]any{"error": detail},
+		},
 	}
 }
 

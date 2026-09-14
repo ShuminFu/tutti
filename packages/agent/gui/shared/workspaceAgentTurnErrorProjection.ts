@@ -43,12 +43,29 @@ export function enrichProjectedTurnsWithCanonicalErrors({
     );
     if (existingErrorMessage) {
       const explicitDetail = canonicalTurn.error?.detail ?? "";
-      if (explicitDetail.trim() && existingErrorMessage.visibleError) {
-        existingErrorMessage.visibleError = {
-          ...existingErrorMessage.visibleError,
-          detail: explicitDetail,
-          detailAvailable: true
-        };
+      if (existingErrorMessage.visibleError) {
+        const refinedCode = refinedCanonicalErrorCode(
+          existingErrorMessage.visibleError.code,
+          canonicalTurn.error?.code?.trim() ?? ""
+        );
+        const storedDetail = existingErrorMessage.visibleError.detail ?? "";
+        const preserveFullDetail =
+          canonicalTurn.error?.code === "provider_protocol_incompatible" &&
+          explicitDetail.endsWith("...") &&
+          storedDetail.length > explicitDetail.length &&
+          storedDetail.startsWith(explicitDetail.slice(0, -3));
+        if (explicitDetail.trim() || refinedCode) {
+          existingErrorMessage.visibleError = {
+            ...existingErrorMessage.visibleError,
+            ...(refinedCode ? { code: refinedCode } : {}),
+            ...(explicitDetail.trim()
+              ? {
+                  detail: preserveFullDetail ? storedDetail : explicitDetail,
+                  detailAvailable: true
+                }
+              : {})
+          };
+        }
       }
       continue;
     }
@@ -94,4 +111,34 @@ function visibleErrorFromCanonicalTurn(
     ...(explicitDetail.trim() ? { detailAvailable: true } : {}),
     retryable: null
   };
+}
+
+/**
+ * Codes the runtime emits when it cannot narrow the cause. A visible-error
+ * payload written before the classifier learned a narrower code — or before the
+ * runtime could classify at all — carries one of these (or no code), so the
+ * canonical Turn error for the same Turn may be strictly more specific.
+ */
+const COARSE_VISIBLE_ERROR_CODES: ReadonlySet<string> = new Set([
+  "provider_error",
+  "unknown"
+]);
+
+// Only this protocol fix upgrades historical coarse cards. Other canonical
+// codes keep the existing presentation behavior.
+function refinedCanonicalErrorCode(
+  storedCode: string | null | undefined,
+  canonicalCode: string
+): string | null {
+  if (
+    canonicalCode !== "provider_protocol_incompatible" ||
+    canonicalCode === storedCode
+  ) {
+    return null;
+  }
+  const stored = (storedCode ?? "").trim();
+  if (stored && !COARSE_VISIBLE_ERROR_CODES.has(stored)) {
+    return null;
+  }
+  return canonicalCode;
 }
