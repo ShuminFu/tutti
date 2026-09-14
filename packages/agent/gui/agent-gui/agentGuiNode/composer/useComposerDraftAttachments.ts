@@ -53,6 +53,7 @@ import {
 } from "./composerDraftUtils";
 import { reportAgentComposerDiagnostic } from "./agentComposerDiagnostics";
 import { settleWithTimeout } from "./composerAssetUploadTimeout";
+import { uploadComposerDraftImage } from "./composerDraftImageUpload";
 import type { AgentGUIComposerContentType } from "../engagement/agentGUIEngagement.types";
 
 export interface WorkspaceReferencePickResult {
@@ -78,6 +79,12 @@ interface UseComposerDraftAttachmentsInput {
   promptImagesSupported: boolean;
   promptFilesSupported: boolean;
   promptAssetLimit?: number | null;
+  /**
+   * Overrides the prompt-asset upload deadline. Production callers omit it and
+   * use the default; tests narrow it so an unsettled upload is observable
+   * without waiting for the real bound.
+   */
+  imageUploadTimeoutMs?: number;
   pastedTextStagingSupported: boolean;
   editorHandleRef: RefObject<AgentRichTextEditorHandle | null>;
   draftPromptRef: RefObject<string>;
@@ -112,6 +119,7 @@ export function useComposerDraftAttachments({
   promptImagesSupported,
   promptFilesSupported,
   promptAssetLimit,
+  imageUploadTimeoutMs,
   pastedTextStagingSupported,
   editorHandleRef,
   draftPromptRef,
@@ -303,108 +311,23 @@ export function useComposerDraftAttachments({
         return;
       }
       for (const draftImage of nextImages) {
-        void settleWithTimeout(
-          uploadPromptContent({
-            workspaceId,
-            content: [
-              {
-                type: "image",
-                mimeType: draftImage.mimeType,
-                data: draftImage.data,
-                name: draftImage.name
-              }
-            ]
-          })
-        )
-          .then((result) => {
-            const uploadedImage = result.content.find(
-              (block) => block.type === "image"
-            );
-            const uploadedUrl = uploadedImage?.url?.trim();
-            reportAgentComposerDiagnostic(agentActivityRuntime, {
-              details: {
-                foundImageBlock: Boolean(uploadedImage),
-                hasAttachmentId: Boolean(uploadedImage?.attachmentId?.trim()),
-                hasData: Boolean(uploadedImage?.data?.trim()),
-                hasPath: Boolean(uploadedImage?.path?.trim()),
-                hasUrl: Boolean(uploadedUrl),
-                imageId: draftImage.id
-              },
-              event: "agent.gui.composer.image_upload.resolved",
-              level: "info",
-              source: "agent-gui",
-              workspaceId
-            });
-            if (
-              !uploadedImage ||
-              (!uploadedUrl &&
-                !uploadedImage.attachmentId &&
-                !uploadedImage.path &&
-                !uploadedImage.data)
-            ) {
-              throw new Error(
-                "Prompt image upload completed without usable image reference."
-              );
-            }
-            updateScopedDraft(draftScopeKey, (currentDraft) =>
-              updateAgentComposerDraft(currentDraft, {
-                images: agentComposerDraftImages(currentDraft).map((image) =>
-                  image.id === draftImage.id
-                    ? {
-                        id: image.id,
-                        name: image.name,
-                        mimeType: image.mimeType,
-                        ...(uploadedImage.attachmentId
-                          ? { attachmentId: uploadedImage.attachmentId }
-                          : {}),
-                        ...(uploadedUrl
-                          ? { url: uploadedUrl }
-                          : uploadedImage.data
-                            ? { data: uploadedImage.data }
-                            : {}),
-                        ...(uploadedImage.path
-                          ? { path: uploadedImage.path }
-                          : {}),
-                        previewUrl: image.previewUrl,
-                        uploading: false
-                      }
-                    : image
-                )
-              })
-            );
-          })
-          .catch((error: unknown) => {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            reportAgentComposerDiagnostic(agentActivityRuntime, {
-              details: {
-                error: message.slice(0, 500),
-                imageId: draftImage.id
-              },
-              event: "agent.gui.composer.image_upload.failed",
-              level: "warn",
-              source: "agent-gui",
-              workspaceId
-            });
-            updateScopedDraft(draftScopeKey, (currentDraft) =>
-              updateAgentComposerDraft(currentDraft, {
-                images: agentComposerDraftImages(currentDraft).map((image) =>
-                  image.id === draftImage.id
-                    ? {
-                        ...image,
-                        uploading: false,
-                        uploadError: message
-                      }
-                    : image
-                )
-              })
-            );
-          });
+        uploadComposerDraftImage({
+          draftImage,
+          runtime: agentActivityRuntime,
+          ...(imageUploadTimeoutMs === undefined
+            ? {}
+            : { timeoutMs: imageUploadTimeoutMs }),
+          updateScopedDraft: (update) =>
+            updateScopedDraft(draftScopeKey, update),
+          uploadPromptContent,
+          workspaceId
+        });
       }
     },
     [
       agentActivityRuntime,
       draftScopeKey,
+      imageUploadTimeoutMs,
       onPromptImagesUnsupported,
       publishScopedDraft,
       promptImagesSupported,

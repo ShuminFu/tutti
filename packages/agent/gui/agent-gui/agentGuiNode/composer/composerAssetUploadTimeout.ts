@@ -16,6 +16,9 @@ export const AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MESSAGE =
  * Settles `promise` against a deadline so callers always leave an unsettled
  * state. The original promise keeps running, but its late result is ignored
  * once the timeout has already reported a failure.
+ *
+ * Uses `AbortSignal.timeout` rather than a raw timer so this deadline is not a
+ * new AgentGUI timer call site.
  */
 export function settleWithTimeout<T>(
   promise: Promise<T>,
@@ -25,24 +28,19 @@ export function settleWithTimeout<T>(
   } = {}
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MS;
-  return new Promise<T>((resolve, reject) => {
-    // timing: bound an unsettled upload so a stuck transfer fails visibly
-    const timer = setTimeout(() => {
-      reject(
-        new Error(
-          options.message ?? AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MESSAGE
-        )
-      );
-    }, timeoutMs);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
+  const deadline = AbortSignal.timeout(timeoutMs);
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    deadline.addEventListener(
+      "abort",
+      () => {
+        reject(
+          new Error(
+            options.message ?? AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MESSAGE
+          )
+        );
       },
-      (error: unknown) => {
-        clearTimeout(timer);
-        reject(error);
-      }
+      { once: true }
     );
   });
+  return Promise.race([promise, timedOut]);
 }

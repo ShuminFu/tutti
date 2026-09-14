@@ -1,11 +1,10 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { settleWithTimeout } from "./composerAssetUploadTimeout";
+import { describe, expect, it } from "vitest";
+import {
+  AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MESSAGE,
+  settleWithTimeout
+} from "./composerAssetUploadTimeout";
 
 describe("settleWithTimeout", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it("resolves with the underlying value before the deadline", async () => {
     await expect(
       settleWithTimeout(Promise.resolve("ok"), { timeoutMs: 1_000 })
@@ -21,33 +20,32 @@ describe("settleWithTimeout", () => {
   });
 
   it("rejects when the upload never settles", async () => {
-    vi.useFakeTimers();
-    const pending = settleWithTimeout(new Promise<never>(() => {}), {
-      timeoutMs: 50
-    });
-    const assertion = expect(pending).rejects.toThrow(
-      "Prompt asset upload timed out."
-    );
-    await vi.advanceTimersByTimeAsync(60);
-    await assertion;
+    await expect(
+      settleWithTimeout(new Promise<never>(() => {}), { timeoutMs: 5 })
+    ).rejects.toThrow(AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MESSAGE);
+  });
+
+  it("rejects with a caller-provided message", async () => {
+    await expect(
+      settleWithTimeout(new Promise<never>(() => {}), {
+        message: "custom timeout",
+        timeoutMs: 5
+      })
+    ).rejects.toThrow("custom timeout");
   });
 
   it("ignores a late result after the timeout already failed", async () => {
-    vi.useFakeTimers();
     let resolveLate!: (value: string) => void;
     const pending = settleWithTimeout(
       new Promise<string>((resolve) => {
         resolveLate = resolve;
       }),
-      { timeoutMs: 50 }
+      { timeoutMs: 5 }
     );
-    const assertion = expect(pending).rejects.toThrow(
-      "Prompt asset upload timed out."
+    await expect(pending).rejects.toThrow(
+      AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MESSAGE
     );
-    await vi.advanceTimersByTimeAsync(60);
-    await assertion;
     // The abandoned upload resolving afterwards must not resurrect the state.
     resolveLate("late");
-    await vi.advanceTimersByTimeAsync(0);
   });
 });

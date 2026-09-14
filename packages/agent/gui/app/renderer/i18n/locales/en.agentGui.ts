@@ -727,10 +727,6 @@ export const enAgentGui = {
     "This attachment failed to prepare. Remove it and add the file again.",
   composerFileOpenUnavailable:
     "This attachment has no openable path yet. Remove it and add the file again.",
-  composerAttachmentSendSkippedPreparing:
-    "Sent without the attachment that is still being prepared",
-  composerAttachmentSendSkippedFailed:
-    "Sent without the attachment that failed to prepare",
   mentionPalette: "Reference or Invoke",
   addReference: "Add reference",
   addContent: "Add files and more",

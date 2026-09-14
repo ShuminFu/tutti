@@ -3,5 +3,9 @@ export const zhCNAgentGuiComposer = {
   composerOptionsLoadFailed: "配置加载失败",
   composerOptionsRetry: "重试",
   composerOptionsRetryTooltip: "共享 Agent 信息加载失败，点击重试",
-  inheritedUnavailable: "继承 / 不可用"
+  inheritedUnavailable: "继承 / 不可用",
+  composerAttachmentSendSkippedPreparing:
+    "其他内容已发送，仍在准备中的附件本次未包含",
+  composerAttachmentSendSkippedFailed:
+    "其他内容已发送，准备失败的附件本次未包含"
 };

@@ -793,6 +793,7 @@ be resent`). The app never opens.
 - **References:**
   [useComposerSlashActions.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/composer/useComposerSlashActions.ts)
   [useComposerDraftAttachments.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/composer/useComposerDraftAttachments.ts)
+  [composerDraftImageUpload.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/composer/composerDraftImageUpload.ts)
   [composerAssetUploadTimeout.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/composer/composerAssetUploadTimeout.ts)
 
 ### A new Tutti conversation briefly reports session not found after submit
