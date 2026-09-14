@@ -1,6 +1,7 @@
 import type { DesktopRuntimeApi } from "@preload/types";
 import { AppRendererErrorReporter } from "@renderer/features/analytics/reporters/app-renderer-error/appRendererErrorReporter.ts";
 import type { IReporterService } from "@renderer/features/analytics/services/reporterService.interface.ts";
+import { isBenignResizeObserverLoopError } from "@renderer/lib/reactDiagnostics.ts";
 
 let installed = false;
 
@@ -15,6 +16,11 @@ export function installRendererDiagnostics(
   installed = true;
 
   window.addEventListener("error", (event) => {
+    // DinTalDock: benign ResizeObserver warning, not a crash (see reactDiagnostics.ts).
+    if (isBenignResizeObserverLoopError(event)) {
+      event.preventDefault();
+      return;
+    }
     const details = errorDetails(event.error ?? event.message);
     sendRendererDiagnostic(runtimeApi, {
       details: {

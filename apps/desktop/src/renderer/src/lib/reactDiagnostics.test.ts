@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createReactRootErrorLogger,
-  createRenderStormTracker
+  createRenderStormTracker,
+  installBrowserCrashLogging
 } from "./reactDiagnostics.ts";
 
 test("react root error logger prints crash diagnostics without filtering by message", () => {
@@ -146,4 +147,58 @@ test("render storm tracker logs recent commits when a subtree exceeds the thresh
     level: "warn",
     source: "react-diagnostics"
   });
+});
+
+// DinTalDock: WebKit reports the benign ResizeObserver warning via window "error";
+// it must not become a red renderer diagnostic, but real errors still must.
+test("browser crash logging drops the benign ResizeObserver loop warning only", () => {
+  const listeners = new Map<string, (event: unknown) => void>();
+  const fakeWindow = {
+    addEventListener: (type: string, fn: (event: unknown) => void) =>
+      listeners.set(type, fn),
+    removeEventListener: () => {}
+  } as unknown as Window;
+  const diagnostics: Array<{ event: string }> = [];
+  const noop = () => {};
+  installBrowserCrashLogging({
+    console: { error: noop, groupCollapsed: noop, groupEnd: noop, info: noop, warn: noop },
+    logRendererDiagnostic(input) {
+      diagnostics.push(input as { event: string });
+    },
+    window: fakeWindow
+  });
+  const fire = (init: { error?: unknown; message: string }) => {
+    let prevented = false;
+    listeners.get("error")?.({
+      colno: 0,
+      filename: "",
+      lineno: 0,
+      ...init,
+      preventDefault: () => {
+        prevented = true;
+      }
+    });
+    return prevented;
+  };
+
+  assert.equal(
+    fire({ error: null, message: "ResizeObserver loop completed with undelivered notifications." }),
+    true
+  );
+  assert.equal(fire({ error: undefined, message: "ResizeObserver loop limit exceeded" }), true);
+  assert.equal(diagnostics.length, 0);
+
+  // A real crash, and a thrown Error that merely quotes the text, are still logged.
+  assert.equal(fire({ error: new Error("boom"), message: "boom" }), false);
+  assert.equal(
+    fire({
+      error: new Error("ResizeObserver loop completed with undelivered notifications"),
+      message: "ResizeObserver loop completed with undelivered notifications"
+    }),
+    false
+  );
+  assert.deepEqual(
+    diagnostics.map((entry) => entry.event),
+    ["runtime.error", "runtime.error"]
+  );
 });

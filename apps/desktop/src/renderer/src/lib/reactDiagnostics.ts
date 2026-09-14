@@ -137,12 +137,41 @@ export function createRenderStormTracker(
   };
 }
 
+// DinTalDock: the browser reports "ResizeObserver loop completed with undelivered
+// notifications" (Chromium's older wording: "ResizeObserver loop limit exceeded")
+// through window "error" whenever resize callbacks spill into the next frame.
+// Nothing is thrown and layout settles one frame later, but two window error
+// listeners (this one and rendererDiagnostics) each turned it into a red
+// "renderer diagnostic" line, so one benign warning showed up as three errors.
+// A real layout feedback loop is still caught by createRenderStormTracker.
+const BENIGN_RESIZE_OBSERVER_MESSAGES = [
+  "ResizeObserver loop completed with undelivered notifications",
+  "ResizeObserver loop limit exceeded"
+];
+
+export function isBenignResizeObserverLoopError(
+  event: Pick<ErrorEvent, "error" | "message">
+): boolean {
+  // The real warning carries no Error object; a thrown Error whose text happens
+  // to match is a genuine crash and must still be logged.
+  if (event.error instanceof Error) {
+    return false;
+  }
+  const message = typeof event.message === "string" ? event.message : "";
+  return BENIGN_RESIZE_OBSERVER_MESSAGES.some((text) => message.includes(text));
+}
+
 export function installBrowserCrashLogging(
   options: BrowserCrashLoggerOptions = {}
 ): () => void {
   const targetWindow = options.window ?? globalThis.window;
   const diagnosticConsole = options.console ?? console;
   const handleError = (event: ErrorEvent): void => {
+    if (isBenignResizeObserverLoopError(event)) {
+      // Cancelling also stops the browser's own console line for this warning.
+      event.preventDefault();
+      return;
+    }
     diagnosticConsole.groupCollapsed(
       "[tutti:runtime:error]",
       event.message || "(no message)"
