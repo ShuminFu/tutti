@@ -65,12 +65,11 @@ func rndmasterACPLoadSupported(raw json.RawMessage) bool {
 		truthyNested(result, "agentCapabilities", "load")
 }
 
-func rndmasterACPMCPServers(contract rndmasterRuntimeContract) ([]any, bool, error) {
-	raw, configured := contract.MCPConfig["mcpServers"]
+func rndmasterACPMCPServers(contract rndmasterRuntimeContract, sessionEnv []string) ([]any, bool, error) {
+	servers, configured := rndmasterMCPServers(contract, sessionEnv)
 	if !configured {
 		return nil, false, nil
 	}
-	servers := payloadObject(raw)
 	names := make([]string, 0, len(servers))
 	for name := range servers {
 		names = append(names, name)

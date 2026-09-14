@@ -43,7 +43,7 @@ func appServerThreadStartParams(session Session, cwd string) map[string]any {
 		config["service_tier"] = serviceTier
 	}
 	if contract, err := rndmasterContractFromSession(session); err == nil {
-		if servers, configured := rndmasterMCPServers(contract); configured {
+		if servers, configured := rndmasterMCPServers(contract, session.Env); configured {
 			config["mcp_servers"] = servers
 		}
 	}

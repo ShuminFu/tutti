@@ -429,7 +429,7 @@ func (a *standardACPAdapter) supportsHTTPMCP(raw json.RawMessage) bool {
 
 func (a *standardACPAdapter) mergeFilteredContractMCP(session Session, contract rndmasterRuntimeContract, initializeResult json.RawMessage) ([]any, bool, error) {
 	mcpServers := acpMCPServers(session.MCPServers)
-	contractMCPServers, _, err := rndmasterACPMCPServers(contract)
+	contractMCPServers, _, err := rndmasterACPMCPServers(contract, session.Env)
 	if err != nil {
 		return nil, false, err
 	}

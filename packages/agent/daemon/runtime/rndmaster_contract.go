@@ -149,10 +149,37 @@ func rndmasterEnvListForOS(base []string, extra map[string]string, goos string) 
 	return out
 }
 
-func rndmasterMCPServers(contract rndmasterRuntimeContract) (map[string]any, bool) {
+const runtimeInstructionsFileEnv = "TUTTI_RUNTIME_INSTRUCTIONS_FILE"
+
+func rndmasterMCPServers(contract rndmasterRuntimeContract, sessionEnv []string) (map[string]any, bool) {
 	raw, configured := contract.MCPConfig["mcpServers"]
 	if !configured {
 		return nil, false
 	}
-	return clonePayload(payloadObject(raw)), true
+	servers := clonePayload(payloadObject(raw))
+	injectRuntimeInstructionsFileIntoStdioMCP(servers, sessionEnv)
+	return servers, true
+}
+
+func injectRuntimeInstructionsFileIntoStdioMCP(servers map[string]any, sessionEnv []string) {
+	value := envValueFromList(sessionEnv, runtimeInstructionsFileEnv)
+	if strings.TrimSpace(value) == "" {
+		return
+	}
+	for name, raw := range servers {
+		body := payloadObject(raw)
+		if body == nil || strings.TrimSpace(asString(body["command"])) == "" {
+			continue
+		}
+		env := payloadObject(body["env"])
+		if env == nil {
+			env = map[string]any{}
+		}
+		if _, exists := env[runtimeInstructionsFileEnv]; exists {
+			continue
+		}
+		env[runtimeInstructionsFileEnv] = value
+		body["env"] = env
+		servers[name] = body
+	}
 }
