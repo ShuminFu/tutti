@@ -492,30 +492,6 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
           files: currentDraftFiles,
           largeTexts: currentDraftLargeTexts
         });
-      if (attachmentsPendingOrFailed.hasUnavailable) {
-        reportAgentComposerDiagnostic(agentActivityRuntime, {
-          details: {
-            failedCount: attachmentsPendingOrFailed.failedCount,
-            imageFailedCount: currentDraftImages.filter((image) =>
-              Boolean(image.uploadError)
-            ).length,
-            imageUploadingCount: currentDraftImages.filter(
-              (image) => image.uploading
-            ).length,
-            uploadingCount: attachmentsPendingOrFailed.uploadingCount
-          },
-          event: "agent.gui.composer.submit.degraded",
-          level: "warn",
-          source: "agent-gui",
-          workspaceId
-        });
-        const notice = translate(
-          attachmentsPendingOrFailed.failedCount > 0
-            ? "agentHost.agentGui.composerAttachmentSendSkippedFailed"
-            : "agentHost.agentGui.composerAttachmentSendSkippedPreparing"
-        );
-        (agentHostApi?.toast?.info ?? agentHostApi?.toast?.error)?.(notice);
-      }
       const nextPrompt = draftPromptRef.current;
       const nextDraftContent = buildAgentComposerDraft({
         prompt: nextPrompt,
@@ -567,6 +543,61 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         draft: nextDraftContent,
         skills: availableSkills
       });
+      // Nothing left to send. The draft could still look non-empty because the
+      // only content was an attachment that the projection dropped (still
+      // uploading, or failed). Handing the controller empty content would be
+      // discarded silently, so report the real outcome instead.
+      if (submission.content.length === 0) {
+        reportAgentComposerDiagnostic(agentActivityRuntime, {
+          details: {
+            failedCount: attachmentsPendingOrFailed.failedCount,
+            imageFailedCount: currentDraftImages.filter((image) =>
+              Boolean(image.uploadError)
+            ).length,
+            imageUploadingCount: currentDraftImages.filter(
+              (image) => image.uploading
+            ).length,
+            uploadingCount: attachmentsPendingOrFailed.uploadingCount
+          },
+          event: "agent.gui.composer.submit.nothing_sendable",
+          level: "warn",
+          source: "agent-gui",
+          workspaceId
+        });
+        const notice = translate(
+          attachmentsPendingOrFailed.hasUnavailable
+            ? "agentHost.agentGui.composerAttachmentOnlySendBlocked"
+            : "agentHost.agentGui.composerNothingToSend"
+        );
+        (agentHostApi?.toast?.info ?? agentHostApi?.toast?.error)?.(notice);
+        return;
+      }
+      // A send is happening, but some attachments were left out. Tell the user
+      // once, and record why.
+      if (attachmentsPendingOrFailed.hasUnavailable) {
+        reportAgentComposerDiagnostic(agentActivityRuntime, {
+          details: {
+            failedCount: attachmentsPendingOrFailed.failedCount,
+            imageFailedCount: currentDraftImages.filter((image) =>
+              Boolean(image.uploadError)
+            ).length,
+            imageUploadingCount: currentDraftImages.filter(
+              (image) => image.uploading
+            ).length,
+            uploadingCount: attachmentsPendingOrFailed.uploadingCount
+          },
+          event: "agent.gui.composer.submit.degraded",
+          level: "warn",
+          source: "agent-gui",
+          workspaceId
+        });
+        const notice = translate(
+          attachmentsPendingOrFailed.failedCount > 0
+            ? "agentHost.agentGui.composerAttachmentSendSkippedFailed"
+            : "agentHost.agentGui.composerAttachmentSendSkippedPreparing"
+        );
+        (agentHostApi?.toast?.info ?? agentHostApi?.toast?.error)?.(notice);
+      }
       const fileReferences = agentComposerFileMentionReferences(nextPrompt);
       const draftFileIds = new Set(currentDraftFiles.map((file) => file.id));
       reportAgentComposerDiagnostic(agentActivityRuntime, {

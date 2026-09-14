@@ -406,10 +406,42 @@ export function shouldClearSubmittedDraft(input: {
   currentDraft: AgentComposerDraft | undefined;
   submittedDraft: AgentComposerDraft;
 }): boolean {
-  return Boolean(
-    input.currentDraft &&
-    areAgentComposerDraftsEqual(input.currentDraft, input.submittedDraft)
+  if (!input.currentDraft) {
+    return false;
+  }
+  if (areAgentComposerDraftsEqual(input.currentDraft, input.submittedDraft)) {
+    return true;
+  }
+  // A send can be handed off while an attachment is still uploading. The
+  // upload then settles in place and mutates the very draft we submitted, so a
+  // strict comparison no longer matches and the sent text and attachment would
+  // stay in the composer. Attachment settlement is not a user edit, so compare
+  // again with upload progress normalized away.
+  return areAgentComposerDraftsEqual(
+    normalizeDraftAttachmentProgress(input.currentDraft),
+    normalizeDraftAttachmentProgress(input.submittedDraft)
   );
+}
+
+/**
+ * Strips upload progress from a draft so "the same content, further along in
+ * its upload" compares equal. Attachment identity, name, location, and error
+ * state are preserved; only the transient `uploading` flag is dropped.
+ *
+ * The draft is a tuple whose first element is always the text block, so the
+ * projection rebuilds that shape explicitly instead of casting.
+ */
+function normalizeDraftAttachmentProgress(
+  draft: AgentComposerDraft
+): AgentComposerDraft {
+  const [textBlock, ...attachments] = draft;
+  return [
+    textBlock,
+    ...attachments.map((block) => {
+      const { uploading: _uploading, ...rest } = block;
+      return rest as typeof block;
+    })
+  ];
 }
 
 export function clearSubmittedDraftIfUnchanged(input: {

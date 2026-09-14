@@ -7,5 +7,7 @@ export const zhCNAgentGuiComposer = {
   composerAttachmentSendSkippedPreparing:
     "其他内容已发送，仍在准备中的附件本次未包含",
   composerAttachmentSendSkippedFailed:
-    "其他内容已发送，准备失败的附件本次未包含"
+    "其他内容已发送，准备失败的附件本次未包含",
+  composerAttachmentOnlySendBlocked: "没有发送：唯一的附件还没准备好",
+  composerNothingToSend: "没有可发送的内容"
 };

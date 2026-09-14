@@ -128,7 +128,34 @@ describe("submitted composer draft cleanup", () => {
     if (image) image.uploading = true;
 
     expect(areAgentComposerDraftsEqual(current, submittedDraft)).toBe(false);
+  });
+
+  // A send can be handed off while an attachment is still uploading; the upload
+  // then settles in place. That settlement is not a user edit, so the submitted
+  // text and attachment must still be cleared instead of lingering in the
+  // composer and being resent by accident.
+  it("clears the submitted draft when an attachment only finishes uploading", () => {
+    const current = snapshotAgentComposerDraft(submittedDraft);
+    const image = current.find((block) => block.type === "image");
+    if (image) image.uploading = true;
     const drafts = { [sourceScopeKey]: current };
+
+    const result = clearSubmittedDraftIfUnchanged({ drafts, snapshot });
+
+    expect(result).not.toBe(drafts);
+    expect(result[sourceScopeKey]).toEqual([{ type: "text", text: "" }]);
+  });
+
+  // The same normalization must not swallow a real edit that happens while the
+  // upload is still in flight.
+  it("retains the draft when text is edited while an attachment is uploading", () => {
+    const current = snapshotAgentComposerDraft(submittedDraft);
+    const image = current.find((block) => block.type === "image");
+    if (image) image.uploading = true;
+    const text = current.find((block) => block.type === "text");
+    if (text) text.text = "edited while uploading";
+    const drafts = { [sourceScopeKey]: current };
+
     expect(clearSubmittedDraftIfUnchanged({ drafts, snapshot })).toBe(drafts);
   });
 

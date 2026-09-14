@@ -220,4 +220,115 @@ describe("useComposerSlashActions submit readiness", () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
   });
+
+  // Regression: an attachment-only draft passed the "has content" check (an
+  // image block counts regardless of upload state) but projected to empty
+  // content, so the send was discarded downstream with no feedback at all.
+  it("does not claim a send when the only content is an unsettled image", () => {
+    const toastInfo = vi.fn();
+    setAgentHostApiForTests({
+      toast: { error: vi.fn(), info: toastInfo }
+    } as never);
+    const onSubmit = vi.fn();
+    const rendered = renderHook(() =>
+      useComposerSlashActions(
+        createInput({
+          draftContent: [{ text: "", type: "text" as const }],
+          draftPromptRef: { current: "" },
+          draftImagesRef: { current: [createImage({ uploading: true })] },
+          onSubmit
+        }) as never
+      )
+    );
+
+    act(() => rendered.result.current.submitCurrentPrompt());
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(toastInfo).toHaveBeenCalledWith(
+      "Nothing was sent: the only attachment is not ready yet"
+    );
+  });
+
+  it("does not claim a send when the only content is a failed image", () => {
+    const toastInfo = vi.fn();
+    setAgentHostApiForTests({
+      toast: { error: vi.fn(), info: toastInfo }
+    } as never);
+    const onSubmit = vi.fn();
+    const rendered = renderHook(() =>
+      useComposerSlashActions(
+        createInput({
+          draftContent: [{ text: "", type: "text" as const }],
+          draftPromptRef: { current: "" },
+          draftImagesRef: {
+            current: [createImage({ uploadError: "boom", uploading: false })]
+          },
+          onSubmit
+        }) as never
+      )
+    );
+
+    act(() => rendered.result.current.submitCurrentPrompt());
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(toastInfo).toHaveBeenCalledWith(
+      "Nothing was sent: the only attachment is not ready yet"
+    );
+  });
+
+  // A ready image alone is real content and must still send.
+  it("sends an attachment-only draft once the image is ready", () => {
+    const onSubmit = vi.fn();
+    const rendered = renderHook(() =>
+      useComposerSlashActions(
+        createInput({
+          draftContent: [{ text: "", type: "text" as const }],
+          draftPromptRef: { current: "" },
+          draftImagesRef: {
+            current: [
+              createImage({ path: "/tmp/shot.png", previewUrl: undefined })
+            ]
+          },
+          onSubmit
+        }) as never
+      )
+    );
+
+    act(() => rendered.result.current.submitCurrentPrompt());
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const [content] = onSubmit.mock.calls[0]!;
+    expect(content).toContainEqual({
+      mimeType: "image/png",
+      name: "shot.png",
+      path: "/tmp/shot.png",
+      type: "image"
+    });
+  });
+
+  // Exactly one message must reach the user, never the degraded notice plus a
+  // nothing-sent notice.
+  it("sends only one notice when an unsettled image accompanies text", () => {
+    const toastInfo = vi.fn();
+    setAgentHostApiForTests({
+      toast: { error: vi.fn(), info: toastInfo }
+    } as never);
+    const onSubmit = vi.fn();
+    const rendered = renderHook(() =>
+      useComposerSlashActions(
+        createInput({
+          draftImagesRef: { current: [createImage({ uploading: true })] },
+          onSubmit
+        }) as never
+      )
+    );
+
+    act(() => rendered.result.current.submitCurrentPrompt());
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(toastInfo).toHaveBeenCalledTimes(1);
+    expect(toastInfo).toHaveBeenCalledWith(
+      "Sent without the attachment that is still being prepared"
+    );
+  });
 });

@@ -8,5 +8,8 @@ export const enAgentGuiComposer = {
   composerAttachmentSendSkippedPreparing:
     "Sent without the attachment that is still being prepared",
   composerAttachmentSendSkippedFailed:
-    "Sent without the attachment that failed to prepare"
+    "Sent without the attachment that failed to prepare",
+  composerAttachmentOnlySendBlocked:
+    "Nothing was sent: the only attachment is not ready yet",
+  composerNothingToSend: "Nothing to send"
 };
