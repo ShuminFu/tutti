@@ -160,6 +160,13 @@ type responseToolIdentity struct {
 	Name      string
 	Namespace string
 	Type      string
+	// WrappedCustomInput marks a Responses custom tool that the gateway encoded
+	// as a Chat function. Responses and streams restore the custom tool call
+	// shape for these calls instead of leaking the function wrapper.
+	WrappedCustomInput bool
+	// Description is the Chat function description generated for a wrapped
+	// custom tool: the original description plus the wrapper and format notes.
+	Description string
 }
 
 type responseToolMap map[string]responseToolIdentity
@@ -421,13 +428,17 @@ func convertResponseInput(
 			if strings.TrimSpace(item.CallID) == "" || strings.TrimSpace(item.Name) == "" {
 				return nil, invalidParam(fmt.Sprintf("input[%d]", index), "custom_tool_call requires call_id and name")
 			}
+			arguments, err := customToolArguments(item.Input)
+			if err != nil {
+				return nil, withParam(err, fmt.Sprintf("input[%d].input", index))
+			}
 			current := ensureAssistant()
 			current.toolCalls = append(current.toolCalls, map[string]any{
 				"id":   item.CallID,
-				"type": "custom",
-				"custom": map[string]any{
-					"name":  chatNameForResponseTool(item.Namespace, item.Name, toolMap),
-					"input": item.Input,
+				"type": "function",
+				"function": map[string]any{
+					"name":      chatNameForResponseTool(item.Namespace, item.Name, toolMap),
+					"arguments": arguments,
 				},
 			})
 		case "function_call_output", "custom_tool_call_output":
@@ -637,279 +648,4 @@ func functionOutputText(encoded json.RawMessage) (string, error) {
 		return "", invalidParam("", "function output cannot be encoded")
 	}
 	return string(normalized), nil
-}
-
-func convertResponseTools(tools []json.RawMessage) ([]map[string]any, responseToolMap, []string, error) {
-	if len(tools) == 0 {
-		return nil, nil, nil, nil
-	}
-	result := make([]map[string]any, 0, len(tools))
-	toolMap := make(responseToolMap)
-	filteredTypes := make(map[string]struct{})
-	seenNames := make(map[string]struct{})
-	seenIdentities := make(map[string]struct{})
-	for index, encoded := range tools {
-		var header struct {
-			Type string `json:"type"`
-			Name string `json:"name"`
-		}
-		if err := json.Unmarshal(encoded, &header); err != nil || (header.Type != "function" && header.Type != "custom") {
-			continue
-		}
-		name := strings.TrimSpace(header.Name)
-		if name == "" {
-			continue
-		}
-		if _, exists := seenNames[name]; exists {
-			return nil, nil, nil, invalidParam(
-				fmt.Sprintf("tools[%d].name", index),
-				fmt.Sprintf("tool name %q is duplicated", name),
-			)
-		}
-		seenNames[name] = struct{}{}
-	}
-	for index, encoded := range tools {
-		var tool struct {
-			Type        string            `json:"type"`
-			Name        string            `json:"name"`
-			Description string            `json:"description"`
-			Parameters  json.RawMessage   `json:"parameters"`
-			Format      json.RawMessage   `json:"format"`
-			Strict      *bool             `json:"strict"`
-			Tools       []json.RawMessage `json:"tools"`
-		}
-		if err := json.Unmarshal(encoded, &tool); err != nil {
-			return nil, nil, nil, invalidParam(fmt.Sprintf("tools[%d]", index), "invalid tool")
-		}
-		switch tool.Type {
-		case "function":
-			function, err := convertFunctionTool(
-				tool.Name,
-				tool.Description,
-				tool.Parameters,
-				tool.Strict,
-				fmt.Sprintf("tools[%d]", index),
-			)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			name := function["name"].(string)
-			seenIdentities["\x00"+name] = struct{}{}
-			toolMap[name] = responseToolIdentity{Name: name, Type: "function"}
-			result = append(result, map[string]any{"type": "function", "function": function})
-		case "custom":
-			custom, err := convertCustomTool(tool.Name, tool.Description, tool.Format, fmt.Sprintf("tools[%d]", index))
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			name := custom["name"].(string)
-			seenIdentities["\x00"+name] = struct{}{}
-			toolMap[name] = responseToolIdentity{Name: name, Type: "custom"}
-			result = append(result, map[string]any{"type": "custom", "custom": custom})
-		case "namespace":
-			namespace := strings.TrimSpace(tool.Name)
-			if namespace == "" {
-				return nil, nil, nil, invalidParam(fmt.Sprintf("tools[%d].name", index), "tool namespace name is required")
-			}
-			if len(tool.Tools) == 0 {
-				return nil, nil, nil, invalidParam(fmt.Sprintf("tools[%d].tools", index), "tool namespace must contain at least one function")
-			}
-			for nestedIndex, nestedEncoded := range tool.Tools {
-				var nested struct {
-					Type        string          `json:"type"`
-					Name        string          `json:"name"`
-					Description string          `json:"description"`
-					Parameters  json.RawMessage `json:"parameters"`
-					Strict      *bool           `json:"strict"`
-				}
-				param := fmt.Sprintf("tools[%d].tools[%d]", index, nestedIndex)
-				if err := json.Unmarshal(nestedEncoded, &nested); err != nil {
-					return nil, nil, nil, invalidParam(param, "invalid namespaced tool")
-				}
-				if nested.Type != "function" {
-					filteredTypes[normalizedFilteredToolType(nested.Type)] = struct{}{}
-					continue
-				}
-				function, err := convertFunctionTool(
-					nested.Name,
-					namespacedToolDescription(tool.Description, nested.Description),
-					nested.Parameters,
-					nested.Strict,
-					param,
-				)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-				responseName := function["name"].(string)
-				identityKey := namespace + "\x00" + responseName
-				if _, exists := seenIdentities[identityKey]; exists {
-					return nil, nil, nil, invalidParam(
-						param+".name",
-						fmt.Sprintf("tool name %q is duplicated within namespace %q", responseName, namespace),
-					)
-				}
-				seenIdentities[identityKey] = struct{}{}
-				chatName := flattenedChatToolName(namespace, responseName, seenNames)
-				function["name"] = chatName
-				seenNames[chatName] = struct{}{}
-				toolMap[chatName] = responseToolIdentity{Name: responseName, Namespace: namespace, Type: "function"}
-				result = append(result, map[string]any{"type": "function", "function": function})
-			}
-		default:
-			// A Responses tool entry is an availability declaration, not a
-			// call. Intersect declarations with the set this Chat adapter can
-			// represent so newly advertised hosted tools do not break ordinary
-			// turns. Explicit choices and call/output history are validated
-			// separately and remain fail-closed.
-			filteredTypes[normalizedFilteredToolType(tool.Type)] = struct{}{}
-		}
-	}
-	filtered := make([]string, 0, len(filteredTypes))
-	for toolType := range filteredTypes {
-		filtered = append(filtered, toolType)
-	}
-	sort.Strings(filtered)
-	return result, toolMap, filtered, nil
-}
-
-func chatNameForResponseTool(namespace string, name string, toolMap responseToolMap) string {
-	namespace = strings.TrimSpace(namespace)
-	name = strings.TrimSpace(name)
-	for chatName, identity := range toolMap {
-		if identity.Name == name && identity.Namespace == namespace {
-			return chatName
-		}
-	}
-	return name
-}
-
-func convertFunctionTool(
-	name string,
-	description string,
-	encodedParameters json.RawMessage,
-	strict *bool,
-	param string,
-) (map[string]any, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return nil, invalidParam(param+".name", "function tool name is required")
-	}
-	function := map[string]any{"name": name}
-	if description != "" {
-		function["description"] = description
-	}
-	if len(bytes.TrimSpace(encodedParameters)) > 0 &&
-		!bytes.Equal(bytes.TrimSpace(encodedParameters), []byte("null")) {
-		var parameters any
-		if err := json.Unmarshal(encodedParameters, &parameters); err != nil {
-			return nil, invalidParam(param+".parameters", "function parameters must be valid JSON")
-		}
-		function["parameters"] = parameters
-	}
-	if strict != nil {
-		function["strict"] = *strict
-	}
-	return function, nil
-}
-
-func convertCustomTool(name string, description string, encodedFormat json.RawMessage, param string) (map[string]any, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return nil, invalidParam(param+".name", "custom tool name is required")
-	}
-	custom := map[string]any{"name": name}
-	if description != "" {
-		custom["description"] = description
-	}
-	if len(bytes.TrimSpace(encodedFormat)) == 0 || bytes.Equal(bytes.TrimSpace(encodedFormat), []byte("null")) {
-		return custom, nil
-	}
-	var format struct {
-		Type       string `json:"type"`
-		Definition string `json:"definition"`
-		Syntax     string `json:"syntax"`
-	}
-	if err := json.Unmarshal(encodedFormat, &format); err != nil {
-		return nil, invalidParam(param+".format", "custom tool format must be valid JSON")
-	}
-	switch format.Type {
-	case "text":
-		custom["format"] = map[string]any{"type": "text"}
-	case "grammar":
-		if format.Definition == "" || (format.Syntax != "lark" && format.Syntax != "regex") {
-			return nil, invalidParam(param+".format", "custom tool grammar requires a definition and lark or regex syntax")
-		}
-		custom["format"] = map[string]any{
-			"type": "grammar",
-			"grammar": map[string]any{
-				"definition": format.Definition,
-				"syntax":     format.Syntax,
-			},
-		}
-	default:
-		return nil, invalidParam(param+".format.type", fmt.Sprintf("unsupported custom tool format %q", format.Type))
-	}
-	return custom, nil
-}
-
-func convertResponseToolChoice(encoded json.RawMessage, toolMap responseToolMap, toolCount int) (any, error) {
-	trimmed := bytes.TrimSpace(encoded)
-	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
-		return nil, nil
-	}
-	var value string
-	if err := json.Unmarshal(trimmed, &value); err == nil {
-		switch value {
-		case "auto", "none":
-			return value, nil
-		case "required":
-			if toolCount == 0 {
-				return nil, invalidParam("tool_choice", "required tool_choice has no translatable tools")
-			}
-			return value, nil
-		default:
-			return nil, invalidParam("tool_choice", fmt.Sprintf("unsupported tool_choice %q", value))
-		}
-	}
-	var choice struct {
-		Type      string `json:"type"`
-		Name      string `json:"name"`
-		Namespace string `json:"namespace"`
-	}
-	if err := json.Unmarshal(trimmed, &choice); err != nil {
-		return nil, invalidParam("tool_choice", "named tool_choice must be a valid object")
-	}
-	if choice.Type != "function" && choice.Type != "custom" {
-		return nil, invalidParam(
-			"tool_choice",
-			fmt.Sprintf("tool_choice type %q cannot be translated to Chat Completions", choice.Type),
-		)
-	}
-	if strings.TrimSpace(choice.Name) == "" {
-		return nil, invalidParam("tool_choice", "named tool_choice requires a name")
-	}
-	chatName, found := responseToolChatName(choice.Namespace, choice.Name, toolMap)
-	if !found {
-		return nil, invalidParam("tool_choice", fmt.Sprintf("selected %s tool %q is not registered", choice.Type, choice.Name))
-	}
-	if toolMap[chatName].Type != choice.Type {
-		return nil, invalidParam("tool_choice", fmt.Sprintf("selected tool %q is not a %s tool", choice.Name, choice.Type))
-	}
-	return map[string]any{
-		"type": choice.Type,
-		choice.Type: map[string]any{
-			"name": chatName,
-		},
-	}, nil
-}
-
-func responseToolChatName(namespace string, name string, toolMap responseToolMap) (string, bool) {
-	namespace = strings.TrimSpace(namespace)
-	name = strings.TrimSpace(name)
-	for chatName, identity := range toolMap {
-		if identity.Name == name && identity.Namespace == namespace {
-			return chatName, true
-		}
-	}
-	return "", false
 }

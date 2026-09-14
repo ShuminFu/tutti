@@ -191,6 +191,23 @@ Rules:
   already-recorded conversation semantics. Background Responses,
   Conversations, Realtime/WebSocket, `/responses/compact`, and non-empty
   `previous_response_id` are also rejected instead of dropped.
+- Chat Completions has no custom tool type, so the gateway carries a Codex
+  custom tool across the boundary as a synthesized function: the declaration
+  becomes a function of the same Chat name with one required string parameter
+  `input` and a closed parameter object, the selected-custom `tool_choice` and
+  recorded `custom_tool_call` history become the matching function forms with
+  the original input JSON-encoded into `arguments`, and the wrapper is decoded
+  back into `custom_tool_call` on Responses output, synthetic SSE, and real SSE.
+  The call id, tool name, and namespace are preserved in both directions; the
+  upstream sees only `function` tools, and an upstream `custom` tool call is
+  rejected rather than reinterpreted. The declared `text`/`grammar` format and
+  tool description stay in the wrapper description as input guidance; the
+  wrapper wraps a string parameter and does not provide grammar-constrained
+  decoding. Streaming buffers wrapper arguments until the JSON is complete, so
+  the wrapper shell and partial escapes never reach the caller as custom input.
+  A wrapper argument document that is missing `input`, carries a non-string
+  `input`, adds unexpected members, or is not complete JSON fails the conversion
+  with a specific error instead of being substituted with an empty input.
 - Composer options for a bound target replace provider-native model options
   with the plan's models (`applyModelPlanComposerOverlay`); each option carries
   the source plan name and `runtimeContext.modelPlan = {id, name, protocol}`.

@@ -116,25 +116,141 @@ type toolStreamItem struct {
 	chatIndex int
 	id        string
 	callID    string
-	toolType  string
 	name      string
 	toolMap   responseToolMap
-	arguments strings.Builder
+	// wrappedCustom marks a call whose registered tool is a Responses custom
+	// tool that travels upstream as a synthesized function wrapper. Its raw
+	// arguments are buffered and only the decoded custom input is streamed.
+	wrappedCustom bool
+	announced     bool
+	arguments     strings.Builder
+	flushed       int
 }
 
 func (i *toolStreamItem) outputIndex() int { return i.index }
 
-func (i *toolStreamItem) finish(writer *responsesSSEWriter) (map[string]any, error) {
+func (i *toolStreamItem) itemType() string {
+	if i.wrappedCustom {
+		return "custom_tool_call"
+	}
+	return "function_call"
+}
+
+// announce emits output_item.added once the call shape is settled. The item id
+// is allocated here because its Responses prefix depends on that shape.
+func (i *toolStreamItem) announce(writer *responsesSSEWriter) error {
+	if i.announced {
+		return nil
+	}
+	i.announced = true
+	if i.id == "" {
+		prefix := "fc"
+		if i.wrappedCustom {
+			prefix = "ctc"
+		}
+		i.id = newResponseID(prefix)
+	}
+	inputKey := "arguments"
+	if i.wrappedCustom {
+		inputKey = "input"
+	}
 	identity := responseIdentityForChatTool(i.name, i.toolMap)
-	if i.toolType == "custom" {
+	item := map[string]any{
+		"id": i.id, "type": i.itemType(), "status": "in_progress",
+		"call_id": i.callID, "name": identity.Name, inputKey: "",
+	}
+	if identity.Namespace != "" {
+		item["namespace"] = identity.Namespace
+	}
+	return writer.Event("response.output_item.added", map[string]any{
+		"output_index": i.index, "item": item,
+	})
+}
+
+// observeName classifies the call once its streamed name can no longer grow,
+// then announces the settled shape. A name that is still a strict prefix of a
+// registered tool name stays unclassified so a split name is never mistaken for
+// an ordinary function.
+func (i *toolStreamItem) observeName(writer *responsesSSEWriter) error {
+	if i.announced {
+		return nil
+	}
+	wrapped, settled := classifyToolStreamName(i.name, i.toolMap)
+	if !settled || i.callID == "" {
+		return nil
+	}
+	i.wrappedCustom = wrapped
+	return i.announce(writer)
+}
+
+// settle commits the final call shape at the end of the call. A call whose
+// function arguments were already streamed cannot be re-shaped into a custom
+// tool call without emitting contradictory events, so that case fails instead
+// of fabricating a custom call.
+func (i *toolStreamItem) settle() error {
+	if !i.announced {
+		i.wrappedCustom = i.toolMap[i.name].WrappedCustomInput
+		return nil
+	}
+	if i.wrappedCustom {
+		return nil
+	}
+	if wrapped, settled := classifyToolStreamName(i.name, i.toolMap); settled && wrapped {
+		return fmt.Errorf(
+			"chat tool call %q was streamed as a function before its registered custom tool name was complete",
+			i.name,
+		)
+	}
+	return nil
+}
+
+// flushArguments streams buffered function arguments. Wrapped custom arguments
+// are never streamed raw: only decodeCustomToolInput output may reach the
+// caller as custom tool input.
+func (i *toolStreamItem) flushArguments(writer *responsesSSEWriter) error {
+	if i.wrappedCustom || !i.announced {
+		return nil
+	}
+	buffered := i.arguments.String()
+	if i.flushed >= len(buffered) {
+		return nil
+	}
+	pending := buffered[i.flushed:]
+	i.flushed = len(buffered)
+	return writer.Event("response.function_call_arguments.delta", map[string]any{
+		"item_id": i.id, "output_index": i.index, "delta": pending,
+	})
+}
+
+func (i *toolStreamItem) finish(writer *responsesSSEWriter) (map[string]any, error) {
+	if err := i.settle(); err != nil {
+		return nil, err
+	}
+	if i.callID == "" {
+		i.callID = newResponseID("call")
+	}
+	if err := i.announce(writer); err != nil {
+		return nil, err
+	}
+	identity := responseIdentityForChatTool(i.name, i.toolMap)
+	if i.wrappedCustom {
+		input, err := decodeCustomToolInput(json.RawMessage(i.arguments.String()))
+		if err != nil {
+			return nil, fmt.Errorf("decode custom tool call %q: %w", i.name, err)
+		}
+		if err := writer.Event("response.custom_tool_call_input.delta", map[string]any{
+			"item_id": i.id, "output_index": i.index, "delta": input,
+		}); err != nil {
+			return nil, err
+		}
 		if err := writer.Event("response.custom_tool_call_input.done", map[string]any{
-			"item_id": i.id, "output_index": i.index, "input": i.arguments.String(),
+			"item_id": i.id, "output_index": i.index, "input": input,
 		}); err != nil {
 			return nil, err
 		}
 		item := map[string]any{
 			"id": i.id, "type": "custom_tool_call", "status": "completed",
-			"call_id": i.callID, "name": identity.Name, "input": i.arguments.String(),
+			"call_id": i.callID, "name": identity.Name, "input": input,
 		}
 		if identity.Namespace != "" {
 			item["namespace"] = identity.Namespace
@@ -145,6 +261,9 @@ func (i *toolStreamItem) finish(writer *responsesSSEWriter) (map[string]any, err
 			return nil, err
 		}
 		return item, nil
+	}
+	if err := i.flushArguments(writer); err != nil {
+		return nil, err
 	}
 	if err := writer.Event("response.function_call_arguments.done", map[string]any{
 		"item_id": i.id, "output_index": i.index, "name": identity.Name, "arguments": i.arguments.String(),
@@ -164,6 +283,22 @@ func (i *toolStreamItem) finish(writer *responsesSSEWriter) (map[string]any, err
 		return nil, err
 	}
 	return item, nil
+}
+
+// classifyToolStreamName resolves whether an accumulated Chat tool name is an
+// ordinary function or a synthesized wrapper for a registered custom tool. A
+// non-empty name that is still a strict prefix of a registered tool name is not
+// settled, because the upstream may still be streaming that name.
+func classifyToolStreamName(name string, toolMap responseToolMap) (wrapped bool, settled bool) {
+	if name == "" {
+		return false, false
+	}
+	for chatName := range toolMap {
+		if chatName != name && strings.HasPrefix(chatName, name) {
+			return false, false
+		}
+	}
+	return toolMap[name].WrappedCustomInput, true
 }
 
 type chatStreamState struct {
@@ -342,68 +477,37 @@ func (s *chatStreamState) addText(delta string) error {
 }
 
 func (s *chatStreamState) addToolDelta(delta chatToolCall) error {
+	if toolType := strings.TrimSpace(delta.Type); toolType != "" && toolType != "function" {
+		return fmt.Errorf("upstream Chat tool call type %q is not a function call", toolType)
+	}
 	item := s.tools[delta.Index]
 	if item == nil {
 		callID := strings.TrimSpace(delta.ID)
-		if callID == "" {
-			callID = newResponseID("call")
-		}
-		toolType := delta.Type
-		if toolType == "" {
-			toolType = "function"
-		}
-		idPrefix := "fc"
-		itemType := "function_call"
-		inputKey := "arguments"
-		initialName := delta.Function.Name
-		if toolType == "custom" {
-			idPrefix = "ctc"
-			itemType = "custom_tool_call"
-			inputKey = "input"
-			initialName = delta.Custom.Name
-		}
 		item = &toolStreamItem{
 			index: s.nextOutputIndex(), chatIndex: delta.Index,
-			id: newResponseID(idPrefix), callID: callID, toolType: toolType, name: initialName, toolMap: s.toolMap,
+			callID: callID, toolMap: s.toolMap,
 		}
 		s.tools[delta.Index] = item
 		s.items = append(s.items, item)
-		added := map[string]any{
-			"id": item.id, "type": itemType, "status": "in_progress",
-			"call_id": item.callID, "name": item.name, inputKey: "",
-		}
-		if err := s.writer.Event("response.output_item.added", map[string]any{
-			"output_index": item.index, "item": added,
-		}); err != nil {
-			return err
-		}
 	}
 	if strings.TrimSpace(delta.ID) != "" {
+		if item.announced && item.callID != delta.ID {
+			return fmt.Errorf("upstream changed an announced tool call ID")
+		}
 		item.callID = delta.ID
-	}
-	if item.toolType == "custom" {
-		if delta.Custom.Name != "" {
-			item.name = mergeStreamedName(item.name, delta.Custom.Name)
-		}
-		if delta.Custom.Input == "" {
-			return nil
-		}
-		item.arguments.WriteString(delta.Custom.Input)
-		return s.writer.Event("response.custom_tool_call_input.delta", map[string]any{
-			"item_id": item.id, "output_index": item.index, "delta": delta.Custom.Input,
-		})
 	}
 	if delta.Function.Name != "" {
 		item.name = mergeStreamedName(item.name, delta.Function.Name)
+	}
+	if err := item.observeName(s.writer); err != nil {
+		return err
 	}
 	arguments := rawJSONString(delta.Function.Arguments)
 	if arguments == "" {
 		return nil
 	}
 	item.arguments.WriteString(arguments)
-	return s.writer.Event("response.function_call_arguments.delta", map[string]any{
-		"item_id": item.id, "output_index": item.index, "delta": arguments,
-	})
+	return item.flushArguments(s.writer)
 }
 
 func mergeStreamedName(current string, delta string) string {
@@ -526,7 +630,7 @@ func (g *Gateway) convertChatStream(
 			return
 		}
 		if err := state.process(chunk); err != nil {
-			_ = state.fail("upstream_error", "Upstream Chat stream could not be converted")
+			_ = state.fail("upstream_error", err.Error())
 			return
 		}
 	}
@@ -534,7 +638,9 @@ func (g *Gateway) convertChatStream(
 		_ = state.fail("upstream_stream_error", "Upstream Chat stream closed before a finish reason")
 		return
 	}
-	_ = state.complete()
+	if err := state.complete(); err != nil {
+		_ = state.fail("upstream_error", err.Error())
+	}
 }
 
 func writeSyntheticStream(
@@ -578,11 +684,13 @@ func writeSyntheticStream(
 		FunctionCall:     choice.Message.FunctionCall,
 	}
 	if err := state.processDelta(delta); err != nil {
-		_ = state.fail("upstream_error", "Upstream Chat response could not be converted")
+		_ = state.fail("upstream_error", err.Error())
 		return
 	}
 	state.finishReason = choice.FinishReason
 	state.sawFinish = true
 	state.usage = upstream.Usage
-	_ = state.complete()
+	if err := state.complete(); err != nil {
+		_ = state.fail("upstream_error", err.Error())
+	}
 }

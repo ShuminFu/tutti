@@ -44,10 +44,6 @@ type chatToolCall struct {
 		Name      string          `json:"name"`
 		Arguments json.RawMessage `json:"arguments"`
 	} `json:"function"`
-	Custom struct {
-		Name  string `json:"name"`
-		Input string `json:"input"`
-	} `json:"custom"`
 }
 
 type chatUsage struct {
@@ -105,7 +101,11 @@ func convertChatResponse(
 		toolCalls = append(toolCalls, legacy)
 	}
 	for _, toolCall := range toolCalls {
-		output = append(output, completedToolCallItem(toolCall, toolMap))
+		item, err := completedToolCallItem(toolCall, toolMap)
+		if err != nil {
+			return nil, err
+		}
+		output = append(output, item)
 	}
 	responseID := responseIDFromUpstream(upstream.ID)
 	createdAt := upstream.Created
@@ -174,28 +174,39 @@ func completedMessageItem(text string) map[string]any {
 	}
 }
 
-func completedToolCallItem(toolCall chatToolCall, toolMap responseToolMap) map[string]any {
+// completedToolCallItem converts one upstream Chat tool call into its Responses
+// output item. A call that resolves to a registered custom tool is restored to
+// custom_tool_call so the caller keeps its own registered tool contract; the
+// upstream function name alone never decides the shape, because a custom tool
+// travels upstream as a synthesized function wrapper.
+func completedToolCallItem(toolCall chatToolCall, toolMap responseToolMap) (map[string]any, error) {
+	if toolType := strings.TrimSpace(toolCall.Type); toolType != "" && toolType != "function" {
+		return nil, fmt.Errorf("upstream Chat tool call type %q is not a function call", toolType)
+	}
 	callID := strings.TrimSpace(toolCall.ID)
 	if callID == "" {
 		callID = newResponseID("call")
 	}
-	if toolCall.Type == "custom" {
-		identity := responseIdentityForChatTool(toolCall.Custom.Name, toolMap)
+	arguments := rawJSONString(toolCall.Function.Arguments)
+	identity := responseIdentityForChatTool(toolCall.Function.Name, toolMap)
+	if identity.WrappedCustomInput {
+		input, err := decodeCustomToolInput(json.RawMessage(arguments))
+		if err != nil {
+			return nil, fmt.Errorf("decode custom tool call %q: %w", identity.Name, err)
+		}
 		item := map[string]any{
 			"id":      newResponseID("ctc"),
 			"type":    "custom_tool_call",
 			"status":  "completed",
 			"call_id": callID,
 			"name":    identity.Name,
-			"input":   toolCall.Custom.Input,
+			"input":   input,
 		}
 		if identity.Namespace != "" {
 			item["namespace"] = identity.Namespace
 		}
-		return item
+		return item, nil
 	}
-	arguments := rawJSONString(toolCall.Function.Arguments)
-	identity := responseIdentityForChatTool(toolCall.Function.Name, toolMap)
 	item := map[string]any{
 		"id":        newResponseID("fc"),
 		"type":      "function_call",
@@ -207,7 +218,7 @@ func completedToolCallItem(toolCall chatToolCall, toolMap responseToolMap) map[s
 	if identity.Namespace != "" {
 		item["namespace"] = identity.Namespace
 	}
-	return item
+	return item, nil
 }
 
 func responseIdentityForChatTool(name string, toolMap responseToolMap) responseToolIdentity {

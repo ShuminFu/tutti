@@ -193,6 +193,14 @@ func TestGatewayConvertsResponsesLiteAdditionalTools(t *testing.T) {
 			http.Error(writer, "invalid request", http.StatusBadRequest)
 			return
 		}
+		// This upstream accepts only function tools, matching the real
+		// function-only route that rejected a native custom declaration.
+		for _, tool := range upstreamRequest.Tools {
+			if tool["type"] != "function" {
+				http.Error(writer, "upstream only accepts function tools", http.StatusBadRequest)
+				return
+			}
+		}
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(writer, `{
 			"id":"chatcmpl-lite",
@@ -202,8 +210,8 @@ func TestGatewayConvertsResponsesLiteAdditionalTools(t *testing.T) {
 			"choices":[{
 				"index":0,
 				"message":{"role":"assistant","content":null,"tool_calls":[{
-					"id":"call_exec","type":"custom",
-					"custom":{"name":"exec","input":"await tools.exec_command({cmd:\"pwd\"})"}
+					"id":"call_exec","type":"function",
+					"function":{"name":"exec","arguments":"{\"input\":\"await tools.exec_command({cmd:\\\"pwd\\\"})\"}"}
 				}]},
 				"finish_reason":"tool_calls"
 			}],
@@ -240,22 +248,36 @@ func TestGatewayConvertsResponsesLiteAdditionalTools(t *testing.T) {
 		t.Fatalf("upstream messages = %#v", upstreamRequest.Messages)
 	}
 	historyCalls := upstreamRequest.Messages[1]["tool_calls"].([]any)
-	historyCustom := historyCalls[0].(map[string]any)["custom"].(map[string]any)
-	if historyCustom["name"] != "exec" || historyCustom["input"] != "return 1" || upstreamRequest.Messages[2]["content"] != "1" {
-		t.Fatalf("upstream custom history = %#v, output = %#v", historyCustom, upstreamRequest.Messages[2])
+	historyCall := historyCalls[0].(map[string]any)
+	historyFunction := historyCall["function"].(map[string]any)
+	if historyCall["type"] != "function" || historyCall["id"] != "call_previous" ||
+		historyFunction["name"] != "exec" || historyFunction["arguments"] != `{"input":"return 1"}` ||
+		upstreamRequest.Messages[2]["content"] != "1" {
+		t.Fatalf("upstream custom history = %#v, output = %#v", historyCall, upstreamRequest.Messages[2])
 	}
 	if len(upstreamRequest.Tools) != 2 {
 		t.Fatalf("upstream tools = %#v", upstreamRequest.Tools)
 	}
-	firstCustom := upstreamRequest.Tools[0]["custom"].(map[string]any)
+	firstTool := upstreamRequest.Tools[0]
+	firstWrapper := firstTool["function"].(map[string]any)
 	secondFunction := upstreamRequest.Tools[1]["function"].(map[string]any)
-	format := firstCustom["format"].(map[string]any)
-	grammar := format["grammar"].(map[string]any)
-	if firstCustom["name"] != "exec" || grammar["syntax"] != "lark" || grammar["definition"] != "start: /.+/" || secondFunction["name"] != "collaboration__spawn_agent" {
+	wrapperParameters := firstWrapper["parameters"].(map[string]any)
+	wrapperProperties := wrapperParameters["properties"].(map[string]any)
+	if firstTool["type"] != "function" || firstWrapper["name"] != "exec" ||
+		secondFunction["name"] != "collaboration__spawn_agent" {
 		t.Fatalf("upstream tools = %#v", upstreamRequest.Tools)
 	}
+	if wrapperParameters["type"] != "object" || wrapperParameters["additionalProperties"] != false ||
+		fmt.Sprint(wrapperParameters["required"]) != "[input]" ||
+		fmt.Sprint(wrapperProperties["input"]) != "map[type:string]" {
+		t.Fatalf("custom tool wrapper parameters = %#v", wrapperParameters)
+	}
+	if description, _ := firstWrapper["description"].(string); !strings.Contains(description, "Run code") ||
+		!strings.Contains(description, "start: /.+/") {
+		t.Fatalf("custom tool wrapper description = %#v", firstWrapper["description"])
+	}
 	choice := upstreamRequest.ToolChoice.(map[string]any)
-	if choice["type"] != "custom" || choice["custom"].(map[string]any)["name"] != "exec" {
+	if choice["type"] != "function" || choice["function"].(map[string]any)["name"] != "exec" {
 		t.Fatalf("upstream tool choice = %#v", upstreamRequest.ToolChoice)
 	}
 
@@ -265,7 +287,9 @@ func TestGatewayConvertsResponsesLiteAdditionalTools(t *testing.T) {
 	}
 	output := converted["output"].([]any)
 	toolCall := output[len(output)-1].(map[string]any)
-	if toolCall["type"] != "custom_tool_call" || toolCall["name"] != "exec" || toolCall["input"] != `await tools.exec_command({cmd:"pwd"})` {
+	if toolCall["type"] != "custom_tool_call" || toolCall["name"] != "exec" ||
+		toolCall["call_id"] != "call_exec" ||
+		toolCall["input"] != `await tools.exec_command({cmd:"pwd"})` {
 		t.Fatalf("converted tool call = %#v", toolCall)
 	}
 }
@@ -557,11 +581,14 @@ func TestGatewayStreamsInterleavedToolCallsReasoningAndUTF8WithoutDone(t *testin
 func TestGatewayStreamsCustomToolCalls(t *testing.T) {
 	t.Parallel()
 
+	// The upstream is function-only, so it streams the custom tool input as
+	// wrapper function arguments split across chunks. The gateway must decode
+	// the wrapper before exposing any custom tool input to the caller.
 	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "text/event-stream")
 		for _, event := range []string{
-			`{"id":"chat-custom","model":"model-a","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_exec","type":"custom","custom":{"name":"exec","input":"await "}}]}}]}`,
-			`{"id":"chat-custom","model":"model-a","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"custom":{"input":"tools.exec_command({cmd:\"pwd\"})"}}]},"finish_reason":"tool_calls"}]}`,
+			`{"id":"chat-custom","model":"model-a","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_exec","type":"function","function":{"name":"exec","arguments":"{\"input\":\"await "}}]}}]}`,
+			`{"id":"chat-custom","model":"model-a","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"tools.exec_command({cmd:\\\"pwd\\\"})\"}"}}]},"finish_reason":"tool_calls"}]}`,
 		} {
 			_, _ = io.WriteString(writer, "data: "+event+"\n\n")
 		}
@@ -583,6 +610,7 @@ func TestGatewayStreamsCustomToolCalls(t *testing.T) {
 	}
 
 	var deltas strings.Builder
+	var wrapperFragments []string
 	var completed map[string]any
 	seenDone := false
 	for _, event := range readSSEEvents(t, response.Body) {
@@ -595,6 +623,8 @@ func TestGatewayStreamsCustomToolCalls(t *testing.T) {
 			deltas.WriteString(payload["delta"].(string))
 		case "response.custom_tool_call_input.done":
 			seenDone = true
+		case "response.function_call_arguments.delta":
+			wrapperFragments = append(wrapperFragments, payload["delta"].(string))
 		case "response.output_item.done":
 			item, _ := payload["item"].(map[string]any)
 			if item["type"] == "custom_tool_call" {
@@ -605,6 +635,12 @@ func TestGatewayStreamsCustomToolCalls(t *testing.T) {
 	wantInput := `await tools.exec_command({cmd:"pwd"})`
 	if deltas.String() != wantInput || !seenDone || completed["name"] != "exec" || completed["input"] != wantInput {
 		t.Fatalf("custom stream deltas=%q done=%v item=%#v", deltas.String(), seenDone, completed)
+	}
+	if completed["call_id"] != "call_exec" {
+		t.Fatalf("custom call identity = %#v", completed)
+	}
+	if len(wrapperFragments) != 0 {
+		t.Fatalf("wrapper JSON leaked as function arguments: %#v", wrapperFragments)
 	}
 }
 
