@@ -80,7 +80,6 @@ type AgentGUIRuntimeUploadedImageBlock = {
 export function uploadComposerDraftImage(input: {
   draftImage: AgentComposerDraftImage;
   runtime: AgentGUIRuntime | null;
-  timeoutMs?: number;
   updateScopedDraft: (
     update: (current: AgentComposerDraft) => AgentComposerDraft
   ) => AgentComposerDraft | null;
@@ -100,8 +99,7 @@ export function uploadComposerDraftImage(input: {
           name: draftImage.name
         }
       ]
-    }),
-    input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }
+    })
   )
     .then((result) => {
       const uploadedImage = result.content.find(

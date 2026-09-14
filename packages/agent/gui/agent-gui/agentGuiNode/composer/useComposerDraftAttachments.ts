@@ -79,12 +79,6 @@ interface UseComposerDraftAttachmentsInput {
   promptImagesSupported: boolean;
   promptFilesSupported: boolean;
   promptAssetLimit?: number | null;
-  /**
-   * Overrides the prompt-asset upload deadline. Production callers omit it and
-   * use the default; tests narrow it so an unsettled upload is observable
-   * without waiting for the real bound.
-   */
-  imageUploadTimeoutMs?: number;
   pastedTextStagingSupported: boolean;
   editorHandleRef: RefObject<AgentRichTextEditorHandle | null>;
   draftPromptRef: RefObject<string>;
@@ -119,7 +113,6 @@ export function useComposerDraftAttachments({
   promptImagesSupported,
   promptFilesSupported,
   promptAssetLimit,
-  imageUploadTimeoutMs,
   pastedTextStagingSupported,
   editorHandleRef,
   draftPromptRef,
@@ -314,9 +307,6 @@ export function useComposerDraftAttachments({
         uploadComposerDraftImage({
           draftImage,
           runtime: agentActivityRuntime,
-          ...(imageUploadTimeoutMs === undefined
-            ? {}
-            : { timeoutMs: imageUploadTimeoutMs }),
           updateScopedDraft: (update) =>
             updateScopedDraft(draftScopeKey, update),
           uploadPromptContent,
@@ -327,7 +317,6 @@ export function useComposerDraftAttachments({
     [
       agentActivityRuntime,
       draftScopeKey,
-      imageUploadTimeoutMs,
       onPromptImagesUnsupported,
       publishScopedDraft,
       promptImagesSupported,

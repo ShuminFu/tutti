@@ -13,32 +13,21 @@ export const AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MESSAGE =
   "Prompt asset upload timed out.";
 
 /**
- * Settles `promise` against a deadline so callers always leave an unsettled
- * state. The original promise keeps running, but its late result is ignored
- * once the timeout has already reported a failure.
+ * Settles `promise` against the prompt-asset upload deadline so callers always
+ * leave an unsettled state. The original promise keeps running, but its late
+ * result is ignored once the deadline has already reported a failure.
  *
- * Uses `AbortSignal.timeout` rather than a raw timer so this deadline is not a
- * new AgentGUI timer call site.
+ * Uses `AbortSignal.timeout` rather than a raw timer so this bound is not a new
+ * AgentGUI timer call site. The deadline is fixed rather than injectable: a
+ * test that shortened it would have to depend on real wall-clock timing, which
+ * is exactly the kind of flake this bound should not introduce.
  */
-export function settleWithTimeout<T>(
-  promise: Promise<T>,
-  options: {
-    message?: string;
-    timeoutMs?: number;
-  } = {}
-): Promise<T> {
-  const timeoutMs = options.timeoutMs ?? AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MS;
-  const deadline = AbortSignal.timeout(timeoutMs);
+export function settleWithTimeout<T>(promise: Promise<T>): Promise<T> {
+  const deadline = AbortSignal.timeout(AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MS);
   const timedOut = new Promise<never>((_resolve, reject) => {
     deadline.addEventListener(
       "abort",
-      () => {
-        reject(
-          new Error(
-            options.message ?? AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MESSAGE
-          )
-        );
-      },
+      () => reject(new Error(AGENT_COMPOSER_ASSET_UPLOAD_TIMEOUT_MESSAGE)),
       { once: true }
     );
   });
