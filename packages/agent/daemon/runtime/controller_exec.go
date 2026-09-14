@@ -107,8 +107,9 @@ func (c *Controller) Exec(ctx context.Context, input ExecInput) (result ExecResu
 	if len(content) == 0 {
 		return ExecResult{}, fmt.Errorf("prompt is required")
 	}
-	providerContent := projectRuntimeConnectorPromptContent(content)
+	providerContent := projectRuntimePromptContent(content)
 	displayPrompt := strings.TrimSpace(input.DisplayPrompt)
+	ctx = withSubmittedPrompt(ctx, content, displayPrompt)
 	if promptAdapter, ok := adapter.(PromptContentAdapter); ok {
 		if err := promptAdapter.ValidatePromptContent(session, providerContent); err != nil {
 			return ExecResult{}, err
@@ -139,6 +140,7 @@ func (c *Controller) Exec(ctx context.Context, input ExecInput) (result ExecResu
 		runCtx = context.WithValue(runCtx, execMetadataContextKey{}, metadata)
 	}
 	runCtx = withCanonicalSubmitFact(runCtx, canonicalSubmit)
+	runCtx = withSubmittedPrompt(runCtx, content, displayPrompt)
 	tuttiModeSnapshot := normalizeTuttiModeTurnSnapshot(input.TuttiModeSnapshot)
 	runCtx = withTuttiModeTurnSnapshot(runCtx, tuttiModeSnapshot)
 	var dispatchObserver *providerDispatchObserver

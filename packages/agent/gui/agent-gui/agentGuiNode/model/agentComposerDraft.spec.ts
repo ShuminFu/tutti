@@ -144,8 +144,18 @@ describe("agentComposerDraft", () => {
 
     expect(agentComposerDraftToPromptContent({ draft, skills: [] })).toEqual([
       { type: "text", text: "before middle after" },
-      { type: "file", kind: "file", name: "first.pdf", path: "/runtime/first.pdf" },
-      { type: "file", kind: "file", name: "second.txt", path: "/runtime/second.txt" }
+      {
+        type: "file",
+        kind: "file",
+        name: "first.pdf",
+        path: "/runtime/first.pdf"
+      },
+      {
+        type: "file",
+        kind: "file",
+        name: "second.txt",
+        path: "/runtime/second.txt"
+      }
     ]);
   });
 
@@ -169,7 +179,12 @@ describe("agentComposerDraft", () => {
     expect(projectAgentComposerDraftSubmission({ draft, skills: [] })).toEqual({
       content: [
         { type: "text", text: "summarize" },
-        { type: "file", kind: "file", name: "report.pdf", path: "/runtime/report.pdf" }
+        {
+          type: "file",
+          kind: "file",
+          name: "report.pdf",
+          path: "/runtime/report.pdf"
+        }
       ],
       displayPrompt: "summarize [@report.pdf](/runtime/report.pdf)"
     });
@@ -267,20 +282,45 @@ describe("agentComposerDraft", () => {
     );
     expect(agentComposerDraftToPromptContent({ draft, skills: [] })).toEqual([
       { type: "text", text: "before after" },
-      { type: "file", kind: "file", name: "report.pdf", path: "/runtime/report.pdf" }
+      {
+        type: "file",
+        kind: "file",
+        name: "report.pdf",
+        path: "/runtime/report.pdf"
+      }
     ]);
   });
 
   it("projects native workspace file mentions without duplicating their paths in text", () => {
     const draft = buildAgentComposerDraft({
-      prompt: "compare [@mac file](/tmp/a file.txt) and [@win file](C:\\\\Users\\\\me\\\\b.txt)"
+      prompt:
+        "compare [@mac file](/tmp/a file.txt) and [@win file](C:\\\\Users\\\\me\\\\b.txt)"
     });
 
     expect(agentComposerDraftToPromptContent({ draft, skills: [] })).toEqual([
       { type: "text", text: "compare and" },
       { type: "file", kind: "file", name: "mac file", path: "/tmp/a file.txt" },
-      { type: "file", kind: "file", name: "win file", path: "C:\\Users\\me\\b.txt" }
+      {
+        type: "file",
+        kind: "file",
+        name: "win file",
+        path: "C:\\Users\\me\\b.txt"
+      }
     ]);
+  });
+
+  it("keeps a directory-only mention as a canonical reference block", () => {
+    const prompt = "[@项目资料](/Users/me/项目 资料/)";
+    const draft = buildAgentComposerDraft({ prompt });
+    expect(agentComposerDraftToPromptContent({ draft, skills: [] })).toEqual([
+      {
+        type: "file",
+        kind: "file",
+        name: "项目资料",
+        path: "/Users/me/项目 资料/"
+      }
+    ]);
+    expect(agentComposerDraftPrompt(draft)).toBe(prompt);
   });
 
   it("normalizes empty drafts", () => {

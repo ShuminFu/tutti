@@ -77,24 +77,13 @@ func TestNormalizeRuntimePromptContentPreservesURLOnlyImage(t *testing.T) {
 	}
 }
 
-func TestPromptContentForACPProjectsLocalFilesAsResourceLinks(t *testing.T) {
-	tests := map[string]struct{ path, uri string }{
-		"posix":   {path: "/tmp/a b#c.txt", uri: "file:///tmp/a%20b%23c.txt"},
-		"windows": {path: `C:\Users\me\a b.txt`, uri: "file:///C:/Users/me/a%20b.txt"},
-		"unc":     {path: `\\server\share\a b.txt`, uri: "file://server/share/a%20b.txt"},
-	}
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			content := normalizeRuntimePromptContent([]PromptContentBlock{{
-				Type: "file", Name: "a b.txt", Path: test.path, SizeBytes: 42,
-			}})
-			projected := promptContentForACP(content)
-			if len(projected) != 1 || projected[0]["type"] != "resource_link" ||
-				projected[0]["name"] != "a b.txt" || projected[0]["uri"] != test.uri ||
-				projected[0]["size"] != int64(42) {
-				t.Fatalf("ACP content = %#v, want resource_link %q", projected, test.uri)
-			}
-		})
+func TestPromptContentForACPReceivesSharedLocalPathText(t *testing.T) {
+	for _, path := range []string{"/tmp/项目资料/a b#c.txt", `C:\Users\me\a b.txt`, `\\server\share\a b.txt`} {
+		content := normalizeRuntimePromptContent([]PromptContentBlock{{Type: "file", Name: "reference", Path: path}})
+		projected := promptContentForACP(projectRuntimePromptContent(content))
+		if len(projected) != 1 || projected[0]["type"] != "text" || projected[0]["text"] != path {
+			t.Fatalf("ACP content = %#v, want original path %q", projected, path)
+		}
 	}
 	if got := normalizeRuntimePromptContent([]PromptContentBlock{{Type: "file", Name: "relative.txt", Path: "relative.txt"}}); len(got) != 0 {
 		t.Fatalf("relative file normalized as %#v, want rejection", got)

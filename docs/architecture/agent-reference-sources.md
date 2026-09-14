@@ -332,6 +332,27 @@ registries do not acquire this capability implicitly. Generated-file cursors
 page only within the bounded recent result and may drift when its ten-second
 cache expires; they do not claim exhaustive history.
 
+## Local reference delivery
+
+Local file and directory references share one input contract. The composer and
+canonical submission retain file blocks with their prepared absolute paths and
+display metadata. Before provider validation and dispatch, the shared agent
+Runtime projects each local file block to an ordinary text block containing its
+raw path. This applies to initial sends, subsequent turns, guidance, asynchronous
+execution, and history replacement. No provider-specific file capability or ACP
+resource-link conversion is required for this flow.
+
+The projection does not read files, enumerate directories, change the working
+directory, or URL-encode paths. Images retain their multimodal contract; skills,
+connectors, and workspace-reference handles keep their existing semantics.
+Upload preparation must resolve a provider-readable local path before using
+this contract; unresolved host locators are not local paths.
+
+Provider wire content is transient. A submission-scoped immutable snapshot
+preserves canonical file blocks and display text when adapters emit user-message
+receipts, including guidance and audit receipts. Persistence and retry never
+depend on a later provenance write overwriting an earlier lossy receipt.
+
 ## Invariants
 
 - Route every operation by `sourceId`; reject unknown sources.

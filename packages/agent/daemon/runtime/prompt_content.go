@@ -326,6 +326,10 @@ func newUserPromptActivityEvent(
 	turnID string,
 	extra map[string]any,
 ) activityshared.Event {
+	if prompt, ok := submittedPromptFromContext(ctx); ok {
+		content = prompt.content
+		explicitDisplayPrompt, visibleText = explicitAndVisiblePromptText(content, prompt.displayPrompt)
+	}
 	payloadExtra := userPromptActivityPayloadExtraFromExecMetadata(ctx, extra)
 	return newUserPromptActivityEventWithFact(
 		session,
@@ -373,7 +377,15 @@ func newUserPromptActivityEventWithFact(
 }
 
 func userPromptActivityPayloadExtraFromExecMetadata(ctx context.Context, extra map[string]any) map[string]any {
-	return userPromptActivityPayloadExtraFromMetadata(execMetadataFromContext(ctx), extra)
+	payload := userPromptActivityPayloadExtraFromMetadata(execMetadataFromContext(ctx), extra)
+	if prompt, ok := submittedPromptFromContext(ctx); ok {
+		if payload == nil {
+			payload = make(map[string]any)
+		}
+		payload["content"] = promptContentForActivity(prompt.content)
+		payload["displayPrompt"] = prompt.displayPrompt
+	}
+	return payload
 }
 
 func userPromptActivityPayloadExtraFromMetadata(metadata map[string]any, extra map[string]any) map[string]any {
@@ -418,16 +430,6 @@ func promptContentForACP(content []PromptContentBlock) []map[string]any {
 				"mimeType": block.MimeType,
 				"data":     block.Data,
 			})
-		case "file":
-			fileURI, ok := promptFileURI(block.Path)
-			if !ok {
-				continue
-			}
-			item := map[string]any{"type": "resource_link", "name": block.Name, "uri": fileURI}
-			if block.SizeBytes > 0 {
-				item["size"] = block.SizeBytes
-			}
-			out = append(out, item)
 		}
 	}
 	return out
