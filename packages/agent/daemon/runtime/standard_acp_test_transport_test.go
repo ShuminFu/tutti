@@ -71,17 +71,20 @@ func (t *multiProcStandardACPTransport) snapshot() (spawned int, live []*standar
 }
 
 type standardACPConnection struct {
-	mu                            sync.Mutex
-	closeOnce                     sync.Once
-	recv                          chan ProcessFrame
-	agentTitle                    string
-	sessionID                     string
-	lastInitializeParamsSnapshot  map[string]any
-	commandUpdateOnNewSession     bool
-	commandUpdateOnLoadSession    bool
-	availableCommands             []AgentSessionCommand
-	promptPermission              bool
-	permissionOptions             []map[string]any
+	mu                           sync.Mutex
+	closeOnce                    sync.Once
+	recv                         chan ProcessFrame
+	agentTitle                   string
+	sessionID                    string
+	lastInitializeParamsSnapshot map[string]any
+	commandUpdateOnNewSession    bool
+	commandUpdateOnLoadSession   bool
+	availableCommands            []AgentSessionCommand
+	promptPermission             bool
+	permissionOptions            []map[string]any
+	// permissionToolCall overrides the toolCall sent with a scripted permission
+	// request, so a test can reproduce the exact shape a provider sends.
+	permissionToolCall            map[string]any
 	promptKind                    string
 	pauseBeforePromptResult       chan struct{}
 	pauseBeforeToolCallCompletion chan struct{}

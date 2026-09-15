@@ -388,6 +388,19 @@ const (
 type PermissionModeDescriptor struct {
 	ID       string
 	Semantic string
+	// AutomaticDecision, when non-empty, is the decision the client applies to
+	// an incoming session/request_permission on its own instead of turning it
+	// into a user approval. Only the safe pairings pass Validate: "approved"
+	// for full-access and "denied" for read-only / locked-down. Empty keeps
+	// today's behaviour — the user is asked — so declaring it is an explicit,
+	// per-tier opt-in.
+	//
+	// ACP targets built straight from the composer profile (see
+	// newClaudeCodeACPAdapterFromProviderDescriptor) install these as their
+	// automatic permission tier. One exception is applied at the stream level
+	// for every provider rather than per descriptor: a request to leave plan
+	// mode is never auto-answered (see standard_acp_stream.go).
+	AutomaticDecision string
 }
 
 type ComposerConfigOptionIDs struct {

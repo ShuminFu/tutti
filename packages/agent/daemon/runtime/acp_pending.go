@@ -51,6 +51,25 @@ func resolveACPPermissionDecisionOptionID(options []map[string]any, decision str
 	return "", false
 }
 
+// acpPermissionRequestToolCall returns the toolCall a permission request is
+// about (nil when the provider sent none).
+func acpPermissionRequestToolCall(raw json.RawMessage) map[string]any {
+	var params struct {
+		ToolCall map[string]any `json:"toolCall"`
+	}
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return nil
+	}
+	return params.ToolCall
+}
+
+// acpPermissionRequestIsPlanExit reports whether an incoming permission request
+// is the provider asking to leave plan mode. Such a request is never resolved by
+// an automatic tier — see the call site in standard_acp_stream.go.
+func acpPermissionRequestIsPlanExit(raw json.RawMessage) bool {
+	return normalizedInteractiveToolName(acpPermissionRequestToolCall(raw)) == "ExitPlanMode"
+}
+
 func acpPermissionResponseResult(optionID string) map[string]any {
 	return map[string]any{"outcome": map[string]any{"outcome": "selected", "optionId": strings.TrimSpace(optionID)}}
 }

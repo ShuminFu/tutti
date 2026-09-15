@@ -108,7 +108,16 @@ func claudeCodeDescriptor() ProviderDescriptor {
 				{ID: "default", Semantic: "ask-before-write"},
 				{ID: "acceptEdits", Semantic: "accept-edits"},
 				{ID: "dontAsk", Semantic: "locked-down"},
-				{ID: "bypassPermissions", Semantic: "full-access"},
+				// 完全放行 = 不再逐条问用户。Claude Code 的 ACP 目标只能从
+				// 这里拿到"自动裁决"：它的适配器不注册自动档位，于是每一条
+				// session/request_permission 都会落成用户审批——包括模型自己
+				// 进入 plan mode 之后要求放行的那些（plan 模式优先于 bypass，
+				// 所以「完全放行」的会话此时仍会问人）。声明成 approved 让
+				// 客户端直接放行，与扩展 provider 的 permissionModes
+				// automaticDecision 同一套语义。
+				// 唯一的例外是「退出 plan mode」那一问：它同时是方案评审和
+				// CLI 侧的模式切换，见 standard_acp_stream.go 里的 plan-exit 规则。
+				{ID: "bypassPermissions", Semantic: "full-access", AutomaticDecision: "approved"},
 			},
 			ConfigOptionIDs: ComposerConfigOptionIDs{
 				Model:      "model",

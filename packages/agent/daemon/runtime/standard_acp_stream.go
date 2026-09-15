@@ -109,12 +109,22 @@ func (a *standardACPAdapter) handleACPMessage(
 		// Automatic tiers resolve the request from the live permission tier
 		// without prompting; the tool call still streams its own activity via
 		// session/update.
+		// Leaving plan mode is never answered on the user's behalf, not even for
+		// a full-access tier. Two reasons: it is the one request whose answer
+		// authorizes implementation (the plan review the product asks for), and
+		// Claude Code's own exit options make the answer mode-changing — its only
+		// allow-once entry is "Yes, and manually approve edits", which the bridge
+		// maps to `setMode: default`. Auto-approving would therefore both skip the
+		// review and silently move the CLI out of the tier the user picked. It
+		// keeps flowing into the exit-plan interactive below.
 		decision := ""
-		if a.config.providerPermissionRequestDecision != nil {
-			decision = strings.TrimSpace(a.config.providerPermissionRequestDecision(message.Params))
-		}
-		if decision == "" {
-			decision = a.automaticPermissionDecisionFor(session)
+		if !acpPermissionRequestIsPlanExit(message.Params) {
+			if a.config.providerPermissionRequestDecision != nil {
+				decision = strings.TrimSpace(a.config.providerPermissionRequestDecision(message.Params))
+			}
+			if decision == "" {
+				decision = a.automaticPermissionDecisionFor(session)
+			}
 		}
 		if decision != "" {
 			if optionID, ok := acpPermissionRequestDecisionOptionID(
@@ -122,6 +132,22 @@ func (a *standardACPAdapter) handleACPMessage(
 				decision,
 				a.config.filterPermissionOptions,
 			); ok {
+				// The tier path answered on the user's behalf, so this line is the
+				// only record such a request ever existed — the durable
+				// workspace_agent_interactions row is not written for it. (The
+				// RnDMaster-contract path logs its own decision separately.)
+				slog.Info("agent session ACP permission auto-answered",
+					"event", "agent_session.acp.permission.auto_answered",
+					"provider", a.config.provider,
+					"adapter", a.config.adapterName,
+					"room_id", session.RoomID,
+					"agent_session_id", session.AgentSessionID,
+					"turn_id", turnID,
+					"request_id", rawMessageLogValue(message.ID),
+					"decision", decision,
+					"option_id", optionID,
+					"tool_name", normalizedInteractiveToolName(acpPermissionRequestToolCall(message.Params)),
+				)
 				if err := client.Respond(ctx, message.ID, acpPermissionResponseResult(optionID), nil); err != nil {
 					slog.Warn("agent session ACP automatic permission response failed",
 						"event", "agent_session.acp.permission.automatic_response_failed",

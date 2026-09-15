@@ -558,6 +558,25 @@ func Validate(descriptor ProviderDescriptor) error {
 	if descriptor.ComposerProfile.PermissionConfigurable && len(descriptor.ComposerProfile.PermissionModes) == 0 {
 		return fmt.Errorf("provider %q configurable permissions require modes", providerID)
 	}
+	// An automatic decision is the client answering a permission request without
+	// the user. Only the two pairings whose whole point is "do not ask" are
+	// allowed, so a typo cannot silently turn a prompting tier into a silent
+	// one. Same rule the Agent Extension composer profiles are validated with.
+	for _, mode := range descriptor.ComposerProfile.PermissionModes {
+		decision := strings.TrimSpace(mode.AutomaticDecision)
+		if decision == "" {
+			continue
+		}
+		semantic := strings.TrimSpace(mode.Semantic)
+		if decision == "approved" && semantic == "full-access" {
+			continue
+		}
+		if decision == "denied" && (semantic == "read-only" || semantic == "locked-down") {
+			continue
+		}
+		return fmt.Errorf("provider %q permission mode %q automatic decision %q is unsafe for semantic %q",
+			providerID, strings.TrimSpace(mode.ID), decision, semantic)
+	}
 	if descriptor.ComposerProfile.ModelSelection && strings.TrimSpace(descriptor.ComposerProfile.ConfigOptionIDs.Model) == "" {
 		return fmt.Errorf("provider %q model selection requires a config option id", providerID)
 	}

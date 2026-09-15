@@ -613,6 +613,69 @@ func TestValidateRejectsUnsupportedDescriptorStrategies(t *testing.T) {
 	}
 }
 
+// A permission mode may only promise an automatic decision where "do not ask"
+// is the whole point of the tier, so a typo cannot silently turn a prompting
+// tier into a silent one.
+func TestValidatePermissionModeAutomaticDecision(t *testing.T) {
+	t.Parallel()
+
+	withMode := func(semantic string, decision string) ProviderDescriptor {
+		descriptor := codexDescriptor()
+		descriptor.ComposerProfile.PermissionModes[0].Semantic = semantic
+		descriptor.ComposerProfile.PermissionModes[0].AutomaticDecision = decision
+		return descriptor
+	}
+
+	for _, test := range []struct {
+		name      string
+		semantic  string
+		decision  string
+		wantError bool
+	}{
+		{name: "full access approves", semantic: "full-access", decision: "approved"},
+		{name: "read only denies", semantic: "read-only", decision: "denied"},
+		{name: "locked down denies", semantic: "locked-down", decision: "denied"},
+		{name: "approve while asking", semantic: "ask-before-write", decision: "approved", wantError: true},
+		{name: "deny while auto accepting", semantic: "accept-edits", decision: "denied", wantError: true},
+		{name: "approve read only", semantic: "read-only", decision: "approved", wantError: true},
+		{name: "deny full access", semantic: "full-access", decision: "denied", wantError: true},
+		{name: "unknown decision", semantic: "full-access", decision: "maybe", wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := Validate(withMode(test.semantic, test.decision))
+			if test.wantError && err == nil {
+				t.Fatalf("Validate() error = nil for %s/%s", test.semantic, test.decision)
+			}
+			if !test.wantError && err != nil {
+				t.Fatalf("Validate() error = %v for %s/%s", err, test.semantic, test.decision)
+			}
+		})
+	}
+}
+
+// The shipped Claude Code descriptor is what makes 完全放行 mean "do not ask" on
+// the ACP target; pin it so a refactor cannot quietly drop the declaration.
+func TestClaudeCodeDescriptorDeclaresFullAccessApproval(t *testing.T) {
+	t.Parallel()
+
+	descriptor := claudeCodeDescriptor()
+	found := false
+	for _, mode := range descriptor.ComposerProfile.PermissionModes {
+		if mode.ID == "bypassPermissions" {
+			found = true
+			if mode.Semantic != "full-access" || mode.AutomaticDecision != "approved" {
+				t.Fatalf("bypassPermissions = %#v, want full-access/approved", mode)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("claude-code descriptor does not declare bypassPermissions")
+	}
+	if err := Validate(descriptor); err != nil {
+		t.Fatalf("Validate(claude-code) error = %v", err)
+	}
+}
+
 func TestValidateRejectsInvalidSlashCommandPolicy(t *testing.T) {
 	tests := []struct {
 		name   string

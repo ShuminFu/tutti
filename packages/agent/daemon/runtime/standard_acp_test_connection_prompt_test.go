@@ -171,13 +171,16 @@ func (c *standardACPConnection) promptRequest() (map[string]any, []map[string]an
 				{"optionId": "q0_skip", "name": "Skip", "kind": "reject_once"},
 			}
 	case "exit-plan":
+		if c.permissionToolCall != nil {
+			return clonePayload(c.permissionToolCall), c.permissionOptions
+		}
 		return map[string]any{
 			"toolCallId": "interactive-plan-1",
 			"title":      "ExitPlanMode",
 			"input": map[string]any{
 				"plan": "Implement the shared renderer",
 			},
-		}, nil
+		}, c.permissionOptions
 	default:
 		options := c.permissionOptions
 		if len(options) == 0 {
