@@ -44,6 +44,12 @@ type acpTurnNormalizer struct {
 	// its short chunks (" ", "\n\n", "**") look exactly like duplicate or
 	// backtracking snapshots.
 	assistantStreamKind acpAssistantStreamKind
+	// inlineReasoning diverts providers' inline <think>...</think> markup into
+	// the thinking channel. Those providers never send the protocol's dedicated
+	// reasoning stream, so the markup would otherwise surface as the answer.
+	// The splitter sees raw provider text before the stream-shape heuristics
+	// run, so snapshot prefix-diffing keeps comparing unstripped text.
+	inlineReasoning inlineReasoningSplitter
 }
 
 type acpAssistantStreamKind int
@@ -157,6 +163,10 @@ func (n *acpTurnNormalizer) AppendAssistantChunk(session Session, turnID string,
 	if n.suppressAssistantOutput {
 		return nil
 	}
+	chunk, reasoningEvents := n.splitInlineReasoning(session, turnID, chunk)
+	if chunk == "" {
+		return reasoningEvents
+	}
 	if n.assistantMessageID == "" || n.assistantSegmentCompleted {
 		n.assistantMessageID = newID()
 		n.assistantContent.Reset()
@@ -168,11 +178,57 @@ func (n *acpTurnNormalizer) AppendAssistantChunk(session Session, turnID string,
 		// Duplicate and backtracking provider snapshots do not change the
 		// normalized message. Suppress them here so they cannot fall through
 		// the stream projection as full precommit message_update snapshots.
-		return nil
+		return reasoningEvents
 	}
 	event := n.assistantSnapshotEvent(session, turnID, messageStreamStateStreaming)
 	attachTextLiveOperation(&event, liveOperation, RoleAssistant, "text")
-	return []activityshared.Event{event}
+	return append(reasoningEvents, event)
+}
+
+// splitInlineReasoning routes any <think>...</think> markup in raw provider text
+// to the thinking channel and returns the assistant-visible remainder together
+// with the thinking events to emit. It runs on every text entry point so that
+// inline-reasoning providers never publish their monologue as the answer.
+func (n *acpTurnNormalizer) splitInlineReasoning(
+	session Session,
+	turnID string,
+	raw string,
+) (string, []activityshared.Event) {
+	if n == nil || raw == "" {
+		return raw, nil
+	}
+	assistant, reasoning := n.inlineReasoning.Feed(raw)
+	if reasoning == "" {
+		return assistant, nil
+	}
+	return assistant, n.AppendThinkingChunk(session, turnID, reasoning)
+}
+
+// bufferInlineReasoning splits raw text into the assistant and reasoning
+// channels, returning the assistant remainder. Thinking is buffered rather than
+// emitted because the authoritative-final path has no session or turn id at
+// hand; Finish publishes the buffered segment.
+func (n *acpTurnNormalizer) bufferInlineReasoning(raw string) string {
+	if n == nil || raw == "" {
+		return raw
+	}
+	assistant, reasoning := n.inlineReasoning.Feed(raw)
+	n.appendInlineReasoning(reasoning)
+	return assistant
+}
+
+// appendInlineReasoning buffers diverted reasoning into the thinking segment,
+// minting the segment id on first content exactly as AppendThinkingChunk does.
+func (n *acpTurnNormalizer) appendInlineReasoning(reasoning string) {
+	if n == nil || reasoning == "" {
+		return
+	}
+	if n.thinkingMessageID == "" || n.thinkingSegmentCompleted {
+		n.thinkingMessageID = newID()
+		n.thinkingContent.Reset()
+		n.thinkingSegmentCompleted = false
+	}
+	_, _ = n.thinkingContent.WriteString(reasoning)
 }
 
 func (n *acpTurnNormalizer) AppendThinkingChunk(session Session, turnID string, chunk string) []activityshared.Event {
@@ -246,6 +302,15 @@ func (n *acpTurnNormalizer) MarkSystemNoticeOutput() {
 }
 
 func (n *acpTurnNormalizer) ApplyAssistantFinalText(finalText string) {
+	n.applyAssistantFinalText(finalText)
+}
+
+// applyAssistantFinalText splits inline <think> markup out of the authoritative
+// final text before it becomes the assistant answer. A response cut off
+// mid-thought arrives here as a bare, unterminated "<think>…" with no closing
+// tag; publishing that verbatim would show the user a truncated monologue in
+// place of the answer.
+func (n *acpTurnNormalizer) applyAssistantFinalText(finalText string) {
 	if n == nil {
 		return
 	}
@@ -254,6 +319,15 @@ func (n *acpTurnNormalizer) ApplyAssistantFinalText(finalText string) {
 	}
 	finalText = strings.TrimSpace(finalText)
 	if finalText == "" {
+		return
+	}
+	finalText = strings.TrimSpace(n.bufferInlineReasoning(finalText))
+	if finalText == "" {
+		// The whole final text was reasoning, so this turn has no answer. Any
+		// assistant text already accumulated for the segment was that same
+		// monologue; drop it rather than publishing it as the reply.
+		n.assistantContent.Reset()
+		n.assistantMessageID = ""
 		return
 	}
 	// Codex may close a streamed assistant segment before item/completed
@@ -314,6 +388,11 @@ func (n *acpTurnNormalizer) AppendAssistantSnapshot(
 	if text == "" {
 		return nil
 	}
+	text = stripInlineReasoningTags(text)
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
 	current := strings.TrimSpace(n.assistantContent.String())
 	if current == text && n.assistantMessageID != "" {
 		if n.assistantSegmentCompleted {
@@ -344,6 +423,11 @@ func (n *acpTurnNormalizer) FailAssistantSnapshot(
 		return nil
 	}
 	messageID = strings.TrimSpace(messageID)
+	text = stripInlineReasoningTags(text)
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
 	if n.assistantMessageID == "" || (messageID != "" && n.assistantMessageID != messageID) {
 		n.assistantMessageID = firstNonEmpty(messageID, newID())
 	}
@@ -409,6 +493,7 @@ func (n *acpTurnNormalizer) Finish(session Session, turnID string, streamState s
 	if n == nil {
 		return nil
 	}
+	n.settleInlineReasoning()
 	events := make([]activityshared.Event, 0, 2)
 	if n.thinkingMessageID != "" && n.thinkingContent.Len() > 0 && !n.thinkingSegmentCompleted {
 		events = append(events, n.thinkingSnapshotEvent(session, turnID, streamState))
@@ -419,6 +504,31 @@ func (n *acpTurnNormalizer) Finish(session Session, turnID string, streamState s
 		n.assistantSegmentCompleted = true
 	}
 	return events
+}
+
+// settleInlineReasoning drains the inline-reasoning splitter at a turn, tool, or
+// segment boundary. It releases any tag tail held back mid-chunk and, when the
+// text ended inside an unterminated <think> block, buffers the trailing
+// monologue as thinking. Critically, it discards any assistant text accumulated
+// from that same unterminated block: a response cut off mid-thought has no
+// answer, and publishing the fragment would present reasoning as the reply.
+func (n *acpTurnNormalizer) settleInlineReasoning() {
+	if n == nil || n.suppressAssistantOutput {
+		return
+	}
+	// Flush releases any tag tail held back mid-chunk. Only an unterminated
+	// block changes the outcome: the tail is then reasoning, and the assistant
+	// text accumulated from that block must not be published as the answer.
+	_, reasoningTail, unterminated := n.inlineReasoning.Flush()
+	if !unterminated {
+		return
+	}
+	if reasoningTail != "" {
+		n.appendInlineReasoning(reasoningTail)
+	}
+	// Any assistant text for this turn was the unterminated monologue itself.
+	n.assistantContent.Reset()
+	n.assistantMessageID = ""
 }
 
 // hasStreamingThinkingSegment reports whether an in-flight thinking segment is

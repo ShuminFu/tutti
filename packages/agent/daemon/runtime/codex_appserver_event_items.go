@@ -85,6 +85,10 @@ func (*CodexAppServerAdapter) appServerItemEvents(
 		// emit a standalone message tagged messageKind=plan for the GUI.
 		events := normalizer.Finish(session, turnID, messageStreamStateCompleted)
 		planMessageID := "plan:" + firstNonEmpty(asString(item["id"]), newID())
+		// This row is built by hand rather than through the normalizer, so any
+		// inline <think> markup the provider wrote into the plan text has to be
+		// stripped here too; the normalizer's splitter never sees this string.
+		planText := stripInlineReasoningTags(asStringRaw(item["text"]))
 		events = append(events, newTurnActivityEventWithID(
 			session,
 			planMessageID,
@@ -92,7 +96,7 @@ func (*CodexAppServerAdapter) appServerItemEvents(
 			turnID,
 			messageStreamStateCompleted,
 			RoleAssistant,
-			asStringRaw(item["text"]),
+			planText,
 			map[string]any{
 				"messageId":   planMessageID,
 				"contentMode": messageContentModeSnapshot,
