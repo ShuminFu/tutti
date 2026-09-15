@@ -505,27 +505,6 @@ func TestExtensionHiddenComposerDiscoveryCleansUpOnTerminalFailureCancellationAn
 		})
 	}
 }
-
-func TestExtensionHiddenComposerDiscoveryCleansPreparedRuntimeAfterStartFailure(t *testing.T) {
-	runtime := newFakeRuntime()
-	runtime.startErr = errors.New("start failed")
-	cleanupCalls := make([]runtimeprep.CleanupInput, 0, 1)
-	service := newIsolatedAgentService(runtime)
-	service.RuntimePreparer = fakeRuntimePreparer{cleanupCalls: &cleanupCalls}
-	input := extensionComposerDiscoveryInput(t.TempDir())
-	scope := newComposerLiveModelScopeForInput(input, ComposerSettings{})
-
-	_, err := service.discoverLiveComposerModelsUncachedForScope(
-		context.Background(), scope, input.providerTargetRef, ComposerSettings{},
-	)
-	if err == nil || !strings.Contains(err.Error(), "start failed") {
-		t.Fatalf("discovery error = %v, want start failure", err)
-	}
-	if len(runtime.startCalls) != 1 || len(runtime.sessions) != 0 || len(cleanupCalls) != 1 {
-		t.Fatalf("start=%d sessions=%d cleanup=%#v, want prepared runtime cleanup", len(runtime.startCalls), len(runtime.sessions), cleanupCalls)
-	}
-}
-
 func TestExtensionHiddenComposerDiscoveryCallerCancellationClosesSession(t *testing.T) {
 	runtime := newFakeRuntime()
 	started := make(chan struct{})

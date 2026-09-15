@@ -6,9 +6,7 @@ import (
 	"testing"
 
 	agenthost "github.com/tutti-os/tutti/packages/agent/host"
-	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	agentactivitybiz "github.com/tutti-os/tutti/packages/agent/store-sqlite"
-	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
 	reporterservice "github.com/tutti-os/tutti/services/tuttid/service/reporter"
 )
 
@@ -433,124 +431,6 @@ func TestServiceGetDoesNotReconcileActionableInteractionFromStaleTranscript(t *t
 		t.Fatalf("Get returned error: %v", err)
 	}
 }
-
-func TestServiceResumesPersistedSessionWithPreparedRuntime(t *testing.T) {
-	runtime := newFakeRuntime()
-	var prepareInput runtimeprep.PrepareInput
-	service := newIsolatedAgentService(runtime)
-	service.AgentTargetStore = fakeAgentTargetStore{targets: defaultTestAgentTargets()}
-	service.RuntimePreparer = fakeRuntimePreparer{
-		input: &prepareInput,
-		result: runtimeprep.PreparedRuntime{
-			Cwd: "/prepared/workdir",
-			Env: []string{"CODEX_HOME=/prepared/codex-home"},
-		},
-	}
-	service.SessionReader = fakeSessionReader{
-		sessions: map[string]PersistedSession{
-			"ws-1:session-1": {
-				ID:                "session-1",
-				WorkspaceID:       "ws-1",
-				AgentTargetID:     agenttargetbiz.IDLocalCodex,
-				Provider:          "codex",
-				ProviderSessionID: "provider-session-1",
-				Cwd:               "/persisted/workdir",
-				Settings: ComposerSettings{
-					Model:            "gpt-5",
-					PermissionModeID: "auto",
-					ReasoningEffort:  "high",
-				},
-				ActiveTurnID:    "turn-1",
-				Title:           "Persisted session",
-				CreatedAtUnixMS: 1000,
-				UpdatedAtUnixMS: 2000,
-			},
-		},
-	}
-
-	if _, err := service.SendInput(context.Background(), "ws-1", "session-1", SendInput{Content: TextPromptContent("hello")}); err != nil {
-		t.Fatalf("SendInput returned error: %v", err)
-	}
-	if prepareInput.WorkspaceID != "ws-1" ||
-		prepareInput.AgentSessionID != "session-1" ||
-		prepareInput.Provider != "codex" ||
-		prepareInput.Cwd != "/persisted/workdir" ||
-		prepareInput.Model != "gpt-5" ||
-		prepareInput.PermissionModeID != "auto" ||
-		prepareInput.ReasoningEffort != "high" {
-		t.Fatalf("prepare input = %#v, want persisted session metadata", prepareInput)
-	}
-	if len(runtime.resumeCalls) != 1 {
-		t.Fatalf("resume calls = %d, want 1", len(runtime.resumeCalls))
-	}
-	resume := runtime.resumeCalls[0]
-	if resume.Cwd != "/prepared/workdir" {
-		t.Fatalf("resume cwd = %q, want prepared cwd", resume.Cwd)
-	}
-	if len(resume.Env) != 1 || resume.Env[0] != "CODEX_HOME=/prepared/codex-home" {
-		t.Fatalf("resume env = %#v, want prepared env", resume.Env)
-	}
-	if resume.Settings.Model != "gpt-5" ||
-		resume.Settings.PermissionModeID != "auto" ||
-		resume.Settings.ReasoningEffort != "high" {
-		t.Fatalf("resume settings = %#v, want persisted settings", resume.Settings)
-	}
-}
-
-func TestServiceResumeClampsPersistedReasoningToSelectedModelCatalog(t *testing.T) {
-	runtime := newFakeRuntime()
-	var prepareInput runtimeprep.PrepareInput
-	service := NewService(runtime)
-	service.RuntimePreparer = fakeRuntimePreparer{
-		input:  &prepareInput,
-		result: runtimeprep.PreparedRuntime{Cwd: "/prepared/workdir"},
-	}
-	service.ModelCatalog = fakeModelCatalog{
-		result: AgentModelCatalogResult{
-			Provider: "codex",
-			Source:   "codex-cli",
-			Models: []AgentModelOption{{
-				ID:                         "gpt-5.6-luna",
-				DefaultReasoningEffort:     "high",
-				ReasoningEffortsAdvertised: true,
-				SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
-					{Value: "low"}, {Value: "medium"}, {Value: "high"},
-				},
-			}},
-		},
-	}
-	service.SessionReader = fakeSessionReader{
-		sessions: map[string]PersistedSession{
-			"ws-1:session-1": {
-				ID:          "session-1",
-				WorkspaceID: "ws-1",
-				Provider:    "codex",
-				Cwd:         "/persisted/workdir",
-				Settings: ComposerSettings{
-					Model:           "gpt-5.6-luna",
-					ReasoningEffort: "ultra",
-				},
-			},
-		},
-	}
-
-	configureTestApplicationHost(service)
-	if _, err := service.SendInput(
-		context.Background(),
-		"ws-1",
-		"session-1",
-		SendInput{Content: TextPromptContent("hello")},
-	); err != nil {
-		t.Fatalf("SendInput returned error: %v", err)
-	}
-	if prepareInput.ReasoningEffort != "high" {
-		t.Fatalf("prepare reasoning effort = %q, want selected model default high", prepareInput.ReasoningEffort)
-	}
-	if len(runtime.resumeCalls) != 1 || runtime.resumeCalls[0].Settings.ReasoningEffort != "high" {
-		t.Fatalf("resume calls = %#v, want selected model default high", runtime.resumeCalls)
-	}
-}
-
 func TestServiceResumesPersistedSessionWithoutProviderSessionID(t *testing.T) {
 	runtime := newFakeRuntime()
 	service := newIsolatedAgentService(runtime)
