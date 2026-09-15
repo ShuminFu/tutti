@@ -132,6 +132,10 @@
       "description": "Disables additional reasoning for the fastest responses",
       "label": "Off"
     },
+    "off": {
+      "description": "Disables additional reasoning for the fastest responses",
+      "label": "Off"
+    },
     "ultra": {
       "description": "Maximum reasoning with automatic task delegation",
       "label": "Ultra"

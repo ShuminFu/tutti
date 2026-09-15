@@ -329,7 +329,11 @@ func composerReasoningConfigFromRuntimeOption(
 			continue
 		}
 		label, description := reasoningEffortDisplay(optionValue, locale, value.Description)
-		if text := strings.TrimSpace(value.Label); text != "" {
+		// 运行时给的显示名只有在它**确实是文案**时才优先。DeepSeek Harness 的 ACP 把
+		// 档位的 name 直接填成取值本身（acpServer.ts 的 `name: value`），于是 "off"/
+		// "high" 这种裸 token 会一路压掉这里的本地化标签——中文界面里显示成小写英文。
+		// 「与取值相同（忽略大小写）」视为没有给名字，继续用 locale 的文案。
+		if text := strings.TrimSpace(value.Label); text != "" && !strings.EqualFold(text, optionValue) {
 			label = text
 		}
 		config.Options = append(config.Options, ComposerConfigOptionValue{

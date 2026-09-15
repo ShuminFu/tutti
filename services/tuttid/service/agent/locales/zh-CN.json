@@ -132,6 +132,10 @@
       "description": "关闭额外推理，以获得最快响应",
       "label": "关闭"
     },
+    "off": {
+      "description": "关闭额外推理，以获得最快响应",
+      "label": "关闭"
+    },
     "ultra": {
       "description": "最高强度推理，并自动委派任务",
       "label": "极致"

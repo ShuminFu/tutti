@@ -213,3 +213,49 @@ func TestMergeRuntimeComposerContextRoutesUnlistedCommandsToSkills(t *testing.T)
 		t.Fatalf("runtime skills = %#v, want typed projection mirrored for diagnostics", options.RuntimeContext["skills"])
 	}
 }
+
+// 运行时给的档位显示名只有在它**确实是文案**时才优先。DeepSeek Harness 的 ACP 把
+// name 直接填成取值本身（扩展的 acpServer.ts 写的是 `name: value`），于是 off/high
+// 这种裸 token 会一路压掉本地化标签，中文界面里显示成小写英文。
+func TestComposerReasoningConfigLocalizesRuntimeTokenEcho(t *testing.T) {
+	option := map[string]any{
+		"id":           "reasoning_effort",
+		"category":     "thought_level",
+		"currentValue": "high",
+		"options": []any{
+			// DH 的回显：把取值本身当显示名。
+			map[string]any{"value": "off", "name": "off"},
+			map[string]any{"value": "high", "name": "High"},
+			// 运行时给了**不同**的文字：那是显示名，必须保留（它也允许别的 provider
+			// 用自己的措辞覆盖 locale）。注意 X-High 不是 xhigh 的忽略大小写回显，
+			// 所以按「有文案」处理。
+			map[string]any{"value": "xhigh", "name": "X-High"},
+			map[string]any{"value": "max", "name": "Maximum depth"},
+		},
+	}
+	config, current := composerReasoningConfigFromRuntimeOption(option, map[string]any{}, "zh-CN")
+	if !config.Configurable {
+		t.Fatal("运行时报了 4 个档位，选择器必须是可配的")
+	}
+	if current != "high" {
+		t.Fatalf("current = %q, want the runtime's currentValue", current)
+	}
+	labels := map[string]string{}
+	for _, value := range config.Options {
+		labels[value.Value] = value.Label
+	}
+	// 这两个取值在 zh-CN 目录里本来没有条目，会显示成裸英文；补上后应显示中文。
+	if labels["off"] != "关闭" {
+		t.Fatalf("off 的标签 = %q, want 关闭（token 回显不该压掉本地化）", labels["off"])
+	}
+	if labels["high"] != "高" {
+		t.Fatalf("high 的标签 = %q, want 高（忽略大小写同样算回显）", labels["high"])
+	}
+	// 不是回显的两条保持运行时给的名字。
+	if labels["xhigh"] != "X-High" {
+		t.Fatalf("xhigh 的标签 = %q, want 运行时给的 X-High", labels["xhigh"])
+	}
+	if labels["max"] != "Maximum depth" {
+		t.Fatalf("max 的标签 = %q, want 运行时给的 Maximum depth（运行时的文案优先）", labels["max"])
+	}
+}
