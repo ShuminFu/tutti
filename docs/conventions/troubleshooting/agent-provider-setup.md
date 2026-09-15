@@ -1006,6 +1006,35 @@ file or directory`. A failed `codex app-server` probe is diagnostic evidence,
   [codex_model_catalog.go](../../../services/tuttid/service/agent/codex_model_catalog.go)
   [codex_capability_catalog.go](../../../services/tuttid/service/agent/codex_capability_catalog.go)
 
+### Codex reasoning selector shows only the current effort
+
+- Symptom:
+  The Composer footer shows `Reasoning High` for a gateway-backed Codex model,
+  but opening the submenu exposes only `High`. The host model endpoint already
+  declares a verified `reasoningEfforts` map for that model, and the model's
+  private Codex catalog can return the full `none/high/max` set.
+- Root cause:
+  A bound model plan or host-default endpoint takes the model-plan Composer
+  overlay path, which intentionally skips the provider-native Codex catalog.
+  The overlay rebuilt the model list but did not project the endpoint model's
+  `reasoningEfforts` into `ReasoningOptionsByModel`. The remaining single value
+  was only the selected-value fallback. A `[1m]` model variant also did not
+  inherit the bare model's reasoning profile.
+- Fix:
+  Project host endpoint reasoning metadata into the Composer overlay for
+  model-catalog providers, using the wire effort values expected by Codex
+  (`off -> none`). Publish the complete `ReasoningConfig` and per-model profile
+  from the overlay, and copy that profile to `[1m]` variants.
+- Validation:
+  Run the focused Composer and model-plan tests with the real host endpoint
+  environment cleared, then compare `tutti-dev agent composer-options` for a
+  gateway DeepSeek model and confirm `none/high/max` is present for both the
+  bare and `[1m]` model values.
+- References:
+  [model_plan_binding.go](../../../services/tuttid/service/agent/model_plan_binding.go)
+  [composer_reasoning_options.go](../../../services/tuttid/service/agent/composer_reasoning_options.go)
+  [composer_context_window_options.go](../../../services/tuttid/service/agent/composer_context_window_options.go)
+
 ### Codex custom model_provider hides app-server models, duplicates replies, or shows metadata warnings
 
 - Symptom:
@@ -2200,7 +2229,6 @@ The error card exposes the provider detail without a sign-in or setup action.
 Historical canonical Turn errors receive the same classification on read;
 stored rows do not need migration. The existing transport detail limit still
 applies, so use the canonical error message when a longer diagnostic is needed.
-
 
 - Symptom:
   A Codex session bound to an OpenAI-protocol Model Plan fails immediately,

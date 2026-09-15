@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -592,7 +593,7 @@ func TestHostDefaultModelEndpointPrecedesProviderNativeFallback(t *testing.T) {
 	if resolution.ModelConfiguration.Source != modelConfigurationSourceHostDefault || resolution.ModelConfiguration.ModelPlanID != "" {
 		t.Fatalf("host model configuration = %#v", resolution.ModelConfiguration)
 	}
-	options := applyResolvedModelPlanComposerOverlay(ComposerOptions{Provider: "codex"}, resolution)
+	options := applyResolvedModelPlanComposerOverlay(ComposerOptions{Provider: "codex"}, resolution, "en")
 	if options.ModelConfig.CurrentValue != "gateway-alt" || len(options.ModelConfig.Options) != 2 {
 		t.Fatalf("host model overlay = %#v", options.ModelConfig)
 	}
@@ -602,6 +603,57 @@ func TestHostDefaultModelEndpointPrecedesProviderNativeFallback(t *testing.T) {
 	endpointContext, ok := options.RuntimeContext["modelEndpoint"].(map[string]any)
 	if !ok || endpointContext["source"] != modelConfigurationSourceHostDefault {
 		t.Fatalf("host endpoint context = %#v", options.RuntimeContext["modelEndpoint"])
+	}
+}
+
+func TestHostDefaultModelEndpointCarriesCodexReasoningOptions(t *testing.T) {
+	none := "none"
+	high := "high"
+	max := "max"
+	path := filepath.Join(t.TempDir(), "host-model-endpoints.json")
+	payload := `{"version":1,"providers":{"codex":{` +
+		`"planName":"DinTal Runtime LLM Proxy","protocol":"openai",` +
+		`"baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback",` +
+		`"wireAPI":"responses","model":"deepseek-flash","models":[` +
+		`{"id":"deepseek-flash","name":"DeepSeek Flash","reasoningEfforts":{` +
+		`"off":"none","high":"high","max":"max"}}]}}}`
+	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(runtimeprep.HostModelEndpointsFileEnv, path)
+
+	includeCapabilityCatalog := false
+	service := newTestService(newFakeRuntime())
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		IncludeCapabilityCatalog: &includeCapabilityCatalog,
+		Provider:                 "codex",
+		Settings: ComposerSettings{
+			Model:           "deepseek-flash",
+			ReasoningEffort: "max",
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if options.EffectiveSettings.ReasoningEffort != max ||
+		options.ReasoningConfig.CurrentValue != max {
+		t.Fatalf("reasoning selection = %#v, replay = %#v", options.EffectiveSettings, options.ReasoningConfig)
+	}
+	if options.ReasoningConfig.Configurable != true {
+		t.Fatalf("reasoning config should be configurable: %#v", options.ReasoningConfig)
+	}
+	if got := composerConfigOptionModelValues(options.ReasoningConfig.Options); !reflect.DeepEqual(got, []string{none, high, max}) {
+		t.Fatalf("reasoning options = %v, want [none high max]", got)
+	}
+	profile, ok := options.ReasoningOptionsByModel["deepseek-flash"]
+	if !ok {
+		t.Fatalf("reasoning profile missing: %#v", options.ReasoningOptionsByModel)
+	}
+	if profile.DefaultValue != high {
+		t.Fatalf("reasoning default = %q, want high", profile.DefaultValue)
+	}
+	if got := composerConfigOptionModelValues(profile.Options); !reflect.DeepEqual(got, []string{none, high, max}) {
+		t.Fatalf("profile options = %v, want [none high max]", got)
 	}
 }
 
@@ -658,7 +710,7 @@ func TestResolveModelPlanNamespacesOpenCodeModelValues(t *testing.T) {
 
 	// The composer overlay surfaces namespaced option values for opencode.
 	resolution := service.resolveModelPlan(ctx, "ws", "local:opencode", "opencode", "")
-	options := applyResolvedModelPlanComposerOverlay(ComposerOptions{Provider: "opencode"}, resolution)
+	options := applyResolvedModelPlanComposerOverlay(ComposerOptions{Provider: "opencode"}, resolution, "en")
 	if options.ModelConfig.CurrentValue != "tutti-model-plan/plan-default" {
 		t.Fatalf("overlay current value = %q", options.ModelConfig.CurrentValue)
 	}
@@ -670,7 +722,7 @@ func TestResolveModelPlanNamespacesOpenCodeModelValues(t *testing.T) {
 
 	// Codex keeps raw plan model values.
 	codexResolution := service.resolveModelPlan(ctx, "ws", "local:codex", "codex", "")
-	codexOptions := applyResolvedModelPlanComposerOverlay(ComposerOptions{Provider: "codex"}, codexResolution)
+	codexOptions := applyResolvedModelPlanComposerOverlay(ComposerOptions{Provider: "codex"}, codexResolution, "en")
 	if codexOptions.ModelConfig.CurrentValue != "plan-default" ||
 		codexOptions.ModelConfig.Options[0].Value != "plan-default" {
 		t.Fatalf("codex overlay = %#v", codexOptions.ModelConfig)

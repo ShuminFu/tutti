@@ -83,6 +83,17 @@ func withContextWindowModelVariants(provider string, options ComposerOptions) Co
 		return options
 	}
 	options.ModelConfig.Options = append(append([]ComposerConfigOptionValue{}, base...), variants...)
+	for _, variant := range variants {
+		baseValue, _ := contextwindow.Split(variant.Value)
+		profile, ok := options.ReasoningOptionsByModel[baseValue]
+		if !ok {
+			continue
+		}
+		options.ReasoningOptionsByModel[variant.Value] = ComposerReasoningProfile{
+			DefaultValue: profile.DefaultValue,
+			Options:      cloneComposerConfigOptionValues(profile.Options),
+		}
+	}
 	options.RuntimeContext = appendRuntimeModelOptionVariants(
 		provider,
 		options.RuntimeContext,

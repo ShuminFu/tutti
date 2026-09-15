@@ -151,6 +151,43 @@ func TestContextWindowModelVariantsMirrorIntoRuntimeContext(t *testing.T) {
 	}
 }
 
+func TestContextWindowModelVariantsCopyReasoningProfiles(t *testing.T) {
+	setHostModelEndpointContractWithModelContext(t, "codex", "openai", map[string]int64{
+		"deepseek-flash": 1_000_000,
+	})
+	options := ComposerOptions{
+		Provider: "codex",
+		ModelConfig: ComposerConfigOption{
+			Options: []ComposerConfigOptionValue{
+				{ID: "deepseek-flash", Label: "DeepSeek Flash", Value: "deepseek-flash"},
+			},
+		},
+		ReasoningOptionsByModel: map[string]ComposerReasoningProfile{
+			"deepseek-flash": {
+				DefaultValue: "high",
+				Options: []ComposerConfigOptionValue{
+					{ID: "none", Label: "Off", Value: "none"},
+					{ID: "high", Label: "High", Value: "high"},
+					{ID: "max", Label: "Max", Value: "max"},
+				},
+			},
+		},
+	}
+
+	got := withContextWindowModelVariants("codex", options)
+
+	profile, ok := got.ReasoningOptionsByModel["deepseek-flash[1m]"]
+	if !ok {
+		t.Fatalf("marked model reasoning profile missing: %#v", got.ReasoningOptionsByModel)
+	}
+	if profile.DefaultValue != "high" {
+		t.Fatalf("marked model default = %q, want high", profile.DefaultValue)
+	}
+	if got := composerConfigOptionModelValues(profile.Options); !reflect.DeepEqual(got, []string{"none", "high", "max"}) {
+		t.Fatalf("marked model options = %v, want [none high max]", got)
+	}
+}
+
 func TestContextWindowModelVariantsLeaveEmptyCatalogAlone(t *testing.T) {
 	t.Parallel()
 	options := ComposerOptions{Provider: "codex"}

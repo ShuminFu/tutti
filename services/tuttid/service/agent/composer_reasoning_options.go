@@ -5,8 +5,129 @@ import (
 
 	"github.com/tutti-os/tutti/packages/agent/daemon/modelcatalog"
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
+	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	"github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
 )
+
+var modelPlanReasoningLevelOrder = []string{
+	"off",
+	"minimal",
+	"low",
+	"medium",
+	"high",
+	"xhigh",
+	"max",
+}
+
+func composerModelPlanReasoningProfiles(
+	provider string,
+	endpoint *runtimeprep.ModelEndpointConfig,
+	locale string,
+) map[string]ComposerReasoningProfile {
+	if endpoint == nil ||
+		composerProfileFor(provider).ReasoningEffortOptions != providerregistry.ReasoningEffortOptionsModelCatalog {
+		return nil
+	}
+	profiles := make(map[string]ComposerReasoningProfile, len(endpoint.Models))
+	for _, model := range endpoint.Models {
+		modelID := strings.TrimSpace(model.ID)
+		if modelID == "" {
+			continue
+		}
+		options := composerModelPlanReasoningOptionValues(model.ReasoningEfforts, locale)
+		if len(options) == 0 {
+			continue
+		}
+		profiles[planModelComposerValue(provider, modelID)] = ComposerReasoningProfile{
+			DefaultValue: composerModelPlanReasoningDefault(provider, options),
+			Options:      options,
+		}
+	}
+	if len(profiles) == 0 {
+		return nil
+	}
+	return profiles
+}
+
+func composerModelPlanReasoningOptionValues(
+	efforts map[string]*string,
+	locale string,
+) []ComposerConfigOptionValue {
+	if len(efforts) == 0 {
+		return nil
+	}
+	options := make([]ComposerConfigOptionValue, 0, len(efforts))
+	seen := make(map[string]struct{}, len(efforts))
+	for _, level := range modelPlanReasoningLevelOrder {
+		wire, declared := efforts[level]
+		if !declared || wire == nil || strings.TrimSpace(*wire) == "" {
+			continue
+		}
+		value := strings.TrimSpace(*wire)
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		label, description := reasoningEffortDisplay(value, locale, "")
+		options = append(options, ComposerConfigOptionValue{
+			Description: description,
+			ID:          value,
+			Label:       label,
+			Value:       value,
+		})
+	}
+	return options
+}
+
+func composerModelPlanReasoningDefault(
+	provider string,
+	options []ComposerConfigOptionValue,
+) string {
+	preferred := strings.TrimSpace(composerProfileFor(provider).DefaultReasoningEffort)
+	for _, option := range options {
+		if strings.TrimSpace(option.Value) == preferred {
+			return preferred
+		}
+	}
+	if len(options) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(options[0].Value)
+}
+
+func applyComposerModelPlanReasoningOptions(
+	options ComposerOptions,
+	endpoint *runtimeprep.ModelEndpointConfig,
+	locale string,
+) ComposerOptions {
+	profiles := composerModelPlanReasoningProfiles(options.Provider, endpoint, locale)
+	if len(profiles) == 0 {
+		return options
+	}
+	options.ReasoningOptionsByModel = profiles
+	profile, ok := profiles[strings.TrimSpace(options.EffectiveSettings.Model)]
+	if !ok {
+		return options
+	}
+	current := composerModelPlanReasoningDefault(options.Provider, profile.Options)
+	for _, option := range profile.Options {
+		if strings.TrimSpace(option.Value) == strings.TrimSpace(options.EffectiveSettings.ReasoningEffort) {
+			current = strings.TrimSpace(option.Value)
+			break
+		}
+	}
+	options.EffectiveSettings.ReasoningEffort = current
+	options.ReasoningConfig = ComposerConfigOption{
+		Configurable: len(profile.Options) > 0,
+		CurrentValue: current,
+		DefaultValue: profile.DefaultValue,
+		Options:      cloneComposerConfigOptionValues(profile.Options),
+	}
+	if options.RuntimeContext != nil {
+		options.RuntimeContext["reasoningEffort"] = nullableString(current)
+	}
+	return options
+}
 
 func composerModelReasoningOptionsByModel(
 	provider string,

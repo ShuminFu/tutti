@@ -477,7 +477,7 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		}
 		options = applyExtensionComposerCapabilities(options, extensionProfile, s.computerUseAvailable(), s.browserUseAvailable())
 	}
-	options = applyResolvedModelPlanComposerOverlay(options, modelPlanResolution)
+	options = applyResolvedModelPlanComposerOverlay(options, modelPlanResolution, locale)
 	options = withContextWindowModelVariants(provider, options)
 	options.CodexSaverModeSupported = codexSaverModeSupported
 	return options, nil

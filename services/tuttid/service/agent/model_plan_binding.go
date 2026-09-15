@@ -462,10 +462,14 @@ func (s *Service) applyModelPlanComposerOverlay(ctx context.Context, input Compo
 			resolution = hostDefault
 		}
 	}
-	return applyResolvedModelPlanComposerOverlay(options, resolution)
+	return applyResolvedModelPlanComposerOverlay(options, resolution, normalizeComposerLocale(input.Locale))
 }
 
-func applyResolvedModelPlanComposerOverlay(options ComposerOptions, resolution modelPlanResolution) ComposerOptions {
+func applyResolvedModelPlanComposerOverlay(
+	options ComposerOptions,
+	resolution modelPlanResolution,
+	locale string,
+) ComposerOptions {
 	endpoint := resolution.Endpoint
 	if endpoint == nil {
 		return options
@@ -491,6 +495,7 @@ func applyResolvedModelPlanComposerOverlay(options ComposerOptions, resolution m
 	if options.RuntimeContext == nil {
 		options.RuntimeContext = map[string]any{}
 	}
+	options = applyComposerModelPlanReasoningOptions(options, endpoint, locale)
 	options.RuntimeContext["model"] = nullableString(endpoint.Model)
 	options.RuntimeContext["configOptions"] = composerConfigOptions(
 		options.Provider,
