@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 )
 
@@ -97,7 +98,12 @@ func nexightACPCommandWithSettings(base []string, session Session) []string {
 func nexightACPConfigEntries(session Session) []string {
 	settings := session.SettingsValue()
 	entries := make([]string, 0, 4)
-	if model := strings.TrimSpace(settings.Model); model != "" {
+	// The model flag is a codex-family id and nexight-acp is codex-acp derived:
+	// `[1m]` is a Claude Code convention (that CLI strips the suffix outbound and
+	// asks for the context-1m beta), so a marked value arriving here names a model
+	// the app-server does not have. Strip it the same way the codex app-server
+	// path does (codex_appserver_event_params.go).
+	if model := contextwindow.Bare(strings.TrimSpace(settings.Model)); model != "" {
 		entries = append(entries, "model="+model)
 		if summary := codexACPReasoningSummaryOverride(model); summary != "" {
 			entries = append(entries, codexACPConfigModelReasoningSummary+"="+summary)

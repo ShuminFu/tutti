@@ -105,6 +105,17 @@ type standardACPConfig struct {
 	restrictConfigOptions          bool
 	launchPermission               *StandardACPLaunchPermissionSetting
 	setModelReasoningEffortMeta    bool
+	// modelValueCarriesContextWindow declares that this runtime reads the 1M
+	// context-window request off the model VALUE — the `[1m]` spelling — rather
+	// than out of band or not at all, so a selected 1M lane has to travel
+	// outbound as `X[1m]`. Claude Code is the only such runtime: its ACP adapter
+	// strips the marker before the request goes out and adds the context-1m
+	// beta, which is what makes the session run at 1000000 instead of 200000.
+	// Every other runtime either takes the window out of band (dsh reads
+	// ModelEndpointConfig.ContextWindow) or has no channel at all; those
+	// advertise canonical bare ids and reject — or silently fuzz back to bare —
+	// a marked value. See modelValueForRuntime.
+	modelValueCarriesContextWindow bool
 	messageDiagnostics             *standardACPMessageDiagnostics
 	localToolBridge                standardACPLocalToolBridge
 	capabilities                   []string

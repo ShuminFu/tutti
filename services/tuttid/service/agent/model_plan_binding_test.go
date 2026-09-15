@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,12 +17,37 @@ import (
 
 func setHostModelEndpointContract(t *testing.T, provider string, protocol string, wireAPIs ...string) {
 	t.Helper()
+	setHostModelEndpointContractWithModelContext(t, provider, protocol, nil, wireAPIs...)
+}
+
+// setHostModelEndpointContractWithModelContext is the same fixture plus the host
+// `modelContext` window table. That table is what the composer's 1M rows are
+// gated on (withContextWindowModelVariants): a model absent from it -- including
+// every model when windows is nil -- has an unknown window and never earns a
+// `X[1m]` row, so a test that wants to see marked rows has to declare the
+// windows here.
+func setHostModelEndpointContractWithModelContext(
+	t *testing.T,
+	provider string,
+	protocol string,
+	windows map[string]int64,
+	wireAPIs ...string,
+) {
+	t.Helper()
 	wireAPI := "responses"
 	if len(wireAPIs) > 0 {
 		wireAPI = wireAPIs[0]
 	}
+	contextPayload := ""
+	if len(windows) > 0 {
+		encoded, err := json.Marshal(windows)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contextPayload = `,"modelContext":` + string(encoded)
+	}
 	path := filepath.Join(t.TempDir(), "host-model-endpoints.json")
-	payload := `{"version":1,"providers":{"` + provider + `":{"planName":"DinTal Runtime LLM Proxy","protocol":"` + protocol + `","baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback","wireAPI":"` + wireAPI + `","model":"gateway-default","models":[{"id":"gateway-default","name":"Gateway Default"},{"id":"gateway-alt","name":"Gateway Alt"}]}}}`
+	payload := `{"version":1` + contextPayload + `,"providers":{"` + provider + `":{"planName":"DinTal Runtime LLM Proxy","protocol":"` + protocol + `","baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback","wireAPI":"` + wireAPI + `","model":"gateway-default","models":[{"id":"gateway-default","name":"Gateway Default"},{"id":"gateway-alt","name":"Gateway Alt"}]}}}`
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -682,5 +708,69 @@ func TestResolveModelPlanEndpointLeavesTheWindowUnsetByDefault(t *testing.T) {
 	}
 	if endpoint.ContextWindow != 0 {
 		t.Fatalf("endpoint context window = %d, want none", endpoint.ContextWindow)
+	}
+}
+
+// The 1M spelling has to survive on the session while the runtime is handed the
+// bare id: the session row and settings_json are the only place a resume can
+// learn that the user asked for 1M, and the endpoint is the only place the
+// runtime learns the window. Writing the bare endpoint id back over input.Model
+// — the 2026-07 behaviour — dropped the request at persistence time, which is
+// why every `X[1m]` session came back at 200k. All four assertions have to hold
+// together; any one of them alone would let the pair drift apart again.
+func TestResolveCreateSessionModelKeepsTheOneMSpellingOnTheSession(t *testing.T) {
+	t.Parallel()
+	service := newPlanBoundService(modelplanbiz.ProtocolOpenAI, true)
+
+	input := CreateSessionInput{AgentTargetID: "local:codex"}
+	resolution, err := service.resolveCreateSessionModelForPlanOrProvider(
+		context.Background(), "ws", "codex", "plan-alt[1m]", &input,
+	)
+	if err != nil {
+		t.Fatalf("resolveCreateSessionModelForPlanOrProvider() error = %v", err)
+	}
+	if resolution.Endpoint == nil {
+		t.Fatal("resolution endpoint = nil, want the bound plan endpoint")
+	}
+	if resolution.Endpoint.Model != "plan-alt" {
+		t.Fatalf("endpoint model = %q, want the bare plan-alt", resolution.Endpoint.Model)
+	}
+	if resolution.Endpoint.ContextWindow != contextwindow.OneMillionTokens {
+		t.Fatalf("endpoint context window = %d, want %d",
+			resolution.Endpoint.ContextWindow, contextwindow.OneMillionTokens)
+	}
+	if resolution.SessionModel != "plan-alt[1m]" {
+		t.Fatalf("resolution session model = %q, want the marked plan-alt[1m]", resolution.SessionModel)
+	}
+	if got := value(input.Model); got != "plan-alt[1m]" {
+		t.Fatalf("input model = %q, want the marked plan-alt[1m] kept on the session", got)
+	}
+}
+
+// The pair to the test above: the same path with no marker keeps the bare
+// spelling and no window. The marker is preserved, never added — a user who
+// picked the 200k entry must not be silently upgraded to 1M.
+func TestResolveCreateSessionModelLeavesTheBareLaneBare(t *testing.T) {
+	t.Parallel()
+	service := newPlanBoundService(modelplanbiz.ProtocolOpenAI, true)
+
+	input := CreateSessionInput{AgentTargetID: "local:codex"}
+	resolution, err := service.resolveCreateSessionModelForPlanOrProvider(
+		context.Background(), "ws", "codex", "plan-alt", &input,
+	)
+	if err != nil {
+		t.Fatalf("resolveCreateSessionModelForPlanOrProvider() error = %v", err)
+	}
+	if resolution.Endpoint == nil {
+		t.Fatal("resolution endpoint = nil, want the bound plan endpoint")
+	}
+	if resolution.Endpoint.Model != "plan-alt" || resolution.Endpoint.ContextWindow != 0 {
+		t.Fatalf("endpoint = %#v, want the bare plan-alt with no window", resolution.Endpoint)
+	}
+	if resolution.SessionModel != "plan-alt" {
+		t.Fatalf("resolution session model = %q, want the bare plan-alt", resolution.SessionModel)
+	}
+	if got := value(input.Model); got != "plan-alt" {
+		t.Fatalf("input model = %q, want the bare plan-alt", got)
 	}
 }

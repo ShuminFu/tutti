@@ -36,6 +36,20 @@ func TestNexightSpawnCommandCarriesModelSettings(t *testing.T) {
 				"--config", "model_reasoning_effort=medium",
 			},
 		},
+		{
+			// nexight-acp is codex-acp derived and addresses models by exact id, so
+			// the Claude Code 1M spelling must not reach the spawn flag. The summary
+			// override is looked up on the bare id: it is a model-family match, and a
+			// marked value would silently miss the spark family.
+			name:     "1M marker is stripped from the codex model flag",
+			settings: &SessionSettings{Model: "gpt-5.3-codex-spark[1m]", ReasoningEffort: "high"},
+			want: []string{
+				nexightACPCommand,
+				"--config", "model=gpt-5.3-codex-spark",
+				"--config", "model_reasoning_summary=none",
+				"--config", "model_reasoning_effort=high",
+			},
+		},
 	}
 
 	for _, tc := range cases {

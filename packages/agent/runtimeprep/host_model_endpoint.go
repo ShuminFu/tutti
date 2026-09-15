@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 )
 
 // HostModelEndpointsEnv carries daemon-owned default model endpoints. A
@@ -21,6 +23,20 @@ type hostModelEndpointsDocument struct {
 	Version   int                            `json:"version"`
 	Routes    map[string]HostProviderRoute   `json:"routes"`
 	Providers map[string]ModelEndpointConfig `json:"providers"`
+	// ModelContext is the host's read-only answer to "how many tokens does this
+	// gateway model really take", one entry per model id the document publishes.
+	// The keys are bare model ids and the values are token counts -- never the
+	// `[1m]` spelling, because this document is read by codex and the extension
+	// catalogs too, and a marked id reaching a consumer that does not strip the
+	// suffix is routed as a model that does not exist.
+	//
+	// It exists so the composer stops inventing 1M rows. A `X[1m]` row is not a
+	// wish the receiving runtime may ignore: for the runtimes that read the
+	// window off the model VALUE (Claude Code), it is a routing key that has to
+	// resolve against the ids the CLI was told about, and the only component that
+	// knows which models actually have a 1M window is the host (its seed table
+	// plus the panel override). Absent entry == unknown == do not offer the row.
+	ModelContext map[string]int64 `json:"modelContext,omitempty"`
 }
 
 // HostProviderRoute is the host-owned execution route for one provider. An
@@ -88,6 +104,53 @@ func HostModelEndpoint(provider string) *ModelEndpointConfig {
 	}
 	endpoint.Models = models
 	return &endpoint
+}
+
+// HostModelContextWindows returns the host's model-window table (see
+// hostModelEndpointsDocument.ModelContext). A missing, malformed, or versionless
+// document yields nil, and callers MUST treat "no entry" as "window unknown"
+// rather than as a default window: over-reporting a window is the failure mode
+// that makes the CLI never auto-compact and blow up at the upstream 400.
+func HostModelContextWindows() map[string]int64 {
+	var document hostModelEndpointsDocument
+	if err := json.Unmarshal(hostModelEndpointsPayload(), &document); err != nil || document.Version != 1 {
+		return nil
+	}
+	windows := make(map[string]int64, len(document.ModelContext))
+	for id, window := range document.ModelContext {
+		id = strings.TrimSpace(id)
+		if id == "" || window <= 0 {
+			continue
+		}
+		windows[id] = window
+	}
+	if len(windows) == 0 {
+		return nil
+	}
+	return windows
+}
+
+// HostModelContextWindow looks up one model's window. The lookup tolerates a
+// `[1m]`-suffixed request because callers hold user spellings: the table itself
+// is keyed by bare id.
+func HostModelContextWindow(id string) (int64, bool) {
+	windows := HostModelContextWindows()
+	if len(windows) == 0 {
+		return 0, false
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return 0, false
+	}
+	if window, ok := windows[id]; ok {
+		return window, true
+	}
+	if base, marked := contextwindow.Split(id); marked {
+		if window, ok := windows[base]; ok {
+			return window, true
+		}
+	}
+	return 0, false
 }
 
 func hostModelEndpointsPayload() []byte {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 )
 
@@ -303,7 +304,12 @@ func runtimeSettingsEnvironmentValue(
 	for _, field := range descriptor.JSONFields {
 		var value string
 		if field.Setting == providerregistry.RuntimeSettingFieldModel {
-			value = strings.TrimSpace(settings.Model)
+			// These descriptors exist only for runtimes that take the model id out
+			// of band (a settings JSON payload, e.g. OpenCode) and address models by
+			// exact id, so a `[1m]` value names a model they do not have: the marker
+			// is Claude Code's own convention and travels the ACP config-option path,
+			// never this one. Same strip as the codex app-server path.
+			value = contextwindow.Bare(strings.TrimSpace(settings.Model))
 		}
 		if value != "" {
 			values[field.JSONKey] = value

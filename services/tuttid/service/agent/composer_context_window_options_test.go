@@ -35,7 +35,13 @@ func baseRuntimeModelOptions(options []map[string]any) []map[string]any {
 }
 
 func TestContextWindowModelVariantsSpellBareIDs(t *testing.T) {
-	t.Parallel()
+	// The rows below come from the host window table, so the table has to be
+	// declared: withContextWindowModelVariants never spells a model the host did
+	// not publish as a 1M window (see composer_context_window_gate_test.go).
+	setHostModelEndpointContractWithModelContext(t, "codex", "openai", map[string]int64{
+		"gpt-5.6-sol": 1_000_000,
+		"glm-5.3":     2_000_000,
+	})
 	options := ComposerOptions{
 		Provider: "codex",
 		ModelConfig: ComposerConfigOption{
@@ -106,7 +112,10 @@ func TestContextWindowModelVariantsAreIdempotent(t *testing.T) {
 }
 
 func TestContextWindowModelVariantsMirrorIntoRuntimeContext(t *testing.T) {
-	t.Parallel()
+	// Same as above: the row exists because the host declared the window.
+	setHostModelEndpointContractWithModelContext(t, "codex", "openai", map[string]int64{
+		"glm-5.3": 1_000_000,
+	})
 	options := ComposerOptions{
 		Provider: "codex",
 		ModelConfig: ComposerConfigOption{
