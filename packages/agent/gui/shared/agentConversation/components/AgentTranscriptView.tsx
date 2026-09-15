@@ -509,6 +509,9 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
       (activeTurn?.turnId === row.turnId
         ? activeTurn.phase !== "settled"
         : conversation.sourceDetail.session.activeTurnId === row.turnId);
+    // A settled Turn cannot still stream; only an unknown Turn identity (turnless
+    // imported or session-level rows) keeps trusting the message row.
+    const turnSettled = canonicalTurn?.phase === "settled";
     return (
       <div
         key={rowKey}
@@ -556,6 +559,7 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
           participantPresentation={participantPresentation}
           showParticipantHeader={showParticipantHeader}
           isActiveTurn={isActiveTurn}
+          turnSettled={turnSettled}
           processingPaused={
             isActiveTurn &&
             row.turnId !== null &&

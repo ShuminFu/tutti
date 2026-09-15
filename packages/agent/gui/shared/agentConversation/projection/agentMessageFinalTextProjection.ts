@@ -101,6 +101,15 @@ function isLatestTranscriptTurnSettled(
   );
 }
 
+// Walks every eligible Turn backwards and stamps its latest visible assistant
+// text as the Turn's final text. Eligibility is the Turn-level "this Turn is
+// settled" signal (see buildAssistantFinalTextEligibleTurnIds), so a message's
+// own stream state must not veto the stamp: a provider that dies mid-stream
+// leaves its last assistant text at status "streaming" forever even though the
+// Turn settled, and honouring that stale state would hand the Turn's final text
+// to an earlier process line while the real reply collapsed into the work
+// section — the "important output is never hidden" failure that
+// docs/architecture/agent-gui-node.md forbids.
 function findLatestAssistantFinalTextTargetKeys(
   rows: readonly AgentTranscriptRowVM[],
   eligibleTurnIds: ReadonlySet<string>
@@ -123,7 +132,7 @@ function findLatestAssistantFinalTextTargetKeys(
       messageIndex -= 1
     ) {
       const message = row.messages[messageIndex];
-      if (message && isSettledAssistantFinalTextCandidate(message)) {
+      if (message && isVisibleTextMessage(message)) {
         targetKeys.add(messagePresentationTargetKey(row, message));
         coveredTurnIds.add(row.turnId);
         break;
@@ -142,16 +151,6 @@ function messagePresentationTargetKey(
 
 function copyTextForUserMessage(message: AgentMessageContentVM): string | null {
   return isVisibleTextMessage(message) ? message.body : null;
-}
-
-function isSettledAssistantFinalTextCandidate(
-  message: AgentMessageContentVM
-): boolean {
-  return (
-    isVisibleTextMessage(message) &&
-    message.statusKind !== "working" &&
-    message.statusKind !== "waiting"
-  );
 }
 
 function isVisibleTextMessage(message: AgentMessageContentVM): boolean {

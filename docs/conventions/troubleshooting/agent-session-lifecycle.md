@@ -3236,6 +3236,46 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   [activity_historical_import_turns.go](../../../packages/agent/store-sqlite/activity_historical_import_turns.go)
   [agent-gui-node.md](../../architecture/agent-gui-node.md)
 
+### A completed Turn's reply is hidden inside the collapsed work section
+
+- Symptom:
+  A settled, successfully completed Turn looks as if the model answered with a
+  short mid-process line, while its real final reply only appears after
+  expanding the collapsed work disclosure.
+- Quick checks:
+  Read the Turn's last assistant text message in `workspace_agent_messages`. If
+  its `status` is still `streaming` while the `workspace_agent_turns` row is
+  `settled`/`completed`, the provider died mid-stream and never finalized that
+  message; the Turn lifecycle, not the message row, is the trustworthy fact.
+- Root cause:
+  The transcript final-text projection used the message's own stream state as
+  the settle signal. A `working`/`waiting` message was rejected as the Turn's
+  final copy target, so the stamp fell back to an earlier process line and every
+  row after it — including the real reply — was classified as work, which the
+  Turn work section then collapsed.
+- Fix:
+  Stamp the latest visible assistant text of every eligible Turn without
+  re-checking that message's own stream state, per the "important output is never
+  hidden" rule in [agent-gui-node.md](../../architecture/agent-gui-node.md).
+  Eligible means the latest Turn once it is settled; earlier Turns stay eligible
+  by position so imported history without `sessionTurns` keeps its stamps.
+  Render-layer consumers follow the same rule: the streaming affordance (Mermaid
+  placeholder, tail-stabilized Markdown) is derived from the Turn lifecycle in
+  `isAgentMessageContentStreaming`, so a settled reply whose body is complete is
+  rendered instead of held on the streaming path. A diagram whose fence is still
+  unterminated keeps the Mermaid placeholder: that content was truncated
+  mid-stream, and `AgentMessageMarkdown` additionally consults a content-derived
+  fence heuristic.
+- Validation:
+  `pnpm --dir packages/agent/gui exec vitest run shared/agentConversation/projection/agentConversationProjection.spec.ts`
+  covers a settled Turn whose final reply never left `streaming`, and
+  `shared/agentConversation/components/AgentMessageBlock.turnStreaming.spec.tsx`
+  covers the settled-versus-live streaming affordance.
+- References:
+  [agentMessageFinalTextProjection.ts](../../../packages/agent/gui/shared/agentConversation/projection/agentMessageFinalTextProjection.ts)
+  [agentMessageContentStreaming.ts](../../../packages/agent/gui/shared/agentConversation/components/agentMessageContentStreaming.ts)
+  [agentTurnWorkSectionModel.ts](../../../packages/agent/gui/shared/agentConversation/components/agentTurnWorkSectionModel.ts)
+
 ### Imported sessions trigger fresh-completion indicators
 
 - Symptom:

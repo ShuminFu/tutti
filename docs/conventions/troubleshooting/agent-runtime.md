@@ -110,6 +110,7 @@ Turn state, loading, cancel, restore, rail projection, event updates, imports, a
 - [Cursor session/new is canceled before its 30-second timeout](./agent-session-lifecycle.md#cursor-sessionnew-is-canceled-before-its-30-second-timeout)
 - [Claude Code keeps returning ConnectionRefused after network recovery](./agent-session-lifecycle.md#claude-code-keeps-returning-connectionrefused-after-network-recovery)
 - [Cursor auto-continue invents interrupted work after a network drop](./agent-session-lifecycle.md#cursor-auto-continue-invents-interrupted-work-after-a-network-drop)
+- [A completed Turn's reply is hidden inside the collapsed work section](./agent-session-lifecycle.md#a-completed-turns-reply-is-hidden-inside-the-collapsed-work-section)
 
 ## [Agent Approvals And Sub-Agents](./agent-approvals-subagents.md)
 

@@ -34,6 +34,7 @@ interface AgentTranscriptItemViewProps {
   participantPresentation?: AgentConversationParticipantPresentation;
   showParticipantHeader?: boolean;
   isActiveTurn?: boolean;
+  turnSettled?: boolean;
   processingPaused?: boolean;
   toolGroupExpanded?: boolean;
   toolGroupExpansionKey?: string;
@@ -56,6 +57,7 @@ export const AgentTranscriptItemView = memo(function AgentTranscriptItemView({
   participantPresentation,
   showParticipantHeader,
   isActiveTurn = false,
+  turnSettled = false,
   processingPaused = false,
   toolGroupExpanded,
   toolGroupExpansionKey,
@@ -108,6 +110,7 @@ export const AgentTranscriptItemView = memo(function AgentTranscriptItemView({
           participantPresentation={participantPresentation}
           showParticipantHeader={showParticipantHeader}
           isActiveTurn={isActiveTurn}
+          turnSettled={turnSettled}
           footerAction={footerAction}
         />
       );

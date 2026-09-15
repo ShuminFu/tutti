@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { normalizeAgentActivitySession } from "@tutti-os/agent-activity-core";
 import type { WorkspaceAgentSessionDetailViewModel } from "../../workspaceAgentSessionDetailViewModel";
 import {
+  buildAgentTranscriptTurnGroups,
+  transcriptRowKey
+} from "../components/agentTranscriptModel";
+import { buildAgentTurnWorkSectionModel } from "../components/agentTurnWorkSectionModel";
+import {
   projectAgentConversationVM,
   reconcileProjectedAgentConversationVM
 } from "./agentConversationProjection";
@@ -1782,6 +1787,123 @@ describe("projectAgentConversationVM", () => {
         isTurnFinalText: true
       }
     ]);
+  });
+
+  it("keeps a settled Turn's real reply visible when the provider left it streaming", () => {
+    const reply = "Root cause: the provider died mid-stream.";
+    const conversation = projectAgentConversationVM(
+      detailViewModel({
+        turns: [
+          {
+            id: "turn-1",
+            userMessage: { id: "user-1", body: "Investigate the crash" },
+            userMessages: [{ id: "user-1", body: "Investigate the crash" }],
+            agentMessages: [
+              { id: "assistant-process", body: "Let me inspect the runtime." },
+              { id: "assistant-reply", body: reply }
+            ],
+            toolCalls: [],
+            toolCallCount: 0,
+            hasFailedToolCall: false,
+            agentItems: [
+              {
+                kind: "message",
+                message: {
+                  id: "assistant-process",
+                  body: "Let me inspect the runtime.",
+                  statusKind: "completed"
+                }
+              },
+              {
+                kind: "tool-calls",
+                id: "tools-1",
+                toolCalls: [
+                  {
+                    id: "call:1",
+                    name: "Read file",
+                    toolName: "read_file",
+                    callType: "tool",
+                    status: "Completed",
+                    statusKind: "completed",
+                    summary: "/workspace/demo/app.log",
+                    payload: null
+                  }
+                ],
+                toolCallCount: 1,
+                hasFailedToolCall: false
+              },
+              {
+                kind: "message",
+                message: {
+                  id: "assistant-reply",
+                  body: reply,
+                  // The Turn settled, but this message never reached a terminal
+                  // stream state because its provider died mid-stream.
+                  statusKind: "working"
+                }
+              }
+            ]
+          }
+        ],
+        showProcessingIndicator: false
+      })
+    );
+
+    const assistantMessages = conversation.rows
+      .filter(
+        (
+          row
+        ): row is Extract<
+          (typeof conversation.rows)[number],
+          { kind: "message" }
+        > => row.kind === "message" && row.speaker === "assistant"
+      )
+      .flatMap((row) => row.messages);
+
+    expect(
+      assistantMessages.map((message) => ({
+        id: message.id,
+        copyText: message.copyText ?? null,
+        isTurnFinalText: message.isTurnFinalText === true
+      }))
+    ).toEqual([
+      {
+        id: "assistant-process",
+        copyText: null,
+        isTurnFinalText: false
+      },
+      {
+        id: "assistant-reply",
+        copyText: reply,
+        isTurnFinalText: true
+      }
+    ]);
+
+    // The reply is the Turn's final text, so the work section collapses around
+    // it instead of hiding it (docs/architecture/agent-gui-node.md: important
+    // output is never hidden).
+    const rowKeys = conversation.rows.map((row) => transcriptRowKey(row));
+    const turnGroups = buildAgentTranscriptTurnGroups(conversation.rows, rowKeys);
+    const turn = conversation.sourceDetail.sessionTurns?.[0] ?? null;
+    const model = buildAgentTurnWorkSectionModel(turnGroups[0]!, turn, false, {
+      collapseIntermediateAssistantReplies: true
+    });
+    const messageIdsBySectionKind = (kind: "visible" | "work") =>
+      (model?.sections ?? [])
+        .filter((section) => section.kind === kind)
+        .flatMap((section) => section.rows)
+        .flatMap((entry) =>
+          entry.row.kind === "message" ? entry.row.messages : []
+        )
+        .map((message) => message.id);
+
+    expect(model?.collapseEligible).toBe(true);
+    expect(model?.sections.map((section) => section.kind)).toEqual([
+      "work",
+      "visible"
+    ]);
+    expect(messageIdsBySectionKind("work")).toEqual(["assistant-process"]);
+    expect(messageIdsBySectionKind("visible")).toEqual(["assistant-reply"]);
   });
 
   it("marks prior turn assistant replies copyable while the latest turn is still working", () => {

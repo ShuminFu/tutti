@@ -27,6 +27,7 @@ import type {
 } from "../contracts/agentConversationParticipantPresentation";
 import { AgentMessageDetailsDisclosure } from "./AgentMessageDetailsDisclosure";
 import { AgentPeerMessageCards } from "./AgentPeerMessageCard";
+import { isAgentMessageContentStreaming } from "./agentMessageContentStreaming";
 
 // RNDMASTER_PEER_MESSAGE_CARD：同伴消息信封折叠成卡片。回退看红时改 false，保留本符号。
 const peerMessageEnvelopeCard = true;
@@ -79,6 +80,8 @@ interface AgentMessageBlockProps {
   participantPresentation?: AgentConversationParticipantPresentation;
   showParticipantHeader?: boolean;
   isActiveTurn?: boolean;
+  /** The row's canonical Turn is settled: no content of it can still stream. */
+  turnSettled?: boolean;
   footerAction?: ReactNode;
 }
 
@@ -99,6 +102,7 @@ export function AgentMessageBlock({
   participantPresentation,
   showParticipantHeader = true,
   isActiveTurn = false,
+  turnSettled = false,
   footerAction
 }: AgentMessageBlockProps): JSX.Element {
   "use memo";
@@ -322,11 +326,11 @@ export function AgentMessageBlock({
           }}
           workspaceAppIcons={workspaceAppIcons}
           enableImageZoom
-          streaming={
-            isActiveTurn ||
-            message.statusKind === "working" ||
-            message.statusKind === "waiting"
-          }
+          streaming={isAgentMessageContentStreaming({
+            isActiveTurn,
+            turnSettled,
+            statusKind: message.statusKind
+          })}
         />
       );
     const editor =
