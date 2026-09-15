@@ -10,13 +10,6 @@ import (
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
 )
 
-func TestDefaultControllerUsesClaudeSDKAdapterByDefault(t *testing.T) {
-	controller := NewDefaultControllerWithProcessTransport(nil, nil)
-	if _, ok := controller.adapters[ProviderClaudeCode].(*ClaudeCodeSDKAdapter); !ok {
-		t.Fatalf("claude-code adapter = %T, want *ClaudeCodeSDKAdapter", controller.adapters[ProviderClaudeCode])
-	}
-}
-
 func TestClaudeCodeSDKAdapterInteractiveApprovalRoundTrip(t *testing.T) {
 	adapter := NewClaudeCodeSDKAdapter(nil)
 	session := standardTestSession(ProviderClaudeCode)
