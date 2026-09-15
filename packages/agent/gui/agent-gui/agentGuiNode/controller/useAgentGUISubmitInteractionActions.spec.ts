@@ -219,11 +219,7 @@ describe("conversation stop", () => {
     );
 
     act(() =>
-      result.current.stopBackgroundMonitors([
-        "monitor-a",
-        "  ",
-        " monitor-b "
-      ])
+      result.current.stopBackgroundMonitors(["monitor-a", "  ", " monitor-b "])
     );
 
     expect(stopSession).toHaveBeenCalledTimes(2);

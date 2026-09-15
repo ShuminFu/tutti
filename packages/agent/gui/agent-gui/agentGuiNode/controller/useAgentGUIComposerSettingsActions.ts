@@ -156,16 +156,16 @@ export function useAgentGUIComposerSettingsActions(
         ? selectEngineSessionSettingsUpdate(state, agentSessionId)
         : null;
       if (update?.commandId === commandId) {
-		if (
-			update.status === "inFlight" ||
-			update.status === "waitingForPromptSend" ||
-			update.status === "waitingForRuntime"
-		) {
-			return;
-		}
-		pendingFastFallbackCommandRef.current = null;
-		return;
-	  }
+        if (
+          update.status === "inFlight" ||
+          update.status === "waitingForPromptSend" ||
+          update.status === "waitingForRuntime"
+        ) {
+          return;
+        }
+        pendingFastFallbackCommandRef.current = null;
+        return;
+      }
       pendingFastFallbackCommandRef.current = null;
       const speed = agentSessionId
         ? selectEngineSession(state, agentSessionId)?.settings?.speed

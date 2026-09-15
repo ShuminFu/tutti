@@ -485,7 +485,7 @@ describe("useAgentGUIComposerSettingsActions", () => {
       await Promise.resolve();
     });
     expect(onShowMessage).toHaveBeenCalledWith(
-		"Fast mode is not supported by the current model. Standard mode is now in use.",
+      "Fast mode is not supported by the current model. Standard mode is now in use.",
       "warning"
     );
   });
