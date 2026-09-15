@@ -304,6 +304,10 @@ func (c *standardACPConnection) Send(data []byte) error {
 			}
 			c.promptCallCount++
 			promptCall := c.promptCallCount
+			c.promptResultStopReason = ""
+			if promptCall <= c.truncatedOutputPrompts {
+				c.promptResultStopReason = "max_tokens"
+			}
 			c.mu.Unlock()
 			if c.planLimitPromptError {
 				c.sendJSON(map[string]any{
@@ -398,7 +402,7 @@ func (c *standardACPConnection) Send(data []byte) error {
 				c.sendJSON(map[string]any{
 					"jsonrpc": "2.0",
 					"id":      message.ID,
-					"result":  map[string]any{"stopReason": "end_turn"},
+					"result":  map[string]any{"stopReason": firstNonEmpty(c.promptResultStopReason, "end_turn")},
 				})
 				return nil
 			}

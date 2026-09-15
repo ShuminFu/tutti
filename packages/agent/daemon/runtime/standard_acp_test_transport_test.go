@@ -129,6 +129,13 @@ type standardACPConnection struct {
 	// emptyPromptResult returns a normal ACP end_turn without any session
 	// updates, matching providers that hide a model/account failure.
 	emptyPromptResult bool
+	// truncatedOutputPrompts makes the first N session/prompt calls report
+	// `max_tokens` — the stop reason a real provider sends when it reaches its
+	// output-token ceiling — after streaming the normal updates.
+	truncatedOutputPrompts int
+	// promptResultStopReason is the stop reason resolved for the prompt call
+	// being served, derived from truncatedOutputPrompts.
+	promptResultStopReason string
 	// promptResultUpdates replaces the normal prompt stream with only these
 	// session updates followed by end_turn.
 	promptResultUpdates      []map[string]any

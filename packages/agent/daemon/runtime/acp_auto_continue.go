@@ -44,7 +44,8 @@ func acpRetriableTurnTailError(text string) (string, bool) {
 
 // acpStopReasonEndsTurnNormally reports whether the stop reason would take
 // Exec's default (turn-completed) branch — the only state worth auto-continuing
-// from. Canceled and hard-failure stop reasons keep their existing handling.
+// from. Canceled and hard-failure stop reasons keep their existing handling, and
+// output truncation is resumed by its own branch, not by this one.
 func acpStopReasonEndsTurnNormally(stopReason string) bool {
 	switch stopReason {
 	case "canceled", "refusal", "max_tokens", "max_turn_requests":
@@ -52,6 +53,15 @@ func acpStopReasonEndsTurnNormally(stopReason string) bool {
 	default:
 		return true
 	}
+}
+
+// acpStopReasonTruncatedOutput reports the stop reason that means the provider
+// hit its output-token ceiling with the turn unfinished. Nothing failed on the
+// wire: the provider answered, the answer just did not fit. That is why this
+// condition is provider-wide rather than an opt-in like the transport retry
+// above — a truncated turn must either continue or say it was truncated.
+func acpStopReasonTruncatedOutput(stopReason string) bool {
+	return stopReason == "max_tokens"
 }
 
 // acpAutoContinueHasUsefulProgress reports whether the failed attempt produced
@@ -107,5 +117,40 @@ func acpAutoContinueNoticeEvent(session Session, turnID string, errLine string, 
 		"title":      fmt.Sprintf("Connection to the agent backend dropped; continuing automatically (%d/%d).", attempt, acpAutoContinueMaxAttempts),
 		"detail":     errLine,
 		"retryable":  true,
+	}, "system_notice", true)
+}
+
+// acpTruncatedOutputError is what a truncated turn settles with once the bounded
+// continuations also hit the ceiling. The turn is still a failure — the request
+// went unanswered — but it has to name truncation: without it the failure card
+// reads like an agent crash and hides that the work is resumable.
+const acpTruncatedOutputError = "provider_output_truncated: the provider stopped at its output token limit before finishing the turn"
+
+// acpAutoContinueTruncatedPrompt resumes a turn the output ceiling cut short.
+// The provider session already holds the cut-off output, so the prompt only names
+// the cut; restating the task invites a rewrite of completed work.
+const acpAutoContinueTruncatedPrompt = "Your previous response was cut off by the output token limit. Continue from exactly where it stopped and finish the remaining work; do not repeat output that already completed."
+
+// acpAutoContinueTruncatedPromptContent is the synthetic prompt that resumes a
+// truncated turn. Like the transport retry it is not emitted as a user message:
+// the provider session retains the full prior context.
+func acpAutoContinueTruncatedPromptContent() []map[string]any {
+	return []map[string]any{{
+		"type": "text",
+		"text": acpAutoContinueTruncatedPrompt,
+	}}
+}
+
+// acpTruncatedOutputNoticeEvent renders the in-transcript banner that separates
+// the cut-off output from the continuation, so a long turn does not look like it
+// restarted on its own.
+func acpTruncatedOutputNoticeEvent(session Session, turnID string, attempt int) (activityshared.Event, bool) {
+	return acpSystemNoticeEvent(session, turnID, map[string]any{
+		"kind":       "agent_system_notice",
+		"noticeKind": "output_truncated",
+		"severity":   "warning",
+		"title":      fmt.Sprintf("The reply reached the provider's output token limit; continuing automatically (%d/%d).", attempt, acpAutoContinueMaxAttempts),
+		"detail":     acpTruncatedOutputError,
+		"retryable":  false,
 	}, "system_notice", true)
 }

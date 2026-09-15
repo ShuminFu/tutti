@@ -304,6 +304,35 @@ execLoop:
 				break execLoop
 			}
 		}
+		// A turn the output ceiling cut short is resumable, and it is not a
+		// transport failure: the provider session still holds the cut-off output,
+		// so a bounded continuation finishes the work instead of dead-ending the
+		// conversation. Exhausted attempts (or a truncation with nothing to
+		// continue from) falls through to the failure below, which names it.
+		if acpStopReasonTruncatedOutput(stopReason) &&
+			autoContinueAttempts < acpAutoContinueMaxAttempts &&
+			normalizer.HasObservableOutput() {
+			autoContinueAttempts++
+			// Close the cut-off segment so the continuation streams into a fresh
+			// message instead of appending to a truncated one.
+			emitEvents(normalizer.Finish(session, turnID, messageStreamStateCompleted))
+			if notice, ok := acpTruncatedOutputNoticeEvent(session, turnID, autoContinueAttempts); ok {
+				emitEvents([]activityshared.Event{notice})
+			}
+			slog.Warn("agent session ACP auto-continue after output truncation",
+				"event", "agent_session.acp.exec.auto_continue_truncated",
+				"provider", a.config.provider,
+				"adapter", a.config.adapterName,
+				"room_id", session.RoomID,
+				"agent_session_id", session.AgentSessionID,
+				"provider_session_id", session.ProviderSessionID,
+				"turn_id", turnID,
+				"attempt", autoContinueAttempts,
+				"max_attempts", acpAutoContinueMaxAttempts,
+			)
+			promptParams = acpAutoContinueTruncatedPromptContent()
+			continue execLoop
+		}
 		switch stopReason {
 		case "canceled":
 			terminalEvents := normalizer.FinishInterrupted(session, turnID, stopReason)
@@ -312,10 +341,26 @@ execLoop:
 			}))
 			emitEvents(terminalEvents)
 		case "refusal", "max_tokens", "max_turn_requests":
+			metadata := map[string]any{"stopReason": stopReason}
+			if acpStopReasonTruncatedOutput(stopReason) {
+				// Every continuation hit the ceiling too, or the provider produced
+				// nothing worth continuing: the turn stays failed, but it says why
+				// instead of showing an unexplained failure card.
+				metadata["error"] = acpTruncatedOutputError
+				slog.Warn("agent session ACP turn ended at the provider output limit",
+					"event", "agent_session.acp.exec.output_truncated",
+					"provider", a.config.provider,
+					"adapter", a.config.adapterName,
+					"room_id", session.RoomID,
+					"agent_session_id", session.AgentSessionID,
+					"provider_session_id", session.ProviderSessionID,
+					"turn_id", turnID,
+					"stop_reason", stopReason,
+					"auto_continue_attempts", autoContinueAttempts,
+				)
+			}
 			terminalEvents := normalizer.FinishFailed(session, turnID)
-			terminalEvents = append(terminalEvents, standardACPRootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeFailed, map[string]any{
-				"stopReason": stopReason,
-			}))
+			terminalEvents = append(terminalEvents, standardACPRootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeFailed, metadata))
 			emitEvents(terminalEvents)
 		default:
 			if !normalizer.HasObservableOutput() {

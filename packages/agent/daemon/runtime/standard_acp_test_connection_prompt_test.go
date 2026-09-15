@@ -113,7 +113,7 @@ func (c *standardACPConnection) streamPromptResult(promptID json.RawMessage) {
 		"jsonrpc": "2.0",
 		"id":      promptID,
 		"result": map[string]any{
-			"stopReason": "end_turn",
+			"stopReason": firstNonEmpty(c.promptResultStopReason, "end_turn"),
 		},
 	})
 }
