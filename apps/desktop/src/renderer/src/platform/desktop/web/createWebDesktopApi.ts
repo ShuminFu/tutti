@@ -354,8 +354,8 @@ function createWebHostApi(): DesktopHostApi {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 name: input.name,
-                allow_existing: Boolean(input.allowExisting),
-              }),
+                allow_existing: Boolean(input.allowExisting)
+              })
             }).then(async (response) => {
               if (!response.ok) {
                 throw new Error(
@@ -417,7 +417,10 @@ function createWebHostApi(): DesktopHostApi {
         ).then(
           (result) => result?.path ?? null,
           (error) => {
-            if (error instanceof HostBridgeUnavailableError && !isHostBridgeAvailable()) {
+            if (
+              error instanceof HostBridgeUnavailableError &&
+              !isHostBridgeAvailable()
+            ) {
               return Promise.reject(electronDebugRequired("selectDirectory"));
             }
             return Promise.reject(error);
@@ -455,11 +458,27 @@ function createWebHostApi(): DesktopHostApi {
         return Promise.reject(electronDebugRequired("revealWorkspaceFile"));
       },
       openExternal(url) {
-        window.open(url, "_blank", "noopener,noreferrer");
-        return Promise.resolve();
+        return requestHostCapability("openExternal", [url]).then(
+          () => undefined,
+          (error) => {
+            if (error instanceof HostBridgeUnavailableError) {
+              window.open(url, "_blank", "noopener,noreferrer");
+              return;
+            }
+            return Promise.reject(error);
+          }
+        );
       },
-      openTerminalLink() {
-        return Promise.reject(electronDebugRequired("openTerminalLink"));
+      openTerminalLink(input) {
+        return requestHostCapability("openTerminalLink", [input]).then(
+          () => undefined,
+          (error) => {
+            if (error instanceof HostBridgeUnavailableError) {
+              return Promise.reject(electronDebugRequired("openTerminalLink"));
+            }
+            return Promise.reject(error);
+          }
+        );
       },
       readLocalFileText() {
         return Promise.reject(electronDebugRequired("readLocalFileText"));
@@ -477,14 +496,23 @@ function createWebHostApi(): DesktopHostApi {
             const name = result?.name?.trim() ?? "";
             const path = result?.path?.trim() ?? "";
             const sizeBytes = Number(result?.sizeBytes);
-            if (!name || !path || !Number.isFinite(sizeBytes) || sizeBytes < 0) {
-              return Promise.reject(electronDebugRequired("archiveAgentPromptFile"));
+            if (
+              !name ||
+              !path ||
+              !Number.isFinite(sizeBytes) ||
+              sizeBytes < 0
+            ) {
+              return Promise.reject(
+                electronDebugRequired("archiveAgentPromptFile")
+              );
             }
             return { name, path, sizeBytes };
           },
           (error) => {
             if (error instanceof HostBridgeUnavailableError) {
-              return Promise.reject(electronDebugRequired("archiveAgentPromptFile"));
+              return Promise.reject(
+                electronDebugRequired("archiveAgentPromptFile")
+              );
             }
             return Promise.reject(error);
           }
@@ -512,7 +540,10 @@ function createWebHostApi(): DesktopHostApi {
               .filter((path): path is string => typeof path === "string");
           },
           (error) => {
-            if (error instanceof HostBridgeUnavailableError && !isHostBridgeAvailable()) {
+            if (
+              error instanceof HostBridgeUnavailableError &&
+              !isHostBridgeAvailable()
+            ) {
               return Promise.reject(electronDebugRequired("selectUploadFiles"));
             }
             return Promise.reject(error);
