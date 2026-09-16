@@ -40,6 +40,15 @@ export interface ConversationRailPairKickoffInput {
   goal: string;
 }
 
+export interface ConversationRailCommitPairKickoffInput
+  extends ConversationRailPairKickoffInput {
+  /**
+   * preview 时拍下的开发者（task id 或会话号，后端同样归一）。给了且与行里当前
+   * developer 不一致 → 409 kickoff_roles_changed，不投递、保持 pending（契约补充评审 A）。
+   */
+  expectedDeveloperTaskId?: string;
+}
+
 export interface ConversationRailPeerPairingHost {
   createPeerPair(
     input: ConversationRailCreatePeerPairInput
@@ -61,7 +70,7 @@ export interface ConversationRailPeerPairingHost {
    * pending，调用方按「没投到」处理，下一句再带卡重试。
    */
   commitPairKickoff?(
-    input: ConversationRailPairKickoffInput
+    input: ConversationRailCommitPairKickoffInput
   ): Promise<{
     pair: ConversationRailPeerPair;
     delivered: boolean;

@@ -62,6 +62,7 @@ function session(id: string): ConversationRailSplitDragSession {
 
 interface Harness {
   calls: { args: unknown; kind: string }[];
+  listCount(): number;
   controller: EmbeddedSplitViewController;
   errors: string[];
   extension: AgentComposerHostExtension;
@@ -71,6 +72,8 @@ interface Harness {
 async function harness(
   options: {
     commit?: () => Promise<{ delivered: boolean; reason?: string } | void>;
+    /** 同一条 session-a 名下别的配对行（不在分栏里）。 */
+    extraPairs?: unknown[];
     preview?: () => Promise<{ block: string }>;
     row?: Partial<Row>;
   } = {}
@@ -83,6 +86,7 @@ async function harness(
   };
   const calls: { args: unknown; kind: string }[] = [];
   const errors: string[] = [];
+  let listCount = 0;
   const pairRow = () => ({
     a: { sessionId: "session-a", taskId: "task-a", title: "a" },
     b: { sessionId: "session-b", taskId: "task-b", title: "b" },
@@ -103,12 +107,24 @@ async function harness(
     },
     createPeerPair: async () => ({ pairId: "p1" }),
     deletePeerPair: async () => undefined,
-    listPeerPairs: async () => ({ pairs: [pairRow()] }),
+    listPeerPairs: async () => {
+      listCount += 1;
+      return { pairs: [pairRow(), ...(options.extraPairs ?? [])] };
+    },
     async previewPairKickoff(args: unknown) {
       calls.push({ args, kind: "preview" });
       return options.preview ? options.preview() : { block: BLOCK };
     },
-    setPeerPairMode: async () => ({ pair: pairRow() })
+    async setPeerPairMode(args: {
+      developerTaskId?: string;
+      mode: "solo" | "pair";
+    }) {
+      calls.push({ args, kind: "mode" });
+      row.pairMode = args.mode;
+      row.developerTaskId = args.mode === "pair" ? (args.developerTaskId ?? "") : "";
+      row.kickoffState = args.mode === "pair" ? "pending" : "";
+      return { pair: pairRow() };
+    }
   };
   const controller = createEmbeddedSplitViewController({
     geometry: {
@@ -119,6 +135,7 @@ async function harness(
     labels: () => ({
       kickoffCommitFailed: "搭档没收到开工卡",
       kickoffPreviewFailed: "开工卡没准备好",
+      kickoffRolesChanged: "角色刚被调整",
       paired: "已配对",
       relaunchTimeout: "超时",
       unmanaged: "未托管"
@@ -140,7 +157,14 @@ async function harness(
     wantsSubmitPreparation: ({ agentSessionId }) =>
       controller.wantsPairKickoff(agentSessionId)
   };
-  return { calls, controller, errors, extension, row };
+  return {
+    calls,
+    controller,
+    errors,
+    extension,
+    listCount: () => listCount,
+    row
+  };
 }
 
 type Content = { text?: string; type: "image" | "text"; url?: string }[];
@@ -192,9 +216,17 @@ test("pending 时拦截：块拼进第一个文字块，图片块不动；被接
     kinds(h, "preview").map((call) => call.args),
     [{ goal: "修登录页", pairId: "p1", senderTaskId: "task-a" }]
   );
+  // 评审 A：commit 带上 preview 时拍下的开发者，后端据此判角色有没有变。
   assert.deepEqual(
     kinds(h, "commit").map((call) => call.args),
-    [{ goal: "修登录页", pairId: "p1", senderTaskId: "task-a" }]
+    [
+      {
+        expectedDeveloperTaskId: "task-a",
+        goal: "修登录页",
+        pairId: "p1",
+        senderTaskId: "task-a"
+      }
+    ]
   );
   // commit 之后配对表重拉，行是 sent：下一句不再拦截。
   assert.equal(h.controller.getSnapshot().pairMode?.kickoffState, "sent");
@@ -314,5 +346,130 @@ test("开工卡在途时同一对的第二句不再拼卡", async () => {
   release(true);
   await first;
   assert.equal(kinds(h, "commit").length, 1);
+  h.controller.dispose();
+});
+
+test("评审 D：分栏这一对是独立模式时，同一会话别的 pending 配对行不劫持这句", async () => {
+  const h = await harness({
+    extraPairs: [
+      {
+        a: { sessionId: "session-a", taskId: "task-a", title: "a" },
+        b: { sessionId: "session-z", taskId: "task-z", title: "z" },
+        developerTaskId: "task-a",
+        kickoffState: "pending",
+        pairId: "pz",
+        pairMode: "pair"
+      }
+    ],
+    row: { developerTaskId: "", kickoffState: "", pairMode: "solo" }
+  });
+  assert.equal(h.controller.wantsPairKickoff("session-a"), false);
+  const content: Content = [{ text: "继续", type: "text" }];
+  const { sent } = await submit(h, content);
+  assert.deepEqual(sent, [content]);
+  assert.equal(kinds(h, "preview").length, 0);
+  h.controller.dispose();
+});
+
+test("评审 D：会话不在任一栏里（被换走）不拦截", async () => {
+  const h = await harness();
+  assert.equal(h.controller.wantsPairKickoff("session-a"), true);
+  assert.equal(h.controller.wantsPairKickoff("session-elsewhere"), false);
+  h.controller.dispose();
+});
+
+test("评审 A：等引擎接受期间换了角色 → 不 commit、提示、重拉；下一句按新行再拼卡", async () => {
+  const h = await harness();
+  let release: (value: boolean) => void = () => {};
+  const first = submit(
+    h,
+    [{ text: "第一句", type: "text" }],
+    () =>
+      new Promise<boolean>((resolve) => {
+        release = resolve;
+      })
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await h.controller.setPairMode("left", "reviewer");
+  assert.equal(h.row.developerTaskId, "task-b");
+  const listsBefore = h.listCount();
+
+  release(true);
+  await first;
+
+  assert.equal(kinds(h, "commit").length, 0);
+  assert.deepEqual(h.errors, ["角色刚被调整"]);
+  assert.equal(h.listCount(), listsBefore + 1);
+  assert.equal(h.controller.wantsPairKickoff("session-a"), true);
+  h.controller.dispose();
+});
+
+test("评审 C：preview / commit 失败都重拉配对表，缓存对齐后端真相", async () => {
+  const previewFails = await harness({
+    preview: async () => {
+      throw new Error("kickoff_not_pending");
+    }
+  });
+  let before = previewFails.listCount();
+  await submit(previewFails, [{ text: "第一句", type: "text" }]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(previewFails.listCount(), before + 1);
+  previewFails.controller.dispose();
+
+  // commit 超时，但后端其实已经记成 sent：重拉之后下一句不再拼卡。
+  let commits = 0;
+  const commitTimesOut = await harness({
+    commit: async () => {
+      commits += 1;
+      commitTimesOut.row.kickoffState = "sent";
+      throw new Error("宿主响应超时，请稍后再试");
+    }
+  });
+  before = commitTimesOut.listCount();
+  await submit(commitTimesOut, [{ text: "第一句", type: "text" }]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(commitTimesOut.listCount(), before + 1);
+  assert.equal(commitTimesOut.controller.wantsPairKickoff("session-a"), false);
+  const { sent } = await submit(commitTimesOut, [{ text: "第二句", type: "text" }]);
+  assert.deepEqual(sent, [[{ text: "第二句", type: "text" }]]);
+  assert.equal(commits, 1);
+  commitTimesOut.controller.dispose();
+});
+
+test("评审补充 3：send 抛错时清掉在途，下一句还能拼卡；错误照常抛出", async () => {
+  const h = await harness();
+  await assert.rejects(
+    runPreparedAgentPromptSubmit({
+      agentSessionId: "session-a",
+      content: [{ text: "第一句", type: "text" }] as never,
+      extension: h.extension,
+      send: () => {
+        throw new Error("engine exploded");
+      }
+    }),
+    /engine exploded/
+  );
+  assert.equal(h.controller.wantsPairKickoff("session-a"), true);
+  assert.equal(kinds(h, "commit").length, 0);
+  h.controller.dispose();
+});
+
+test("评审 E：拦截时回显一律是用户原话，不带开工卡", async () => {
+  const h = await harness();
+  const displays: (string | undefined)[] = [];
+  for (const displayPrompt of [undefined, "  ", "折叠成 chip 的原话"]) {
+    h.row.kickoffState = "pending";
+    await runPreparedAgentPromptSubmit({
+      agentSessionId: "session-a",
+      content: [{ text: "修登录页", type: "text" }] as never,
+      ...(displayPrompt === undefined ? {} : { displayPrompt }),
+      extension: h.extension,
+      send: (_content, display) => {
+        displays.push(display);
+        return { settle: async () => false };
+      }
+    });
+  }
+  assert.deepEqual(displays, ["修登录页", "修登录页", "折叠成 chip 的原话"]);
   h.controller.dispose();
 });

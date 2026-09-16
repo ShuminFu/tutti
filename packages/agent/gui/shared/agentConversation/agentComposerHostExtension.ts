@@ -91,6 +91,18 @@ export function agentPromptSubmitText(
     .trim();
 }
 
+/** 用户原话：各文字块去空白后按行拼，与 agentPromptContentDisplayText 同口径（本文件不做运行时 import）。 */
+function agentPromptOriginalDisplayText(
+  content: readonly AgentPromptContentBlock[]
+): string | undefined {
+  const text = content
+    .filter((block) => block.type === "text")
+    .map((block) => block.text?.trim() ?? "")
+    .filter(Boolean)
+    .join("\n");
+  return text || undefined;
+}
+
 /**
  * 斜杠命令（`/compact`、`/review` …）永远不交给宿主：它们不是「一句话」，拼卡会把
  * 命令变成普通正文、provider 就不认了（票 05）。空文字（纯贴图）同样不拦——没有
@@ -173,14 +185,26 @@ export async function runPreparedAgentPromptSubmit(
     input.onDispatched?.();
     return;
   }
+  // 回显一律用用户原话（评审 E）：displayPrompt 会进排队面板、引擎的待发记录和 tuttid
+  // 的消息负载，带上开工卡的话，排队项的文字 / 编辑回填都会露出一大段协议。
+  // 模型收到的仍是拼了卡的 content。
   const displayPrompt = input.displayPrompt?.trim()
-    ? `${preparation.prefix}\n\n${input.displayPrompt}`
-    : input.displayPrompt;
-  const receipt = input.send(
-    prefixAgentPromptContent(input.content, preparation.prefix),
-    displayPrompt
-  );
-  input.onDispatched?.();
+    ? input.displayPrompt
+    : agentPromptOriginalDisplayText(input.content);
+  let receipt: AgentPromptSubmitReceipt | null = null;
+  let sent = false;
+  try {
+    receipt = input.send(
+      prefixAgentPromptContent(input.content, preparation.prefix),
+      displayPrompt
+    );
+    sent = true;
+  } finally {
+    input.onDispatched?.();
+    // send 抛错（引擎 / 诊断上报炸了）时宿主记的「在途」必须清掉，否则这对的开工卡
+    // 再也不会被拦截（评审补充 3）。错误照常往上抛给调用方显示。
+    if (!sent) preparation.onRejected();
+  }
   let accepted = false;
   if (receipt) {
     try {

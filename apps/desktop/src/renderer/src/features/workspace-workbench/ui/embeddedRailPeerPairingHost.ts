@@ -23,6 +23,27 @@ function normalizeBridgeError(error: unknown): never {
   throw error;
 }
 
+/**
+ * 结对模式三件套专用（评审补充 1）：只有「宿主没注册这个能力」才算 unsupported——
+ * 分栏层会据此**永久**收起单选、不再拦截第一句。超时只是这一次没等到回话
+ * （宿主忙 / 后端慢），按普通失败提示，下一次照常再试；commit 超时时后端可能其实
+ * 已经投了卡，调用方随后会重拉配对表对齐。
+ */
+export function normalizePairModeBridgeError(error: unknown): never {
+  if (error instanceof HostBridgeUnavailableError) {
+    const code = (error as { code?: unknown }).code;
+    // 没嵌入宿主（这个安装只在嵌入时跑，正常到不了）与能力未注册一样，都是「这里根本没有」。
+    if (code === "host_capability_unsupported" || code === "host_bridge_unavailable") {
+      throw new Error("unsupported");
+    }
+    if (code === "host_request_timeout") {
+      throw new Error("宿主响应超时，请稍后再试");
+    }
+    throw new Error(error.message);
+  }
+  throw error;
+}
+
 export function installEmbeddedRailPeerPairingHost(): () => void {
   return registerConversationRailPeerPairingHost({
     createPeerPair: (input) =>
@@ -31,13 +52,13 @@ export function installEmbeddedRailPeerPairingHost(): () => void {
       requestHostDeletePeerPair(input).catch(normalizeBridgeError),
     listPeerPairs: () =>
       requestHostListPeerPairs().catch(normalizeBridgeError),
-    // 结对模式三件套（peer-pair-mode）：宿主没注册时桥回 unsupported，同样归一，
-    // 分栏层据此把整排单选收起来。
+    // 结对模式三件套（peer-pair-mode）：只有宿主没注册时才归一成 unsupported（分栏层据此
+    // 把整排单选收起来）；超时是普通失败，见 normalizePairModeBridgeError。
     commitPairKickoff: (input) =>
-      requestHostCommitPairKickoff(input).catch(normalizeBridgeError),
+      requestHostCommitPairKickoff(input).catch(normalizePairModeBridgeError),
     previewPairKickoff: (input) =>
-      requestHostPreviewPairKickoff(input).catch(normalizeBridgeError),
+      requestHostPreviewPairKickoff(input).catch(normalizePairModeBridgeError),
     setPeerPairMode: (input) =>
-      requestHostSetPeerPairMode(input).catch(normalizeBridgeError)
+      requestHostSetPeerPairMode(input).catch(normalizePairModeBridgeError)
   });
 }

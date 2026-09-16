@@ -18,6 +18,10 @@ import {
   typedGoalControlFromComposer,
   useAgentGUISubmitInteractionActions
 } from "./useAgentGUISubmitInteractionActions";
+import {
+  registerAgentComposerHostExtension,
+  type AgentPromptSubmitPreparation
+} from "../../../shared/agentConversation/agentComposerHostExtension";
 
 const draftKey = "node-default:codex:local:codex";
 
@@ -564,6 +568,65 @@ describe("existing-session prompt submission", () => {
     expect(
       agentComposerDraftPrompt(draftByScopeKeyRef.current["session:session-1"]!)
     ).toBe("continue");
+  });
+});
+
+// 分栏结对模式（peer-pair-mode 票 05 评审 E / F）：宿主要先异步准备开工卡的那条提交。
+describe("host-prepared submit (pair kickoff)", () => {
+  const BLOCK = '<pair-kickoff role="developer">\n协议\n</pair-kickoff>';
+
+  it("snapshots the draft at submit time, echoes the user's own words, and keeps text typed while preparing", async () => {
+    const goalControl = vi.fn(async () => undefined);
+    const { input, draftByScopeKeyRef, sessionEngine } =
+      createGoalControlInput(goalControl as never);
+    draftByScopeKeyRef.current = { "session:session-1": draft("修登录页") };
+    const submitPrompt = vi
+      .spyOn(sessionEngine, "submitPrompt")
+      .mockReturnValue({ accepted: true, queued: false });
+    let resolvePreparation: (value: AgentPromptSubmitPreparation) => void =
+      () => {};
+    const unregister = registerAgentComposerHostExtension({
+      prepareSubmit: () =>
+        new Promise<AgentPromptSubmitPreparation>((resolve) => {
+          resolvePreparation = resolve;
+        }),
+      wantsSubmitPreparation: () => true
+    });
+    try {
+      const { result } = renderHook(() =>
+        useAgentGUISubmitInteractionActions(input)
+      );
+      act(() =>
+        result.current.submitPrompt([{ type: "text", text: "修登录页" }])
+      );
+      expect(submitPrompt).not.toHaveBeenCalled();
+
+      // 宿主还在准备开工卡，用户已经开始打下一句。
+      draftByScopeKeyRef.current = { "session:session-1": draft("下一句") };
+      await act(async () => {
+        resolvePreparation({
+          onAccepted: () => {},
+          onRejected: () => {},
+          prefix: BLOCK
+        });
+      });
+
+      await waitFor(() => expect(submitPrompt).toHaveBeenCalledTimes(1));
+      expect(submitPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: [{ type: "text", text: `${BLOCK}\n\n修登录页` }],
+          displayPrompt: "修登录页"
+        })
+      );
+      // 新打的字没被当成「已提交的草稿」清掉。
+      expect(
+        agentComposerDraftPrompt(
+          draftByScopeKeyRef.current["session:session-1"]!
+        )
+      ).toBe("下一句");
+    } finally {
+      unregister();
+    }
   });
 });
 

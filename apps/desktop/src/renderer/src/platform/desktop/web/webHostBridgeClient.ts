@@ -45,7 +45,7 @@
 //                    result  = { pair }
 // previewPairKickoff args[0] = { pairId, senderTaskId, goal }
 //                    result  = { block }                 —— 纯函数，不写库
-// commitPairKickoff  args[0] = { pairId, senderTaskId, goal }
+// commitPairKickoff  args[0] = { pairId, senderTaskId, goal, expectedDeveloperTaskId? }
 //                    result  = { pair, delivered, reason? } —— 给搭档投卡并记为 sent，幂等；
 //                              delivered=false（卡被环路闸/限流丢了）时行仍是 pending
 // 未注册时 iframe 收到 unsupported，分栏层整排单选不渲染。
@@ -817,6 +817,11 @@ export function requestHostPreviewPairKickoff(args: {
 }
 
 export function requestHostCommitPairKickoff(args: {
+  /**
+   * preview 时拍下的开发者（契约补充 2026-09-16 评审 A）：与行里当前 developer 不一致时
+   * 后端回 409 kickoff_roles_changed，不投递、保持 pending。
+   */
+  expectedDeveloperTaskId?: string;
   goal: string;
   pairId: string;
   senderTaskId: string;

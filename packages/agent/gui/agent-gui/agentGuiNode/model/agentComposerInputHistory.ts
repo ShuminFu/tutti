@@ -2,6 +2,7 @@ import type { AgentPromptContentBlock } from "../../../shared/contracts/dto";
 import type { AgentConversationVM } from "../../../shared/agentConversation/contracts/agentConversationVM";
 import type { WorkspaceAgentSessionDetailGoalControl } from "../../../shared/workspaceAgentSessionDetailViewModel";
 import type { AgentComposerDraft } from "./agentGuiNodeTypes";
+import { stripLeadingPairKickoffFromContent } from "../../../shared/agentConversation/components/pairKickoffEnvelope";
 import {
   agentComposerDraftHasContent,
   agentPromptContentToComposerDraft,
@@ -232,7 +233,8 @@ function projectHistoryEntry(
   const draft =
     content.length > 0
       ? agentPromptContentToComposerDraft(
-          content,
+          // 分栏结对模式的第一句：上箭头取回历史时只要用户原话（票 05 评审 E）。
+          [...stripLeadingPairKickoffFromContent(content)],
           `history-${message.turnId ?? fallbackTurnId}-${message.id}`
         )
       : buildAgentComposerDraft({

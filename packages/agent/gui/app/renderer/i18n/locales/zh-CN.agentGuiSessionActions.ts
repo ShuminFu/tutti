@@ -37,6 +37,7 @@ export const zhCNAgentGuiSessionActions = {
   splitPairRoleReviewer: "审查者",
   splitPairKickoffPreviewFailed: "开工卡没准备好，这句按普通消息发出",
   splitPairKickoffCommitFailed: "搭档没收到开工卡，下一句会再试",
+  splitPairKickoffRolesChanged: "结对角色刚被调整，这张开工卡没投；下一句按新角色再发",
   retryConversations: "重试",
   conversationCopyImage: "图片",
   conversationCopyMentionPrefix: "@",

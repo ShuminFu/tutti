@@ -5,9 +5,6 @@ import {
   type AgentSessionEngineState
 } from "@tutti-os/agent-activity-core";
 
-/** 兜底上限：排队很久的提交也总会被引擎的确认超时收掉，这里只防订阅泄漏。 */
-const AGENT_SUBMIT_SETTLEMENT_MAX_WAIT_MS = 10 * 60 * 1000;
-
 type SettlementVerdict = "accepted" | "rejected" | "waiting";
 
 /**
@@ -44,26 +41,30 @@ function readSettlement(
 }
 
 /**
- * 等一次提交被引擎定论：true = 接受，false = 没发出去 / 被拒 / 被撤回。
+ * 等一次提交被引擎定论：true = 接受，false = 没发出去 / 被拒 / 被撤回 / 引擎没了。
  *
  * 分栏结对模式（peer-pair-mode 票 05，PRD D4）靠它决定「开工卡能不能给搭档投」：
  * 发送栏那句没被接受，搭档就不该先收到卡。
+ *
+ * 不设等待上限：排队中的提交在引擎里不会过期（用户可以让它排很久再放行），
+ * 按时间放弃会把「晚一点被接受」误判成拒绝、白白丢掉开工卡。收尾只认引擎的定论：
+ * failed 且不在可见队列、记录消失（撤回 / 丢弃 / 会话被删）；引擎释放时
+ * 不会再有推送，经 onDispose 判 false，订阅随之解除，不会泄漏。
  */
 export function waitForAgentSubmitSettlement(
-  engine: Pick<AgentSessionEngine, "getSnapshot" | "subscribe">,
+  engine: Pick<AgentSessionEngine, "getSnapshot" | "onDispose" | "subscribe">,
   agentSessionId: string,
-  clientSubmitId: string,
-  maxWaitMs = AGENT_SUBMIT_SETTLEMENT_MAX_WAIT_MS
+  clientSubmitId: string
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     let done = false;
     let unsubscribe: (() => void) | null = null;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    let offDispose: (() => void) | null = null;
     const finish = (accepted: boolean): void => {
       if (done) return;
       done = true;
       unsubscribe?.();
-      if (timer !== null) clearTimeout(timer);
+      offDispose?.();
       resolve(accepted);
     };
     const check = (state: AgentSessionEngineState): void => {
@@ -73,6 +74,8 @@ export function waitForAgentSubmitSettlement(
     check(engine.getSnapshot());
     if (done) return;
     unsubscribe = engine.subscribe((state) => check(state));
-    timer = setTimeout(() => finish(false), maxWaitMs);
+    offDispose = engine.onDispose?.(() => finish(false)) ?? null;
+    // onDispose 对已释放的引擎会同步回调，那时 offDispose 还没赋值，补一次解除。
+    if (done) offDispose?.();
   });
 }

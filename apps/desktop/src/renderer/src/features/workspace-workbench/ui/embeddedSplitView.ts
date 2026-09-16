@@ -1038,6 +1038,8 @@ export function createEmbeddedSplitViewController(
     side: SplitSide,
     choice: EmbeddedSplitPairModeChoice
   ): Promise<void> {
+    // 评审补充 2：上一次写还没回来就不接新的选择（连点 / 键盘连按），免得两次写互相覆盖。
+    if (pairModeBusy > 0) return;
     const pairingHost = readPairingHost();
     const current = pairModeSnapshot();
     const pair = splitPeerPair();
@@ -1084,12 +1086,26 @@ export function createEmbeddedSplitViewController(
     await refreshPairs();
   }
 
-  /** 这条会话所在、且在等开工卡的那一对；优先连着左右两栏的那一行。 */
+  /** 这条会话此刻显示在哪一栏（空槽 / 新建占位栏不算）。 */
+  function sideOfSession(agentSessionId: string): SplitSide | null {
+    const id = agentSessionId.trim();
+    if (!id) return null;
+    if (!isFreshPane("left") && layout.panes.left === id) return "left";
+    if (!isFreshPane("right") && layout.panes.right === id) return "right";
+    return null;
+  }
+
+  /**
+   * 这条会话要不要拼开工卡：只认**连着左右两栏的那一对**，且这条会话此刻就在某一栏里
+   * （评审 D）。不回退去翻整张配对表——同一条会话可能还有别的配对行处在 pending，
+   * 分栏里没露面的那一对不该劫持这句话（单选也只投影分栏这一对）。
+   */
   function pendingKickoffPairFor(
     agentSessionId: string
   ): ConversationRailPeerPair | null {
     const sessionId = agentSessionId.trim();
     if (!sessionId || pairingUnsupported || pairModeUnsupported) return null;
+    if (sideOfSession(sessionId) === null) return null;
     const pairingHost = readPairingHost();
     if (!pairingHost?.previewPairKickoff || !pairingHost.commitPairKickoff) {
       return null;
@@ -1100,8 +1116,7 @@ export function createEmbeddedSplitViewController(
       endpointOf(pair, sessionId) !== null &&
       !kickoffInFlight.has(pair.pairId);
     const split = splitPeerPair();
-    if (split && isPending(split)) return split;
-    return pairs.find(isPending) ?? null;
+    return split && isPending(split) ? split : null;
   }
 
   function wantsPairKickoff(agentSessionId: string): boolean {
@@ -1132,6 +1147,9 @@ export function createEmbeddedSplitViewController(
     const senderTaskId =
       sender?.taskId?.trim() || input.agentSessionId.trim();
     const request = { goal, pairId: pair.pairId, senderTaskId };
+    // 评审 A：拍下 preview 时的开发者。块里的角色是按它写的；到 commit 时行里的
+    // developer 变了，这张卡就是错的，不能投（本地缓存先挡一道，后端 409 再挡一道）。
+    const expectedDeveloperTaskId = pair.developerTaskId?.trim() ?? "";
     kickoffInFlight.add(pair.pairId);
     let block = "";
     try {
@@ -1148,6 +1166,9 @@ export function createEmbeddedSplitViewController(
             .join("：")
         );
       }
+      // 评审 C：preview 失败多半是缓存旧了（409 kickoff_not_pending：别处已开工 / 已退回
+      // 独立模式）。不重拉的话下一句还会按旧行拦截、再失败一次。
+      void refreshPairs();
       return null;
     }
     if (!block.trim()) {
@@ -1158,9 +1179,26 @@ export function createEmbeddedSplitViewController(
     return {
       prefix: block,
       onAccepted: async () => {
+        // 评审 A：等引擎接受的这段时间里用户可能换了角色 / 退回独立模式。缓存里这一行
+        // 已经不是 preview 时的样子，就别投了：提示、清在途、重拉，下一句按新行重新拼卡。
+        const latest = pairs.find((candidate) => candidate.pairId === pair.pairId);
+        if (
+          !latest ||
+          latest.pairMode !== "pair" ||
+          (latest.developerTaskId?.trim() ?? "") !== expectedDeveloperTaskId
+        ) {
+          kickoffInFlight.delete(pair.pairId);
+          toast.error(labels().kickoffRolesChanged ?? labels().kickoffCommitFailed ?? "");
+          emit();
+          await refreshPairs();
+          return;
+        }
         let committed = false;
         try {
-          const result = await commitHost.commitPairKickoff!(request);
+          const result = await commitHost.commitPairKickoff!({
+            ...request,
+            ...(expectedDeveloperTaskId ? { expectedDeveloperTaskId } : {})
+          });
           // 行是真相：delivered=false 时后端那一行仍是 pending，照样换进缓存。
           replacePair(result?.pair);
           if (result?.delivered !== true) {
@@ -1181,6 +1219,9 @@ export function createEmbeddedSplitViewController(
               .filter(Boolean)
               .join("：")
           );
+          // 评审 C：失败不等于没投——超时的那次后端可能已经记成 sent，409
+          // kickoff_roles_changed 说明角色已变。重拉让缓存对齐真相，免得下一句按旧行再拼卡。
+          void refreshPairs();
         } finally {
           kickoffInFlight.delete(pair.pairId);
           emit();
@@ -1483,13 +1524,7 @@ export function createEmbeddedSplitViewController(
       emit();
     },
     setPairMode,
-    sideForSessionId(agentSessionId) {
-      const id = agentSessionId.trim();
-      if (!id) return null;
-      if (!isFreshPane("left") && layout.panes.left === id) return "left";
-      if (!isFreshPane("right") && layout.panes.right === id) return "right";
-      return null;
-    },
+    sideForSessionId: sideOfSession,
     sideForNodeId(nodeId) {
       if (nodeIdBySide.left === nodeId) return "left";
       if (nodeIdBySide.right === nodeId) return "right";

@@ -4,6 +4,7 @@ import type {
   AgentMessageRowVM
 } from "../contracts/agentMessageRowVM";
 import type { AgentTranscriptRowVM } from "../contracts/agentTranscriptRowVM";
+import { stripLeadingPairKickoff } from "../components/pairKickoffEnvelope";
 
 export function projectAgentMessageFinalText(
   rows: readonly AgentTranscriptRowVM[],
@@ -150,7 +151,10 @@ function messagePresentationTargetKey(
 }
 
 function copyTextForUserMessage(message: AgentMessageContentVM): string | null {
-  return isVisibleTextMessage(message) ? message.body : null;
+  if (!isVisibleTextMessage(message)) return null;
+  // 分栏结对模式的第一句：复制只拿用户原话，开工卡不进剪贴板（票 05 评审 E）。
+  const text = stripLeadingPairKickoff(message.body);
+  return text.trim() ? text : null;
 }
 
 function isVisibleTextMessage(message: AgentMessageContentVM): boolean {

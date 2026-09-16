@@ -50,13 +50,16 @@ export function EmbeddedSplitPairModeBar({
   );
   const model = buildEmbeddedSplitPairModeBar(snapshot, agentSessionId);
   const side = model?.side ?? null;
+  const interactive = model?.interactive === true;
 
   const choose = useCallback(
     (choice: EmbeddedSplitPairModeChoice) => {
-      if (!side) return;
+      // 评审补充 2：非焦点栏 / 写在途时点了也不写。两次点击间隔短于一次重渲染时这里的
+      // interactive 还是旧值，所以 controller.setPairMode 自己也按 busy 再挡一次。
+      if (!side || !interactive) return;
       void embeddedSplitViewController()?.setPairMode(side, choice);
     },
-    [side]
+    [interactive, side]
   );
 
   if (!model) return null;

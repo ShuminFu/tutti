@@ -75,6 +75,34 @@ describe("agent composer input history", () => {
     ]);
   });
 
+  // 分栏结对模式（票 05 评审 E）：上箭头取回的第一句不带开工卡。
+  it("recalls a pair-kickoff prompt without its kickoff block", () => {
+    const conversation = conversationWithUserMessages([
+      {
+        id: "message-1",
+        body: "修登录页",
+        sourceTimelineItems: [
+          {
+            payload: {
+              content: [
+                {
+                  type: "text",
+                  text: '<pair-kickoff role="developer" partner="codex-b" partner_provider="codex" partner_role="reviewer" reason="start">\n结对模式开始：你是开发者。\n</pair-kickoff>\n\n修登录页'
+                }
+              ],
+              displayPrompt: "修登录页"
+            }
+          }
+        ]
+      }
+    ]);
+
+    const history = projectAgentComposerInputHistory(conversation);
+
+    expect(history).toHaveLength(1);
+    expect(agentComposerDraftPrompt(history[0]!.draft)).toBe("修登录页");
+  });
+
   it("includes Goal controls in chronological input history", () => {
     const conversation = conversationWithUserMessages([
       {

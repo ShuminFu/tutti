@@ -2,7 +2,13 @@ import { fireEvent, render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { AgentMessageBlock } from "./AgentMessageBlock";
 import { AgentEnvPanelActionProvider } from "../../agentEnv";
-import { parsePairCard, splitLeadingPairCard } from "./pairKickoffEnvelope";
+import {
+  parsePairCard,
+  splitLeadingPairCard,
+  stripLeadingPairKickoff,
+  stripLeadingPairKickoffFromContent
+} from "./pairKickoffEnvelope";
+import { projectAgentMessageFinalText } from "../projection/agentMessageFinalTextProjection";
 import type { AgentMessageRowVM } from "../contracts/agentMessageRowVM";
 
 // 分栏结对模式（peer-pair-mode 票 05）：<pair-kickoff> / <pair-ended> 的解析与卡片。
@@ -120,6 +126,50 @@ describe("pair card parser", () => {
     expect(card?.kind === "kickoff" ? card.goal : null).toBe("别写 < /pair-kickoff> 这种字");
   });
 
+  // 评审补充 4：目标是用户原话，可以多行；按后端模板切到「结对模式开始：」/「结对角色已调整：」之前。
+  it("reads a multi-line goal up to the protocol head line", () => {
+    const head = "结对模式开始：你是审查者，claude-a34（claude） 是开发者。给对方发消息用 peer_send，to 填 claude-a34。";
+    const card = parsePairCard(
+      kickoff(PARTNER_ATTRS, `目标：修一下登录页\n第二行：别动注册页\n\n第四行\n${head}\n${PROTOCOL}`)
+    );
+    expect(card?.kind === "kickoff" ? card.goal : null).toBe(
+      "修一下登录页\n第二行：别动注册页\n\n第四行"
+    );
+    expect(card?.kind === "kickoff" ? card.protocol : null).toBe(`${head}\n${PROTOCOL}`);
+
+    const changed = parsePairCard(
+      kickoff(
+        { ...PARTNER_ATTRS, reason: "roles_changed" },
+        `目标：a\nb\n结对角色已调整：你是开发者。\n${PROTOCOL}`
+      )
+    );
+    expect(changed?.kind === "kickoff" ? changed.goal : null).toBe("a\nb");
+  });
+
+  it("a goal that itself mentions the head phrase still ends at the template's head line", () => {
+    const card = parsePairCard(
+      kickoff(PARTNER_ATTRS, `目标：把\n结对模式开始：这句提示改短\n结对模式开始：你是审查者。\n${PROTOCOL}`)
+    );
+    expect(card?.kind === "kickoff" ? card.goal : null).toBe("把\n结对模式开始：这句提示改短");
+    expect(card?.kind === "kickoff" ? card.protocol : null).toBe(`结对模式开始：你是审查者。\n${PROTOCOL}`);
+  });
+
+  // 评审 E：回到输入框 / 剪贴板时只要原话。
+  it("strips only a leading kickoff block from text and from the first text block of content", () => {
+    const withCard = `${kickoff(SENDER_ATTRS, PROTOCOL)}\n\n修一下登录页`;
+    expect(stripLeadingPairKickoff(withCard)).toBe("修一下登录页");
+    expect(stripLeadingPairKickoff("普通一句")).toBe("普通一句");
+    const ended = '<pair-ended partner="x">\n结对已结束，回到独立模式。\n</pair-ended>';
+    expect(stripLeadingPairKickoff(ended)).toBe(ended);
+
+    const image = { type: "image" as const, url: "blob:1" };
+    expect(
+      stripLeadingPairKickoffFromContent([image, { type: "text", text: withCard }])
+    ).toEqual([image, { type: "text", text: "修一下登录页" }]);
+    const plain = [{ type: "text", text: "普通一句" }];
+    expect(stripLeadingPairKickoffFromContent(plain)).toBe(plain);
+  });
+
   it("rejects malformed input", () => {
     // 没闭合
     expect(parsePairCard(`<pair-kickoff role="developer">\n${PROTOCOL}`)).toBeNull();
@@ -174,6 +224,37 @@ describe("AgentMessageBlock pair card", () => {
     );
     expect(getByTestId("agent-pair-card").getAttribute("data-pair-card-kind")).toBe("ended");
     expect(getByTestId("agent-pair-card-title").textContent).toBe("Pairing ended");
+  });
+
+  it("copy text of the sender's first message is the original words only", () => {
+    const row = userRow(`${kickoff(SENDER_ATTRS, PROTOCOL)}\n\n修一下登录页`);
+    const [projected] = projectAgentMessageFinalText([row], { turns: [] } as never);
+    expect(
+      projected?.kind === "message" ? projected.messages[0]?.copyText : undefined
+    ).toBe("修一下登录页");
+  });
+
+  it("editing the sender's first message prefills only the original words", () => {
+    const body = `${kickoff(SENDER_ATTRS, PROTOCOL)}\n\n修一下登录页`;
+    const { getByRole } = render(
+      <AgentEnvPanelActionProvider openPanel={() => {}}>
+        <AgentMessageBlock
+          workspaceRoot={null}
+          basePath="/"
+          row={{ ...userRow(body), rawFirstTextBlock: body }}
+          editRetry={{
+            pending: false,
+            labels: { edit: "Edit message", cancel: "Cancel", submit: "Save and retry" },
+            onSubmit: async () => true
+          }}
+          thinkingLabel="thinking"
+        />
+      </AgentEnvPanelActionProvider>
+    );
+    fireEvent.click(getByRole("button", { name: "Edit message" }));
+    expect(
+      (getByRole("textbox", { name: "Edit message" }) as HTMLTextAreaElement).value
+    ).toBe("修一下登录页");
   });
 
   it("malformed kickoff text stays on the rich text path", () => {

@@ -15,6 +15,7 @@ export {
   subscribeConversationRailPeerPairsChanged,
   type ConversationRailCreatePeerPairInput,
   type ConversationRailCreatePeerPairResult,
+  type ConversationRailCommitPairKickoffInput,
   type ConversationRailPairKickoffInput,
   type ConversationRailPeerPairingHost,
   type ConversationRailSetPeerPairModeInput

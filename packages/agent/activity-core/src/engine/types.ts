@@ -553,6 +553,11 @@ export interface AgentSessionEngine {
   dispatch(intent: EngineIntent, options?: EngineDispatchOptions): void;
   dispose(): void;
   getSnapshot(): AgentSessionEngineState;
+  /**
+   * 引擎释放时回调一次（已释放则立即回调）。dispose 会清掉 subscribe 的监听者，
+   * 靠订阅等结局的一方只能从这里知道「不会再有下文了」。可选：测试替身可不实现。
+   */
+  onDispose?(listener: () => void): () => void;
   loadComposerOptions(
     input: AgentSessionLoadComposerOptionsInput
   ): Promise<AgentActivityComposerOptions>;

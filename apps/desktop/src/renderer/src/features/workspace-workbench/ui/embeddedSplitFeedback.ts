@@ -38,6 +38,9 @@ export function embeddedSplitPairingLabels(): EmbeddedSplitPairingLabels {
     kickoffCommitFailed: translateEmbeddedSplitLabel(
       "agentHost.agentGui.splitPairKickoffCommitFailed"
     ),
+    kickoffRolesChanged: translateEmbeddedSplitLabel(
+      "agentHost.agentGui.splitPairKickoffRolesChanged"
+    ),
     kickoffPreviewFailed: translateEmbeddedSplitLabel(
       "agentHost.agentGui.splitPairKickoffPreviewFailed"
     ),

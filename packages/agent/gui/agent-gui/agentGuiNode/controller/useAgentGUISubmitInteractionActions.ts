@@ -243,6 +243,8 @@ export function useAgentGUISubmitInteractionActions(
         sendNow?: boolean;
         targetTurnId?: AgentComposerSubmitOptions["targetTurnId"];
         sourceScopeKey?: string;
+        /** 提交那一刻的草稿快照；不给时现读。异步准备过的提交必须给（见 submitPrompt）。 */
+        submittedDraft?: AgentComposerDraft;
         trackDraft?: boolean;
       }
     ) => {
@@ -270,6 +272,7 @@ export function useAgentGUISubmitInteractionActions(
           options.sourceScopeKey ??
           resolveAgentComposerDraftScopeKey({ agentSessionId });
         const submittedDraft =
+          options.submittedDraft ??
           draftByScopeKeyRef.current[sourceScopeKey] ??
           emptyAgentComposerDraft();
         submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId] = {
@@ -419,6 +422,7 @@ export function useAgentGUISubmitInteractionActions(
         sendNow?: boolean;
         targetTurnId?: AgentComposerSubmitOptions["targetTurnId"];
         sourceScopeKey?: string;
+        submittedDraft?: AgentComposerDraft;
         trackDraft?: boolean;
       }
     ) => {
@@ -449,6 +453,9 @@ export function useAgentGUISubmitInteractionActions(
         targetTurnId: options?.targetTurnId,
         sendNow: options?.sendNow === true,
         sourceScopeKey: options?.sourceScopeKey,
+        ...(options?.submittedDraft
+          ? { submittedDraft: options.submittedDraft }
+          : {}),
         trackDraft: options?.trackDraft === true
       });
     },
@@ -569,6 +576,14 @@ export function useAgentGUISubmitInteractionActions(
         );
         return;
       }
+      // 评审 F：按下发送这一刻就给草稿拍照。结对模式要先异步问宿主要开工卡，这段时间
+      // 用户可能已经在输入框里打下一句了；到真正发送时才读草稿，就会把新打的字当成
+      // 「已提交的草稿」清掉，或在被拒时恢复成错的内容。
+      const submittedDraft = snapshotAgentComposerDraft(
+        draftByScopeKeyRef.current[
+          resolveAgentComposerDraftScopeKey({ agentSessionId })
+        ] ?? emptyAgentComposerDraft()
+      );
       const sendExisting = (
         sendContent: AgentPromptContentBlock[],
         sendDisplayPrompt: string | undefined
@@ -580,6 +595,7 @@ export function useAgentGUISubmitInteractionActions(
           {
             capabilityRefs: options?.capabilityRefs,
             requiredSettingsPatch: options?.requiredSettingsPatch,
+            submittedDraft,
             trackDraft: true
           }
         );
@@ -626,9 +642,15 @@ export function useAgentGUISubmitInteractionActions(
             preparingSubmitSessionIdsRef.current.delete(agentSessionId);
           },
           send: sendExisting
-        }).finally(() => {
-          preparingSubmitSessionIdsRef.current.delete(agentSessionId);
-        });
+        })
+          .catch((error: unknown) => {
+            // 同步路径里 send 抛错会直接冒到作曲区；异步路径没人接，这里接住显示出来，
+            // 宿主的在途标记已由 runPreparedAgentPromptSubmit 清掉（评审补充 3）。
+            setDetailError(getAgentGUIErrorMessage(error));
+          })
+          .finally(() => {
+            preparingSubmitSessionIdsRef.current.delete(agentSessionId);
+          });
         return;
       }
       sendExisting(normalizedContent, displayPromptText);

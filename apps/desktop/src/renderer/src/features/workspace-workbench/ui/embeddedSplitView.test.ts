@@ -1394,3 +1394,31 @@ test("设模式失败：toast 后端原文，单选仍是行里的值", async ()
   assert.equal(controller.getSnapshot().pairMode?.busy, false);
   controller.dispose();
 });
+
+test("写在途时连点（评审补充 2）：第二次选择被挡掉，只写一次", async () => {
+  const pending: (() => void)[] = [];
+  const release = () => pending.splice(0).forEach((resolve) => resolve());
+  const { calls, host } = pairModeHost({
+    setPeerPairMode: () =>
+      new Promise<void>((resolve) => {
+        pending.push(resolve);
+      })
+  });
+  const { controller } = await splitPairedController(host);
+
+  const first = controller.setPairMode("left", "developer");
+  assert.equal(controller.getSnapshot().pairMode?.busy, true);
+  const second = controller.setPairMode("left", "reviewer");
+  release();
+  await Promise.all([first, second]);
+
+  assert.deepEqual(
+    calls.filter((call) => call.kind === "setMode").map((call) => call.args),
+    [{ developerTaskId: "task-a", mode: "pair", pairId: "p1" }]
+  );
+  assert.deepEqual(controller.getSnapshot().pairMode?.roles, {
+    left: "developer",
+    right: "reviewer"
+  });
+  controller.dispose();
+});

@@ -8,7 +8,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentGUIRuntime } from "../../../agentActivityRuntime";
 import { createTestEngineCommandPort } from "../../../shared/testing/createTestAgentSessionEngine";
 import type { AgentComposerDraft } from "../model/agentGuiNodeTypes";
-import { agentComposerDraftImages } from "../model/agentComposerDraft";
+import {
+  agentComposerDraftImages,
+  agentComposerDraftPrompt
+} from "../model/agentComposerDraft";
 import { useAgentGUIQueueActions } from "./useAgentGUIQueueActions";
 
 describe("useAgentGUIQueueActions", () => {
@@ -102,5 +105,54 @@ describe("useAgentGUIQueueActions", () => {
         )[0]?.previewUrl
       ).toBe("data:image/png;base64,cmVzdG9yZWQ=")
     );
+  });
+
+  // 分栏结对模式（票 05 评审 E）：排队的第一句带着开工卡，取回编辑只回填用户原话。
+  it("strips the pair kickoff block when restoring a queued prompt into the composer", () => {
+    const sessionEngine = createAgentSessionEngine({
+      clock: { nowUnixMs: () => 1 },
+      commandPort: createTestEngineCommandPort({
+        execute: async () => undefined
+      }),
+      identity: { origin: "test", workspaceId: "workspace-1" },
+      scheduler: { schedule: () => ({ cancel() {} }) }
+    });
+    sessionEngine.dispatch({
+      agentSessionId: "session-1",
+      prompt: {
+        id: "queued-1",
+        content: [
+          {
+            type: "text",
+            text: '<pair-kickoff role="developer" partner="codex-b" partner_provider="codex" partner_role="reviewer" reason="start">\n结对模式开始：你是开发者。\n</pair-kickoff>\n\n修登录页'
+          }
+        ],
+        createdAtUnixMs: 1,
+        displayPrompt: "修登录页"
+      },
+      type: "queue/enqueued",
+      workspaceId: "workspace-1"
+    });
+    const rendered = renderHook(() => {
+      const [drafts, setDrafts] = useState<Record<string, AgentComposerDraft>>(
+        {}
+      );
+      return {
+        drafts,
+        actions: useAgentGUIQueueActions({
+          activeConversationIdRef: { current: "session-1" },
+          agentActivityRuntime: {} as unknown as AgentGUIRuntime,
+          sessionEngine,
+          setDraftByScopeKey: setDrafts,
+          workspaceId: "workspace-1"
+        })
+      };
+    });
+
+    act(() => rendered.result.current.actions.editQueuedPrompt("queued-1"));
+
+    expect(
+      agentComposerDraftPrompt(rendered.result.current.drafts["session:session-1"]!)
+    ).toBe("修登录页");
   });
 });
