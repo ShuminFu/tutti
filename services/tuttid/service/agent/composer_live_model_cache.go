@@ -175,6 +175,11 @@ func (s *Service) InvalidateLiveComposerModels(provider string) {
 	}
 	nowUnixMS := time.Now().UnixMilli()
 	deletedCacheEntries := s.liveComposerModelCache().invalidateProvider(normalized)
+	// Target-scoped runtime evidence is a projection of the same observation as
+	// the model cache, so a provider-level invalidation must drop both. Keeping
+	// the evidence would leave sparse defaults patches validating against a
+	// catalog the daemon just decided was wrong.
+	deletedTargetEvidence := s.InvalidateComposerTargetRuntimeEvidenceForProvider(normalized)
 	prefix := "live-model:" + normalized + ":"
 	s.liveModelDiscoveryMu.Lock()
 	if s.liveModelInvalidatedAtUnixMS == nil {
@@ -197,6 +202,7 @@ func (s *Service) InvalidateLiveComposerModels(provider string) {
 		"provider":              normalized,
 		"deletedCacheEntries":   deletedCacheEntries,
 		"deletedAttemptMarkers": deletedAttemptMarkers,
+		"deletedTargetEvidence": deletedTargetEvidence,
 		"occurredAtUnixMs":      nowUnixMS,
 	})
 	s.liveModelDiscoveryMu.Unlock()
@@ -266,8 +272,19 @@ func (s *Service) getComposerRuntimeContextForScope(scope composerLiveModelScope
 	return s.liveComposerModelCache().getRuntimeContext(scope.key(), now, s.liveModelCacheTTL(scope.provider))
 }
 
-func (s *Service) setComposerRuntimeContextForScope(scope composerLiveModelScope, now time.Time, runtimeContext map[string]any) {
+func (s *Service) setComposerRuntimeContextForScope(
+	scope composerLiveModelScope,
+	now time.Time,
+	observedAt time.Time,
+	runtimeContext map[string]any,
+) {
 	s.liveComposerModelCache().setRuntimeContext(scope.key(), now, runtimeContext)
+	// Mirror the scoped runtime context into the target-scoped evidence store so
+	// a later sparse defaults patch — which has no workspace/cwd with which to
+	// rediscover it — can still validate against real runtime ACP options.
+	// observedAt (the ACP session's creation time) orders competing observations
+	// for the same target; see recordComposerTargetRuntimeEvidence.
+	s.recordComposerTargetRuntimeEvidence(scope, observedAt, runtimeContext)
 }
 
 // composerLiveModelCacheKey buckets the cache by provider, workspace, cwd scope,

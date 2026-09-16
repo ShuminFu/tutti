@@ -28,7 +28,7 @@ type ComposerProfile struct {
 	ConfigOptions *struct {
 		Model      ComposerConfigOptionReference `json:"model"`
 		Permission ComposerConfigOptionReference `json:"permission"`
-		Reasoning  ComposerConfigOptionReference `json:"reasoning"`
+		Reasoning  ComposerReasoningDeclaration  `json:"reasoning"`
 	} `json:"configOptions,omitempty"`
 	PermissionModes []ComposerPermissionMode `json:"permissionModes"`
 	LaunchSettings  *struct {
@@ -143,6 +143,54 @@ func (profile ComposerProfile) AutomaticPermissionDecisions() map[string]string 
 
 type ComposerConfigOptionReference struct {
 	ACPOptionID string `json:"acpOptionId"`
+}
+
+// ComposerReasoningDeclaration is the extension's static reasoning-effort
+// contract. Runtime ACP session options remain authoritative for a live
+// session, but defaults persistence has no session to read them from, so a
+// profile that wants its reasoning defaults configurable out of the box must
+// declare the same levels here.
+type ComposerReasoningDeclaration struct {
+	ACPOptionID string `json:"acpOptionId"`
+	// Options are the selectable reasoning levels in display order.
+	Options []string `json:"options,omitempty"`
+	// Default is the level selected when the caller expresses no preference.
+	Default string `json:"default,omitempty"`
+}
+
+// ReasoningOptions returns the declared static levels in declaration order
+// with blanks and duplicates removed, and reports whether the profile declares
+// a usable static contract at all.
+func (declaration ComposerReasoningDeclaration) ReasoningOptions() ([]string, bool) {
+	options := make([]string, 0, len(declaration.Options))
+	seen := make(map[string]struct{}, len(declaration.Options))
+	for _, option := range declaration.Options {
+		value := strings.TrimSpace(option)
+		if value == "" {
+			continue
+		}
+		if _, duplicate := seen[value]; duplicate {
+			continue
+		}
+		seen[value] = struct{}{}
+		options = append(options, value)
+	}
+	return options, len(options) > 0
+}
+
+// ReasoningDefault returns the declared default level, falling back to the
+// first declared level when the declared default is blank or not declared.
+func (declaration ComposerReasoningDeclaration) ReasoningDefault(options []string) string {
+	declared := strings.TrimSpace(declaration.Default)
+	for _, option := range options {
+		if option == declared {
+			return declared
+		}
+	}
+	if len(options) == 0 {
+		return ""
+	}
+	return options[0]
 }
 
 func (profile ComposerProfile) ACPConfigOptionIDs() (model string, permission string, reasoning string) {
@@ -348,6 +396,33 @@ func setComposerModeAlias(modes map[string]string, alias string, runtimeID strin
 	modes[alias] = runtimeID
 }
 
+// validateComposerReasoningDeclaration keeps the static reasoning contract
+// strict: declared levels must be non-blank and unique, and a declared default
+// must name one of them. Runtime projection and check both consume this list
+// verbatim, so a loose profile would silently widen or narrow the picker.
+func validateComposerReasoningDeclaration(declaration ComposerReasoningDeclaration) error {
+	seen := make(map[string]struct{}, len(declaration.Options))
+	for _, option := range declaration.Options {
+		value := strings.TrimSpace(option)
+		if value == "" {
+			return errors.New("composer reasoning options must not be blank")
+		}
+		if _, duplicate := seen[value]; duplicate {
+			return errors.New("composer reasoning options must be unique")
+		}
+		seen[value] = struct{}{}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	if declared := strings.TrimSpace(declaration.Default); declared != "" {
+		if _, ok := seen[declared]; !ok {
+			return errors.New("composer reasoning default must be one of the declared options")
+		}
+	}
+	return nil
+}
+
 func validateComposerProfile(profile ComposerProfile) error {
 	if profile.SchemaVersion != "tutti.agent.composer.v1" {
 		return errors.New("unsupported composer profile schema")
@@ -381,11 +456,17 @@ func validateComposerProfile(profile ComposerProfile) error {
 		for _, option := range []ComposerConfigOptionReference{
 			profile.ConfigOptions.Model,
 			profile.ConfigOptions.Permission,
-			profile.ConfigOptions.Reasoning,
 		} {
 			if id := strings.TrimSpace(option.ACPOptionID); id != "" && !composerConfigOptionID.MatchString(id) {
 				return errors.New("composer ACP config option id is unsupported")
 			}
+		}
+		reasoning := profile.ConfigOptions.Reasoning
+		if id := strings.TrimSpace(reasoning.ACPOptionID); id != "" && !composerConfigOptionID.MatchString(id) {
+			return errors.New("composer ACP config option id is unsupported")
+		}
+		if err := validateComposerReasoningDeclaration(reasoning); err != nil {
+			return err
 		}
 	}
 	for _, mode := range profile.PermissionModes {

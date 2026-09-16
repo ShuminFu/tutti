@@ -61,32 +61,69 @@ func (s *Service) mergeRuntimeComposerContextForComposerOptions(
 		configOptions,
 	)
 	configValues, _ := runtimeContext["config"].(map[string]any)
-	if permissionOption, ok := runtimeConfigOptionByID(configOptions, extensionProfile.PermissionConfigOptionID); ok {
+	return projectRuntimeConfigOptionsForComposerOptions(extensionRuntimeConfigProjectionInput{
+		agentTargetID:             input.AgentTargetID,
+		configOptions:             configOptions,
+		configValues:              configValues,
+		extensionProfile:          extensionProfile,
+		fallbackPermissionModeID:  requestSettings.PermissionModeID,
+		locale:                    locale,
+		options:                   options,
+		provider:                  input.Provider,
+		requestedPermissionModeID: requestedPermissionModeID,
+	})
+}
+
+type extensionRuntimeConfigProjectionInput struct {
+	agentTargetID             string
+	configOptions             []map[string]any
+	configValues              map[string]any
+	extensionProfile          ExtensionComposerProfile
+	fallbackPermissionModeID  string
+	locale                    string
+	options                   ComposerOptions
+	provider                  string
+	requestedPermissionModeID string
+}
+
+// projectRuntimeConfigOptionsForComposerOptions folds ACP runtime config options
+// into composer options: permission modes first, then reasoning effort. Both the
+// live-session runtime context and the target-scoped last-known-good evidence
+// store project through this one function, so a value validated against stored
+// evidence behaves exactly like a value validated against a live session.
+func projectRuntimeConfigOptionsForComposerOptions(
+	input extensionRuntimeConfigProjectionInput,
+) (ComposerOptions, error) {
+	options := input.options
+	if len(input.configOptions) == 0 {
+		return options, nil
+	}
+	if permissionOption, ok := runtimeConfigOptionByID(input.configOptions, input.extensionProfile.PermissionConfigOptionID); ok {
 		projection, err := projectExtensionPermissionConfig(extensionPermissionProjectionInput{
-			AgentTargetID: input.AgentTargetID,
-			FallbackID:    requestSettings.PermissionModeID,
-			Locale:        locale,
-			Profile:       extensionProfile,
-			Provider:      input.Provider,
+			AgentTargetID: input.agentTargetID,
+			FallbackID:    input.fallbackPermissionModeID,
+			Locale:        input.locale,
+			Profile:       input.extensionProfile,
+			Provider:      input.provider,
 			Runtime: &extensionPermissionRuntimeState{
-				CurrentRuntimeID: runtimeConfigOptionCurrentValue(permissionOption, configValues),
+				CurrentRuntimeID: runtimeConfigOptionCurrentValue(permissionOption, input.configValues),
 				Options:          composerConfigOptionValuesFromAny(permissionOption["options"]),
 			},
-			SelectedID: requestedPermissionModeID,
+			SelectedID: input.requestedPermissionModeID,
 		})
 		if err != nil {
 			return ComposerOptions{}, err
 		}
-		logExtensionPermissionProjectionDiagnostics(projection, input.AgentTargetID, input.Provider)
+		logExtensionPermissionProjectionDiagnostics(projection, input.agentTargetID, input.provider)
 		options.PermissionConfig = projection.Config
 		options.EffectiveSettings.PermissionModeID = projection.CurrentID
 		options.RuntimeContext["permissionModeId"] = nullableString(projection.CurrentID)
 	}
-	if reasoningOption, ok := runtimeConfigOptionByID(configOptions, extensionProfile.ReasoningConfigOptionID); ok {
+	if reasoningOption, ok := runtimeConfigOptionByID(input.configOptions, input.extensionProfile.ReasoningConfigOptionID); ok {
 		if config, current := composerReasoningConfigFromRuntimeOption(
 			reasoningOption,
-			configValues,
-			locale,
+			input.configValues,
+			input.locale,
 		); len(config.Options) > 0 {
 			options.ReasoningConfig = config
 			options.EffectiveSettings.ReasoningEffort = current

@@ -46,9 +46,15 @@ type Manager struct {
 	Client            *http.Client
 	RuntimeResolver   runtimecmd.Resolver
 	UserPathAdapter   UserPathAdapter
-	reconcileMu       sync.Mutex
-	versionCacheOnce  sync.Once
-	runtimeVersions   *runtimeVersionCache
+	// OnInstallationChanged, when set, runs after a successful (re)install with
+	// the installation's provider id. The runtime content changed, so callers
+	// that cache per-provider runtime projections (discovered model lists,
+	// target-scoped runtime config-option evidence) must drop them here; the
+	// auth-file watcher cannot see extension package replacement.
+	OnInstallationChanged func(provider string)
+	reconcileMu           sync.Mutex
+	versionCacheOnce      sync.Once
+	runtimeVersions       *runtimeVersionCache
 }
 
 type UserPathAdapter interface {
@@ -536,6 +542,9 @@ func (m *Manager) installVerifiedRelease(release Release, artifact []byte, sourc
 	installation.AuthMessage = strings.TrimSpace(locales["runtime.authRequired"])
 	if err := m.Installations.PutActive(installation); err != nil {
 		return Installation{}, err
+	}
+	if m.OnInstallationChanged != nil {
+		m.OnInstallationChanged(installation.Provider)
 	}
 	return installation, nil
 }

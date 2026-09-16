@@ -109,6 +109,13 @@ type Service struct {
 	// modelPlanBinding wires the optional workspace model access plan
 	// integration; see ConfigureModelPlanBinding.
 	modelPlanBinding modelPlanBindingRuntime
+	// composerTargetEvidence holds the last runtime ACP config-option evidence
+	// observed per agent target. The defaults-persistence path has no workspace
+	// scope, so it cannot read a live session for itself; see
+	// composer_target_runtime_evidence.go.
+	composerTargetEvidenceMu       sync.Mutex
+	composerTargetEvidence         map[string]composerTargetRuntimeEvidence
+	composerTargetEvidenceRevision uint64
 }
 
 // ConnectorRuntime is the tuttid-owned projection of the active Connector
@@ -222,13 +229,22 @@ const (
 )
 
 type ExtensionComposerProfile struct {
-	Capabilities                     []string
-	ModelConfigOptionID              string
-	PermissionConfigOptionID         string
-	DefaultPermissionModeID          string
-	PermissionModeIDPolicy           ExtensionPermissionModeIDPolicy
-	PermissionModes                  []ExtensionComposerPermissionMode
-	ReasoningConfigOptionID          string
+	Capabilities             []string
+	ModelConfigOptionID      string
+	PermissionConfigOptionID string
+	DefaultPermissionModeID  string
+	PermissionModeIDPolicy   ExtensionPermissionModeIDPolicy
+	PermissionModes          []ExtensionComposerPermissionMode
+	ReasoningConfigOptionID  string
+	// ReasoningEffortOptions is the extension's declared static reasoning-effort
+	// contract in display order. Runtime ACP config options stay authoritative
+	// for a live session; this list is the only capability projection available
+	// on the defaults-persistence path, which has no session and no workspace
+	// scope to read runtime evidence from.
+	ReasoningEffortOptions []string
+	// DefaultReasoningEffort is the declared default level, always one of
+	// ReasoningEffortOptions when that list is non-empty.
+	DefaultReasoningEffort           string
 	Skills                           *ExtensionComposerSkillProfile
 	RuntimePrep                      *runtimeprep.ExtensionRuntimePrep
 	SlashCommands                    []ExtensionComposerSlashCommand

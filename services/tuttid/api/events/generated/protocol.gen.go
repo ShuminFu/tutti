@@ -6,7 +6,7 @@ import "encoding/json"
 
 const (
 	BusinessEventProtocolVersion = 1
-	BusinessEventCatalogRevision = "sha256:92fde556d9bb44a6"
+	BusinessEventCatalogRevision = "sha256:20e0dcbcbccc69ad"
 )
 
 type Topic string
@@ -22,6 +22,7 @@ const (
 	TopicConnectorMarketChanged                          Topic = "connector.market.changed"
 	TopicPreferencesAgentComposerDefaultsChanged         Topic = "preferences.agent.composer.defaults.changed"
 	TopicPreferencesAgentComposerDefaultsPatchRequested  Topic = "preferences.agent.composer.defaults.patch.requested"
+	TopicPreferencesAgentComposerDefaultsResolved        Topic = "preferences.agent.composer.defaults.resolved"
 	TopicPreferencesAgentSessionLaunchModePatchRequested Topic = "preferences.agent.session.launch.mode.patch.requested"
 	TopicPreferencesDesktopUpdateRequested               Topic = "preferences.desktop.update.requested"
 	TopicPreferencesDesktopUpdated                       Topic = "preferences.desktop.updated"
@@ -319,6 +320,17 @@ type PreferencesAgentComposerDefaultsPatchRequestedPayload struct {
 	ClientMutationId *string `json:"clientMutationId,omitempty"`
 }
 
+type PreferencesAgentComposerDefaultsResolvedPayload struct {
+	AgentTargetId    string   `json:"agentTargetId"`
+	ClientMutationId *string  `json:"clientMutationId,omitempty"`
+	Applied          []string `json:"applied"`
+	Rejected         []struct {
+		Field      string  `json:"field"`
+		ReasonCode string  `json:"reasonCode"`
+		Message    *string `json:"message,omitempty"`
+	} `json:"rejected,omitempty"`
+}
+
 type PreferencesAgentSessionLaunchModePatchRequestedPayload struct {
 	WorkspaceId       string `json:"workspaceId"`
 	ProjectSectionKey string `json:"projectSectionKey"`
@@ -467,6 +479,15 @@ type PreferencesAgentComposerDefaultsPatchRequestedEvent struct {
 	EmittedAt string                                                `json:"emittedAt"`
 	Scope     *EventScope                                           `json:"scope,omitempty"`
 	Payload   PreferencesAgentComposerDefaultsPatchRequestedPayload `json:"payload"`
+}
+
+type PreferencesAgentComposerDefaultsResolvedEvent struct {
+	ID        string                                          `json:"id"`
+	Topic     Topic                                           `json:"topic"`
+	Version   int                                             `json:"version"`
+	EmittedAt string                                          `json:"emittedAt"`
+	Scope     *EventScope                                     `json:"scope,omitempty"`
+	Payload   PreferencesAgentComposerDefaultsResolvedPayload `json:"payload"`
 }
 
 type PreferencesAgentSessionLaunchModePatchRequestedEvent struct {
@@ -689,6 +710,13 @@ var BusinessEventDefinitions = []EventDefinition{
 		Scope:     ScopeNameDesktop,
 	},
 	{
+		Topic:     TopicPreferencesAgentComposerDefaultsResolved,
+		Version:   1,
+		Direction: DirectionServerToClient,
+		Owner:     "core",
+		Scope:     ScopeNameDesktop,
+	},
+	{
 		Topic:     TopicPreferencesAgentSessionLaunchModePatchRequested,
 		Version:   1,
 		Direction: DirectionClientToServer,
@@ -771,16 +799,17 @@ var businessEventDefinitionByTopic = map[Topic]EventDefinition{
 	TopicConnectorMarketChanged:                          BusinessEventDefinitions[7],
 	TopicPreferencesAgentComposerDefaultsChanged:         BusinessEventDefinitions[8],
 	TopicPreferencesAgentComposerDefaultsPatchRequested:  BusinessEventDefinitions[9],
-	TopicPreferencesAgentSessionLaunchModePatchRequested: BusinessEventDefinitions[10],
-	TopicPreferencesDesktopUpdateRequested:               BusinessEventDefinitions[11],
-	TopicPreferencesDesktopUpdated:                       BusinessEventDefinitions[12],
-	TopicUserProjectUpdated:                              BusinessEventDefinitions[13],
-	TopicWorkspaceAppUpdated:                             BusinessEventDefinitions[14],
-	TopicWorkspaceAppfactoryJobUpdated:                   BusinessEventDefinitions[15],
-	TopicWorkspaceIssueUpdated:                           BusinessEventDefinitions[16],
-	TopicWorkspaceTuttimodeUpdated:                       BusinessEventDefinitions[17],
-	TopicWorkspaceWorkbenchNodeLaunchRequested:           BusinessEventDefinitions[18],
-	TopicWorkspaceWorkflowUpdated:                        BusinessEventDefinitions[19],
+	TopicPreferencesAgentComposerDefaultsResolved:        BusinessEventDefinitions[10],
+	TopicPreferencesAgentSessionLaunchModePatchRequested: BusinessEventDefinitions[11],
+	TopicPreferencesDesktopUpdateRequested:               BusinessEventDefinitions[12],
+	TopicPreferencesDesktopUpdated:                       BusinessEventDefinitions[13],
+	TopicUserProjectUpdated:                              BusinessEventDefinitions[14],
+	TopicWorkspaceAppUpdated:                             BusinessEventDefinitions[15],
+	TopicWorkspaceAppfactoryJobUpdated:                   BusinessEventDefinitions[16],
+	TopicWorkspaceIssueUpdated:                           BusinessEventDefinitions[17],
+	TopicWorkspaceTuttimodeUpdated:                       BusinessEventDefinitions[18],
+	TopicWorkspaceWorkbenchNodeLaunchRequested:           BusinessEventDefinitions[19],
+	TopicWorkspaceWorkflowUpdated:                        BusinessEventDefinitions[20],
 }
 
 var ClientToServerTopics = []Topic{
@@ -799,6 +828,7 @@ var ServerToClientTopics = []Topic{
 	TopicAnalyticsDebugReported,
 	TopicConnectorMarketChanged,
 	TopicPreferencesAgentComposerDefaultsChanged,
+	TopicPreferencesAgentComposerDefaultsResolved,
 	TopicPreferencesDesktopUpdated,
 	TopicUserProjectUpdated,
 	TopicWorkspaceAppUpdated,
@@ -852,6 +882,8 @@ func IsServerToClientTopic(topic Topic) bool {
 		return true
 	case TopicPreferencesAgentComposerDefaultsChanged:
 		return true
+	case TopicPreferencesAgentComposerDefaultsResolved:
+		return true
 	case TopicPreferencesDesktopUpdated:
 		return true
 	case TopicUserProjectUpdated:
@@ -895,6 +927,8 @@ func PayloadPrototypeForTopic(topic Topic) (any, bool) {
 		return &PreferencesAgentComposerDefaultsChangedPayload{}, true
 	case TopicPreferencesAgentComposerDefaultsPatchRequested:
 		return &PreferencesAgentComposerDefaultsPatchRequestedPayload{}, true
+	case TopicPreferencesAgentComposerDefaultsResolved:
+		return &PreferencesAgentComposerDefaultsResolvedPayload{}, true
 	case TopicPreferencesAgentSessionLaunchModePatchRequested:
 		return &PreferencesAgentSessionLaunchModePatchRequestedPayload{}, true
 	case TopicPreferencesDesktopUpdateRequested:
@@ -942,6 +976,8 @@ func EventPrototypeForTopic(topic Topic) (any, bool) {
 		return &PreferencesAgentComposerDefaultsChangedEvent{}, true
 	case TopicPreferencesAgentComposerDefaultsPatchRequested:
 		return &PreferencesAgentComposerDefaultsPatchRequestedEvent{}, true
+	case TopicPreferencesAgentComposerDefaultsResolved:
+		return &PreferencesAgentComposerDefaultsResolvedEvent{}, true
 	case TopicPreferencesAgentSessionLaunchModePatchRequested:
 		return &PreferencesAgentSessionLaunchModePatchRequestedEvent{}, true
 	case TopicPreferencesDesktopUpdateRequested:

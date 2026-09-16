@@ -50,12 +50,50 @@ func (s *preferencesStoreStub) PatchAgentSessionLaunchMode(_ context.Context, wo
 type agentComposerDefaultsValidatorStub struct {
 	agentTargetID string
 	patch         preferencesbiz.AgentComposerDefaultsPatch
+	rejected      []AgentComposerDefaultsPatchOutcome
+	rejectAll     bool
+	err           error
 }
 
-func (s *agentComposerDefaultsValidatorStub) ValidateAgentComposerDefaultsPatch(_ context.Context, agentTargetID string, patch preferencesbiz.AgentComposerDefaultsPatch) error {
+func (s *agentComposerDefaultsValidatorStub) ValidateAgentComposerDefaultsPatch(
+	_ context.Context,
+	agentTargetID string,
+	patch preferencesbiz.AgentComposerDefaultsPatch,
+) (AgentComposerDefaultsPatchValidation, error) {
 	s.agentTargetID = agentTargetID
 	s.patch = patch
-	return nil
+	if s.err != nil {
+		return AgentComposerDefaultsPatchValidation{}, s.err
+	}
+	// Mirror the real validator: rejected fields are withheld from Applied, and
+	// everything else passes through.
+	applied := preferencesbiz.AgentComposerDefaultsPatch{}
+	for field, value := range patch {
+		rejected := false
+		for _, outcome := range s.rejected {
+			if outcome.Field == field {
+				rejected = true
+				break
+			}
+		}
+		if !rejected {
+			applied[field] = value
+		}
+	}
+	return AgentComposerDefaultsPatchValidation{Applied: applied, Rejected: s.rejected}, nil
+}
+
+type agentComposerDefaultsResolvedPublisherStub struct {
+	inputs []AgentComposerDefaultsResolvedInput
+	err    error
+}
+
+func (s *agentComposerDefaultsResolvedPublisherStub) PublishAgentComposerDefaultsResolved(
+	_ context.Context,
+	input AgentComposerDefaultsResolvedInput,
+) error {
+	s.inputs = append(s.inputs, input)
+	return s.err
 }
 
 type agentComposerDefaultsPublisherStub struct {
@@ -764,5 +802,97 @@ func TestServicePutKeepsAgentTargetDefaultsWhenFieldOmitted(t *testing.T) {
 	}
 	if store.putInput.AgentComposerDefaultsByAgentTarget["local:codex"].Model != "gpt-5" {
 		t.Fatalf("stored agent target defaults = %#v, want preserved on explicit empty map", store.putInput.AgentComposerDefaultsByAgentTarget)
+	}
+}
+
+// A refused field must not take its legal siblings down with it: the client
+// sends every desired default in one snapshot.
+func TestServicePatchAgentComposerDefaultsPersistsOnlyAppliedFields(t *testing.T) {
+	t.Parallel()
+
+	store := &preferencesStoreStub{patchResult: preferencesbiz.AgentComposerDefaults{
+		PermissionModeID: "full-access",
+	}}
+	validator := &agentComposerDefaultsValidatorStub{
+		rejected: []AgentComposerDefaultsPatchOutcome{
+			{Field: "reasoningEffort", ReasonCode: "not_configurable"},
+		},
+	}
+	publisher := &agentComposerDefaultsPublisherStub{}
+	resolved := &agentComposerDefaultsResolvedPublisherStub{}
+	service := Service{
+		Store:                                  store,
+		AgentComposerDefaultsValidator:         validator,
+		AgentComposerDefaultsPublisher:         publisher,
+		AgentComposerDefaultsResolvedPublisher: resolved,
+	}
+	permission := "full-access"
+	reasoning := "ultra"
+	_, err := service.PatchAgentComposerDefaultsForTarget(context.Background(), PatchAgentComposerDefaultsForTargetInput{
+		AgentTargetID:    "local:codex",
+		ClientMutationID: "mutation-3",
+		Patch: preferencesbiz.AgentComposerDefaultsPatch{
+			preferencesbiz.AgentComposerDefaultsFieldPermissionModeID: &permission,
+			preferencesbiz.AgentComposerDefaultsFieldReasoningEffort:  &reasoning,
+		},
+	})
+	if err != nil {
+		t.Fatalf("PatchAgentComposerDefaultsForTarget() error = %v", err)
+	}
+	if len(publisher.agentTargetIDs) != 1 {
+		t.Fatalf("changed invalidations = %#v, want one", publisher.agentTargetIDs)
+	}
+	if len(resolved.inputs) != 1 {
+		t.Fatalf("resolved inputs = %#v, want one", resolved.inputs)
+	}
+	got := resolved.inputs[0]
+	if got.ClientMutationID != "mutation-3" {
+		t.Fatalf("resolved clientMutationId = %q, want mutation-3", got.ClientMutationID)
+	}
+	if len(got.Applied) != 1 || got.Applied[0] != preferencesbiz.AgentComposerDefaultsFieldPermissionModeID {
+		t.Fatalf("resolved applied = %#v, want only permissionModeId", got.Applied)
+	}
+	if len(got.Rejected) != 1 || got.Rejected[0].ReasonCode != "not_configurable" {
+		t.Fatalf("resolved rejected = %#v", got.Rejected)
+	}
+}
+
+// When nothing can be applied the stored defaults did not move, so a changed
+// event would be a lie and no store write may happen.
+func TestServicePatchAgentComposerDefaultsAllRejectedSkipsStoreAndChangedEvent(t *testing.T) {
+	t.Parallel()
+
+	store := &preferencesStoreStub{}
+	validator := &agentComposerDefaultsValidatorStub{
+		rejected: []AgentComposerDefaultsPatchOutcome{
+			{Field: "reasoningEffort", ReasonCode: "not_configurable"},
+		},
+		rejectAll: true,
+	}
+	publisher := &agentComposerDefaultsPublisherStub{}
+	resolved := &agentComposerDefaultsResolvedPublisherStub{}
+	service := Service{
+		Store:                                  store,
+		AgentComposerDefaultsValidator:         validator,
+		AgentComposerDefaultsPublisher:         publisher,
+		AgentComposerDefaultsResolvedPublisher: resolved,
+	}
+	reasoning := "ultra"
+	if _, err := service.PatchAgentComposerDefaultsForTarget(context.Background(), PatchAgentComposerDefaultsForTargetInput{
+		AgentTargetID: "local:codex",
+		Patch: preferencesbiz.AgentComposerDefaultsPatch{
+			preferencesbiz.AgentComposerDefaultsFieldReasoningEffort: &reasoning,
+		},
+	}); err != nil {
+		t.Fatalf("PatchAgentComposerDefaultsForTarget() error = %v", err)
+	}
+	if store.patchAgentTarget != "" {
+		t.Fatalf("store write happened for %q, want none", store.patchAgentTarget)
+	}
+	if len(publisher.agentTargetIDs) != 0 {
+		t.Fatalf("changed events = %#v, want none", publisher.agentTargetIDs)
+	}
+	if len(resolved.inputs) != 1 || len(resolved.inputs[0].Applied) != 0 {
+		t.Fatalf("resolved inputs = %#v, want one all-rejected report", resolved.inputs)
 	}
 }

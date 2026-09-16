@@ -21,6 +21,7 @@ const (
 	TopicConnectorMarketChanged                          = "connector.market.changed"
 	TopicPreferencesAgentComposerDefaultsChanged         = "preferences.agent.composer.defaults.changed"
 	TopicPreferencesAgentComposerDefaultsPatchRequested  = "preferences.agent.composer.defaults.patch.requested"
+	TopicPreferencesAgentComposerDefaultsResolved        = "preferences.agent.composer.defaults.resolved"
 	TopicPreferencesAgentSessionLaunchModePatchRequested = "preferences.agent.session.launch.mode.patch.requested"
 	TopicPreferencesDesktopUpdateRequested               = "preferences.desktop.update.requested"
 	TopicPreferencesDesktopUpdated                       = "preferences.desktop.updated"

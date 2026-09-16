@@ -1022,3 +1022,120 @@ func assertNoEvent(t *testing.T, session *Session) {
 	default:
 	}
 }
+
+func TestAgentComposerDefaultsPatchIntentEchoesClientMutationID(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(DefaultCatalog(), nil)
+	patcher := &agentComposerDefaultsPatcherStub{}
+	service.RegisterIntentHandler(
+		TopicPreferencesAgentComposerDefaultsPatchRequested,
+		NewPreferencesAgentComposerDefaultsPatchRequestedHandler(patcher),
+	)
+	if err := service.PublishFromClient(context.Background(), ClientEvent{
+		Topic:   TopicPreferencesAgentComposerDefaultsPatchRequested,
+		Payload: []byte(`{"agentTargetId":"local:opencode","patch":{"permissionModeId":"full-access"},"clientMutationId":"mutation-7"}`),
+	}); err != nil {
+		t.Fatalf("PublishFromClient() error = %v", err)
+	}
+	if len(patcher.inputs) != 1 {
+		t.Fatalf("patch inputs = %#v", patcher.inputs)
+	}
+	if patcher.inputs[0].ClientMutationID != "mutation-7" {
+		t.Fatalf("clientMutationId = %q, want mutation-7", patcher.inputs[0].ClientMutationID)
+	}
+}
+
+// The resolved event is the only channel that tells the client which fields of
+// its snapshot survived, so its shape is part of the contract.
+func TestAgentComposerDefaultsResolvedPublishesPerFieldOutcome(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(DefaultCatalog(), nil)
+	session := service.OpenSession()
+	t.Cleanup(func() { service.CloseSession(session) })
+	if err := service.Subscribe(session, []string{TopicPreferencesAgentComposerDefaultsResolved}, EventScope{}); err != nil {
+		t.Fatalf("Subscribe() error = %v", err)
+	}
+	publisher := DesktopPreferencesPublisher{Service: service}
+	if err := publisher.PublishAgentComposerDefaultsResolved(context.Background(), preferencesservice.AgentComposerDefaultsResolvedInput{
+		AgentTargetID:    "local:opencode",
+		ClientMutationID: "mutation-9",
+		Applied:          []string{"permissionModeId"},
+		Rejected: []preferencesservice.AgentComposerDefaultsPatchOutcome{
+			{Field: "reasoningEffort", ReasonCode: "not_configurable"},
+		},
+	}); err != nil {
+		t.Fatalf("PublishAgentComposerDefaultsResolved() error = %v", err)
+	}
+	event := receiveEvent(t, session)
+	var payload struct {
+		AgentTargetID    string   `json:"agentTargetId"`
+		ClientMutationID string   `json:"clientMutationId"`
+		Applied          []string `json:"applied"`
+		Rejected         []struct {
+			Field      string `json:"field"`
+			ReasonCode string `json:"reasonCode"`
+		} `json:"rejected"`
+	}
+	if err := json.Unmarshal(event.Payload, &payload); err != nil {
+		t.Fatalf("decode resolved: %v", err)
+	}
+	if payload.AgentTargetID != "local:opencode" ||
+		payload.ClientMutationID != "mutation-9" ||
+		len(payload.Applied) != 1 || payload.Applied[0] != "permissionModeId" ||
+		len(payload.Rejected) != 1 ||
+		payload.Rejected[0].Field != "reasoningEffort" ||
+		payload.Rejected[0].ReasonCode != "not_configurable" {
+		t.Fatalf("resolved payload = %#v", payload)
+	}
+}
+
+// A request without a mutation id must omit the field entirely rather than
+// serialize an empty string, so the client can distinguish "no correlation id"
+// from a real one.
+func TestAgentComposerDefaultsResolvedOmitsAbsentClientMutationID(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(DefaultCatalog(), nil)
+	session := service.OpenSession()
+	t.Cleanup(func() { service.CloseSession(session) })
+	if err := service.Subscribe(session, []string{TopicPreferencesAgentComposerDefaultsResolved}, EventScope{}); err != nil {
+		t.Fatalf("Subscribe() error = %v", err)
+	}
+	publisher := DesktopPreferencesPublisher{Service: service}
+	if err := publisher.PublishAgentComposerDefaultsResolved(context.Background(), preferencesservice.AgentComposerDefaultsResolvedInput{
+		AgentTargetID: "local:opencode",
+		Applied:       []string{},
+	}); err != nil {
+		t.Fatalf("PublishAgentComposerDefaultsResolved() error = %v", err)
+	}
+	event := receiveEvent(t, session)
+	var payload map[string]any
+	if err := json.Unmarshal(event.Payload, &payload); err != nil {
+		t.Fatalf("decode resolved: %v", err)
+	}
+	if _, ok := payload["clientMutationId"]; ok {
+		t.Fatalf("resolved payload = %#v, want clientMutationId omitted", payload)
+	}
+	if applied, ok := payload["applied"].([]any); !ok || len(applied) != 0 {
+		t.Fatalf("applied = %#v, want an empty array", payload["applied"])
+	}
+}
+
+func TestAgentComposerDefaultsResolvedRejectsUnknownReasonCode(t *testing.T) {
+	t.Parallel()
+
+	if err := validateAgentComposerDefaultsResolvedPayload([]byte(`{"agentTargetId":"local:opencode","applied":[],"rejected":[{"field":"speed","reasonCode":"made_up"}]}`)); err == nil {
+		t.Fatal("validateAgentComposerDefaultsResolvedPayload() error = nil, want rejection")
+	}
+	if err := validateAgentComposerDefaultsResolvedPayload([]byte(`{"agentTargetId":"local:opencode","applied":["not_a_field"]}`)); err == nil {
+		t.Fatal("validateAgentComposerDefaultsResolvedPayload() error = nil, want rejection for unknown field")
+	}
+	if err := validateAgentComposerDefaultsResolvedPayload([]byte(`{"agentTargetId":"local:opencode"}`)); err == nil {
+		t.Fatal("validateAgentComposerDefaultsResolvedPayload() error = nil, want rejection for missing applied")
+	}
+	if err := validateAgentComposerDefaultsResolvedPayload([]byte(`{"agentTargetId":"local:opencode","applied":[],"rejected":[{"field":"speed","reasonCode":"not_configurable"}]}`)); err != nil {
+		t.Fatalf("validateAgentComposerDefaultsResolvedPayload() error = %v", err)
+	}
+}

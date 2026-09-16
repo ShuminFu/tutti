@@ -28,6 +28,8 @@ export const businessEventTopicPreferencesAgentComposerDefaultsChanged =
   "preferences.agent.composer.defaults.changed" as const;
 export const businessEventTopicPreferencesAgentComposerDefaultsPatchRequested =
   "preferences.agent.composer.defaults.patch.requested" as const;
+export const businessEventTopicPreferencesAgentComposerDefaultsResolved =
+  "preferences.agent.composer.defaults.resolved" as const;
 export const businessEventTopicPreferencesAgentSessionLaunchModePatchRequested =
   "preferences.agent.session.launch.mode.patch.requested" as const;
 export const businessEventTopicPreferencesDesktopUpdateRequested =
@@ -57,7 +59,7 @@ export interface BusinessEventDefinition {
   scope: BusinessEventScopeName;
 }
 
-export const businessEventCatalogRevision = "sha256:92fde556d9bb44a6" as const;
+export const businessEventCatalogRevision = "sha256:20e0dcbcbccc69ad" as const;
 
 export const businessEventDefinitions = [
   {
@@ -127,6 +129,13 @@ export const businessEventDefinitions = [
     topic: "preferences.agent.composer.defaults.patch.requested",
     version: 1,
     direction: "client->server",
+    owner: "core",
+    scope: "desktop"
+  },
+  {
+    topic: "preferences.agent.composer.defaults.resolved",
+    version: 1,
+    direction: "server->client",
     owner: "core",
     scope: "desktop"
   },
@@ -270,6 +279,13 @@ export const businessEventDefinitionByTopic = {
     topic: "preferences.agent.composer.defaults.patch.requested",
     version: 1,
     direction: "client->server",
+    owner: "core",
+    scope: "desktop"
+  },
+  "preferences.agent.composer.defaults.resolved": {
+    topic: "preferences.agent.composer.defaults.resolved",
+    version: 1,
+    direction: "server->client",
     owner: "core",
     scope: "desktop"
   },

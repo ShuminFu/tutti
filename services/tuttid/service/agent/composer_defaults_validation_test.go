@@ -39,8 +39,8 @@ func TestValidateAgentComposerDefaultsPatchUsesObservedExtensionTargetCatalog(t 
 		if !composerValidationConfigHasValue(options.ModelConfig, input.model) {
 			t.Fatalf("model config for %s = %#v, want %q", input.workspace, options.ModelConfig, input.model)
 		}
-		if err := validateExtensionModelDefault(service, input.model); err != nil {
-			t.Fatalf("ValidateAgentComposerDefaultsPatch(%q) error = %v", input.model, err)
+		if reason, err := validateExtensionModelDefault(service, input.model); err != nil || reason != "" {
+			t.Fatalf("ValidateAgentComposerDefaultsPatch(%q) = reason %q, err %v, want applied", input.model, reason, err)
 		}
 	}
 
@@ -50,13 +50,19 @@ func TestValidateAgentComposerDefaultsPatchUsesObservedExtensionTargetCatalog(t 
 		[]ComposerConfigOptionValue{{Value: "other-target-only"}},
 	)
 	for _, model := range []string{"not-advertised", "other-target-only"} {
-		if err := validateExtensionModelDefault(service, model); !errors.Is(err, ErrInvalidArgument) {
-			t.Fatalf("ValidateAgentComposerDefaultsPatch(%q) error = %v, want ErrInvalidArgument", model, err)
+		reason, err := validateExtensionModelDefault(service, model)
+		if err != nil {
+			t.Fatalf("ValidateAgentComposerDefaultsPatch(%q) error = %v", model, err)
+		}
+		if reason != AgentComposerDefaultsReasonUnsupportedValue {
+			t.Fatalf("ValidateAgentComposerDefaultsPatch(%q) reason = %q, want %q", model, reason, AgentComposerDefaultsReasonUnsupportedValue)
 		}
 	}
 	service.InvalidateLiveComposerModels("acp:gemini")
-	if err := validateExtensionModelDefault(service, "gemini-project-a"); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("validation after catalog invalidation error = %v, want ErrInvalidArgument", err)
+	if reason, err := validateExtensionModelDefault(service, "gemini-project-a"); err != nil {
+		t.Fatalf("validation after catalog invalidation error = %v", err)
+	} else if reason == "" {
+		t.Fatal("validation after catalog invalidation applied, want rejection")
 	}
 }
 
@@ -77,8 +83,8 @@ func TestValidateAgentComposerDefaultsPatchRetainsExtensionTargetCatalogAfterDis
 	if _, ok := service.getLiveComposerModelOptionsForScope(scope, cachedAt.Add(2*time.Minute)); ok {
 		t.Fatal("display cache hit after TTL, want expired")
 	}
-	if err := validateExtensionModelDefault(service, "gemini-menu-selection"); err != nil {
-		t.Fatalf("validation after display cache TTL error = %v", err)
+	if reason, err := validateExtensionModelDefault(service, "gemini-menu-selection"); err != nil || reason != "" {
+		t.Fatalf("validation after display cache TTL = reason %q, err %v, want applied", reason, err)
 	}
 }
 
@@ -99,8 +105,8 @@ func TestServiceCreateResolvesObservedExtensionDefaultForActualCwd(t *testing.T)
 	}); err != nil {
 		t.Fatalf("GetComposerOptions() error = %v", err)
 	}
-	if err := validateExtensionModelDefault(service, "gemini-project-a"); err != nil {
-		t.Fatalf("ValidateAgentComposerDefaultsPatch() error = %v", err)
+	if reason, err := validateExtensionModelDefault(service, "gemini-project-a"); err != nil || reason != "" {
+		t.Fatalf("ValidateAgentComposerDefaultsPatch() = reason %q, err %v, want applied", reason, err)
 	}
 	service.AgentComposerDefaultsReader = fakeAgentComposerDefaultsReader{
 		extensionComposerValidationTargetID: {Model: "gemini-project-a"},
@@ -133,14 +139,25 @@ func TestServiceCreateResolvesObservedExtensionDefaultForActualCwd(t *testing.T)
 	}
 }
 
-func validateExtensionModelDefault(service *Service, model string) error {
-	return service.ValidateAgentComposerDefaultsPatch(
+// validateExtensionModelDefault returns the rejection reason for a model
+// default, or "" when the field was applied. Validation is per field now, so a
+// refused value is a result rather than an error; only a hard failure such as an
+// unknown target returns one.
+func validateExtensionModelDefault(service *Service, model string) (string, error) {
+	result, err := service.ValidateAgentComposerDefaultsPatch(
 		context.Background(),
 		extensionComposerValidationTargetID,
 		preferencesbiz.AgentComposerDefaultsPatch{
 			preferencesbiz.AgentComposerDefaultsFieldModel: &model,
 		},
 	)
+	if err != nil {
+		return "", err
+	}
+	for _, rejected := range result.Rejected {
+		return rejected.ReasonCode, nil
+	}
+	return "", nil
 }
 
 func composerValidationConfigHasValue(config ComposerConfigOption, value string) bool {

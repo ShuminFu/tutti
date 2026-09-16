@@ -84,6 +84,14 @@ type ComposerOptionsInput struct {
 	IgnoreModelPlanBinding   bool
 	providerTargetRef        map[string]any
 	extensionComposerProfile ExtensionComposerProfile
+	// IncludeTargetRuntimeEvidence opts into using the last runtime ACP
+	// config-option evidence observed for AgentTargetID when the caller's scope
+	// produced none of its own. Only the sparse agent-composer-defaults patch
+	// sets this: it carries no workspace or cwd, so it cannot read a live
+	// session, yet it must still validate against real runtime capabilities
+	// rather than the provider registry's static profile. Extension targets
+	// only — see applyTargetRuntimeEvidence.
+	IncludeTargetRuntimeEvidence bool
 }
 
 type ComposerSkillOption struct {
@@ -475,7 +483,12 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		if err != nil {
 			return ComposerOptions{}, err
 		}
+		options, err = s.applyTargetRuntimeEvidence(ctx, input, extensionProfile, locale, requestedPermissionModeID, options)
+		if err != nil {
+			return ComposerOptions{}, err
+		}
 		options = applyExtensionComposerCapabilities(options, extensionProfile, s.computerUseAvailable(), s.browserUseAvailable())
+		options = applyExtensionStaticReasoningConfig(options, extensionProfile, locale)
 	}
 	options = applyResolvedModelPlanComposerOverlay(options, modelPlanResolution, locale)
 	options = withContextWindowModelVariants(provider, options)

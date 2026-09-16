@@ -30,6 +30,12 @@ func (r agentExtensionComposerProfileResolver) ResolveExtensionComposerProfile(
 		RuntimePrep:            profile.RuntimePrep,
 	}
 	result.ModelConfigOptionID, result.PermissionConfigOptionID, result.ReasoningConfigOptionID = profile.ACPConfigOptionIDs()
+	if profile.ConfigOptions != nil {
+		if options, declared := profile.ConfigOptions.Reasoning.ReasoningOptions(); declared {
+			result.ReasoningEffortOptions = options
+			result.DefaultReasoningEffort = profile.ConfigOptions.Reasoning.ReasoningDefault(options)
+		}
+	}
 	if launchPermission := profile.LaunchPermissionSetting(); launchPermission != nil {
 		result.DefaultPermissionModeID = launchPermission.DefaultSemantic
 		result.PermissionModeIDPolicy = agentservice.ExtensionPermissionModeIDPolicySemantic

@@ -1,0 +1,72 @@
+{
+  "$schema": "../../schemas/core/event-definition.schema.json",
+  "topic": "preferences.agent.composer.defaults.resolved",
+  "version": 1,
+  "direction": "server->client",
+  "owner": "core",
+  "scope": "desktop",
+  "payloadSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["agentTargetId", "applied"],
+    "properties": {
+      "agentTargetId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "clientMutationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "applied": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "codexSaverMode",
+            "model",
+            "permissionModeId",
+            "reasoningEffort",
+            "speed"
+          ]
+        }
+      },
+      "rejected": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "reasonCode"],
+          "properties": {
+            "field": {
+              "type": "string",
+              "enum": [
+                "codexSaverMode",
+                "model",
+                "permissionModeId",
+                "reasoningEffort",
+                "speed"
+              ]
+            },
+            "reasonCode": {
+              "type": "string",
+              "enum": [
+                "invalid_value",
+                "unsupported_value",
+                "not_configurable",
+                "unsupported_field",
+                "internal_error"
+              ]
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 512
+            }
+          }
+        }
+      }
+    }
+  }
+}

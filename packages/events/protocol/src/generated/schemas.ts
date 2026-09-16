@@ -1904,6 +1904,71 @@ export const preferencesAgentComposerDefaultsPatchRequestedPayloadSchema = {
   }
 } as const;
 
+export const preferencesAgentComposerDefaultsResolvedPayloadSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["agentTargetId", "applied"],
+  properties: {
+    agentTargetId: {
+      type: "string",
+      minLength: 1,
+      maxLength: 128
+    },
+    clientMutationId: {
+      type: "string",
+      minLength: 1,
+      maxLength: 128
+    },
+    applied: {
+      type: "array",
+      items: {
+        type: "string",
+        enum: [
+          "codexSaverMode",
+          "model",
+          "permissionModeId",
+          "reasoningEffort",
+          "speed"
+        ]
+      }
+    },
+    rejected: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["field", "reasonCode"],
+        properties: {
+          field: {
+            type: "string",
+            enum: [
+              "codexSaverMode",
+              "model",
+              "permissionModeId",
+              "reasoningEffort",
+              "speed"
+            ]
+          },
+          reasonCode: {
+            type: "string",
+            enum: [
+              "invalid_value",
+              "unsupported_value",
+              "not_configurable",
+              "unsupported_field",
+              "internal_error"
+            ]
+          },
+          message: {
+            type: "string",
+            maxLength: 512
+          }
+        }
+      }
+    }
+  }
+} as const;
+
 export const preferencesAgentSessionLaunchModePatchRequestedPayloadSchema = {
   type: "object",
   additionalProperties: false,
@@ -3546,6 +3611,8 @@ export const businessEventPayloadSchemas = {
     preferencesAgentComposerDefaultsChangedPayloadSchema,
   "preferences.agent.composer.defaults.patch.requested":
     preferencesAgentComposerDefaultsPatchRequestedPayloadSchema,
+  "preferences.agent.composer.defaults.resolved":
+    preferencesAgentComposerDefaultsResolvedPayloadSchema,
   "preferences.agent.session.launch.mode.patch.requested":
     preferencesAgentSessionLaunchModePatchRequestedPayloadSchema,
   "preferences.desktop.update.requested":

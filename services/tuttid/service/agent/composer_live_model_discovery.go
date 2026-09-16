@@ -340,13 +340,17 @@ func (s *Service) discoverLiveComposerModelsUncachedForScope(
 		isExtension,
 		scope.modelConfigOptionID,
 	)
+	// The ACP session's creation timestamp is the observation time of the
+	// runtime config options: it orders competing observations for the same
+	// target in the evidence store regardless of write order.
+	observedAt := time.UnixMilli(firstNonZeroInt64(session.CreatedAtUnixMS, time.Now().UnixMilli()))
 	if len(runtimeContext) > 0 {
-		s.setComposerRuntimeContextForScope(scope, time.Now().UTC(), runtimeContext)
+		s.setComposerRuntimeContextForScope(scope, time.Now().UTC(), observedAt, runtimeContext)
 	}
 	if isExtension {
 		runtimeContext = stampAgentExtensionComposerScope(runtimeContext, providerTargetRef, scope.cwd, settings)
 		if len(runtimeContext) > 0 {
-			s.setComposerRuntimeContextForScope(scope, time.Now().UTC(), runtimeContext)
+			s.setComposerRuntimeContextForScope(scope, time.Now().UTC(), observedAt, runtimeContext)
 		}
 		go s.cleanupLiveModelDiscoverySession(scope.workspaceID, session.ID)
 		return options, pollErr

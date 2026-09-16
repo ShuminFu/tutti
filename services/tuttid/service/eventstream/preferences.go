@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	agentproviderbiz "github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
 	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
@@ -42,6 +43,16 @@ func preferencesTopicDefinitions() []TopicDefinition {
 			directions:         []Direction{DirectionClientToServer},
 			validators: map[Direction]PayloadValidator{
 				DirectionClientToServer: validateAgentComposerDefaultsPatchRequestedPayload,
+			},
+		},
+		{
+			Name:               TopicPreferencesAgentComposerDefaultsResolved,
+			ClientCanPublish:   false,
+			ClientCanSubscribe: true,
+			Version:            1,
+			directions:         []Direction{DirectionServerToClient},
+			validators: map[Direction]PayloadValidator{
+				DirectionServerToClient: validateAgentComposerDefaultsResolvedPayload,
 			},
 		},
 		{
@@ -148,6 +159,36 @@ func (p DesktopPreferencesPublisher) PublishAgentComposerDefaultsChanged(ctx con
 	return p.Service.PublishFromServer(ctx, TopicPreferencesAgentComposerDefaultsChanged, payload)
 }
 
+// PublishAgentComposerDefaultsResolved reports the per-field outcome of a
+// defaults patch. ClientMutationID is echoed only when the request carried one:
+// an empty id must be omitted entirely, not serialized as "".
+func (p DesktopPreferencesPublisher) PublishAgentComposerDefaultsResolved(
+	ctx context.Context,
+	input preferencesservice.AgentComposerDefaultsResolvedInput,
+) error {
+	if p.Service == nil {
+		return nil
+	}
+	rejected := make([]agentComposerDefaultsRejectedPayload, 0, len(input.Rejected))
+	for _, outcome := range input.Rejected {
+		rejected = append(rejected, agentComposerDefaultsRejectedPayload{
+			Field:      outcome.Field,
+			ReasonCode: outcome.ReasonCode,
+			Message:    outcome.Message,
+		})
+	}
+	payload, err := json.Marshal(agentComposerDefaultsResolvedPayload{
+		AgentTargetID:    input.AgentTargetID,
+		ClientMutationID: strings.TrimSpace(input.ClientMutationID),
+		Applied:          append([]string{}, input.Applied...),
+		Rejected:         rejected,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal agent composer defaults resolved payload: %w", err)
+	}
+	return p.Service.PublishFromServer(ctx, TopicPreferencesAgentComposerDefaultsResolved, payload)
+}
+
 func NewPreferencesAgentComposerDefaultsPatchRequestedHandler(
 	patcher AgentComposerDefaultsPatcher,
 ) IntentHandler {
@@ -162,6 +203,9 @@ func NewPreferencesAgentComposerDefaultsPatchRequestedHandler(
 		if _, err := patcher.PatchAgentComposerDefaultsForTarget(ctx, preferencesservice.PatchAgentComposerDefaultsForTargetInput{
 			AgentTargetID: decoded.AgentTargetID,
 			Patch:         decoded.Patch,
+			// Echoed back on the resolved event so the client can correlate it
+			// with the optimistic update it already applied. Never persisted.
+			ClientMutationID: decoded.ClientMutationID,
 		}); err != nil {
 			return fmt.Errorf("patch agent composer defaults: %w", err)
 		}

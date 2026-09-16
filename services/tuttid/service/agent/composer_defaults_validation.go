@@ -8,17 +8,61 @@ import (
 	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
 )
 
+// Stable reason codes for a rejected agent-composer-defaults field. They are
+// part of the wire contract of
+// preferences.agent.composer.defaults.resolved and must not be renamed without a
+// protocol version bump.
+const (
+	AgentComposerDefaultsReasonInvalidValue     = "invalid_value"
+	AgentComposerDefaultsReasonUnsupportedValue = "unsupported_value"
+	AgentComposerDefaultsReasonNotConfigurable  = "not_configurable"
+	AgentComposerDefaultsReasonUnsupportedField = "unsupported_field"
+	AgentComposerDefaultsReasonInternalError    = "internal_error"
+)
+
+// AgentComposerDefaultsRejectedField is one field the daemon refused to persist.
+// Message is diagnostic only: clients must select their own localized copy from
+// ReasonCode and must never render Message to the user.
+type AgentComposerDefaultsRejectedField struct {
+	Field      string
+	ReasonCode string
+	Message    string
+}
+
+// AgentComposerDefaultsPatchResult is the per-field outcome of a defaults patch.
+//
+// It exists because the desktop client publishes every desired default in ONE
+// snapshot call. Failing the whole patch on the first bad field silently dropped
+// legal siblings, so validation now evaluates each field independently and
+// reports which ones survived.
+type AgentComposerDefaultsPatchResult struct {
+	// Applied holds the fields that were validated and may be persisted.
+	Applied preferencesbiz.AgentComposerDefaultsPatch
+	// Rejected holds the fields that were refused, with a reason code each.
+	Rejected []AgentComposerDefaultsRejectedField
+}
+
+func (r AgentComposerDefaultsPatchResult) hasApplied() bool {
+	return len(r.Applied) > 0
+}
+
+// ValidateAgentComposerDefaultsPatch validates every field of the patch
+// independently and returns the subset that may be persisted.
+//
+// Hard failures still return an error: an unknown agent target or an
+// unresolvable launch means the daemon cannot judge ANY field, so the intent ack
+// fails and no resolved event is published.
 func (s *Service) ValidateAgentComposerDefaultsPatch(
 	ctx context.Context,
 	agentTargetID string,
 	patch preferencesbiz.AgentComposerDefaultsPatch,
-) error {
+) (AgentComposerDefaultsPatchResult, error) {
 	launchInput := CreateSessionInput{
 		AgentTargetID: agentTargetID,
 	}
 	launch, err := s.resolveCreateSessionLaunch(ctx, "", &launchInput)
 	if err != nil {
-		return err
+		return AgentComposerDefaultsPatchResult{}, err
 	}
 	settings := ComposerSettings{}
 	for field, value := range patch {
@@ -42,53 +86,149 @@ func (s *Service) ValidateAgentComposerDefaultsPatch(
 		Provider:                 launch.Provider,
 		Settings:                 settings,
 		IncludeCapabilityCatalog: boolPointer(false),
+		// The patch carries no workspace or cwd, so the only runtime evidence
+		// available is what the daemon previously observed for this target.
+		// Without it, extension targets fall back to the provider registry's
+		// static profile, which declares nothing for extension providers, and a
+		// legal value is rejected as "not configurable".
+		IncludeTargetRuntimeEvidence: true,
+		providerTargetRef:            clonePayload(launch.ProviderTargetRef),
 	})
 	if err != nil {
-		return err
+		return AgentComposerDefaultsPatchResult{}, err
 	}
-	for field, value := range patch {
-		if value == nil {
+	// Deterministic order so a rejected list never reshuffles between two
+	// identical patches.
+	fields := agentComposerDefaultsPatchFieldOrder()
+	result := AgentComposerDefaultsPatchResult{
+		Applied: preferencesbiz.AgentComposerDefaultsPatch{},
+	}
+	for _, field := range fields {
+		value, present := patch[field]
+		if !present {
 			continue
 		}
-		selected := agentComposerDefaultsPatchText(value)
-		switch field {
-		case preferencesbiz.AgentComposerDefaultsFieldCodexSaverMode:
-			if _, ok := value.(bool); !ok {
-				return fmt.Errorf("%w: codex saver mode must be boolean", ErrInvalidArgument)
-			}
-			if !composerProviderSupportsSaverSubagentMode(launch.Provider) {
-				return fmt.Errorf("%w: codex saver mode is only supported by Codex", ErrInvalidArgument)
-			}
-		case preferencesbiz.AgentComposerDefaultsFieldModel:
-			if providerTargetRefKind(launch.ProviderTargetRef) == "agent_extension" {
-				observedModels, observed := s.liveComposerModelOptionsForTarget(
-					launch.Provider,
-					agentTargetID,
-				)
-				if err := validateComposerDefaultOption(field, selected, observed, observedModels); err != nil {
-					return err
-				}
-			} else if err := s.validateComposerModelForCreate(ctx, launch.Provider, "", "", selected); err != nil {
-				return err
-			}
-		case preferencesbiz.AgentComposerDefaultsFieldPermissionModeID:
-			if !options.PermissionConfig.Configurable || !permissionModeConfigHasModeID(options.PermissionConfig, selected) {
-				return fmt.Errorf("%w: permission mode is not supported by agent target", ErrInvalidArgument)
-			}
-		case preferencesbiz.AgentComposerDefaultsFieldReasoningEffort:
-			reasoningConfig := composerReasoningConfigForSelectedModel(options)
-			if err := validateComposerDefaultOption(field, selected, reasoningConfig.Configurable, reasoningConfig.Options); err != nil {
-				return err
-			}
-		case preferencesbiz.AgentComposerDefaultsFieldSpeed:
-			if err := validateComposerDefaultOption(field, selected, options.SpeedConfig.Configurable, options.SpeedConfig.Options); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("%w: unsupported agent composer defaults field", ErrInvalidArgument)
+		if rejected, ok := s.validateAgentComposerDefaultsField(
+			ctx,
+			field,
+			value,
+			launch,
+			agentTargetID,
+			options,
+		); !ok {
+			result.Rejected = append(result.Rejected, rejected)
+			continue
 		}
+		// Text fields clear on null; absent keys were skipped above.
+		if value == nil || field == preferencesbiz.AgentComposerDefaultsFieldCodexSaverMode {
+			result.Applied[field] = value
+			continue
+		}
+		result.Applied[field] = agentComposerDefaultsPatchText(value)
 	}
-	return nil
+	return result, nil
+}
+
+// validateAgentComposerDefaultsField validates one field and reports whether it
+// may be persisted. A rejection never aborts the patch.
+func (s *Service) validateAgentComposerDefaultsField(
+	ctx context.Context,
+	field string,
+	value any,
+	launch resolvedCreateSessionLaunch,
+	agentTargetID string,
+	options ComposerOptions,
+) (AgentComposerDefaultsRejectedField, bool) {
+	reject := func(reasonCode string) (AgentComposerDefaultsRejectedField, bool) {
+		return AgentComposerDefaultsRejectedField{
+			Field:      field,
+			ReasonCode: reasonCode,
+		}, false
+	}
+	// A null value clears the stored default. There is nothing to validate
+	// against runtime capability, and refusing a clear would strand a stale
+	// default the user is trying to remove.
+	if value == nil {
+		return AgentComposerDefaultsRejectedField{}, true
+	}
+	selected := agentComposerDefaultsPatchText(value)
+	if selected == "" && field != preferencesbiz.AgentComposerDefaultsFieldCodexSaverMode {
+		// Blank text is "no default", which is the same state as a clear.
+		return AgentComposerDefaultsRejectedField{}, true
+	}
+	switch field {
+	case preferencesbiz.AgentComposerDefaultsFieldCodexSaverMode:
+		enabled, ok := value.(bool)
+		if !ok {
+			return reject(AgentComposerDefaultsReasonInvalidValue)
+		}
+		if enabled && !composerProviderSupportsSaverSubagentMode(launch.Provider) {
+			return reject(AgentComposerDefaultsReasonUnsupportedValue)
+		}
+		return AgentComposerDefaultsRejectedField{}, true
+	case preferencesbiz.AgentComposerDefaultsFieldModel:
+		if providerTargetRefKind(launch.ProviderTargetRef) == "agent_extension" {
+			observedModels, observed := s.liveComposerModelOptionsForTarget(
+				launch.Provider,
+				agentTargetID,
+			)
+			return composerDefaultsRejection(field, validateComposerDefaultOption(field, selected, observed, observedModels))
+		}
+		return composerDefaultsRejection(field, s.validateComposerModelForCreate(ctx, launch.Provider, "", "", selected))
+	case preferencesbiz.AgentComposerDefaultsFieldPermissionModeID:
+		if !options.PermissionConfig.Configurable || !permissionModeConfigHasModeID(options.PermissionConfig, selected) {
+			return reject(AgentComposerDefaultsReasonNotConfigurable)
+		}
+		return AgentComposerDefaultsRejectedField{}, true
+	case preferencesbiz.AgentComposerDefaultsFieldReasoningEffort:
+		reasoningConfig := composerReasoningConfigForSelectedModel(options)
+		return composerDefaultsRejection(field, validateComposerDefaultOption(field, selected, reasoningConfig.Configurable, reasoningConfig.Options))
+	case preferencesbiz.AgentComposerDefaultsFieldSpeed:
+		return composerDefaultsRejection(field, validateComposerDefaultOption(field, selected, options.SpeedConfig.Configurable, options.SpeedConfig.Options))
+	}
+	return reject(AgentComposerDefaultsReasonUnsupportedField)
+}
+
+// composerDefaultsRejection maps an existing validation error onto a stable
+// per-field reason code. The message is preserved for daemon logs only.
+func composerDefaultsRejection(field string, err error) (AgentComposerDefaultsRejectedField, bool) {
+	if err == nil {
+		return AgentComposerDefaultsRejectedField{}, true
+	}
+	return AgentComposerDefaultsRejectedField{
+		Field:      field,
+		ReasonCode: composerDefaultsReasonCodeForError(err),
+		Message:    err.Error(),
+	}, false
+}
+
+// composerDefaultsReasonCodeForError reads the reason back out of the error
+// strings the existing validators already produce. Those strings are the
+// daemon's internal vocabulary; the code below is the wire vocabulary.
+func composerDefaultsReasonCodeForError(err error) string {
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "is not configurable for agent target"):
+		return AgentComposerDefaultsReasonNotConfigurable
+	case strings.Contains(message, "value is not supported by agent target"):
+		return AgentComposerDefaultsReasonUnsupportedValue
+	case strings.Contains(message, "unsupported agent composer defaults field"):
+		return AgentComposerDefaultsReasonUnsupportedField
+	default:
+		return AgentComposerDefaultsReasonInvalidValue
+	}
+}
+
+// agentComposerDefaultsPatchFieldOrder is the stable evaluation and reporting
+// order for patch fields.
+func agentComposerDefaultsPatchFieldOrder() []string {
+	return []string{
+		preferencesbiz.AgentComposerDefaultsFieldModel,
+		preferencesbiz.AgentComposerDefaultsFieldPermissionModeID,
+		preferencesbiz.AgentComposerDefaultsFieldReasoningEffort,
+		preferencesbiz.AgentComposerDefaultsFieldSpeed,
+		preferencesbiz.AgentComposerDefaultsFieldCodexSaverMode,
+	}
 }
 
 func agentComposerDefaultsPatchText(value any) string {

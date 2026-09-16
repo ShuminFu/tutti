@@ -109,6 +109,9 @@ func (m *Manager) installLocalPackage(key, sourceDir string) (Installation, erro
 	if err := m.Installations.PutActive(installation); err != nil {
 		return Installation{}, err
 	}
+	if m.OnInstallationChanged != nil {
+		m.OnInstallationChanged(installation.Provider)
+	}
 	return installation, nil
 }
 

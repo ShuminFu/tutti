@@ -101,9 +101,10 @@ func buildDaemonAPI(
 		Publisher: eventstreamservice.TuttiModeActivationPublisher{Service: events},
 	}
 	preferences := &preferencesservice.Service{
-		Store:                          preferencesStore,
-		Publisher:                      preferencesPublisher,
-		AgentComposerDefaultsPublisher: preferencesPublisher,
+		Store:                                  preferencesStore,
+		Publisher:                              preferencesPublisher,
+		AgentComposerDefaultsPublisher:         preferencesPublisher,
+		AgentComposerDefaultsResolvedPublisher: preferencesPublisher,
 	}
 	agentTargets := agenttargetservice.Service{Store: agentTargetStore}
 	agentRuntimeDir, err := tuttitypes.DefaultAgentRuntimeDir()
@@ -448,7 +449,14 @@ func buildDaemonAPI(
 	}
 	agentSessionService := agentservice.NewService(agentRuntimeController, agentSessionConfig)
 	agentStatusService.OnProviderStatusInvalidated = agentSessionService.InvalidateProviderAvailabilityCache
-	preferences.AgentComposerDefaultsValidator = agentSessionService
+	// A replaced extension runtime may advertise a different composer option
+	// set (models, reasoning levels), so a (re)install must drop the provider's
+	// cached projections — including the target-scoped runtime evidence the
+	// sparse defaults patch validates against.
+	agentExtensionManager.OnInstallationChanged = func(provider string) {
+		agentSessionService.InvalidateLiveComposerModels(provider)
+	}
+	preferences.AgentComposerDefaultsValidator = agentComposerDefaultsValidatorAdapter{agents: agentSessionService}
 	modelPlans.NativeSubscriptionProbe = modelPlanNativeSubscriptionProbe{Agents: agentSessionService}
 	automationExecutor := &automationruleservice.DaemonExecutor{Agents: agentSessionService, Ledger: automationRulesStore}
 	automationRules.Executor = automationExecutor
@@ -838,4 +846,38 @@ func buildDaemonAPI(
 			}
 		},
 	}, appCenterService, agentRuntime, providerAuthWatcher, nil
+}
+
+// agentComposerDefaultsValidatorAdapter bridges the agent service's per-field
+// patch validation onto the preferences service's interface. The two result
+// types are structurally identical but deliberately independent: agent must not
+// import service/preferences for a shape, and preferences must not import agent.
+type agentComposerDefaultsValidatorAdapter struct {
+	agents *agentservice.Service
+}
+
+func (a agentComposerDefaultsValidatorAdapter) ValidateAgentComposerDefaultsPatch(
+	ctx context.Context,
+	agentTargetID string,
+	patch preferencesbiz.AgentComposerDefaultsPatch,
+) (preferencesservice.AgentComposerDefaultsPatchValidation, error) {
+	if a.agents == nil {
+		return preferencesservice.AgentComposerDefaultsPatchValidation{}, fmt.Errorf("agent service is unavailable")
+	}
+	result, err := a.agents.ValidateAgentComposerDefaultsPatch(ctx, agentTargetID, patch)
+	if err != nil {
+		return preferencesservice.AgentComposerDefaultsPatchValidation{}, err
+	}
+	rejected := make([]preferencesservice.AgentComposerDefaultsPatchOutcome, 0, len(result.Rejected))
+	for _, field := range result.Rejected {
+		rejected = append(rejected, preferencesservice.AgentComposerDefaultsPatchOutcome{
+			Field:      field.Field,
+			ReasonCode: field.ReasonCode,
+			Message:    field.Message,
+		})
+	}
+	return preferencesservice.AgentComposerDefaultsPatchValidation{
+		Applied:  result.Applied,
+		Rejected: rejected,
+	}, nil
 }

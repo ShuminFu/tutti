@@ -11,34 +11,6 @@ import (
 	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
 )
 
-func TestGetComposerOptionsUsesTargetDefaultsAndSparseRequestOverrides(t *testing.T) {
-	service := newTestService(newFakeRuntime())
-	service.AgentComposerDefaultsReader = fakeAgentComposerDefaultsReader{
-		agenttargetbiz.IDLocalCodex: {
-			Model:            "gpt-5",
-			PermissionModeID: "full-access",
-			ReasoningEffort:  "high",
-			Speed:            "fast",
-		},
-	}
-	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
-		AgentTargetID: agenttargetbiz.IDLocalCodex,
-		Provider:      "codex",
-		Settings: ComposerSettings{
-			Model: "gpt-5-codex",
-		},
-	})
-	if err != nil {
-		t.Fatalf("GetComposerOptions() error = %v", err)
-	}
-	if options.EffectiveSettings.Model != "gpt-5-codex" ||
-		options.EffectiveSettings.PermissionModeID != "full-access" ||
-		options.EffectiveSettings.ReasoningEffort != "high" ||
-		options.EffectiveSettings.Speed != "fast" {
-		t.Fatalf("effective settings = %#v", options.EffectiveSettings)
-	}
-}
-
 func TestGetComposerOptionsAdvertisesRememberedCodexSaverModeOnlyForCodex(t *testing.T) {
 	service := newTestService(newFakeRuntime())
 	service.AgentComposerDefaultsReader = fakeAgentComposerDefaultsReader{
@@ -69,14 +41,22 @@ func TestGetComposerOptionsAdvertisesRememberedCodexSaverModeOnlyForCodex(t *tes
 func TestValidateAgentComposerDefaultsPatchRejectsUnknownTargetAndValue(t *testing.T) {
 	service := newTestService(newFakeRuntime())
 	unsupported := "not-a-permission"
-	err := service.ValidateAgentComposerDefaultsPatch(context.Background(), agenttargetbiz.IDLocalCodex, preferencesbiz.AgentComposerDefaultsPatch{
+	result, err := service.ValidateAgentComposerDefaultsPatch(context.Background(), agenttargetbiz.IDLocalCodex, preferencesbiz.AgentComposerDefaultsPatch{
 		preferencesbiz.AgentComposerDefaultsFieldPermissionModeID: &unsupported,
 	})
-	if !errors.Is(err, ErrInvalidArgument) {
+	if err != nil {
 		t.Fatalf("unsupported permission error = %v", err)
 	}
+	if len(result.Applied) != 0 {
+		t.Fatalf("applied = %#v, want none", result.Applied)
+	}
+	if len(result.Rejected) != 1 ||
+		result.Rejected[0].Field != preferencesbiz.AgentComposerDefaultsFieldPermissionModeID ||
+		result.Rejected[0].ReasonCode != AgentComposerDefaultsReasonNotConfigurable {
+		t.Fatalf("rejected = %#v, want one not_configurable permissionModeId", result.Rejected)
+	}
 	model := "gpt-5"
-	err = service.ValidateAgentComposerDefaultsPatch(context.Background(), "missing-target", preferencesbiz.AgentComposerDefaultsPatch{
+	_, err = service.ValidateAgentComposerDefaultsPatch(context.Background(), "missing-target", preferencesbiz.AgentComposerDefaultsPatch{
 		preferencesbiz.AgentComposerDefaultsFieldModel: &model,
 	})
 	if !errors.Is(err, ErrInvalidArgument) {

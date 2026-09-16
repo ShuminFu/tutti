@@ -18,8 +18,41 @@ type AgentComposerDefaultsPublisher interface {
 	PublishAgentComposerDefaultsChanged(context.Context, string) error
 }
 
+// AgentComposerDefaultsPatchOutcome is one field the daemon refused to persist,
+// with a stable reason code. Message is diagnostic only and must never be shown
+// to the user.
+type AgentComposerDefaultsPatchOutcome struct {
+	Field      string
+	ReasonCode string
+	Message    string
+}
+
+// AgentComposerDefaultsPatchValidation is the per-field result of a defaults
+// patch: the fields that survived validation, and those that did not.
+type AgentComposerDefaultsPatchValidation struct {
+	Applied  preferencesbiz.AgentComposerDefaultsPatch
+	Rejected []AgentComposerDefaultsPatchOutcome
+}
+
 type AgentComposerDefaultsPatchValidator interface {
-	ValidateAgentComposerDefaultsPatch(context.Context, string, preferencesbiz.AgentComposerDefaultsPatch) error
+	ValidateAgentComposerDefaultsPatch(context.Context, string, preferencesbiz.AgentComposerDefaultsPatch) (AgentComposerDefaultsPatchValidation, error)
+}
+
+// AgentComposerDefaultsResolvedPublisher reports the per-field outcome of a
+// defaults patch back to the client that requested it.
+type AgentComposerDefaultsResolvedPublisher interface {
+	PublishAgentComposerDefaultsResolved(context.Context, AgentComposerDefaultsResolvedInput) error
+}
+
+// AgentComposerDefaultsResolvedInput is the daemon-side shape of
+// preferences.agent.composer.defaults.resolved. ClientMutationID is echoed back
+// verbatim so the client can match the answer to its optimistic update; it is
+// never persisted.
+type AgentComposerDefaultsResolvedInput struct {
+	AgentTargetID    string
+	ClientMutationID string
+	Applied          []string
+	Rejected         []AgentComposerDefaultsPatchOutcome
 }
 
 type ChangeObserver func(
@@ -33,7 +66,11 @@ type Service struct {
 	Publisher                      DesktopPreferencesPublisher
 	AgentComposerDefaultsPublisher AgentComposerDefaultsPublisher
 	AgentComposerDefaultsValidator AgentComposerDefaultsPatchValidator
-	changeObservers                []ChangeObserver
+	// AgentComposerDefaultsResolvedPublisher is optional: when unset the daemon
+	// still applies and publishes the legal fields, the client just does not get
+	// the per-field breakdown back.
+	AgentComposerDefaultsResolvedPublisher AgentComposerDefaultsResolvedPublisher
+	changeObservers                        []ChangeObserver
 }
 
 // RegisterChangeObserver adds a startup-wired observer for successful preference changes.
@@ -47,6 +84,9 @@ func (s *Service) RegisterChangeObserver(observer ChangeObserver) {
 type PatchAgentComposerDefaultsForTargetInput struct {
 	AgentTargetID string
 	Patch         preferencesbiz.AgentComposerDefaultsPatch
+	// ClientMutationID is echoed back on the resolved event so the client can
+	// correlate the answer with its optimistic update. It is never persisted.
+	ClientMutationID string
 }
 
 type PatchAgentSessionLaunchModeInput struct {
@@ -130,14 +170,28 @@ func (s Service) PatchAgentComposerDefaultsForTarget(
 	if s.AgentComposerDefaultsValidator == nil {
 		return preferencesbiz.AgentComposerDefaults{}, errors.New("agent composer defaults validator is not configured")
 	}
-	if err := s.AgentComposerDefaultsValidator.ValidateAgentComposerDefaultsPatch(ctx, agentTargetID, patch); err != nil {
+	validation, err := s.AgentComposerDefaultsValidator.ValidateAgentComposerDefaultsPatch(ctx, agentTargetID, patch)
+	if err != nil {
 		return preferencesbiz.AgentComposerDefaults{}, err
+	}
+	applied := validation.Applied
+	if len(applied) == 0 {
+		// Every field was refused. Publishing a changed event would tell the
+		// client the stored defaults moved when they did not, so only the
+		// resolved event goes out.
+		return preferencesbiz.AgentComposerDefaults{}, s.publishAgentComposerDefaultsResolved(
+			ctx,
+			agentTargetID,
+			input.ClientMutationID,
+			nil,
+			validation.Rejected,
+		)
 	}
 	patchStore, ok := s.Store.(workspacedata.AgentComposerDefaultsPatchStore)
 	if !ok {
 		return preferencesbiz.AgentComposerDefaults{}, errors.New("agent composer defaults patch store is not configured")
 	}
-	defaults, err := patchStore.PatchAgentComposerDefaultsForTarget(ctx, agentTargetID, patch)
+	defaults, err := patchStore.PatchAgentComposerDefaultsForTarget(ctx, agentTargetID, applied)
 	if err != nil {
 		return preferencesbiz.AgentComposerDefaults{}, err
 	}
@@ -146,7 +200,61 @@ func (s Service) PatchAgentComposerDefaultsForTarget(
 			return preferencesbiz.AgentComposerDefaults{}, err
 		}
 	}
+	if err := s.publishAgentComposerDefaultsResolved(
+		ctx,
+		agentTargetID,
+		input.ClientMutationID,
+		agentComposerDefaultsAppliedFieldNames(applied),
+		validation.Rejected,
+	); err != nil {
+		return preferencesbiz.AgentComposerDefaults{}, err
+	}
 	return defaults, nil
+}
+
+// publishAgentComposerDefaultsResolved emits the per-field outcome. It is
+// deliberately best-effort-neutral: a missing publisher is not an error, but a
+// publisher that fails is, because the client is otherwise left waiting.
+func (s Service) publishAgentComposerDefaultsResolved(
+	ctx context.Context,
+	agentTargetID string,
+	clientMutationID string,
+	applied []string,
+	rejected []AgentComposerDefaultsPatchOutcome,
+) error {
+	if s.AgentComposerDefaultsResolvedPublisher == nil {
+		return nil
+	}
+	return s.AgentComposerDefaultsResolvedPublisher.PublishAgentComposerDefaultsResolved(
+		ctx,
+		AgentComposerDefaultsResolvedInput{
+			AgentTargetID:    agentTargetID,
+			ClientMutationID: strings.TrimSpace(clientMutationID),
+			Applied:          applied,
+			Rejected:         rejected,
+		},
+	)
+}
+
+// agentComposerDefaultsAppliedFieldNames lists applied fields in the daemon's
+// stable field order so two identical patches produce identical payloads.
+func agentComposerDefaultsAppliedFieldNames(
+	applied preferencesbiz.AgentComposerDefaultsPatch,
+) []string {
+	order := []string{
+		preferencesbiz.AgentComposerDefaultsFieldModel,
+		preferencesbiz.AgentComposerDefaultsFieldPermissionModeID,
+		preferencesbiz.AgentComposerDefaultsFieldReasoningEffort,
+		preferencesbiz.AgentComposerDefaultsFieldSpeed,
+		preferencesbiz.AgentComposerDefaultsFieldCodexSaverMode,
+	}
+	result := make([]string, 0, len(applied))
+	for _, field := range order {
+		if _, ok := applied[field]; ok {
+			result = append(result, field)
+		}
+	}
+	return result
 }
 
 func (s Service) PatchAgentSessionLaunchMode(

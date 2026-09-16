@@ -17,6 +17,7 @@ export type BusinessEventTopic =
   | "connector.market.changed"
   | "preferences.agent.composer.defaults.changed"
   | "preferences.agent.composer.defaults.patch.requested"
+  | "preferences.agent.composer.defaults.resolved"
   | "preferences.agent.session.launch.mode.patch.requested"
   | "preferences.desktop.update.requested"
   | "preferences.desktop.updated"
@@ -514,6 +515,33 @@ export interface PreferencesAgentComposerDefaultsPatchRequestedPayloadV1 {
   clientMutationId?: string;
 }
 
+export interface PreferencesAgentComposerDefaultsResolvedPayloadV1 {
+  agentTargetId: string;
+  clientMutationId?: string;
+  applied: readonly (
+    | "codexSaverMode"
+    | "model"
+    | "permissionModeId"
+    | "reasoningEffort"
+    | "speed"
+  )[];
+  rejected?: readonly {
+    field:
+      | "codexSaverMode"
+      | "model"
+      | "permissionModeId"
+      | "reasoningEffort"
+      | "speed";
+    reasonCode:
+      | "invalid_value"
+      | "unsupported_value"
+      | "not_configurable"
+      | "unsupported_field"
+      | "internal_error";
+    message?: string;
+  }[];
+}
+
 export interface PreferencesAgentSessionLaunchModePatchRequestedPayloadV1 {
   workspaceId: string;
   projectSectionKey: string;
@@ -650,6 +678,13 @@ export type PreferencesAgentComposerDefaultsPatchRequestedEventV1 =
     1
   >;
 
+export type PreferencesAgentComposerDefaultsResolvedEventV1 =
+  BusinessEventEnvelopeV1<
+    "preferences.agent.composer.defaults.resolved",
+    PreferencesAgentComposerDefaultsResolvedPayloadV1,
+    1
+  >;
+
 export type PreferencesAgentSessionLaunchModePatchRequestedEventV1 =
   BusinessEventEnvelopeV1<
     "preferences.agent.session.launch.mode.patch.requested",
@@ -727,6 +762,7 @@ export type ServerToClientEventTopic =
   | "analytics.debug.reported"
   | "connector.market.changed"
   | "preferences.agent.composer.defaults.changed"
+  | "preferences.agent.composer.defaults.resolved"
   | "preferences.desktop.updated"
   | "user.project.updated"
   | "workspace.app.updated"
@@ -751,6 +787,7 @@ export type ServerToClientEventV1 =
   | AnalyticsDebugReportedEventV1
   | ConnectorMarketChangedEventV1
   | PreferencesAgentComposerDefaultsChangedEventV1
+  | PreferencesAgentComposerDefaultsResolvedEventV1
   | PreferencesDesktopUpdatedEventV1
   | UserProjectUpdatedEventV1
   | WorkspaceAppUpdatedEventV1
