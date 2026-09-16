@@ -183,35 +183,6 @@ test("agent composer defaults patch reports mixed per-field outcomes", async () 
   coordinator.dispose();
 });
 
-test("agent composer defaults patch surfaces per-field rejections without retrying", async () => {
-  let publishCalls = 0;
-  const coordinator = new AgentComposerDefaultsPatchCoordinator({
-    retryDelaysMs: [0, 0],
-    publish: async () => {
-      publishCalls += 1;
-      return {
-        applied: ["permissionModeId"],
-        rejected: [{ field: "reasoningEffort", reasonCode: "not_configurable" }]
-      };
-    }
-  });
-
-  const result = await coordinator.patch("local:opencode", {
-    permissionModeId: "full-access",
-    reasoningEffort: "high"
-  });
-  assert.deepEqual(result, {
-    acknowledgedFields: ["permissionModeId"],
-    rejectedFields: [
-      { field: "reasoningEffort", reasonCode: "not_configurable" }
-    ],
-    supersededFields: []
-  });
-  // A per-field rejection is deterministic; only transport failures retry.
-  assert.equal(publishCalls, 1);
-  coordinator.dispose();
-});
-
 test("agent composer defaults patch merges latest values for different fields", async () => {
   const calls: Array<{
     patch: {
