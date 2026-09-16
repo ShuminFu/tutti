@@ -100,9 +100,9 @@ type externalImportedSession struct {
 	Cwd               string
 	Title             string
 	// SummaryTitle holds an authoritative, provider-supplied conversation title
-	// (e.g. Claude `custom-title`/`summary` transcript lines or the Codex
-	// app-server `threads.title`). When present it wins over message-derived
-	// titles.
+	// (e.g. Claude `custom-title`/`ai-title`/`summary` transcript lines or the
+	// Codex app-server `threads.title`). When present it wins over
+	// message-derived titles.
 	SummaryTitle     string
 	NoProject        bool
 	EventUserMessage externalImportedMessage

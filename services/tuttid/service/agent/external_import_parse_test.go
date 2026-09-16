@@ -524,6 +524,80 @@ func TestParseClaudeCodeJSONLDoesNotUseCodexScratchCwdNoProjectRule(t *testing.T
 	}
 }
 
+func TestParseClaudeCodeJSONLPrefersAiTitleOverFirstUserMessage(t *testing.T) {
+	// Claude Code writes /model stdout as a normal user line. That text is not
+	// the conversation title; ai-title is the name shown by `claude --resume`.
+	cwd := t.TempDir()
+	session, ok, err := parseClaudeCodeJSONL(
+		filepath.Join(cwd, "claude.jsonl"),
+		strings.NewReader(testAgentJSONL(t,
+			map[string]any{
+				"timestamp": "2026-06-18T00:00:00Z",
+				"sessionId": "claude-ai-title",
+				"cwd":       cwd,
+				"uuid":      "claude-1",
+				"message": map[string]any{
+					"role":    "user",
+					"content": []any{map[string]any{"type": "text", "text": "<local-command-stdout>Set model to x</local-command-stdout>"}},
+				},
+			},
+			map[string]any{
+				"type":      "ai-title",
+				"aiTitle":   "修复会话标题取源",
+				"sessionId": "claude-ai-title",
+			},
+			map[string]any{
+				"timestamp": "2026-06-18T00:00:01Z",
+				"sessionId": "claude-ai-title",
+				"cwd":       cwd,
+				"uuid":      "claude-2",
+				"message": map[string]any{
+					"role":    "user",
+					"content": []any{map[string]any{"type": "text", "text": "把列表标题改成可读的会话名"}},
+				},
+			},
+		)),
+	)
+	if err != nil || !ok {
+		t.Fatalf("parseClaudeCodeJSONL ok=%v err=%v", ok, err)
+	}
+	if session.Title != "修复会话标题取源" {
+		t.Fatalf("title = %q, want ai-title, not first user message", session.Title)
+	}
+}
+
+func TestParseClaudeCodeJSONLPrefersCustomTitleOverAiTitle(t *testing.T) {
+	cwd := t.TempDir()
+	session, ok, err := parseClaudeCodeJSONL(
+		filepath.Join(cwd, "claude.jsonl"),
+		strings.NewReader(testAgentJSONL(t,
+			map[string]any{
+				"type":      "ai-title",
+				"aiTitle":   "Generated title",
+				"sessionId": "claude-rename",
+			},
+			map[string]any{
+				"timestamp": "2026-06-18T00:00:00Z",
+				"sessionId": "claude-rename",
+				"cwd":       cwd,
+				"uuid":      "claude-1",
+				"message":   map[string]any{"role": "user", "content": []any{map[string]any{"type": "text", "text": "Some long first prompt"}}},
+			},
+			map[string]any{
+				"type":        "custom-title",
+				"customTitle": "Renamed title",
+				"sessionId":   "claude-rename",
+			},
+		)),
+	)
+	if err != nil || !ok {
+		t.Fatalf("parseClaudeCodeJSONL ok=%v err=%v", ok, err)
+	}
+	if session.Title != "Renamed title" {
+		t.Fatalf("title = %q, want custom-title over ai-title", session.Title)
+	}
+}
+
 func TestParseClaudeCodeJSONLPrefersCustomTitle(t *testing.T) {
 	cwd := t.TempDir()
 	session, ok, err := parseClaudeCodeJSONL(

@@ -32,7 +32,7 @@ import {
   type GoalExecInput
 } from "./goalExecQueue.ts";
 import { TurnLifecycle, type RuntimeTurn } from "./turnLifecycle.ts";
-import { normalizeTitle, stringValue } from "./runtimeValues.ts";
+import { claudeSessionInfoTitle, stringValue } from "./runtimeValues.ts";
 import {
   abortError,
   isAbortError,
@@ -1281,9 +1281,7 @@ export class SessionRuntime {
           dir: this.cwd || process.cwd()
         })
       );
-      const title = normalizeTitle(
-        stringValue(info?.customTitle) || stringValue(info?.summary)
-      );
+      const title = claudeSessionInfoTitle(info);
       if (!shouldEmit() || !title || title === this.lastTitle) {
         return;
       }

@@ -231,20 +231,26 @@ func codexFunctionCallArguments(value any) map[string]any {
 
 func parseClaudeCodeJSONL(path string, reader io.Reader) (externalImportedSession, bool, error) {
 	session := externalImportedSession{Provider: agentproviderbiz.ClaudeCode, SourcePath: path}
+	var customTitle, aiTitle, summaryTitle string
 	err := readJSONLLines(reader, func(index int, raw map[string]any) {
 		session.ProviderSessionID = firstNonEmptyString(session.ProviderSessionID, stringField(raw, "sessionId"), stringField(raw, "session_id"))
 		session.Cwd = firstNonEmptyString(session.Cwd, stringField(raw, "cwd"))
-		// Claude Code records the human/auto-generated conversation title inline.
-		// `custom-title` is the canonical rename; the older `summary` line is a
-		// fallback. The last occurrence wins.
+		// Claude Code records conversation titles inline. Priority is applied
+		// after the scan because line order is not the source of truth:
+		// custom-title (user rename) > ai-title (`claude --resume` name) >
+		// summary (legacy). Last occurrence wins within each type.
 		switch stringField(raw, "type") {
 		case "custom-title":
 			if title := strings.TrimSpace(stringField(raw, "customTitle")); title != "" {
-				session.SummaryTitle = title
+				customTitle = title
+			}
+		case "ai-title":
+			if title := strings.TrimSpace(stringField(raw, "aiTitle")); title != "" {
+				aiTitle = title
 			}
 		case "summary":
 			if title := strings.TrimSpace(stringField(raw, "summary")); title != "" {
-				session.SummaryTitle = title
+				summaryTitle = title
 			}
 		}
 		// Claude Code marks injected non-conversation content (skill/plugin file
@@ -290,6 +296,7 @@ func parseClaudeCodeJSONL(path string, reader io.Reader) (externalImportedSessio
 	if err != nil {
 		return externalImportedSession{}, false, err
 	}
+	session.SummaryTitle = firstNonEmptyString(customTitle, aiTitle, summaryTitle)
 	return normalizeExternalParsedSession(session)
 }
 
