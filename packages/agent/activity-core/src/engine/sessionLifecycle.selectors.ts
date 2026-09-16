@@ -75,15 +75,32 @@ export function selectFailedNewActivationResolution(
  * Session selection may reload after a failed or canceled activation. Only an
  * activation whose delivery is still pending/uncertain must wait for an
  * authoritative result before starting detail hydration.
+ *
+ * "Pending" only earns that wait when the activation can still change what
+ * hydration would read. A `new` activation can: it may swap a provisional
+ * session id for the canonical one and it delivers the authoritative session
+ * projection. An `existing` activation cannot — it re-attaches a session whose
+ * id is already canonical, and its result carries session/turns/childSessions
+ * but never messages (`existingSessionProjection` in
+ * pendingIntents.activationResult.ts). Waiting for it therefore cannot produce
+ * history, and nothing re-arms hydration once the selection has settled, so the
+ * transcript would stay blank until some later live event. That is the
+ * "open from the host with DinTalDock already mounted" blank-transcript bug
+ * (2026-09-16): there, selection runs in the render right after the
+ * existing-mode activation is dispatched, so it always loses the race.
  */
 export function selectEngineSessionCanReload(
   state: AgentSessionEngineStateBase,
   agentSessionId: string | null | undefined
 ): boolean {
   const activation = selectLatestActivationForSession(state, agentSessionId);
-  return (
-    activation?.status !== "requested" && activation?.status !== "uncertain"
-  );
+  if (
+    activation?.status !== "requested" &&
+    activation?.status !== "uncertain"
+  ) {
+    return true;
+  }
+  return activation.mode === "existing";
 }
 
 export function selectEngineSessionRuntimeAvailability(
