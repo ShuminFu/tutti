@@ -18,10 +18,23 @@ export interface ConversationRailPeerPairEndpoint {
   title: string;
 }
 
+/** 分栏结对模式（peer-pair-mode PRD）：solo = 独立模式，pair = 结对模式。 */
+export type ConversationRailPeerPairMode = "solo" | "pair";
+
+/** 结对开工卡：`""` 未进入结对、`pending` 等用户下一句、`sent` 已投给搭档。 */
+export type ConversationRailPeerPairKickoffState = "" | "pending" | "sent";
+
 export interface ConversationRailPeerPair {
   a: ConversationRailPeerPairEndpoint;
   b: ConversationRailPeerPairEndpoint;
   pairId: string;
+  // 以下三项来自 peer-pair-mode 接口契约（宿主 listPeerPairs 驼峰投影）。
+  // 可选是为了兼容老宿主：老宿主的配对行上**没有** pairMode 字段，
+  // 分栏层据此判「宿主不支持结对模式」、整排单选不渲染（PRD D6）。
+  pairMode?: ConversationRailPeerPairMode;
+  /** 开发者那一侧的 task id；可与 `a.taskId` / `b.taskId` 直接比较。solo 时为空串。 */
+  developerTaskId?: string;
+  kickoffState?: ConversationRailPeerPairKickoffState;
 }
 
 /** 「本条会话的一个对端」：解除配对子菜单与吸附都按这个形状取值。 */

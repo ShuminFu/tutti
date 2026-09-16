@@ -69,6 +69,21 @@ import {
 import type { useAgentGUIActivation } from "./useAgentGUIActivation";
 import type { AgentGUINewConversationActivationResult } from "./agentGuiNewConversationActivation.types";
 import { useAgentGUIGoalControlActions } from "./useAgentGUIGoalControlActions";
+import { waitForAgentSubmitSettlement } from "./agentSubmitSettlement";
+import {
+  agentComposerHostExtension,
+  agentPromptSubmitText,
+  isAgentPromptSubmitPreparable,
+  runPreparedAgentPromptSubmit,
+  type AgentPromptSubmitReceipt
+} from "../../../shared/agentConversation/agentComposerHostExtension";
+
+/** executePrompt 交给引擎之后的同步结果；给「提交被接受后」的宿主回调用。 */
+interface AgentGUIExecutedPrompt {
+  accepted: boolean;
+  clientSubmitId: string;
+  queued: boolean;
+}
 
 interface UseAgentGUISubmitInteractionActionsInput {
   activation: ReturnType<typeof useAgentGUIActivation>;
@@ -183,6 +198,8 @@ export function useAgentGUISubmitInteractionActions(
     transientConversation,
     workspaceId
   } = input;
+  // 正在向宿主要开工卡（异步）的会话号：挡同一条会话的重复提交（票 05）。
+  const preparingSubmitSessionIdsRef = useRef<Set<string>>(new Set());
   const goalControlSettlementsRef = useRef<
     Record<string, AgentGUIGoalControlPendingSettlement>
   >({});
@@ -231,7 +248,7 @@ export function useAgentGUISubmitInteractionActions(
     ) => {
       const normalizedContent = normalizeAgentPromptContentBlocks(content);
       if (!agentSessionId || normalizedContent.length === 0) {
-        return;
+        return null;
       }
       const targetIsActiveConversation =
         activeConversationIdRef.current === agentSessionId;
@@ -343,6 +360,12 @@ export function useAgentGUISubmitInteractionActions(
         trace: submitTrace,
         workspaceId
       });
+      const executed: AgentGUIExecutedPrompt = {
+        accepted,
+        clientSubmitId: submitTrace.clientSubmitId,
+        queued
+      };
+      return executed;
     },
     [agentActivityRuntime, sessionEngine, setDraftByScopeKey, workspaceId]
   );
@@ -403,7 +426,7 @@ export function useAgentGUISubmitInteractionActions(
         setDetailError(
           getAgentGUIErrorMessage(buildResumeSessionNotLocalActivationError())
         );
-        return;
+        return null;
       }
       if (isNonRetryableResumeErrorCode(activation.codeFor(agentSessionId))) {
         setDetailError(
@@ -418,9 +441,9 @@ export function useAgentGUISubmitInteractionActions(
                 )
           )
         );
-        return;
+        return null;
       }
-      executePrompt(agentSessionId, normalizedContent, displayPromptText, {
+      return executePrompt(agentSessionId, normalizedContent, displayPromptText, {
         capabilityRefs: options?.capabilityRefs,
         requiredSettingsPatch: options?.requiredSettingsPatch,
         targetTurnId: options?.targetTurnId,
@@ -546,16 +569,69 @@ export function useAgentGUISubmitInteractionActions(
         );
         return;
       }
-      submitExistingPrompt(
-        agentSessionId,
-        normalizedContent,
-        displayPromptText,
-        {
-          capabilityRefs: options?.capabilityRefs,
-          requiredSettingsPatch: options?.requiredSettingsPatch,
-          trackDraft: true
+      const sendExisting = (
+        sendContent: AgentPromptContentBlock[],
+        sendDisplayPrompt: string | undefined
+      ): AgentPromptSubmitReceipt | null => {
+        const executed = submitExistingPrompt(
+          agentSessionId,
+          sendContent,
+          sendDisplayPrompt,
+          {
+            capabilityRefs: options?.capabilityRefs,
+            requiredSettingsPatch: options?.requiredSettingsPatch,
+            trackDraft: true
+          }
+        );
+        if (!executed || (!executed.accepted && !executed.queued)) {
+          return null;
         }
-      );
+        return {
+          settle: () =>
+            waitForAgentSubmitSettlement(
+              sessionEngine,
+              agentSessionId,
+              executed.clientSubmitId
+            )
+        };
+      };
+      // 分栏结对模式（peer-pair-mode 票 05）：宿主扩展口说「这句要拼开工卡」时才走异步
+      // 那条路（先问宿主要块 → 拼进第一个文字块 → 发 → 等引擎接受 → 回调宿主投卡）。
+      // 为什么接在这里而不是作曲区：只有这一层同时握着「这句发给哪条会话」、
+      // 引擎的 clientSubmitId 与引擎本身，「被接受之后才开工」（PRD D4）不必把返回值
+      // 穿过作曲区 → 详情面板 → 工作流三层 void 回调。斜杠命令在作曲区已经分流走了，
+      // 漏到这里的 `/xxx` 文本再由 isAgentPromptSubmitPreparable 挡一次。
+      const extension = agentComposerHostExtension();
+      const submitText = agentPromptSubmitText(normalizedContent);
+      if (
+        extension?.prepareSubmit &&
+        isAgentPromptSubmitPreparable(submitText) &&
+        extension.wantsSubmitPreparation?.({
+          agentSessionId,
+          text: submitText
+        }) === true
+      ) {
+        // 准备在途时草稿还留在输入框里；这段时间里再按一次发送会把同一句发两遍，
+        // 所以同一条会话的重复提交直接丢掉（草稿没清，什么都不会丢）。
+        if (preparingSubmitSessionIdsRef.current.has(agentSessionId)) {
+          return;
+        }
+        preparingSubmitSessionIdsRef.current.add(agentSessionId);
+        void runPreparedAgentPromptSubmit({
+          agentSessionId,
+          content: normalizedContent,
+          displayPrompt: displayPromptText,
+          extension,
+          onDispatched: () => {
+            preparingSubmitSessionIdsRef.current.delete(agentSessionId);
+          },
+          send: sendExisting
+        }).finally(() => {
+          preparingSubmitSessionIdsRef.current.delete(agentSessionId);
+        });
+        return;
+      }
+      sendExisting(normalizedContent, displayPromptText);
     },
     [
       agentActivityRuntime,
@@ -563,6 +639,7 @@ export function useAgentGUISubmitInteractionActions(
       promptImagesSupported,
       goalControl,
       persistActiveConversation,
+      sessionEngine,
       startConversation,
       submitExistingPrompt,
       workspaceId

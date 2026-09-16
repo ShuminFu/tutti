@@ -2,7 +2,10 @@
 //
 // iframe 不直连 cliagent-backend：apps/desktop 在嵌入 DinTalDock 时注册一份走
 // tutti-host-request 桥的实现；未注册（普通 web / 老宿主）时整组配对 UI 不出现。
-import type { ConversationRailPeerPair } from "./conversationRailPeerPairing";
+import type {
+  ConversationRailPeerPair,
+  ConversationRailPeerPairMode
+} from "./conversationRailPeerPairing";
 
 export interface ConversationRailCreatePeerPairInput {
   /** 发起方 = 当前右键那条的 Tutti 会话号。 */
@@ -22,12 +25,48 @@ export interface ConversationRailCreatePeerPairResult {
   relaunchedTaskId?: string;
 }
 
+/** 分栏结对模式（peer-pair-mode 接口契约）：设模式。 */
+export interface ConversationRailSetPeerPairModeInput {
+  pairId: string;
+  mode: ConversationRailPeerPairMode;
+  /** 结对模式下开发者那一侧的 task id（或 Tutti 会话号，后端归一）；solo 时不传。 */
+  developerTaskId?: string;
+}
+
+/** 开工卡预览 / 提交共用的入参：发送栏的 task id（或会话号）+ 用户那句话。 */
+export interface ConversationRailPairKickoffInput {
+  pairId: string;
+  senderTaskId: string;
+  goal: string;
+}
+
 export interface ConversationRailPeerPairingHost {
   createPeerPair(
     input: ConversationRailCreatePeerPairInput
   ): Promise<ConversationRailCreatePeerPairResult>;
   deletePeerPair(input: { pairId: string; taskId: string }): Promise<unknown>;
   listPeerPairs(): Promise<{ pairs: ConversationRailPeerPair[] }>;
+  // 结对模式三件套（契约规定三个一组注册）。可选：只接了 0103 那三个能力的
+  // 实现（单测桩、老宿主适配）照样成立；缺任一个分栏层都当「不支持」处理。
+  setPeerPairMode?(
+    input: ConversationRailSetPeerPairModeInput
+  ): Promise<{ pair: ConversationRailPeerPair }>;
+  /** 纯函数、不写库：返回拼在发送栏用户原文前面的 `<pair-kickoff>` 块。 */
+  previewPairKickoff?(
+    input: ConversationRailPairKickoffInput
+  ): Promise<{ block: string }>;
+  /**
+   * 发送栏那句被接受之后调：给搭档投卡并记为 sent（幂等）。
+   * `delivered: false`（可带 reason，例如搭档那张卡被环路闸 / 限流丢了）时行仍是
+   * pending，调用方按「没投到」处理，下一句再带卡重试。
+   */
+  commitPairKickoff?(
+    input: ConversationRailPairKickoffInput
+  ): Promise<{
+    pair: ConversationRailPeerPair;
+    delivered: boolean;
+    reason?: string;
+  }>;
 }
 
 let registeredHost: ConversationRailPeerPairingHost | null = null;

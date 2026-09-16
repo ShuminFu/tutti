@@ -420,6 +420,23 @@
   font-weight: 600;
 }
 
+/* 结对模式角色胶囊（peer-pair-mode 票 04）：颜色与 paired 链条同源，
+   一眼能把「这两栏在结对、谁是开发者」和链条对上。 */
+.rndmaster-split-pane-header__pair-role {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--brand-primary, var(--tutti-purple)) 14%,
+    transparent
+  );
+  color: var(--brand-primary, var(--tutti-purple));
+  font-weight: 500;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 /* 项目名胶囊：右栏藏了会话栏，这是它唯一能看出「在哪个项目里」的地方。 */
 .rndmaster-split-pane-header__project {
   flex: none;
@@ -524,6 +541,72 @@
   [data-rndmaster-pane][data-rndmaster-pane-focus="false"]
   .agent-gui-node__bottom-dock {
   opacity: 0.5;
+}
+
+/* 结对模式单选（peer-pair-mode 票 04）：画在每栏作曲区（form）里、输入框正上方，
+   占 28px 的正常文档流 —— 两栏都画，输入框才等高。
+   上游 `.agent-gui-node__bottom-dock > .agent-gui-node__composer` 是
+   `pointer-events: none`（让转录透过空白处可点），所以焦点栏这一排要显式要回点击。 */
+.rndmaster-split-pair-mode {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 2px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  pointer-events: auto;
+}
+
+/* 非焦点栏：同位置镜像、不可点。不用 display:none（两栏输入框要等高）。
+   目标观感 opacity .45；外层作曲区在非焦点栏已被压到 .5（见上面「非焦点栏」那条），
+   子元素的 opacity 会与之相乘，所以这里只给 .9 —— .5 × .9 = .45。 */
+.rndmaster-split-pair-mode[data-focused="false"] {
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.rndmaster-split-pair-mode__option {
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rndmaster-split-pair-mode__option:hover {
+  background: var(--transparency-hover);
+  color: var(--text-primary);
+}
+
+.rndmaster-split-pair-mode__option[data-checked="true"] {
+  background: color-mix(
+    in srgb,
+    var(--brand-primary, var(--tutti-purple)) 14%,
+    transparent
+  );
+  color: var(--brand-primary, var(--tutti-purple));
+  font-weight: 500;
+}
+
+.rndmaster-split-pair-mode[aria-disabled="true"]
+  .rndmaster-split-pair-mode__option {
+  cursor: default;
+}
+
+.rndmaster-split-pair-mode__divider {
+  width: 1px;
+  height: 12px;
+  margin: 0 4px;
+  background: var(--line-2);
+}
+
+.rndmaster-split-pair-mode__label {
+  color: var(--text-muted, var(--text-secondary));
 }
 
 .rndmaster-dintaldock-embedded .agent-gui-workbench-header__traffic-lights,

@@ -26,7 +26,8 @@ import type {
   AgentConversationParticipantPresentation
 } from "../contracts/agentConversationParticipantPresentation";
 import { AgentMessageDetailsDisclosure } from "./AgentMessageDetailsDisclosure";
-import { AgentPeerMessageCards } from "./AgentPeerMessageCard";
+import { AgentPairCard, AgentPeerMessageCards } from "./AgentPeerMessageCard";
+import { splitLeadingPairCard } from "./pairKickoffEnvelope";
 import { isAgentMessageContentStreaming } from "./agentMessageContentStreaming";
 
 // RNDMASTER_PEER_MESSAGE_CARD：同伴消息信封折叠成卡片。回退看红时改 false，保留本符号。
@@ -252,6 +253,12 @@ export function AgentMessageBlock({
         : null;
     // RnDMaster 会话互通：同伴消息信封折叠成卡片，不走 RichText。
     const peerBlocks = isUser ? parsePeerMessageEnvelope(message.body) : [];
+    // 结对模式发送栏（peer-pair-mode 票 05）：用户消息开头那张 <pair-kickoff> 剥成卡片，
+    // 剩下的原文照常走 RichText。peer 信封优先（搭档栏的卡在信封里，由上面那条认）。
+    const leadingPairCard =
+      isUser && peerBlocks.length === 0
+        ? splitLeadingPairCard(message.body)
+        : null;
     const renderedContent =
       isUser && message.contentKind === "image-grid" ? (
         <AgentUserImageGrid message={message} />
@@ -264,6 +271,26 @@ export function AgentMessageBlock({
         />
       ) : isUser && peerMessageEnvelopeCard && peerBlocks.length > 0 ? (
         <AgentPeerMessageCards blocks={peerBlocks} />
+      ) : isUser && leadingPairCard ? (
+        // w-full 同 AgentPeerMessageCards：父级 grid 是 justify-items: end，auto 宽会按
+        // max-content 撑开（坑147）。原话气泡靠右，所以列用 items-end。
+        <div
+          className="flex w-full min-w-0 flex-col items-end gap-2"
+          data-testid="agent-pair-card-with-prompt"
+        >
+          <AgentPairCard card={leadingPairCard.card} />
+          {leadingPairCard.rest.trim() ? (
+            <AgentRichTextReadonly
+              value={leadingPairCard.rest}
+              documentCacheKey={`${message.id}:pair-rest`}
+              className={`workspace-agents-status-panel__detail-user-message ${styles.userMessageBubble}`}
+              editorClassName="text-[inherit]"
+              onLinkClick={handleLinkClick}
+              availableSkills={availableSkills}
+              workspaceAppIcons={workspaceAppIcons}
+            />
+          ) : null}
+        </div>
       ) : isUser ? (
         <AgentRichTextReadonly
           value={message.body}

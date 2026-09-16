@@ -30,6 +30,13 @@ export const zhCNAgentGuiSessionActions = {
   splitResetRatio: "重置分栏比例",
   splitSwapPanes: "交换左右",
   splitUntitledSession: "未命名会话",
+  // 分栏结对模式（peer-pair-mode 票 04/05）：作曲区上方单选、栏头角色胶囊、开工卡提示。
+  splitPairModeSolo: "独立模式",
+  splitPairModeLabel: "结对模式：",
+  splitPairRoleDeveloper: "开发者",
+  splitPairRoleReviewer: "审查者",
+  splitPairKickoffPreviewFailed: "开工卡没准备好，这句按普通消息发出",
+  splitPairKickoffCommitFailed: "搭档没收到开工卡，下一句会再试",
   retryConversations: "重试",
   conversationCopyImage: "图片",
   conversationCopyMentionPrefix: "@",

@@ -6,9 +6,12 @@
 import { registerConversationRailPeerPairingHost } from "@tutti-os/agent-gui/conversation-rail-projection";
 import {
   HostBridgeUnavailableError,
+  requestHostCommitPairKickoff,
   requestHostCreatePeerPair,
   requestHostDeletePeerPair,
-  requestHostListPeerPairs
+  requestHostListPeerPairs,
+  requestHostPreviewPairKickoff,
+  requestHostSetPeerPairMode
 } from "../../../platform/desktop/web/webHostBridgeClient.ts";
 
 // 桥不可用（未嵌入 / 宿主没实现这个能力 / 超时）统一归一成 "unsupported"，
@@ -27,6 +30,14 @@ export function installEmbeddedRailPeerPairingHost(): () => void {
     deletePeerPair: (input) =>
       requestHostDeletePeerPair(input).catch(normalizeBridgeError),
     listPeerPairs: () =>
-      requestHostListPeerPairs().catch(normalizeBridgeError)
+      requestHostListPeerPairs().catch(normalizeBridgeError),
+    // 结对模式三件套（peer-pair-mode）：宿主没注册时桥回 unsupported，同样归一，
+    // 分栏层据此把整排单选收起来。
+    commitPairKickoff: (input) =>
+      requestHostCommitPairKickoff(input).catch(normalizeBridgeError),
+    previewPairKickoff: (input) =>
+      requestHostPreviewPairKickoff(input).catch(normalizeBridgeError),
+    setPeerPairMode: (input) =>
+      requestHostSetPeerPairMode(input).catch(normalizeBridgeError)
   });
 }

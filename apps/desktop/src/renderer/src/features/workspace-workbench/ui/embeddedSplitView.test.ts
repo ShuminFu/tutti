@@ -1095,3 +1095,302 @@ test("closing the only pane sends the window home instead of leaving it on the s
   assert.equal(controller.getSnapshot().panes.left, null);
   controller.dispose();
 });
+
+// ---------------------------------------------------------------------------
+// 分栏结对模式（peer-pair-mode 票 04）：单选的显示条件 / 联动 / 角色跟会话走。
+// 配对表是唯一真相：桩里的 `rows` 就是「后端 pair 行」，setPeerPairMode 改它、
+// listPeerPairs 读它；控制器不许另存一份。
+// ---------------------------------------------------------------------------
+
+interface PairModeRow {
+  developerTaskId: string;
+  kickoffState: "" | "pending" | "sent";
+  pairMode?: "solo" | "pair";
+}
+
+function pairModeHost(
+  input: {
+    commitPairKickoff?: (args: {
+      goal: string;
+      pairId: string;
+      senderTaskId: string;
+    }) => Promise<unknown>;
+    omitCapabilities?: boolean;
+    previewPairKickoff?: (args: {
+      goal: string;
+      pairId: string;
+      senderTaskId: string;
+    }) => Promise<{ block: string }>;
+    row?: Partial<PairModeRow>;
+    setPeerPairMode?: (args: {
+      developerTaskId?: string;
+      mode: "solo" | "pair";
+      pairId: string;
+    }) => Promise<unknown>;
+  } = {}
+) {
+  const row: PairModeRow = {
+    developerTaskId: "",
+    kickoffState: "",
+    pairMode: "solo",
+    ...input.row
+  };
+  const calls: { args: unknown; kind: string }[] = [];
+  const pairRow = () => ({
+    a: { sessionId: "session-a", taskId: "task-a", title: "a" },
+    b: { sessionId: "session-b", taskId: "task-b", title: "b" },
+    pairId: "p1",
+    ...(row.pairMode === undefined
+      ? {}
+      : {
+          developerTaskId: row.developerTaskId,
+          kickoffState: row.kickoffState,
+          pairMode: row.pairMode
+        })
+  });
+  const host = {
+    createPeerPair: async () => ({ pairId: "p1" }),
+    deletePeerPair: async () => undefined,
+    listPeerPairs: async () => {
+      calls.push({ args: null, kind: "list" });
+      return { pairs: [pairRow()] };
+    },
+    ...(input.omitCapabilities
+      ? {}
+      : {
+          commitPairKickoff: async (args: {
+            goal: string;
+            pairId: string;
+            senderTaskId: string;
+          }) => {
+            calls.push({ args, kind: "commit" });
+            if (input.commitPairKickoff) await input.commitPairKickoff(args);
+            row.kickoffState = "sent";
+            return { delivered: true, pair: pairRow() };
+          },
+          previewPairKickoff: async (args: {
+            goal: string;
+            pairId: string;
+            senderTaskId: string;
+          }) => {
+            calls.push({ args, kind: "preview" });
+            if (input.previewPairKickoff) return input.previewPairKickoff(args);
+            return { block: '<pair-kickoff role="developer">\n协议\n</pair-kickoff>' };
+          },
+          setPeerPairMode: async (args: {
+            developerTaskId?: string;
+            mode: "solo" | "pair";
+            pairId: string;
+          }) => {
+            calls.push({ args, kind: "setMode" });
+            if (input.setPeerPairMode) await input.setPeerPairMode(args);
+            row.pairMode = args.mode;
+            row.developerTaskId =
+              args.mode === "pair" ? (args.developerTaskId ?? "") : "";
+            row.kickoffState = args.mode === "pair" ? "pending" : "";
+            return { pair: pairRow() };
+          }
+        })
+  };
+  return { calls, host, row };
+}
+
+async function splitPairedController(
+  host: unknown,
+  overrides: Partial<
+    Parameters<typeof createEmbeddedSplitViewController>[0]
+  > = {},
+  sessions: { a?: ConversationRailSplitDragSession; b?: ConversationRailSplitDragSession } = {}
+) {
+  const fake = createFakeHost();
+  const controller = makeController(fake, {
+    pairingHost: () => host as never,
+    ...overrides
+  });
+  await controller.adopt(["agent-left"]);
+  // 左栏那条也要有摘要：托管与否（isImported）靠侧栏上报的摘要判。
+  conversationRailSplitHost()?.describeSession?.(
+    sessions.a ?? dragSession("session-a")
+  );
+  controller.select("session-a");
+  await controller.dropSession(sessions.b ?? dragSession("session-b"), "right");
+  await controller.pairPanes();
+  controller.setFocus("left");
+  return { controller, fake };
+}
+
+test("结对模式单选：分栏 + 已配对 + 两栏托管 + 宿主支持时才有投影", async () => {
+  const { host } = pairModeHost();
+  const { controller } = await splitPairedController(host);
+  const pairMode = controller.getSnapshot().pairMode;
+  assert.equal(pairMode?.pairId, "p1");
+  assert.equal(pairMode?.mode, "solo");
+  assert.deepEqual(pairMode?.roles, { left: null, right: null });
+  controller.dispose();
+});
+
+test("结对模式单选显示条件①：未分栏（单栏）不给投影", async () => {
+  const { host } = pairModeHost();
+  const fake = createFakeHost();
+  const controller = makeController(fake, { pairingHost: () => host as never });
+  await controller.adopt(["agent-left"]);
+  controller.select("session-a");
+  assert.equal(controller.getSnapshot().pairMode, null);
+  controller.dispose();
+});
+
+test("结对模式单选显示条件②：两栏没配对不给投影", async () => {
+  const fake = createFakeHost();
+  const controller = makeController(fake, {
+    pairingHost: () =>
+      ({
+        commitPairKickoff: async () => ({}),
+        createPeerPair: async () => {
+          throw new Error("后端拒绝");
+        },
+        deletePeerPair: async () => undefined,
+        listPeerPairs: async () => ({ pairs: [] }),
+        previewPairKickoff: async () => ({ block: "x" }),
+        setPeerPairMode: async () => ({})
+      }) as never
+  });
+  await controller.adopt(["agent-left"]);
+  controller.select("session-a");
+  await controller.dropSession(dragSession("session-b"), "right");
+  await controller.pairPanes();
+  assert.notEqual(controller.getSnapshot().pairing, "paired");
+  assert.equal(controller.getSnapshot().pairMode, null);
+  controller.dispose();
+});
+
+test("结对模式单选显示条件③：任一栏是非托管会话不给投影", async () => {
+  const { host } = pairModeHost();
+  const { controller } = await splitPairedController(host, {}, {
+    b: { ...dragSession("session-b"), isImported: true }
+  });
+  assert.equal(controller.getSnapshot().pairMode, null);
+  controller.dispose();
+});
+
+test("结对模式单选显示条件④：宿主不支持（行上无 pairMode / 三件套缺 / 回 unsupported）不给投影", async () => {
+  const oldRow = pairModeHost({ row: { pairMode: undefined } });
+  const first = await splitPairedController(oldRow.host);
+  assert.equal(first.controller.getSnapshot().pairing, "paired");
+  assert.equal(first.controller.getSnapshot().pairMode, null);
+  first.controller.dispose();
+
+  const noCapabilities = pairModeHost({ omitCapabilities: true });
+  const second = await splitPairedController(noCapabilities.host);
+  assert.equal(second.controller.getSnapshot().pairMode, null);
+  second.controller.dispose();
+
+  const unsupported = pairModeHost({
+    setPeerPairMode: async () => {
+      throw new Error("unsupported");
+    }
+  });
+  const errors: string[] = [];
+  const third = await splitPairedController(unsupported.host, {
+    toast: { error: (m) => errors.push(m), info() {}, success() {} }
+  });
+  assert.notEqual(third.controller.getSnapshot().pairMode, null);
+  await third.controller.setPairMode("left", "developer");
+  assert.equal(third.controller.getSnapshot().pairMode, null);
+  // unsupported 是「整排收起」，不是一条要端给用户的错误。
+  assert.deepEqual(errors, []);
+  third.controller.dispose();
+});
+
+test("左栏选开发者：developerTaskId 是左栏的 task，右栏投影成审查者，并广播 + 重拉", async () => {
+  const { calls, host } = pairModeHost();
+  const { controller } = await splitPairedController(host);
+  let broadcasts = 0;
+  const unsubscribe = subscribeConversationRailPeerPairsChanged(() => {
+    broadcasts += 1;
+  });
+  const listsBefore = calls.filter((call) => call.kind === "list").length;
+
+  await controller.setPairMode("left", "developer");
+
+  assert.deepEqual(
+    calls.filter((call) => call.kind === "setMode").map((call) => call.args),
+    [{ developerTaskId: "task-a", mode: "pair", pairId: "p1" }]
+  );
+  const pairMode = controller.getSnapshot().pairMode;
+  assert.equal(pairMode?.mode, "pair");
+  assert.equal(pairMode?.kickoffState, "pending");
+  assert.deepEqual(pairMode?.roles, { left: "developer", right: "reviewer" });
+  assert.equal(broadcasts, 1);
+  assert.equal(
+    calls.filter((call) => call.kind === "list").length,
+    listsBefore + 1
+  );
+  unsubscribe();
+  controller.dispose();
+});
+
+test("一栏选审查者 = 另一栏是开发者；任一栏选独立模式两栏一起退出", async () => {
+  const { calls, host } = pairModeHost();
+  const { controller } = await splitPairedController(host);
+
+  await controller.setPairMode("left", "reviewer");
+  assert.deepEqual(
+    calls.filter((call) => call.kind === "setMode").at(-1)?.args,
+    { developerTaskId: "task-b", mode: "pair", pairId: "p1" }
+  );
+  assert.deepEqual(controller.getSnapshot().pairMode?.roles, {
+    left: "reviewer",
+    right: "developer"
+  });
+
+  await controller.setPairMode("right", "solo");
+  assert.deepEqual(
+    calls.filter((call) => call.kind === "setMode").at(-1)?.args,
+    { mode: "solo", pairId: "p1" }
+  );
+  assert.equal(controller.getSnapshot().pairMode?.mode, "solo");
+  assert.deepEqual(controller.getSnapshot().pairMode?.roles, {
+    left: null,
+    right: null
+  });
+  controller.dispose();
+});
+
+test("交换左右之后角色跟着会话走，不跟着左右走", async () => {
+  const { host } = pairModeHost();
+  const { controller } = await splitPairedController(host);
+  await controller.setPairMode("left", "developer");
+  assert.deepEqual(controller.getSnapshot().pairMode?.roles, {
+    left: "developer",
+    right: "reviewer"
+  });
+
+  controller.swapPanes();
+
+  // session-a（task-a，开发者）现在在右栏。
+  assert.equal(controller.getSnapshot().panes.right?.sessionId, "session-a");
+  assert.deepEqual(controller.getSnapshot().pairMode?.roles, {
+    left: "reviewer",
+    right: "developer"
+  });
+  controller.dispose();
+});
+
+test("设模式失败：toast 后端原文，单选仍是行里的值", async () => {
+  const errors: string[] = [];
+  const { host } = pairModeHost({
+    setPeerPairMode: async () => {
+      throw new Error("配对已撤销");
+    }
+  });
+  const { controller } = await splitPairedController(host, {
+    toast: { error: (m) => errors.push(m), info() {}, success() {} }
+  });
+
+  await controller.setPairMode("left", "developer");
+
+  assert.deepEqual(errors, ["配对已撤销"]);
+  assert.equal(controller.getSnapshot().pairMode?.mode, "solo");
+  assert.equal(controller.getSnapshot().pairMode?.busy, false);
+  controller.dispose();
+});

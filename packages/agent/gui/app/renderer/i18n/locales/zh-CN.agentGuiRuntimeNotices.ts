@@ -14,6 +14,13 @@ export const zhCNAgentGuiRuntimeNotices = {
   visibleErrorSessionInterrupted: "{{provider}} 在完成前意外停止，请重试",
   visibleErrorDetails: "查看详情",
   peerMessageFrom: "来自",
+  // 分栏结对模式（peer-pair-mode 票 05）的结对卡。
+  pairCardKickoffTitle: "结对开始",
+  pairCardRolesChangedTitle: "角色已调整",
+  pairCardEndedTitle: "结对结束",
+  pairCardYourRole: "你的角色：{{role}}",
+  pairCardPartner: "搭档",
+  pairCardGoal: "目标：",
   peerPairRequestLead: "本会话请求与 {{peer}} 配对",
   peerPairRequestApprove: "批准",
   peerPairRequestApproveHint: "两个会话之后可以互发消息",

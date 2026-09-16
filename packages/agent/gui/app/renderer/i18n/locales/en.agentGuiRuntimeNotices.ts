@@ -20,6 +20,13 @@ export const enAgentGuiRuntimeNotices = {
     "{{provider}} stopped unexpectedly before it finished. Try again.",
   visibleErrorDetails: "View details",
   peerMessageFrom: "Message from",
+  // Split pair mode (peer-pair-mode issue 05) pairing cards.
+  pairCardKickoffTitle: "Pairing started",
+  pairCardRolesChangedTitle: "Roles changed",
+  pairCardEndedTitle: "Pairing ended",
+  pairCardYourRole: "Your role: {{role}}",
+  pairCardPartner: "Partner",
+  pairCardGoal: "Goal: ",
   peerPairRequestLead: "This session asks to pair with {{peer}}",
   peerPairRequestApprove: "Approve",
   peerPairRequestApproveHint: "Let the two sessions message each other",
