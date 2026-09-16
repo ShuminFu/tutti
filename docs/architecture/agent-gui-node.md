@@ -248,6 +248,13 @@ preference. A model or dependent setting explicitly supplied by the caller
 remains strict. If the runtime rejects an explicit model selection, startup
 fails rather than continuing with an undisclosed provider default.
 
+Remembering a default is a per-field negotiation, not an all-or-nothing write:
+the daemon returns one verdict per patched field, stores the fields it accepted,
+and AgentGUI warns about the fields it did not, so an optimistic composer value
+cannot silently fail to persist. An extension may declare the runtime config
+options it consumes, in which case a remembered reasoning or permission default
+is validated against that declaration instead of requiring a live ACP probe.
+
 Settings that affect provider preparation are immutable after launch. The
 daemon validates them against current product policy and resolved provider
 capability before runtime preparation; an active Session cannot reinterpret

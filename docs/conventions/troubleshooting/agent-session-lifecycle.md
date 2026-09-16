@@ -2028,17 +2028,22 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   running Session may still use the selected value, which can make the problem
   look provider-specific.
 - Quick checks:
-  Start with the exact `agentTargetId`, not only the provider. Confirm the
-  `preferences.agent.composer.defaults.patch.requested` intent receives an ack,
-  then inspect
-  `desktop_preferences.agent_composer_defaults_by_agent_target_json` for that
-  target and field. Confirm a
-  `preferences.agent.composer.defaults.changed` event carries only the same
-  target id. Finally request target-scoped composer options and verify
-  `effectiveSettings`, then create a Session without explicit overrides and
-  inspect the daemon's resolved create settings. For an Agent Extension model,
-  confirm the daemon first observed that value in a live catalog for the exact
-  target; a catalog observed only for another target cannot validate the patch.
+  Start with the exact `agentTargetId`, not only the provider. The patch intent's
+  ack means the request was accepted, not that a field was stored: read the
+  per-field verdict on `preferences.agent.composer.defaults.resolved`, which is
+  matched to the request by `clientMutationId`, and use its `rejected[]`
+  `reasonCode`. An all-rejected patch publishes `resolved` with an empty `applied`
+  and no `preferences.agent.composer.defaults.changed`, so a missing `changed`
+  event is not evidence that nothing was attempted. For an accepted field,
+  inspect `desktop_preferences.agent_composer_defaults_by_agent_target_json` for
+  that target and field, and confirm the `changed` event carries only the same
+  target id. A rejection's `message` is diagnostic prose for the log only and is
+  never rendered to the user. Finally request target-scoped composer options and
+  verify `effectiveSettings`, then create a Session without explicit overrides
+  and inspect the daemon's resolved create settings. For an Agent Extension model,
+  validation needs either the target's declared `configOptions` or a live catalog
+  observed for that exact target; a catalog observed only for another target
+  cannot validate the patch.
 - Root cause:
   Target defaults and current Session settings are separate durable concerns.
   The renderer's home draft can display an optimistic selection even when a
@@ -2057,7 +2062,13 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   validation uses the daemon-observed last-known-good catalog for the exact
   target. Its evidence survives the workspace/cwd display-cache TTL and is
   cleared by explicit provider invalidation; Create performs the separate
-  actual-workspace/cwd validation.
+  actual-workspace/cwd validation. An Agent Extension may declare the runtime
+  config options it consumes, so a statically declared reasoning option needs no
+  live probe. Validation returns one verdict per patched field and never discards
+  a legal sibling because another field was rejected; when the capability
+  projection itself fails it degrades to one `internal_error` per field instead of
+  failing the whole patch, and the resolved event's diagnostic message is bounded
+  before publish so an over-long message cannot cost the client the whole verdict.
 - Validation:
   Change different fields from two windows and confirm both survive. Repeat the
   same SET, then change the same field again and confirm daemon acceptance order
@@ -2066,16 +2077,22 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   patched. Exercise A-to-B-to-A on one field and confirm only the exact latest
   generation can leave the optimistic layer. Fail the first options reload
   after a successful patch, then confirm a later successful target invalidation
-  read converges the acknowledged draft. Reopen the window and restart the app;
-  `effectiveSettings` and a new Session must resolve the remembered values.
-  Open a historical Session and confirm its settings do not change future
-  defaults.
+  read converges the acknowledged draft. Patch one legal and one illegal field
+  together and confirm the legal field is stored, only the illegal field warns,
+  and the warning names that field. Fail the publish outright and confirm the user
+  still sees a warning rather than a silent optimistic value. Reopen the window and
+  restart the app; `effectiveSettings` and a new Session must resolve the
+  remembered values. Open a historical Session and confirm its settings do not
+  change future defaults.
 - References:
   [service.go](../../../services/tuttid/service/preferences/service.go)
   [sqlite_preferences.go](../../../services/tuttid/data/workspace/sqlite_preferences.go)
   [composer_options.go](../../../services/tuttid/service/agent/composer_options.go)
+  [composer_defaults_validation.go](../../../services/tuttid/service/agent/composer_defaults_validation.go)
+  [agent_composer_defaults_payloads.go](../../../services/tuttid/service/eventstream/agent_composer_defaults_payloads.go)
   [desktopPreferencesService.ts](../../../apps/desktop/src/renderer/src/features/desktop-preferences/services/internal/desktopPreferencesService.ts)
   [useAgentGUIComposerSettingsActions.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUIComposerSettingsActions.ts)
+  [agentGuiComposerDefaultsFailureNotice.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/agentGuiComposerDefaultsFailureNotice.ts)
 
 ### Agent interaction remains waiting after the user already responded
 
