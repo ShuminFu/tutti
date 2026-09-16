@@ -49,9 +49,12 @@ func (r AgentComposerDefaultsPatchResult) hasApplied() bool {
 // ValidateAgentComposerDefaultsPatch validates every field of the patch
 // independently and returns the subset that may be persisted.
 //
-// Hard failures still return an error: an unknown agent target or an
-// unresolvable launch means the daemon cannot judge ANY field, so the intent ack
-// fails and no resolved event is published.
+// Only a patch that cannot be judged at all returns an error: an unknown agent
+// target or an unresolvable launch means there is no field set to report on, so
+// the intent ack fails and no resolved event is published. A failure to project
+// the target's capabilities is not in that class — the fields are known, so the
+// patch degrades to a per-field internal_error verdict instead of collapsing
+// into one opaque error that leaves the client waiting.
 func (s *Service) ValidateAgentComposerDefaultsPatch(
 	ctx context.Context,
 	agentTargetID string,
@@ -95,7 +98,32 @@ func (s *Service) ValidateAgentComposerDefaultsPatch(
 		providerTargetRef:            clonePayload(launch.ProviderTargetRef),
 	})
 	if err != nil {
-		return AgentComposerDefaultsPatchResult{}, err
+		// The target exists and its launch resolved, but projecting the target's
+		// capabilities failed — an unreadable extension profile, a runtime
+		// evidence read error, and so on. Returning the error would collapse
+		// every field behind one opaque failure and publish no resolved event,
+		// so the client would never learn that its defaults were not stored.
+		//
+		// Degrade to "nothing applied, everything rejected as internal_error":
+		// each field the caller asked about still comes back with a reason and
+		// the client can surface it. The error text stays on the rejection for
+		// daemon logs and is never rendered (clients select copy from
+		// ReasonCode); the wire boundary bounds its length.
+		result := AgentComposerDefaultsPatchResult{
+			Applied: preferencesbiz.AgentComposerDefaultsPatch{},
+		}
+		message := err.Error()
+		for _, field := range agentComposerDefaultsPatchFieldOrder() {
+			if _, present := patch[field]; !present {
+				continue
+			}
+			result.Rejected = append(result.Rejected, AgentComposerDefaultsRejectedField{
+				Field:      field,
+				ReasonCode: AgentComposerDefaultsReasonInternalError,
+				Message:    message,
+			})
+		}
+		return result, nil
 	}
 	// Deterministic order so a rejected list never reshuffles between two
 	// identical patches.

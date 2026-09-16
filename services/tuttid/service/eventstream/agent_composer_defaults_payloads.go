@@ -130,3 +130,31 @@ func isAgentComposerDefaultsReasonCode(reasonCode string) bool {
 		return false
 	}
 }
+
+// agentComposerDefaultsDiagnosticLimit mirrors the `message` maxLength in the
+// protocol definition's resolved payload.
+const agentComposerDefaultsDiagnosticLimit = 512
+
+// truncateAgentComposerDefaultsDiagnostic bounds a rejection's diagnostic to the
+// size the schema allows.
+//
+// The transport validates an outbound payload before publishing and refuses the
+// whole event when it does not fit, so an over-long diagnostic would cost the
+// client the entire verdict — it would never learn that its defaults were not
+// stored, which is precisely the failure the resolved event exists to prevent.
+// The message reaches the wire from several validators, some of which embed the
+// caller's own value or a wrapped error, so the bound belongs at this single
+// point rather than in each producer.
+//
+// The limit counts characters, not bytes, so the cut is made on runes: a
+// truncated multi-byte message would otherwise be sliced mid-character and
+// produce invalid UTF-8.
+func truncateAgentComposerDefaultsDiagnostic(message string) string {
+	const marker = "..."
+	trimmed := strings.TrimSpace(message)
+	runes := []rune(trimmed)
+	if len(runes) <= agentComposerDefaultsDiagnosticLimit {
+		return trimmed
+	}
+	return string(runes[:agentComposerDefaultsDiagnosticLimit-len(marker)]) + marker
+}

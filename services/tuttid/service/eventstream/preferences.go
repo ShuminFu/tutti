@@ -174,7 +174,7 @@ func (p DesktopPreferencesPublisher) PublishAgentComposerDefaultsResolved(
 		rejected = append(rejected, agentComposerDefaultsRejectedPayload{
 			Field:      outcome.Field,
 			ReasonCode: outcome.ReasonCode,
-			Message:    outcome.Message,
+			Message:    truncateAgentComposerDefaultsDiagnostic(outcome.Message),
 		})
 	}
 	payload, err := json.Marshal(agentComposerDefaultsResolvedPayload{

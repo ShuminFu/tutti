@@ -24,7 +24,7 @@ import type {
   DesktopAgentComposerDefaultsField,
   DesktopAgentComposerDefaultsPatchOutcome,
   DesktopAgentComposerDefaultsRejectedField
-} from "../desktopPreferencesService.interface.ts";
+} from "../../desktopPreferencesService.interface.ts";
 
 export interface DesktopPreferencesClient {
   connect(): Promise<void>;

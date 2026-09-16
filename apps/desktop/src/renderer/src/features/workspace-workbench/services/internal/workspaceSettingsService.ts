@@ -1096,6 +1096,7 @@ const noopDesktopPreferences: DesktopPreferencesService = {
   rememberAgentComposerDefaultsForAgentTarget() {
     return Promise.resolve({
       acknowledgedFields: [],
+      rejectedFields: [],
       supersededFields: []
     });
   },

@@ -51,12 +51,19 @@ import {
   type AgentGUIComposerDefaultsMutation,
   type AgentGUIRetiredComposerDefault
 } from "./agentGuiComposerDefaultsReconciliation";
+import {
+  composerDefaultsRejectionTranslationOptions,
+  composerDefaultsTouchedFields,
+  composerDefaultsWholePatchRejections,
+  createAgentGUIComposerDefaultsFailureReporter
+} from "./agentGuiComposerDefaultsFailureNotice";
 import { normalizeOptionalText } from "./agentGuiController.promptHelpers";
 import {
   composerDefaultsPatchFromSettings,
   composerOptionsForTarget,
   rememberComposerDefaultsFields,
   type AgentGUIRememberComposerDefaultsInput,
+  type AgentGUIRememberComposerDefaultsRejection,
   type AgentGUIRememberComposerDefaultsResult
 } from "./agentGuiController.providerHelpers";
 import type { useAgentGUIActivation } from "./useAgentGUIActivation";
@@ -134,6 +141,10 @@ export function useAgentGUIComposerSettingsActions(
   };
   const composerDefaultsLedgerRef = useRef(
     createAgentGUIComposerDefaultsLedger()
+  );
+  // Collapses the retries/settlements of one user action into a single warning.
+  const composerDefaultsFailureReporterRef = useRef(
+    createAgentGUIComposerDefaultsFailureReporter()
   );
   const pendingFastFallbackCommandRef = useRef<string | null>(null);
   const lastModelFallbackNoticeRef = useRef("");
@@ -327,8 +338,33 @@ export function useAgentGUIComposerSettingsActions(
     },
     reloaded: retireAcknowledgedDefaultsForRead
   };
+  // The one place a default the daemon refused becomes a user-visible warning.
+  // Both the home (draft) and the active-session path settle through here so
+  // they cannot drift apart: one warning per (field, reason) per user action,
+  // and never silence.
+  const reportComposerDefaultsRejections = useCallback(
+    (rejections: readonly AgentGUIRememberComposerDefaultsRejection[]) => {
+      if (rejections.length === 0) {
+        return;
+      }
+      if (!composerDefaultsFailureReporterRef.current.report(rejections)) {
+        return;
+      }
+      onShowMessageRef.current?.(
+        translate(
+          "messages.agentComposerDefaultsNotSaved",
+          composerDefaultsRejectionTranslationOptions(rejections)
+        ),
+        "warning"
+      );
+    },
+    [onShowMessageRef]
+  );
   const updateComposerSettings = useCallback(
     (nextSettings: Partial<AgentSessionComposerSettings>) => {
+      // One user action: the previous action's failure notice has already been
+      // shown, so a repeat failure for the same field must warn again.
+      composerDefaultsFailureReporterRef.current.reset();
       // Values pass through unclamped: the toggle visibility is capability
       // gated and the daemon clamps persisted settings per provider.
       const supportedNextSettings: Partial<AgentSessionComposerSettings> = {
@@ -415,16 +451,16 @@ export function useAgentGUIComposerSettingsActions(
               isMountedRef,
               ledger: composerDefaultsLedgerRef.current,
               mutation,
-              onRejected: () => {
-                onShowMessageRef.current?.(
-                  translate("messages.agentComposerDefaultsNotSaved"),
-                  "warning"
-                );
-              },
+              onRejected: reportComposerDefaultsRejections,
               reloadComposerOptionsForTarget,
               setDraftSettingsBySessionId,
               target: targetData
-            }).catch(() => undefined);
+            })
+              // A missing acknowledgement is reported inside the reconciler,
+              // where it is still known to be a missing verdict rather than a
+              // later step's failure. What reaches here is the follow-up options
+              // reload, which already recovers on its own.
+              .catch(() => undefined);
           }
         }
         void agentActivityRuntime.trackDraftComposerSettingsChange?.({
@@ -508,20 +544,23 @@ export function useAgentGUIComposerSettingsActions(
           }
         );
         if (saving) {
-          // Defaults persistence is independent from the active-session
-          // command. Hard failures stay silent (the session keeps the value);
-          // per-field rejections surface a warning so the user knows the
-          // default will not survive a restart.
+          // Defaults persistence is independent from the active-session command:
+          // the session keeps the value even when the default cannot be stored.
+          // It is not independent in the other direction — a default the user
+          // believes was saved, but was not, resets silently on the next launch,
+          // so a publish that produced no verdict at all is reported alongside a
+          // per-field rejection.
           void saving
             .then((result) => {
-              if (result.rejectedFields.length > 0) {
-                onShowMessageRef.current?.(
-                  translate("messages.agentComposerDefaultsNotSaved"),
-                  "warning"
-                );
-              }
+              reportComposerDefaultsRejections(result.rejectedFields ?? []);
             })
-            .catch(() => undefined);
+            .catch(() => {
+              reportComposerDefaultsRejections(
+                composerDefaultsWholePatchRejections(
+                  composerDefaultsTouchedFields(rememberedDefaultsPatch)
+                )
+              );
+            });
         }
       }
 
@@ -604,6 +643,7 @@ export function useAgentGUIComposerSettingsActions(
       defaultReasoningEffort,
       composerSupport.permissionModeChangeDeferred,
       loadDraftComposerOptions,
+      reportComposerDefaultsRejections,
       reloadComposerOptionsForTarget,
       sessionEngine,
       workspaceId
@@ -663,7 +703,9 @@ async function reconcileAcknowledgedHomeDefaults(input: {
   isMountedRef: RefObject<boolean>;
   ledger: AgentGUIComposerDefaultsLedger;
   mutation: AgentGUIComposerDefaultsMutation;
-  onRejected: () => void;
+  onRejected: (
+    rejections: readonly AgentGUIRememberComposerDefaultsRejection[]
+  ) => void;
   reloadComposerOptionsForTarget(input: {
     settings: AgentSessionComposerSettings;
     target: AgentGUIComposerTargetData;
@@ -673,7 +715,22 @@ async function reconcileAcknowledgedHomeDefaults(input: {
   >;
   target: AgentGUIComposerTargetData;
 }): Promise<void> {
-  const result = await input.acknowledgement;
+  let result: AgentGUIRememberComposerDefaultsResult;
+  try {
+    result = await input.acknowledgement;
+  } catch {
+    // No verdict arrived at all: the publish itself failed, or the coordinator
+    // stopped retrying. Nothing is rolled back — without a per-field answer the
+    // draft may well match what is stored — but the fields this mutation tried
+    // to change are reported, because a default the user believes was saved, but
+    // was not, resets silently on the next launch.
+    input.onRejected(
+      composerDefaultsWholePatchRejections(
+        composerDefaultsTouchedFields(input.mutation.fields)
+      )
+    );
+    return;
+  }
   if (!input.isMountedRef.current) return;
 
   const currentDraft =
@@ -685,7 +742,8 @@ async function reconcileAcknowledgedHomeDefaults(input: {
   // Rejected fields never landed: drop their optimistic draft values so the
   // next authority read shows the real defaults. The ledger generation guard
   // inside rollbackRejectedComposerDefaults keeps a newer in-flight mutation
-  // for the same field untouched.
+  // for the same field untouched — a user edit made after the rejected publish
+  // wins, and its own settlement decides the outcome.
   const rejected = rollbackRejectedComposerDefaults(
     input.ledger,
     input.mutation,
@@ -702,7 +760,7 @@ async function reconcileAcknowledgedHomeDefaults(input: {
       ...current,
       [input.draftKey]: nextDraft
     }));
-    input.onRejected();
+    input.onRejected(rejected);
   }
 
   const acknowledged = acknowledgeAgentGUIComposerDefaultsMutation(

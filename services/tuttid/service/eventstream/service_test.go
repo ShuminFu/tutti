@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
@@ -1137,5 +1138,104 @@ func TestAgentComposerDefaultsResolvedRejectsUnknownReasonCode(t *testing.T) {
 	}
 	if err := validateAgentComposerDefaultsResolvedPayload([]byte(`{"agentTargetId":"local:opencode","applied":[],"rejected":[{"field":"speed","reasonCode":"not_configurable"}]}`)); err != nil {
 		t.Fatalf("validateAgentComposerDefaultsResolvedPayload() error = %v", err)
+	}
+}
+
+// The resolved payload is validated before it is published, and the schema caps
+// a rejection's diagnostic message at 512 characters. A message reaches the wire
+// from several producers, some of which embed the caller's own value or a
+// wrapped error, so it can exceed that — and the transport refuses the whole
+// event when it does, costing the client the entire verdict. That is exactly the
+// failure the resolved event exists to prevent, so the bound is asserted on what
+// actually reaches a subscriber rather than on the producer.
+func TestAgentComposerDefaultsResolvedBoundsDiagnosticMessage(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(DefaultCatalog(), nil)
+	session := service.OpenSession()
+	t.Cleanup(func() { service.CloseSession(session) })
+	if err := service.Subscribe(session, []string{TopicPreferencesAgentComposerDefaultsResolved}, EventScope{}); err != nil {
+		t.Fatalf("Subscribe() error = %v", err)
+	}
+	// Three-byte runes: over the budget as characters and far over it as bytes,
+	// so a byte-based cut would both under-fill the budget and split characters.
+	publisher := DesktopPreferencesPublisher{Service: service}
+	if err := publisher.PublishAgentComposerDefaultsResolved(context.Background(), preferencesservice.AgentComposerDefaultsResolvedInput{
+		AgentTargetID: "local:opencode",
+		Applied:       []string{},
+		Rejected: []preferencesservice.AgentComposerDefaultsPatchOutcome{
+			{
+				Field:      "reasoningEffort",
+				ReasonCode: "internal_error",
+				Message:    strings.Repeat("超", 600),
+			},
+		},
+	}); err != nil {
+		t.Fatalf("PublishAgentComposerDefaultsResolved() error = %v", err)
+	}
+	event := receiveEvent(t, session)
+	var payload struct {
+		Rejected []struct {
+			Message string `json:"message"`
+		} `json:"rejected"`
+	}
+	if err := json.Unmarshal(event.Payload, &payload); err != nil {
+		t.Fatalf("decode resolved: %v", err)
+	}
+	if len(payload.Rejected) != 1 {
+		t.Fatalf("rejected = %#v, want one entry", payload.Rejected)
+	}
+	message := payload.Rejected[0].Message
+	if !utf8.ValidString(message) {
+		t.Fatalf("message = %q, want valid UTF-8 after truncation", message)
+	}
+	if runes := utf8.RuneCountInString(message); runes != agentComposerDefaultsDiagnosticLimit {
+		t.Fatalf(
+			"message runes = %d, want exactly %d",
+			runes,
+			agentComposerDefaultsDiagnosticLimit,
+		)
+	}
+	if !strings.HasSuffix(message, "...") {
+		t.Fatalf("message = %q, want a truncation marker", message)
+	}
+}
+
+// A message that already fits must reach the client untouched: the bound must
+// not rewrite diagnostics that are within budget.
+func TestAgentComposerDefaultsResolvedKeepsShortDiagnosticMessage(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(DefaultCatalog(), nil)
+	session := service.OpenSession()
+	t.Cleanup(func() { service.CloseSession(session) })
+	if err := service.Subscribe(session, []string{TopicPreferencesAgentComposerDefaultsResolved}, EventScope{}); err != nil {
+		t.Fatalf("Subscribe() error = %v", err)
+	}
+	publisher := DesktopPreferencesPublisher{Service: service}
+	if err := publisher.PublishAgentComposerDefaultsResolved(context.Background(), preferencesservice.AgentComposerDefaultsResolvedInput{
+		AgentTargetID: "local:opencode",
+		Applied:       []string{},
+		Rejected: []preferencesservice.AgentComposerDefaultsPatchOutcome{
+			{
+				Field:      "reasoningEffort",
+				ReasonCode: "internal_error",
+				Message:    "composer profile is unreadable",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("PublishAgentComposerDefaultsResolved() error = %v", err)
+	}
+	event := receiveEvent(t, session)
+	var payload struct {
+		Rejected []struct {
+			Message string `json:"message"`
+		} `json:"rejected"`
+	}
+	if err := json.Unmarshal(event.Payload, &payload); err != nil {
+		t.Fatalf("decode resolved: %v", err)
+	}
+	if len(payload.Rejected) != 1 || payload.Rejected[0].Message != "composer profile is unreadable" {
+		t.Fatalf("rejected = %#v, want the diagnostic preserved verbatim", payload.Rejected)
 	}
 }

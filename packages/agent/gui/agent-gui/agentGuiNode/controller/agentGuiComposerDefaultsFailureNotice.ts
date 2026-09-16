@@ -1,8 +1,9 @@
 import { translate } from "../../../i18n/index";
 import type { TranslateOptions } from "../../../i18n/index";
-import type {
-  AgentGUIComposerDefaultsField,
-  AgentGUIRememberComposerDefaultsRejection
+import {
+  rememberComposerDefaultsFields,
+  type AgentGUIComposerDefaultsField,
+  type AgentGUIRememberComposerDefaultsRejection
 } from "./agentGuiController.providerHelpers";
 
 // Composer-defaults persistence is a background side effect of changing a
@@ -124,4 +125,27 @@ export function createAgentGUIComposerDefaultsFailureReporter(): AgentGUICompose
       reported = new Set();
     }
   };
+}
+
+// The fields a patch or mutation actually carries, in the order the daemon
+// evaluates and reports them. Object key order is an accident of whichever
+// object happens to hold the values; the order the user reads in the warning is
+// not, so it is derived from the canonical field list instead.
+export function composerDefaultsTouchedFields(
+  values: Partial<Record<AgentGUIComposerDefaultsField, unknown>>
+): AgentGUIComposerDefaultsField[] {
+  return rememberComposerDefaultsFields.filter(
+    (field) => values[field] !== undefined
+  );
+}
+
+// A publish can fail without producing any per-field verdict: the transport
+// refused the intent, the target is unknown, or the coordinator gave up after
+// its retries. The fields the mutation tried to change are then the only thing
+// left to report, and reporting them is the point — a default the user believes
+// was saved, but was not, resets silently on the next launch.
+export function composerDefaultsWholePatchRejections(
+  fields: readonly AgentGUIComposerDefaultsField[]
+): AgentGUIRememberComposerDefaultsRejection[] {
+  return fields.map((field) => ({ field, reasonCode: "internal_error" }));
 }

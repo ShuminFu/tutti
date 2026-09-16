@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -202,5 +203,105 @@ func extensionComposerValidationProfileResolver() extensionComposerProfileResolv
 				{RuntimeID: "yolo", Semantic: PermissionModeSemanticFullAccess},
 			},
 		},
+	}
+}
+
+// failingExtensionComposerProfileResolver stands in for a profile that cannot be
+// read at all — a broken install, an unreadable manifest.
+type failingExtensionComposerProfileResolver struct{ err error }
+
+func (r failingExtensionComposerProfileResolver) ResolveExtensionComposerProfile(
+	context.Context,
+	string,
+) (ExtensionComposerProfile, error) {
+	return ExtensionComposerProfile{}, r.err
+}
+
+// When the target's capabilities cannot be projected, the patch must still come
+// back as a per-field verdict instead of one opaque error: the client has a
+// pending mutation per field, and a hard error publishes no resolved event, so
+// the user would never learn that nothing was stored.
+func TestValidateAgentComposerDefaultsPatchDegradesToInternalErrorWhenCapabilitiesFail(t *testing.T) {
+	_, service := newExtensionComposerValidationService(t)
+	service.ExtensionComposerProfiles = failingExtensionComposerProfileResolver{
+		err: errors.New("composer profile is unreadable"),
+	}
+
+	permissionMode := "yolo"
+	reasoning := "high"
+	result, err := service.ValidateAgentComposerDefaultsPatch(
+		context.Background(),
+		extensionComposerValidationTargetID,
+		preferencesbiz.AgentComposerDefaultsPatch{
+			preferencesbiz.AgentComposerDefaultsFieldPermissionModeID: &permissionMode,
+			preferencesbiz.AgentComposerDefaultsFieldReasoningEffort:  &reasoning,
+		},
+	)
+	if err != nil {
+		t.Fatalf("ValidateAgentComposerDefaultsPatch() error = %v, want a degraded verdict", err)
+	}
+	if len(result.Applied) != 0 {
+		t.Fatalf("applied = %#v, want nothing persisted when capabilities are unreadable", result.Applied)
+	}
+	// One rejection per field the caller asked about, in the daemon's stable
+	// field order, so the client can report every field it sent.
+	if len(result.Rejected) != 2 {
+		t.Fatalf("rejected = %#v, want one rejection per patched field", result.Rejected)
+	}
+	if result.Rejected[0].Field != preferencesbiz.AgentComposerDefaultsFieldPermissionModeID ||
+		result.Rejected[1].Field != preferencesbiz.AgentComposerDefaultsFieldReasoningEffort {
+		t.Fatalf("rejected fields = %#v, want the stable patch field order", result.Rejected)
+	}
+	for _, rejected := range result.Rejected {
+		if rejected.ReasonCode != AgentComposerDefaultsReasonInternalError {
+			t.Fatalf("reasonCode = %q, want %q", rejected.ReasonCode, AgentComposerDefaultsReasonInternalError)
+		}
+		if rejected.Message == "" {
+			t.Fatal("message = empty, want the underlying failure kept for diagnostics")
+		}
+	}
+}
+
+// Fields the caller did not send must not appear in the degraded verdict: the
+// client settles a mutation per field it asked to change.
+func TestValidateAgentComposerDefaultsPatchDegradationOnlyReportsPatchedFields(t *testing.T) {
+	_, service := newExtensionComposerValidationService(t)
+	service.ExtensionComposerProfiles = failingExtensionComposerProfileResolver{
+		err: errors.New("composer profile is unreadable"),
+	}
+
+	reasoning := "high"
+	result, err := service.ValidateAgentComposerDefaultsPatch(
+		context.Background(),
+		extensionComposerValidationTargetID,
+		preferencesbiz.AgentComposerDefaultsPatch{
+			preferencesbiz.AgentComposerDefaultsFieldReasoningEffort: &reasoning,
+		},
+	)
+	if err != nil {
+		t.Fatalf("ValidateAgentComposerDefaultsPatch() error = %v, want a degraded verdict", err)
+	}
+	if len(result.Rejected) != 1 ||
+		result.Rejected[0].Field != preferencesbiz.AgentComposerDefaultsFieldReasoningEffort {
+		t.Fatalf("rejected = %#v, want only the patched field", result.Rejected)
+	}
+}
+
+// The one case that must still fail hard: nothing about the patch can be judged,
+// so there is no field set to report on and the intent ack has to fail.
+func TestValidateAgentComposerDefaultsPatchFailsHardForUnknownTarget(t *testing.T) {
+	_, service := newExtensionComposerValidationService(t)
+	service.ExtensionComposerProfiles = extensionComposerValidationProfileResolver()
+
+	reasoning := "high"
+	_, err := service.ValidateAgentComposerDefaultsPatch(
+		context.Background(),
+		"extension:no-such-target",
+		preferencesbiz.AgentComposerDefaultsPatch{
+			preferencesbiz.AgentComposerDefaultsFieldReasoningEffort: &reasoning,
+		},
+	)
+	if err == nil {
+		t.Fatal("ValidateAgentComposerDefaultsPatch() error = nil, want a hard failure for an unknown target")
 	}
 }

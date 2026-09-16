@@ -25,12 +25,8 @@ type ComposerProfile struct {
 			Stdio *bool `json:"stdio,omitempty"`
 		} `json:"mcpCapabilities,omitempty"`
 	} `json:"acp,omitempty"`
-	ConfigOptions *struct {
-		Model      ComposerConfigOptionReference `json:"model"`
-		Permission ComposerConfigOptionReference `json:"permission"`
-		Reasoning  ComposerReasoningDeclaration  `json:"reasoning"`
-	} `json:"configOptions,omitempty"`
-	PermissionModes []ComposerPermissionMode `json:"permissionModes"`
+	ConfigOptions   *ComposerConfigOptionsProfile `json:"configOptions,omitempty"`
+	PermissionModes []ComposerPermissionMode      `json:"permissionModes"`
 	LaunchSettings  *struct {
 		Permission *struct {
 			Placeholder     string `json:"placeholder"`
@@ -64,6 +60,19 @@ type ComposerProfile struct {
 		} `json:"roots"`
 	} `json:"skills,omitempty"`
 	RuntimePrep *runtimeprep.ExtensionRuntimePrep `json:"runtimePrep,omitempty"`
+}
+
+// ComposerConfigOptionsProfile is the canonical `configOptions` block: the
+// mapping from composer controls to ACP config option ids.
+//
+// It is a named type rather than an inline struct so that every consumer —
+// validation, profile resolution, and the fixtures tests build — shares one
+// field list. An inline struct desyncs the moment a field's type changes, which
+// is a compile break in whichever fixture was not updated.
+type ComposerConfigOptionsProfile struct {
+	Model      ComposerConfigOptionReference `json:"model"`
+	Permission ComposerConfigOptionReference `json:"permission"`
+	Reasoning  ComposerReasoningDeclaration  `json:"reasoning"`
 }
 
 func (profile ComposerProfile) DeclaresHTTPMCP() bool {

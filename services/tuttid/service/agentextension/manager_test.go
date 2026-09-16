@@ -1083,14 +1083,14 @@ func TestComposerAutomaticPermissionDecisionsAreRestrictedBySemantic(t *testing.
 func TestComposerProfileACPConfigOptionIDs(t *testing.T) {
 	t.Run("canonical", func(t *testing.T) {
 		profile := ComposerProfile{SchemaVersion: "tutti.agent.composer.v1"}
-		profile.ConfigOptions = &struct {
-			Model      ComposerConfigOptionReference `json:"model"`
-			Permission ComposerConfigOptionReference `json:"permission"`
-			Reasoning  ComposerConfigOptionReference `json:"reasoning"`
-		}{
+		profile.ConfigOptions = &ComposerConfigOptionsProfile{
 			Model:      ComposerConfigOptionReference{ACPOptionID: "model-choice"},
 			Permission: ComposerConfigOptionReference{ACPOptionID: "approval-mode"},
-			Reasoning:  ComposerConfigOptionReference{ACPOptionID: "thought-level"},
+			Reasoning: ComposerReasoningDeclaration{
+				ACPOptionID: "thought-level",
+				Options:     []string{"low", "high"},
+				Default:     "high",
+			},
 		}
 		model, permission, reasoning := profile.ACPConfigOptionIDs()
 		if model != "model-choice" || permission != "approval-mode" || reasoning != "thought-level" {

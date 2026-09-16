@@ -969,7 +969,11 @@ function createFallbackConfirmingEventStreamClient(): TuttidEventStreamClient {
     dispose: () => listeners.clear(),
     async publishIntent(_topic, _payload) {},
     subscribe(topic, listener) {
-      assert.equal(topic, "preferences.desktop.updated");
+      // The client also subscribes to the composer-defaults resolved topic;
+      // this fake only feeds the desktop preference stream.
+      if (topic !== "preferences.desktop.updated") {
+        return () => {};
+      }
       listeners.add(listener as Parameters<typeof listeners.add>[0]);
       return () =>
         listeners.delete(listener as Parameters<typeof listeners.delete>[0]);

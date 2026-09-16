@@ -5,7 +5,9 @@ import {
   prepareAcknowledgedComposerDefaultsAuthorityRead,
   preserveAcknowledgedComposerDefaultsForReconciliation,
   registerAgentGUIComposerDefaultsMutation,
-  retireAcknowledgedComposerDefaultsForRead
+  removeRetiredComposerDefaults,
+  retireAcknowledgedComposerDefaultsForRead,
+  rollbackRejectedComposerDefaults
 } from "./agentGuiComposerDefaultsReconciliation";
 
 const draftKey = "__agent_gui_node_defaults__:target:local:opencode";
@@ -455,5 +457,171 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
         }
       }
     });
+  });
+
+  // The daemon validates a defaults patch per field, so one refused field must
+  // not discard the siblings that were persisted.
+  it("rolls back only the rejected fields and reports each reason code", () => {
+    const ledger = createAgentGUIComposerDefaultsLedger();
+    const mutation = registerAgentGUIComposerDefaultsMutation(
+      ledger,
+      draftKey,
+      {
+        model: "openai/gpt-5",
+        permissionModeId: "ask"
+      }
+    );
+
+    const rolledBack = rollbackRejectedComposerDefaults(ledger, mutation, {
+      acknowledgedFields: ["model"],
+      rejectedFields: [
+        { field: "permissionModeId", reasonCode: "not_configurable" }
+      ],
+      supersededFields: []
+    });
+
+    expect(rolledBack).toEqual([
+      {
+        field: "permissionModeId",
+        reasonCode: "not_configurable",
+        value: "ask"
+      }
+    ]);
+    // The rejected field leaves the ledger so no later read resurrects it.
+    expect(
+      prepareAcknowledgedComposerDefaultsAuthorityRead(ledger, draftKey, {
+        model: "openai/gpt-5",
+        permissionModeId: "ask"
+      })
+    ).toEqual({
+      force: false,
+      receipt: null,
+      settings: { model: "openai/gpt-5", permissionModeId: "ask" }
+    });
+  });
+
+  // Race protection: the user changed the same field again while the rejected
+  // publish was still in flight, so the newer mutation owns the field. The
+  // rejection must be reported (returned) but must never roll back the newer
+  // value.
+  it("does not roll back a field whose generation was superseded by a newer edit", () => {
+    const ledger = createAgentGUIComposerDefaultsLedger();
+    const rejected = registerAgentGUIComposerDefaultsMutation(
+      ledger,
+      draftKey,
+      {
+        permissionModeId: "ask"
+      }
+    );
+    const newer = registerAgentGUIComposerDefaultsMutation(ledger, draftKey, {
+      permissionModeId: "full-access"
+    });
+
+    expect(
+      rollbackRejectedComposerDefaults(ledger, rejected, {
+        acknowledgedFields: [],
+        rejectedFields: [
+          { field: "permissionModeId", reasonCode: "unsupported_value" }
+        ],
+        supersededFields: []
+      })
+    ).toEqual([]);
+
+    // The newer mutation still owns the draft: its optimistic value survives
+    // and its own settlement decides the outcome.
+    expect(
+      prepareAcknowledgedComposerDefaultsAuthorityRead(ledger, draftKey, {
+        permissionModeId: "full-access"
+      })
+    ).toEqual({
+      force: false,
+      receipt: null,
+      settings: { permissionModeId: "full-access" }
+    });
+    expect(
+      acknowledgeAgentGUIComposerDefaultsMutation(ledger, newer, {
+        acknowledgedFields: ["permissionModeId"],
+        rejectedFields: [],
+        supersededFields: []
+      })
+    ).toBe(true);
+  });
+
+  // A late settlement for a cycle the ledger has already moved past must be a
+  // no-op: it may neither resurrect the stale value nor double-report.
+  it("ignores a settlement for an already-superseded cycle", () => {
+    const ledger = createAgentGUIComposerDefaultsLedger();
+    const stale = registerAgentGUIComposerDefaultsMutation(ledger, draftKey, {
+      model: "old/model"
+    });
+    registerAgentGUIComposerDefaultsMutation(ledger, draftKey, {
+      model: "new/model"
+    });
+
+    const first = rollbackRejectedComposerDefaults(ledger, stale, {
+      acknowledgedFields: [],
+      rejectedFields: [{ field: "model", reasonCode: "invalid_value" }],
+      supersededFields: []
+    });
+    const second = rollbackRejectedComposerDefaults(ledger, stale, {
+      acknowledgedFields: [],
+      rejectedFields: [{ field: "model", reasonCode: "invalid_value" }],
+      supersededFields: []
+    });
+
+    expect(first).toEqual([]);
+    expect(second).toEqual([]);
+    expect(ledger.latestByDraftKey[draftKey]?.model).not.toBeUndefined();
+  });
+
+  it("drops the rolled-back draft value while keeping acknowledged siblings", () => {
+    const ledger = createAgentGUIComposerDefaultsLedger();
+    const mutation = registerAgentGUIComposerDefaultsMutation(
+      ledger,
+      draftKey,
+      {
+        model: "openai/gpt-5",
+        reasoningEffort: "high"
+      }
+    );
+    acknowledgeAgentGUIComposerDefaultsMutation(ledger, mutation, {
+      acknowledgedFields: ["model"],
+      rejectedFields: [],
+      supersededFields: []
+    });
+    const rolledBack = rollbackRejectedComposerDefaults(ledger, mutation, {
+      acknowledgedFields: ["model"],
+      rejectedFields: [
+        { field: "reasoningEffort", reasonCode: "unsupported_value" }
+      ],
+      supersededFields: []
+    });
+
+    expect(
+      removeRetiredComposerDefaults(
+        { model: "openai/gpt-5", reasoningEffort: "high" },
+        rolledBack
+      )
+    ).toEqual({ model: "openai/gpt-5" });
+  });
+
+  // A host that has not adopted per-field settlement omits the key entirely;
+  // reconciliation must treat that as "nothing rejected" instead of crashing.
+  it("tolerates a settlement result without a rejectedFields list", () => {
+    const ledger = createAgentGUIComposerDefaultsLedger();
+    const mutation = registerAgentGUIComposerDefaultsMutation(
+      ledger,
+      draftKey,
+      {
+        model: "openai/gpt-5"
+      }
+    );
+
+    expect(
+      rollbackRejectedComposerDefaults(ledger, mutation, {
+        acknowledgedFields: ["model"],
+        supersededFields: []
+      } as never)
+    ).toEqual([]);
   });
 });

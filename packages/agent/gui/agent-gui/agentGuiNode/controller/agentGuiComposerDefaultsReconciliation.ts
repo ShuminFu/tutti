@@ -48,6 +48,12 @@ export interface AgentGUIRetiredComposerDefault {
   value: string;
 }
 
+// A rollback result carries the daemon's reason code too: the draft value is
+// dropped for the same reason the user must be told about.
+export interface AgentGUIRolledBackComposerDefault extends AgentGUIRetiredComposerDefault {
+  reasonCode: string;
+}
+
 export interface AgentGUIComposerDefaultsAuthorityRead {
   force: boolean;
   receipt: AgentGUIComposerDefaultsAuthorityReadReceipt | null;
@@ -136,33 +142,47 @@ export function acknowledgeAgentGUIComposerDefaultsMutation(
 // field the host refused to persist and reports which (field, value) pairs
 // must be dropped from the draft.
 //
-// Race protection: a field is only rolled back when the rejected generation is
-// still the latest one. If the user changed the same field again while the
-// rejected patch was in flight, the newer mutation owns the field and its
-// optimistic value stays untouched; the rejection belongs to a generation the
-// draft no longer holds.
+// Race protection — the invariant this must uphold:
+//
+//   A field of `mutation` is rolled back iff the ledger's latest generation for
+//   that (draftKey, field) still equals the generation this mutation carried
+//   for it.
+//
+// If the user changed the same field again while the rejected patch was in
+// flight, the newer mutation already bumped `latestByDraftKey` and owns the
+// field: its optimistic value stays untouched and its own settlement decides
+// the outcome. The rejection is still returned to the caller so the user is
+// told, but it never overwrites the newer draft value.
 export function rollbackRejectedComposerDefaults(
   ledger: AgentGUIComposerDefaultsLedger,
   mutation: AgentGUIComposerDefaultsMutation,
   result: AgentGUIRememberComposerDefaultsResult
-): AgentGUIRetiredComposerDefault[] {
+): AgentGUIRolledBackComposerDefault[] {
   const latest = ledger.latestByDraftKey[mutation.draftKey];
   if (!latest) return [];
   // Tolerate producers that predate per-field rejections (and older host
   // bridges): an absent list simply means "nothing was rejected".
-  const rejectedFields = new Set(
-    (result.rejectedFields ?? []).map((rejection) => rejection.field)
+  const rejectionsByField = new Map(
+    (result.rejectedFields ?? []).map((rejection) => [
+      rejection.field,
+      rejection
+    ])
   );
-  if (rejectedFields.size === 0) return [];
+  if (rejectionsByField.size === 0) return [];
   const acknowledged = ledger.acknowledgedByDraftKey[mutation.draftKey];
-  const rollback: AgentGUIRetiredComposerDefault[] = [];
+  const rollback: AgentGUIRolledBackComposerDefault[] = [];
   for (const field of rememberComposerDefaultsFields) {
     const requested = mutation.fields[field];
-    if (!requested || !rejectedFields.has(field)) continue;
+    const rejection = rejectionsByField.get(field);
+    if (!requested || !rejection) continue;
     if (latest[field] !== requested.generation) continue;
     delete latest[field];
     if (acknowledged) delete acknowledged[field];
-    rollback.push({ field, value: requested.value });
+    rollback.push({
+      field,
+      reasonCode: rejection.reasonCode,
+      value: requested.value
+    });
   }
   return rollback;
 }

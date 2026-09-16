@@ -1164,6 +1164,7 @@ function createDesktopPreferencesService(input: {
       input.onSetAgentCliUpdateCheckEnabled ?? (async (enabled) => enabled),
     rememberAgentComposerDefaultsForAgentTarget: async () => ({
       acknowledgedFields: [],
+      rejectedFields: [],
       supersededFields: []
     }),
     rememberAgentGuiConversationRailCollapsed: async () => {},
