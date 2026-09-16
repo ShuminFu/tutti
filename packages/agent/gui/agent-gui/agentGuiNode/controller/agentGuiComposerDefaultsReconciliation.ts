@@ -8,7 +8,6 @@ import {
   type AgentGUIComposerDefaultsField,
   type AgentGUIRememberComposerDefaultsResult
 } from "./agentGuiController.providerHelpers";
-
 interface AgentGUIComposerDefaultsGeneration {
   generation: number;
   value: string;
@@ -131,6 +130,41 @@ export function acknowledgeAgentGUIComposerDefaultsMutation(
     changed = true;
   }
   return changed;
+}
+
+// rollbackRejectedComposerDefaults retires the optimistic draft for every
+// field the host refused to persist and reports which (field, value) pairs
+// must be dropped from the draft.
+//
+// Race protection: a field is only rolled back when the rejected generation is
+// still the latest one. If the user changed the same field again while the
+// rejected patch was in flight, the newer mutation owns the field and its
+// optimistic value stays untouched; the rejection belongs to a generation the
+// draft no longer holds.
+export function rollbackRejectedComposerDefaults(
+  ledger: AgentGUIComposerDefaultsLedger,
+  mutation: AgentGUIComposerDefaultsMutation,
+  result: AgentGUIRememberComposerDefaultsResult
+): AgentGUIRetiredComposerDefault[] {
+  const latest = ledger.latestByDraftKey[mutation.draftKey];
+  if (!latest) return [];
+  // Tolerate producers that predate per-field rejections (and older host
+  // bridges): an absent list simply means "nothing was rejected".
+  const rejectedFields = new Set(
+    (result.rejectedFields ?? []).map((rejection) => rejection.field)
+  );
+  if (rejectedFields.size === 0) return [];
+  const acknowledged = ledger.acknowledgedByDraftKey[mutation.draftKey];
+  const rollback: AgentGUIRetiredComposerDefault[] = [];
+  for (const field of rememberComposerDefaultsFields) {
+    const requested = mutation.fields[field];
+    if (!requested || !rejectedFields.has(field)) continue;
+    if (latest[field] !== requested.generation) continue;
+    delete latest[field];
+    if (acknowledged) delete acknowledged[field];
+    rollback.push({ field, value: requested.value });
+  }
+  return rollback;
 }
 
 export function prepareAcknowledgedComposerDefaultsAuthorityRead(

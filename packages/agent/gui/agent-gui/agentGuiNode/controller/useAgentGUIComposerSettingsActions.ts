@@ -44,6 +44,7 @@ import {
   registerAgentGUIComposerDefaultsMutation,
   removeRetiredComposerDefaults,
   retireAcknowledgedComposerDefaultsForRead,
+  rollbackRejectedComposerDefaults,
   type AgentGUIComposerDefaultsLedger,
   type AgentGUIComposerDefaultsAuthorityReconciler,
   type AgentGUIComposerDefaultsAuthorityReadReceipt,
@@ -414,7 +415,14 @@ export function useAgentGUIComposerSettingsActions(
               isMountedRef,
               ledger: composerDefaultsLedgerRef.current,
               mutation,
+              onRejected: () => {
+                onShowMessageRef.current?.(
+                  translate("messages.agentComposerDefaultsNotSaved"),
+                  "warning"
+                );
+              },
               reloadComposerOptionsForTarget,
+              setDraftSettingsBySessionId,
               target: targetData
             }).catch(() => undefined);
           }
@@ -501,8 +509,19 @@ export function useAgentGUIComposerSettingsActions(
         );
         if (saving) {
           // Defaults persistence is independent from the active-session
-          // command and must remain silent on both sync and async failures.
-          void saving.catch(() => undefined);
+          // command. Hard failures stay silent (the session keeps the value);
+          // per-field rejections surface a warning so the user knows the
+          // default will not survive a restart.
+          void saving
+            .then((result) => {
+              if (result.rejectedFields.length > 0) {
+                onShowMessageRef.current?.(
+                  translate("messages.agentComposerDefaultsNotSaved"),
+                  "warning"
+                );
+              }
+            })
+            .catch(() => undefined);
         }
       }
 
@@ -644,10 +663,14 @@ async function reconcileAcknowledgedHomeDefaults(input: {
   isMountedRef: RefObject<boolean>;
   ledger: AgentGUIComposerDefaultsLedger;
   mutation: AgentGUIComposerDefaultsMutation;
+  onRejected: () => void;
   reloadComposerOptionsForTarget(input: {
     settings: AgentSessionComposerSettings;
     target: AgentGUIComposerTargetData;
   }): Promise<void>;
+  setDraftSettingsBySessionId: Dispatch<
+    SetStateAction<Record<string, AgentSessionComposerSettings>>
+  >;
   target: AgentGUIComposerTargetData;
 }): Promise<void> {
   const result = await input.acknowledgement;
@@ -658,17 +681,40 @@ async function reconcileAcknowledgedHomeDefaults(input: {
   if (!currentDraft) {
     return;
   }
-  if (
-    !acknowledgeAgentGUIComposerDefaultsMutation(
-      input.ledger,
-      input.mutation,
-      result
-    )
-  ) {
+
+  // Rejected fields never landed: drop their optimistic draft values so the
+  // next authority read shows the real defaults. The ledger generation guard
+  // inside rollbackRejectedComposerDefaults keeps a newer in-flight mutation
+  // for the same field untouched.
+  const rejected = rollbackRejectedComposerDefaults(
+    input.ledger,
+    input.mutation,
+    result
+  );
+  let nextDraft = currentDraft;
+  if (rejected.length > 0) {
+    nextDraft = removeRetiredComposerDefaults(currentDraft, rejected);
+    input.draftSettingsBySessionIdRef.current = {
+      ...input.draftSettingsBySessionIdRef.current,
+      [input.draftKey]: nextDraft
+    };
+    input.setDraftSettingsBySessionId((current) => ({
+      ...current,
+      [input.draftKey]: nextDraft
+    }));
+    input.onRejected();
+  }
+
+  const acknowledged = acknowledgeAgentGUIComposerDefaultsMutation(
+    input.ledger,
+    input.mutation,
+    result
+  );
+  if (!acknowledged && rejected.length === 0) {
     return;
   }
   await input.reloadComposerOptionsForTarget({
-    settings: currentDraft,
+    settings: nextDraft,
     target: input.target
   });
 }

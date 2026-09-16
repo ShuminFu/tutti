@@ -139,9 +139,22 @@ export const rememberComposerDefaultsFields = [
 export type AgentGUIComposerDefaultsField =
   (typeof rememberComposerDefaultsFields)[number];
 
+export interface AgentGUIRememberComposerDefaultsRejection {
+  field: AgentGUIComposerDefaultsField;
+  reasonCode: string;
+}
+
 export interface AgentGUIRememberComposerDefaultsResult {
   acknowledgedFields: AgentGUIComposerDefaultsField[];
   supersededFields: AgentGUIComposerDefaultsField[];
+  // rejectedFields lists the fields the host refused to persist (per-field
+  // validation) with the daemon's reason code. The optimistic draft must roll
+  // those back instead of showing a value that never landed.
+  //
+  // Optional because the result crosses the host boundary: a host that has not
+  // adopted per-field settlement yet legitimately omits the key, and "absent"
+  // must read as "nothing was rejected" rather than crashing reconciliation.
+  rejectedFields?: AgentGUIRememberComposerDefaultsRejection[];
 }
 
 export function composerDefaultsPatchFromSettings(

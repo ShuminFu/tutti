@@ -18,6 +18,7 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
     });
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, firstA, {
       acknowledgedFields: ["permissionModeId"],
+      rejectedFields: [],
       supersededFields: []
     });
     const firstRead = prepareAcknowledgedComposerDefaultsAuthorityRead(
@@ -35,6 +36,7 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
     );
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, mutationB, {
       acknowledgedFields: ["permissionModeId"],
+      rejectedFields: [],
       supersededFields: []
     });
     const latestA = registerAgentGUIComposerDefaultsMutation(ledger, draftKey, {
@@ -42,6 +44,7 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
     });
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, latestA, {
       acknowledgedFields: ["permissionModeId"],
+      rejectedFields: [],
       supersededFields: []
     });
 
@@ -97,6 +100,7 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
 
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, mutation, {
       acknowledgedFields: ["model"],
+      rejectedFields: [],
       supersededFields: []
     });
     const postAckRead = prepareAcknowledgedComposerDefaultsAuthorityRead(
@@ -130,10 +134,12 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
     );
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, opencodeMutation, {
       acknowledgedFields: ["speed"],
+      rejectedFields: [],
       supersededFields: []
     });
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, claudeMutation, {
       acknowledgedFields: ["speed"],
+      rejectedFields: [],
       supersededFields: []
     });
     const opencodeRead = prepareAcknowledgedComposerDefaultsAuthorityRead(
@@ -170,6 +176,7 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
     );
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, mutation, {
       acknowledgedFields: ["permissionModeId"],
+      rejectedFields: [],
       supersededFields: []
     });
     const read = prepareAcknowledgedComposerDefaultsAuthorityRead(
@@ -202,6 +209,7 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
     );
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, mutation, {
       acknowledgedFields: ["permissionModeId"],
+      rejectedFields: [],
       supersededFields: []
     });
     const settings = { permissionModeId: "accept_edits" };
@@ -254,6 +262,7 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
         "reasoningEffort",
         "speed"
       ],
+      rejectedFields: [],
       supersededFields: []
     });
     const sanitized = {
@@ -310,6 +319,7 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
     );
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, mutation, {
       acknowledgedFields: ["permissionModeId"],
+      rejectedFields: [],
       supersededFields: []
     });
     const settings = { permissionModeId: "accept_edits" };
@@ -353,6 +363,7 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
     );
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, mutation, {
       acknowledgedFields: ["model", "permissionModeId", "speed"],
+      rejectedFields: [],
       supersededFields: []
     });
     const settings = {
@@ -405,6 +416,7 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
     );
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, firstMutation, {
       acknowledgedFields: ["permissionModeId"],
+      rejectedFields: [],
       supersededFields: []
     });
     const firstRead = prepareAcknowledgedComposerDefaultsAuthorityRead(
@@ -419,6 +431,7 @@ describe("agentGuiComposerDefaultsReconciliation", () => {
     );
     acknowledgeAgentGUIComposerDefaultsMutation(ledger, secondMutation, {
       acknowledgedFields: ["permissionModeId"],
+      rejectedFields: [],
       supersededFields: []
     });
 

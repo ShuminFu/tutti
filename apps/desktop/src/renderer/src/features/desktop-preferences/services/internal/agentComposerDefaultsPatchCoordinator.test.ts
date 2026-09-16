@@ -4,6 +4,7 @@ import {
   AgentComposerDefaultsPatchCoordinator,
   AgentComposerDefaultsPatchFailure
 } from "./agentComposerDefaultsPatchCoordinator.ts";
+import type { DesktopAgentComposerDefaultsPatchOutcome } from "../desktopPreferencesService.interface.ts";
 
 test("agent composer defaults patch retries three times and reports safe metadata", async () => {
   const calls: unknown[] = [];
@@ -42,12 +43,12 @@ test("agent composer defaults patch retries three times and reports safe metadat
 test("agent composer defaults patch serializes in-flight writes so the latest field value wins", async () => {
   const calls: Array<{
     patch: { permissionModeId?: string | null };
-    resolve: () => void;
+    resolve: (outcome: DesktopAgentComposerDefaultsPatchOutcome) => void;
   }> = [];
   const coordinator = new AgentComposerDefaultsPatchCoordinator({
     createCorrelationId: () => `mutation-${calls.length + 1}`,
     publish: (input) =>
-      new Promise<void>((resolve) => {
+      new Promise<DesktopAgentComposerDefaultsPatchOutcome>((resolve) => {
         calls.push({ patch: input.patch, resolve });
       })
   });
@@ -65,19 +66,21 @@ test("agent composer defaults patch serializes in-flight writes so the latest fi
 
   assert.deepEqual(await oldWrite, {
     acknowledgedFields: [],
+    rejectedFields: [],
     supersededFields: ["permissionModeId"]
   });
 
-  calls[0]!.resolve();
+  calls[0]!.resolve({ applied: ["permissionModeId"], rejected: [] });
   await Promise.resolve();
   assert.deepEqual(
     calls.map((call) => call.patch),
     [{ permissionModeId: "ask" }, { permissionModeId: "full-access" }]
   );
 
-  calls[1]!.resolve();
+  calls[1]!.resolve({ applied: ["permissionModeId"], rejected: [] });
   assert.deepEqual(await latestWrite, {
     acknowledgedFields: ["permissionModeId"],
+    rejectedFields: [],
     supersededFields: []
   });
   coordinator.dispose();
@@ -86,11 +89,11 @@ test("agent composer defaults patch serializes in-flight writes so the latest fi
 test("agent composer defaults patch distinguishes A to B to A generations", async () => {
   const calls: Array<{
     patch: { permissionModeId?: string | null };
-    resolve: () => void;
+    resolve: (outcome: DesktopAgentComposerDefaultsPatchOutcome) => void;
   }> = [];
   const coordinator = new AgentComposerDefaultsPatchCoordinator({
     publish: (input) =>
-      new Promise<void>((resolve) => {
+      new Promise<DesktopAgentComposerDefaultsPatchOutcome>((resolve) => {
         calls.push({ patch: input.patch, resolve });
       })
   });
@@ -107,10 +110,12 @@ test("agent composer defaults patch distinguishes A to B to A generations", asyn
 
   assert.deepEqual(await firstA, {
     acknowledgedFields: [],
+    rejectedFields: [],
     supersededFields: ["permissionModeId"]
   });
   assert.deepEqual(await writeB, {
     acknowledgedFields: [],
+    rejectedFields: [],
     supersededFields: ["permissionModeId"]
   });
   assert.deepEqual(
@@ -118,15 +123,16 @@ test("agent composer defaults patch distinguishes A to B to A generations", asyn
     [{ permissionModeId: "ask" }]
   );
 
-  calls[0]!.resolve();
+  calls[0]!.resolve({ applied: ["permissionModeId"], rejected: [] });
   await Promise.resolve();
   assert.deepEqual(
     calls.map((call) => call.patch),
     [{ permissionModeId: "ask" }, { permissionModeId: "ask" }]
   );
-  calls[1]!.resolve();
+  calls[1]!.resolve({ applied: ["permissionModeId"], rejected: [] });
   assert.deepEqual(await latestA, {
     acknowledgedFields: ["permissionModeId"],
+    rejectedFields: [],
     supersededFields: []
   });
   coordinator.dispose();
@@ -135,11 +141,11 @@ test("agent composer defaults patch distinguishes A to B to A generations", asyn
 test("agent composer defaults patch reports mixed per-field outcomes", async () => {
   const calls: Array<{
     patch: { model?: string | null; permissionModeId?: string | null };
-    resolve: () => void;
+    resolve: (outcome: DesktopAgentComposerDefaultsPatchOutcome) => void;
   }> = [];
   const coordinator = new AgentComposerDefaultsPatchCoordinator({
     publish: (input) =>
-      new Promise<void>((resolve) => {
+      new Promise<DesktopAgentComposerDefaultsPatchOutcome>((resolve) => {
         calls.push({ patch: input.patch, resolve });
       })
   });
@@ -158,17 +164,51 @@ test("agent composer defaults patch reports mixed per-field outcomes", async () 
   await Promise.resolve();
   assert.equal(mixedSettled, false);
 
-  calls[0]!.resolve();
+  calls[0]!.resolve({
+    applied: ["model"],
+    rejected: [{ field: "permissionModeId", reasonCode: "not_configurable" }]
+  });
   assert.deepEqual(await mixedWrite, {
     acknowledgedFields: ["model"],
+    rejectedFields: [],
     supersededFields: ["permissionModeId"]
   });
   await Promise.resolve();
-  calls[1]!.resolve();
+  calls[1]!.resolve({ applied: ["permissionModeId"], rejected: [] });
   assert.deepEqual(await latestPermission, {
     acknowledgedFields: ["permissionModeId"],
+    rejectedFields: [],
     supersededFields: []
   });
+  coordinator.dispose();
+});
+
+test("agent composer defaults patch surfaces per-field rejections without retrying", async () => {
+  let publishCalls = 0;
+  const coordinator = new AgentComposerDefaultsPatchCoordinator({
+    retryDelaysMs: [0, 0],
+    publish: async () => {
+      publishCalls += 1;
+      return {
+        applied: ["permissionModeId"],
+        rejected: [{ field: "reasoningEffort", reasonCode: "not_configurable" }]
+      };
+    }
+  });
+
+  const result = await coordinator.patch("local:opencode", {
+    permissionModeId: "full-access",
+    reasoningEffort: "high"
+  });
+  assert.deepEqual(result, {
+    acknowledgedFields: ["permissionModeId"],
+    rejectedFields: [
+      { field: "reasoningEffort", reasonCode: "not_configurable" }
+    ],
+    supersededFields: []
+  });
+  // A per-field rejection is deterministic; only transport failures retry.
+  assert.equal(publishCalls, 1);
   coordinator.dispose();
 });
 
@@ -179,15 +219,17 @@ test("agent composer defaults patch merges latest values for different fields", 
       permissionModeId?: string | null;
     };
     reject: (error: Error) => void;
-    resolve: () => void;
+    resolve: (outcome: DesktopAgentComposerDefaultsPatchOutcome) => void;
   }> = [];
   const coordinator = new AgentComposerDefaultsPatchCoordinator({
     createCorrelationId: () => `mutation-${calls.length + 1}`,
     retryDelaysMs: [0, 0],
     publish: (input) =>
-      new Promise<void>((resolve, reject) => {
-        calls.push({ patch: input.patch, reject, resolve });
-      })
+      new Promise<DesktopAgentComposerDefaultsPatchOutcome>(
+        (resolve, reject) => {
+          calls.push({ patch: input.patch, reject, resolve });
+        }
+      )
   });
 
   const permissionWrite = coordinator.patch("local:opencode", {
@@ -202,7 +244,10 @@ test("agent composer defaults patch merges latest values for different fields", 
     model: "openai/gpt-5",
     permissionModeId: "full-access"
   });
-  calls[1]!.resolve();
+  calls[1]!.resolve({
+    applied: ["model", "permissionModeId"],
+    rejected: []
+  });
 
   await Promise.all([permissionWrite, modelWrite]);
   coordinator.dispose();

@@ -4,7 +4,9 @@ import {
 } from "../../../../../../shared/preferences/index.ts";
 import type {
   DesktopAgentComposerDefaultsField,
-  DesktopAgentComposerDefaultsPatchResult
+  DesktopAgentComposerDefaultsPatchOutcome,
+  DesktopAgentComposerDefaultsPatchResult,
+  DesktopAgentComposerDefaultsRejectedField
 } from "../desktopPreferencesService.interface.ts";
 
 type AgentComposerDefaultsField = DesktopAgentComposerDefaultsField;
@@ -32,6 +34,15 @@ interface TargetPatchState {
   inFlight: boolean;
   latestRevisionByField: Partial<Record<AgentComposerDefaultsField, number>>;
   nextRevision: number;
+  // rejectedRevisions records, per field, the revisions the daemon refused to
+  // persist and why. A waiter settles with the rejection for the exact
+  // revision it requested; newer revisions supersede it as usual.
+  rejectedRevisions: Partial<
+    Record<
+      AgentComposerDefaultsField,
+      Map<number, DesktopAgentComposerDefaultsRejectedField>
+    >
+  >;
   retryTimer: ReturnType<typeof setTimeout> | null;
   waiters: Set<PatchWaiter>;
 }
@@ -63,7 +74,7 @@ export interface AgentComposerDefaultsPatchCoordinatorDependencies {
     agentTargetId: string;
     clientMutationId: string;
     patch: DesktopAgentComposerDefaultsPatch;
-  }) => Promise<void>;
+  }) => Promise<DesktopAgentComposerDefaultsPatchOutcome>;
   retryDelaysMs?: readonly [number, number];
 }
 
@@ -143,6 +154,7 @@ export class AgentComposerDefaultsPatchCoordinator {
       for (const waiter of state.waiters) {
         waiter.resolve({
           acknowledgedFields: [],
+          rejectedFields: [],
           supersededFields: requestedFields(waiter.requestedRevisions)
         });
       }
@@ -166,6 +178,7 @@ export class AgentComposerDefaultsPatchCoordinator {
       inFlight: false,
       latestRevisionByField: {},
       nextRevision: 0,
+      rejectedRevisions: {},
       retryTimer: null,
       waiters: new Set()
     };
@@ -193,17 +206,42 @@ export class AgentComposerDefaultsPatchCoordinator {
     const correlationId = state.correlationId;
     const cycleRevision = state.cycleRevision;
     try {
-      await this.dependencies.publish({
+      const outcome = await this.dependencies.publish({
         agentTargetId,
         clientMutationId: correlationId,
         patch: snapshot.patch
       });
+      const applied = new Set<AgentComposerDefaultsField>(outcome.applied);
+      const rejectedByField = new Map(
+        outcome.rejected.map((rejection) => [rejection.field, rejection])
+      );
       for (const field of snapshot.fields) {
         const revision = snapshot.revisions[field]!;
-        (state.acknowledgedRevisions[field] ??= new Set()).add(revision);
-        if (state.desired[field]?.revision === revision) {
-          delete state.desired[field];
+        if (state.desired[field]?.revision !== revision) {
+          continue;
         }
+        if (applied.has(field)) {
+          (state.acknowledgedRevisions[field] ??= new Set()).add(revision);
+          delete state.desired[field];
+          continue;
+        }
+        const rejection = rejectedByField.get(field);
+        if (rejection) {
+          // The daemon refused this exact value. Retrying cannot change its
+          // mind: drop the field and surface the per-field rejection to every
+          // waiter that requested this revision.
+          (state.rejectedRevisions[field] ??= new Map()).set(
+            revision,
+            rejection
+          );
+          delete state.desired[field];
+          continue;
+        }
+        // The outcome did not mention this field (defensive: pre-resolved
+        // daemon or lost event handled by the client's fallback). Treat it as
+        // acknowledged so an ambiguous answer never strands the draft.
+        (state.acknowledgedRevisions[field] ??= new Set()).add(revision);
+        delete state.desired[field];
       }
       state.attemptCount = 0;
       this.resolveSatisfiedWaiters(state);
@@ -257,6 +295,7 @@ export class AgentComposerDefaultsPatchCoordinator {
   private resolveSatisfiedWaiters(state: TargetPatchState): void {
     for (const waiter of state.waiters) {
       const acknowledgedFields: AgentComposerDefaultsField[] = [];
+      const rejectedFields: DesktopAgentComposerDefaultsRejectedField[] = [];
       const supersededFields: AgentComposerDefaultsField[] = [];
       let pending = false;
       for (const field of desktopAgentComposerDefaultsFields) {
@@ -266,15 +305,27 @@ export class AgentComposerDefaultsPatchCoordinator {
         }
         if ((state.latestRevisionByField[field] ?? 0) > requestedRevision) {
           supersededFields.push(field);
-        } else if (state.acknowledgedRevisions[field]?.has(requestedRevision)) {
-          acknowledgedFields.push(field);
-        } else {
-          pending = true;
+          continue;
         }
+        const rejection =
+          state.rejectedRevisions[field]?.get(requestedRevision);
+        if (rejection) {
+          rejectedFields.push(rejection);
+          continue;
+        }
+        if (state.acknowledgedRevisions[field]?.has(requestedRevision)) {
+          acknowledgedFields.push(field);
+          continue;
+        }
+        pending = true;
       }
       if (!pending) {
         state.waiters.delete(waiter);
-        waiter.resolve({ acknowledgedFields, supersededFields });
+        waiter.resolve({
+          acknowledgedFields,
+          rejectedFields,
+          supersededFields
+        });
       }
     }
   }
@@ -290,7 +341,7 @@ export class AgentComposerDefaultsPatchCoordinator {
 }
 
 function emptyPatchResult(): DesktopAgentComposerDefaultsPatchResult {
-  return { acknowledgedFields: [], supersededFields: [] };
+  return { acknowledgedFields: [], rejectedFields: [], supersededFields: [] };
 }
 
 function requestedFields(

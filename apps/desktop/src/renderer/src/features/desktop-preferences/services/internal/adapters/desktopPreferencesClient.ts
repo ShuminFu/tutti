@@ -19,6 +19,12 @@ import type {
   DesktopAgentComposerDefaultsPatch,
   DesktopAgentSessionLaunchMode
 } from "../../../../../../../shared/preferences/index.ts";
+import { desktopAgentComposerDefaultsFields } from "../../../../../../../shared/preferences/index.ts";
+import type {
+  DesktopAgentComposerDefaultsField,
+  DesktopAgentComposerDefaultsPatchOutcome,
+  DesktopAgentComposerDefaultsRejectedField
+} from "../desktopPreferencesService.interface.ts";
 
 export interface DesktopPreferencesClient {
   connect(): Promise<void>;
@@ -28,7 +34,7 @@ export interface DesktopPreferencesClient {
     agentTargetId: string;
     clientMutationId: string;
     patch: DesktopAgentComposerDefaultsPatch;
-  }): Promise<void>;
+  }): Promise<DesktopAgentComposerDefaultsPatchOutcome>;
   patchAgentSessionLaunchMode(input: {
     workspaceId: string;
     projectSectionKey: string;
@@ -44,6 +50,7 @@ export interface DesktopPreferencesClient {
 
 export interface CreateDesktopPreferencesClientOptions {
   authoritativeEventTimeoutMs?: number;
+  composerDefaultsResolvedEventTimeoutMs?: number;
 }
 
 interface PendingDesktopPreferencesUpdate {
@@ -55,6 +62,14 @@ interface PendingDesktopPreferencesUpdate {
   timeoutHandle: ReturnType<typeof setTimeout> | null;
 }
 
+interface PendingComposerDefaultsPatch {
+  agentTargetId: string;
+  patch: DesktopAgentComposerDefaultsPatch;
+  reject: (error: Error) => void;
+  resolve: (outcome: DesktopAgentComposerDefaultsPatchOutcome) => void;
+  timeoutHandle: ReturnType<typeof setTimeout> | null;
+}
+
 export function createDesktopPreferencesClient(
   tuttidClient: Pick<TuttidClient, "getDesktopPreferences">,
   eventStreamClient: TuttidEventStreamClient,
@@ -62,14 +77,41 @@ export function createDesktopPreferencesClient(
 ): DesktopPreferencesClient {
   const authoritativeEventTimeoutMs =
     options.authoritativeEventTimeoutMs ?? 1_000;
+  const composerDefaultsResolvedEventTimeoutMs =
+    options.composerDefaultsResolvedEventTimeoutMs ?? 2_000;
   const listeners = new Set<
     (preferences: PutDesktopPreferencesRequest["preferences"]) => void
   >();
   const pendingUpdates = new Map<string, PendingDesktopPreferencesUpdate>();
+  const pendingComposerDefaultsPatches = new Map<
+    string,
+    PendingComposerDefaultsPatch
+  >();
   const unsubscribeEventStream = eventStreamClient.subscribe(
     "preferences.desktop.updated",
     (event) => {
       applyAuthoritativePreferences(event.payload.preferences);
+    }
+  );
+  const unsubscribeComposerDefaultsResolved = eventStreamClient.subscribe(
+    "preferences.agent.composer.defaults.resolved",
+    (event) => {
+      const { clientMutationId } = event.payload;
+      if (!clientMutationId) {
+        return;
+      }
+      const pending = pendingComposerDefaultsPatches.get(clientMutationId);
+      if (!pending) {
+        return;
+      }
+      clearPendingComposerDefaultsTimeout(pending);
+      pendingComposerDefaultsPatches.delete(clientMutationId);
+      pending.resolve(
+        normalizeComposerDefaultsPatchOutcome(
+          event.payload.applied,
+          event.payload.rejected ?? []
+        )
+      );
     }
   );
 
@@ -79,6 +121,7 @@ export function createDesktopPreferencesClient(
     },
     dispose() {
       unsubscribeEventStream();
+      unsubscribeComposerDefaultsResolved();
       const disposeError = new Error(
         "Desktop preferences client was disposed."
       );
@@ -86,15 +129,68 @@ export function createDesktopPreferencesClient(
         rejectPendingUpdate(pendingUpdate, disposeError);
       }
       pendingUpdates.clear();
+      for (const pendingPatch of pendingComposerDefaultsPatches.values()) {
+        clearPendingComposerDefaultsTimeout(pendingPatch);
+        pendingPatch.reject(disposeError);
+      }
+      pendingComposerDefaultsPatches.clear();
     },
     getDesktopPreferences() {
       return tuttidClient.getDesktopPreferences();
     },
     patchAgentComposerDefaultsForTarget(input) {
-      return eventStreamClient.publishIntent(
-        "preferences.agent.composer.defaults.patch.requested",
-        input
+      // Register the waiter BEFORE the intent is published: the resolved event
+      // can arrive in the same tick the intent handler returns.
+      const pending: PendingComposerDefaultsPatch = {
+        agentTargetId: input.agentTargetId,
+        patch: input.patch,
+        reject: () => {},
+        resolve: () => {},
+        timeoutHandle: null
+      };
+      const promise = new Promise<DesktopAgentComposerDefaultsPatchOutcome>(
+        (resolve, reject) => {
+          pending.resolve = resolve;
+          pending.reject = reject;
+        }
       );
+      pendingComposerDefaultsPatches.set(input.clientMutationId, pending);
+      void eventStreamClient
+        .publishIntent(
+          "preferences.agent.composer.defaults.patch.requested",
+          input
+        )
+        .then(() => {
+          const current = pendingComposerDefaultsPatches.get(
+            input.clientMutationId
+          );
+          if (current !== pending) {
+            return;
+          }
+          pending.timeoutHandle = setTimeout(() => {
+            if (
+              pendingComposerDefaultsPatches.get(input.clientMutationId) !==
+              pending
+            ) {
+              return;
+            }
+            pendingComposerDefaultsPatches.delete(input.clientMutationId);
+            void confirmComposerDefaultsOutcomeFromServer(pending);
+          }, composerDefaultsResolvedEventTimeoutMs);
+        })
+        .catch((error: unknown) => {
+          const current = pendingComposerDefaultsPatches.get(
+            input.clientMutationId
+          );
+          if (current !== pending) {
+            return;
+          }
+          pendingComposerDefaultsPatches.delete(input.clientMutationId);
+          pending.reject(
+            error instanceof Error ? error : new Error(String(error))
+          );
+        });
+      return promise;
     },
     patchAgentSessionLaunchMode(input) {
       return eventStreamClient.publishIntent(
@@ -141,6 +237,39 @@ export function createDesktopPreferencesClient(
       };
     }
   };
+
+  // The resolved event is the precise per-field outcome. When it never arrives
+  // (daemon without the topic, dropped event), fall back to the authoritative
+  // stored defaults and diff them against the requested patch: fields that
+  // landed are applied, fields that did not are rejected with internal_error.
+  async function confirmComposerDefaultsOutcomeFromServer(
+    pending: PendingComposerDefaultsPatch
+  ): Promise<void> {
+    try {
+      const state = await tuttidClient.getDesktopPreferences();
+      if (state.initialized) {
+        pending.resolve(
+          diffComposerDefaultsPatchOutcome(state.preferences, pending)
+        );
+        return;
+      }
+    } catch (error) {
+      pending.reject(error instanceof Error ? error : new Error(String(error)));
+      return;
+    }
+    pending.reject(
+      new Error("Composer defaults outcome could not be confirmed.")
+    );
+  }
+
+  function clearPendingComposerDefaultsTimeout(
+    pending: PendingComposerDefaultsPatch
+  ): void {
+    if (pending.timeoutHandle !== null) {
+      clearTimeout(pending.timeoutHandle);
+      pending.timeoutHandle = null;
+    }
+  }
 
   function createPendingUpdate(
     key: string,
@@ -428,4 +557,75 @@ function stableDesktopFeatureFlagsKey(value: unknown): string {
 
 function stableDesktopWorkbenchShortcutsKey(value: unknown): string {
   return JSON.stringify(normalizeDesktopWorkbenchShortcuts(value));
+}
+
+function isDesktopAgentComposerDefaultsField(
+  value: string
+): value is DesktopAgentComposerDefaultsField {
+  return (desktopAgentComposerDefaultsFields as readonly string[]).includes(
+    value
+  );
+}
+
+function normalizeComposerDefaultsPatchOutcome(
+  applied: readonly string[],
+  rejected: readonly {
+    field: string;
+    reasonCode: string;
+    message?: string;
+  }[]
+): DesktopAgentComposerDefaultsPatchOutcome {
+  const normalizedRejected: DesktopAgentComposerDefaultsRejectedField[] = [];
+  for (const entry of rejected) {
+    if (!isDesktopAgentComposerDefaultsField(entry.field)) {
+      continue;
+    }
+    normalizedRejected.push({
+      field: entry.field,
+      reasonCode: entry.reasonCode
+    });
+  }
+  return {
+    applied: applied.filter(isDesktopAgentComposerDefaultsField),
+    rejected: normalizedRejected
+  };
+}
+
+// diffComposerDefaultsPatchOutcome compares the patch the client sent against
+// the stored defaults it reads back. It is only the timeout fallback: the
+// resolved event is the precise source of truth. codexSaverMode never appears
+// in the stored defaults payload, so it counts as applied here — the daemon
+// already validated it before storing.
+function diffComposerDefaultsPatchOutcome(
+  preferences: PutDesktopPreferencesRequest["preferences"],
+  pending: PendingComposerDefaultsPatch
+): DesktopAgentComposerDefaultsPatchOutcome {
+  const stored =
+    preferences.agentComposerDefaultsByAgentTarget?.[pending.agentTargetId] ??
+    {};
+  const applied: DesktopAgentComposerDefaultsField[] = [];
+  const rejected: DesktopAgentComposerDefaultsRejectedField[] = [];
+  for (const field of desktopAgentComposerDefaultsFields) {
+    if (!(field in pending.patch)) {
+      continue;
+    }
+    if (field === "codexSaverMode") {
+      applied.push(field);
+      continue;
+    }
+    const requested = pending.patch[field];
+    const normalizedRequested =
+      typeof requested === "string" ? requested.trim() || null : null;
+    const storedValue = stored[field] ?? null;
+    const normalizedStored =
+      typeof storedValue === "string"
+        ? storedValue.trim() || null
+        : storedValue;
+    if (normalizedRequested === normalizedStored) {
+      applied.push(field);
+    } else {
+      rejected.push({ field, reasonCode: "internal_error" });
+    }
+  }
+  return { applied, rejected };
 }

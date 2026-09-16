@@ -590,6 +590,7 @@ describe("useAgentGUIComposerSettingsActions", () => {
     await act(async () => {
       first.resolve({
         acknowledgedFields: [],
+        rejectedFields: [],
         supersededFields: ["permissionModeId"]
       });
       await first.promise;
@@ -605,6 +606,7 @@ describe("useAgentGUIComposerSettingsActions", () => {
     await act(async () => {
       second.resolve({
         acknowledgedFields: ["model", "reasoningEffort", "speed"],
+        rejectedFields: [],
         supersededFields: ["permissionModeId"]
       });
       await second.promise;
@@ -629,6 +631,7 @@ describe("useAgentGUIComposerSettingsActions", () => {
     await act(async () => {
       third.resolve({
         acknowledgedFields: ["permissionModeId"],
+        rejectedFields: [],
         supersededFields: []
       });
       await third.promise;
@@ -731,6 +734,7 @@ describe("useAgentGUIComposerSettingsActions", () => {
     await act(async () => {
       acknowledgement.resolve({
         acknowledgedFields: ["permissionModeId"],
+        rejectedFields: [],
         supersededFields: []
       });
       await acknowledgement.promise;
@@ -892,6 +896,7 @@ describe("useAgentGUIComposerSettingsActions", () => {
     await act(async () => {
       acknowledgement.resolve({
         acknowledgedFields: ["model"],
+        rejectedFields: [],
         supersededFields: []
       });
       await acknowledgement.promise;

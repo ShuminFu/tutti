@@ -14,6 +14,7 @@ import type { DesktopThemeSource, DesktopThemeState } from "@shared/theme";
 import type { DesktopPreferencesClient } from "./adapters/desktopPreferencesClient.ts";
 import { createDesktopPreferencesClient as createDesktopPreferencesFeatureClient } from "./adapters/desktopPreferencesClient.ts";
 import { DesktopPreferencesService } from "./desktopPreferencesService.ts";
+import type { DesktopAgentComposerDefaultsField } from "../desktopPreferencesService.interface.ts";
 
 type Preferences = DesktopPreferencesStateResponse["preferences"];
 type PublishedPreferences = Omit<
@@ -576,6 +577,12 @@ test("DesktopPreferencesService remembers trimmed and nullable composer defaults
       if (deferPublishes) {
         await new Promise<void>((resolve) => deferredPublishes.push(resolve));
       }
+      return {
+        applied: Object.keys(
+          input.patch
+        ) as DesktopAgentComposerDefaultsField[],
+        rejected: []
+      };
     }
   });
   const { service, cleanup } = await createServiceHarness({ client });
@@ -596,6 +603,7 @@ test("DesktopPreferencesService remembers trimmed and nullable composer defaults
       "reasoningEffort",
       "speed"
     ],
+    rejectedFields: [],
     supersededFields: []
   });
   assert.deepEqual(patches, [
@@ -618,6 +626,7 @@ test("DesktopPreferencesService remembers trimmed and nullable composer defaults
     });
   assert.deepEqual(secondResult, {
     acknowledgedFields: ["model", "speed"],
+    rejectedFields: [],
     supersededFields: []
   });
   assert.deepEqual(patches.at(-1), {
@@ -637,6 +646,7 @@ test("DesktopPreferencesService remembers trimmed and nullable composer defaults
   );
   assert.deepEqual(await superseded, {
     acknowledgedFields: [],
+    rejectedFields: [],
     supersededFields: ["permissionModeId"]
   });
   deferredPublishes[0]!();
@@ -644,6 +654,7 @@ test("DesktopPreferencesService remembers trimmed and nullable composer defaults
   deferredPublishes[1]!();
   assert.deepEqual(await latest, {
     acknowledgedFields: ["permissionModeId"],
+    rejectedFields: [],
     supersededFields: []
   });
   assert.equal(client.updatedRequests.length, 0);
@@ -885,7 +896,8 @@ function createDesktopPreferencesClient(
     },
     ...overrides,
     patchAgentComposerDefaultsForTarget:
-      overrides.patchAgentComposerDefaultsForTarget ?? (async () => {}),
+      overrides.patchAgentComposerDefaultsForTarget ??
+      (async () => ({ applied: [], rejected: [] })),
     patchAgentSessionLaunchMode:
       overrides.patchAgentSessionLaunchMode ?? (async () => {})
   };

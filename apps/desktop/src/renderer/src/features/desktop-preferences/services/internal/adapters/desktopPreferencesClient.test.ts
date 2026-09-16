@@ -39,7 +39,7 @@ test("desktop preferences client patches target defaults through the dedicated a
     eventStreamClient
   );
 
-  await client.patchAgentComposerDefaultsForTarget({
+  const completion = client.patchAgentComposerDefaultsForTarget({
     agentTargetId: "local:opencode",
     clientMutationId: "mutation-1",
     patch: { permissionModeId: "full-access" }
@@ -55,7 +55,115 @@ test("desktop preferences client patches target defaults through the dedicated a
       topic: "preferences.agent.composer.defaults.patch.requested"
     }
   ]);
+
+  eventStreamClient.emitComposerDefaultsResolved({
+    agentTargetId: "local:opencode",
+    clientMutationId: "mutation-1",
+    applied: ["permissionModeId"],
+    rejected: [{ field: "reasoningEffort", reasonCode: "not_configurable" }]
+  });
+
+  assert.deepEqual(await completion, {
+    applied: ["permissionModeId"],
+    rejected: [{ field: "reasoningEffort", reasonCode: "not_configurable" }]
+  });
   client.dispose();
+});
+
+test("desktop preferences client correlates resolved events by client mutation id", async () => {
+  const eventStreamClient = createFakeEventStreamClient();
+  const client = createDesktopPreferencesClient(
+    createFakeTuttidClient(),
+    eventStreamClient
+  );
+
+  const first = client.patchAgentComposerDefaultsForTarget({
+    agentTargetId: "local:opencode",
+    clientMutationId: "mutation-1",
+    patch: { model: "openai/gpt-5" }
+  });
+  const second = client.patchAgentComposerDefaultsForTarget({
+    agentTargetId: "local:opencode",
+    clientMutationId: "mutation-2",
+    patch: { speed: "fast" }
+  });
+  let firstSettled = false;
+  void first.then(() => {
+    firstSettled = true;
+  });
+
+  // The second mutation's answer must not settle the first waiter.
+  eventStreamClient.emitComposerDefaultsResolved({
+    agentTargetId: "local:opencode",
+    clientMutationId: "mutation-2",
+    applied: ["speed"],
+    rejected: []
+  });
+  await Promise.resolve();
+  assert.equal(firstSettled, false);
+
+  eventStreamClient.emitComposerDefaultsResolved({
+    agentTargetId: "local:opencode",
+    clientMutationId: "mutation-1",
+    applied: ["model"],
+    rejected: []
+  });
+  assert.deepEqual(await first, { applied: ["model"], rejected: [] });
+  assert.deepEqual(await second, { applied: ["speed"], rejected: [] });
+  client.dispose();
+});
+
+test("desktop preferences client diffs stored defaults when the resolved event never arrives", async () => {
+  const tuttidClient = createFakeTuttidClient(
+    createStateResponse({
+      agentComposerDefaultsByAgentTarget: {
+        "local:opencode": { permissionModeId: "full-access" }
+      }
+    })
+  );
+  const eventStreamClient = createFakeEventStreamClient();
+  const client = createDesktopPreferencesClient(
+    tuttidClient,
+    eventStreamClient,
+    {
+      composerDefaultsResolvedEventTimeoutMs: 0
+    }
+  );
+
+  const completion = client.patchAgentComposerDefaultsForTarget({
+    agentTargetId: "local:opencode",
+    clientMutationId: "mutation-1",
+    patch: {
+      permissionModeId: "full-access",
+      reasoningEffort: "high"
+    }
+  });
+
+  assert.deepEqual(await completion, {
+    applied: ["permissionModeId"],
+    rejected: [{ field: "reasoningEffort", reasonCode: "internal_error" }]
+  });
+  assert.equal(tuttidClient.getDesktopPreferencesCalls, 1);
+  client.dispose();
+});
+
+test("desktop preferences client rejects pending defaults patches when disposed", async () => {
+  const eventStreamClient = createFakeEventStreamClient();
+  const client = createDesktopPreferencesClient(
+    createFakeTuttidClient(),
+    eventStreamClient
+  );
+
+  const completion = client.patchAgentComposerDefaultsForTarget({
+    agentTargetId: "local:opencode",
+    clientMutationId: "mutation-1",
+    patch: { permissionModeId: "full-access" }
+  });
+
+  client.dispose();
+
+  await assert.rejects(completion, /disposed/);
+  assert.equal(eventStreamClient.disposeCalls, 0);
 });
 
 test("desktop preferences client patches one session launch mode through the dedicated intent", async () => {
@@ -393,23 +501,22 @@ function createFakeTuttidClient(
 
 function createFakeEventStreamClient(): TuttidEventStreamClient & {
   disposeCalls: number;
+  emitComposerDefaultsResolved(payload: {
+    agentTargetId: string;
+    clientMutationId?: string;
+    applied: readonly string[];
+    rejected?: readonly {
+      field: string;
+      reasonCode: string;
+      message?: string;
+    }[];
+  }): void;
   emitDesktopPreferencesUpdated(
     payload: Extract<DesktopPreferencesStateResponse, { initialized: boolean }>
   ): void;
   publishedIntents: Array<{ payload: unknown; topic: string }>;
 } {
-  const listeners = new Set<
-    (event: {
-      emittedAt: string;
-      id: string;
-      payload: Extract<
-        DesktopPreferencesStateResponse,
-        { initialized: boolean }
-      >;
-      topic: "preferences.desktop.updated";
-      version: 1;
-    }) => void
-  >();
+  const listenersByTopic = new Map<string, Set<(event: unknown) => void>>();
   const publishedIntents: Array<{ payload: unknown; topic: string }> = [];
   let disposeCalls = 0;
 
@@ -421,8 +528,23 @@ function createFakeEventStreamClient(): TuttidEventStreamClient & {
     get disposeCalls() {
       return disposeCalls;
     },
+    emitComposerDefaultsResolved(payload) {
+      for (const listener of listenersByTopic.get(
+        "preferences.agent.composer.defaults.resolved"
+      ) ?? []) {
+        listener({
+          emittedAt: "2026-05-30T08:00:00Z",
+          id: "evt-2",
+          payload,
+          topic: "preferences.agent.composer.defaults.resolved",
+          version: 1
+        });
+      }
+    },
     emitDesktopPreferencesUpdated(payload) {
-      for (const listener of listeners) {
+      for (const listener of listenersByTopic.get(
+        "preferences.desktop.updated"
+      ) ?? []) {
         listener({
           emittedAt: "2026-05-30T08:00:00Z",
           id: "evt-1",
@@ -440,10 +562,11 @@ function createFakeEventStreamClient(): TuttidEventStreamClient & {
     },
     publishedIntents,
     subscribe(topic, listener) {
-      assert.equal(topic, "preferences.desktop.updated");
-      listeners.add(listener as Parameters<typeof listeners.add>[0]);
+      const listeners = listenersByTopic.get(topic) ?? new Set();
+      listeners.add(listener as (event: unknown) => void);
+      listenersByTopic.set(topic, listeners);
       return () => {
-        listeners.delete(listener as Parameters<typeof listeners.add>[0]);
+        listeners.delete(listener as (event: unknown) => void);
       };
     },
     subscribeConnectionState() {

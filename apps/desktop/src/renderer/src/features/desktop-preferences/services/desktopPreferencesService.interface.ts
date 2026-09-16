@@ -26,9 +26,25 @@ import type { DesktopPreferencesReadableStoreState } from "./desktopPreferencesT
 export type DesktopAgentComposerDefaultsField =
   keyof DesktopAgentComposerDefaultsPatch;
 
+export interface DesktopAgentComposerDefaultsRejectedField {
+  field: DesktopAgentComposerDefaultsField;
+  reasonCode: string;
+}
+
 export interface DesktopAgentComposerDefaultsPatchResult {
   acknowledgedFields: DesktopAgentComposerDefaultsField[];
   supersededFields: DesktopAgentComposerDefaultsField[];
+  // rejectedFields lists the fields the daemon refused to persist. The daemon
+  // validates every field of a snapshot independently, so a rejected sibling
+  // never drops the fields that were legal.
+  rejectedFields: DesktopAgentComposerDefaultsRejectedField[];
+}
+
+// The per-field outcome of one published defaults patch as reported by the
+// daemon's resolved event. The desktop client correlates it by clientMutationId.
+export interface DesktopAgentComposerDefaultsPatchOutcome {
+  applied: DesktopAgentComposerDefaultsField[];
+  rejected: DesktopAgentComposerDefaultsRejectedField[];
 }
 
 export interface IDesktopPreferencesService {

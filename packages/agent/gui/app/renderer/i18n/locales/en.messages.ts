@@ -19,6 +19,24 @@ export const enMessages = {
   agentSessionTitleTooLongWithoutLimit: "Session title is too long.",
   agentPermissionModeAppliesNextTurn:
     "Permission mode will apply starting with your next message.",
+  agentComposerDefaultsNotSaved:
+    "{{fields}} could not be saved as a default: {{reason}}",
+  agentComposerDefaultsFieldCodexSaverMode: "Saver mode",
+  agentComposerDefaultsFieldModel: "Model",
+  agentComposerDefaultsFieldPermissionModeId: "Permission mode",
+  agentComposerDefaultsFieldReasoningEffort: "Reasoning effort",
+  agentComposerDefaultsFieldSpeed: "Speed",
+  agentComposerDefaultsFieldSeparator: ", ",
+  agentComposerDefaultsReasonInvalidValue: "the value was rejected.",
+  agentComposerDefaultsReasonUnsupportedValue:
+    "the current model or provider does not allow it.",
+  agentComposerDefaultsReasonNotConfigurable:
+    "this provider does not allow it to be configured.",
+  agentComposerDefaultsReasonUnsupportedField:
+    "this provider does not support the setting.",
+  agentComposerDefaultsReasonInternalError: "the change could not be stored.",
+  agentComposerDefaultsReasonUnknown:
+    "the current provider refused the change.",
   agentFastModeFallbackToStandard:
     "Fast mode is not supported by the current model. Standard mode is now in use.",
   agentModelFallback:
