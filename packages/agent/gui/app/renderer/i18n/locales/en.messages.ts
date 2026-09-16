@@ -19,8 +19,12 @@ export const enMessages = {
   agentSessionTitleTooLongWithoutLimit: "Session title is too long.",
   agentPermissionModeAppliesNextTurn:
     "Permission mode will apply starting with your next message.",
+  // Generic fallback copy: the committed call sites pass no interpolation
+  // options, so a templated message would render {{fields}}/{{reason}}
+  // literally. The per-field notice upgrade re-templates this string together
+  // with the interpolation options in one change.
   agentComposerDefaultsNotSaved:
-    "{{fields}} could not be saved as a default: {{reason}}",
+    "Some of these defaults could not be saved. They will reset after a restart.",
   agentComposerDefaultsFieldCodexSaverMode: "Saver mode",
   agentComposerDefaultsFieldModel: "Model",
   agentComposerDefaultsFieldPermissionModeId: "Permission mode",
