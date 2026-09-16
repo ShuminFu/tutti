@@ -2,11 +2,6 @@ import { parseRichTextMentionHref } from "@tutti-os/ui-rich-text/core";
 import type { WorkspaceLinkAction } from "@contexts/workspace/presentation/renderer/actions/workspaceLinkActions";
 import type { DesktopAgentGUIProvider } from "../desktopAgentGUINodeState.ts";
 
-// Value mirror of AGENT_EXTERNAL_LINK_ACTION_SOURCE from @tutti-os/agent-gui.
-// See the note below: runtime imports from the Agent GUI barrel break the
-// desktop node --test runner.
-const AGENT_EXTERNAL_LINK_ACTION_SOURCE = "agent-external-action";
-
 // Value mirror of AGENT_PASTED_TEXT_MENTION_KIND from @tutti-os/agent-gui.
 // Kept as a local literal so this module (loaded by the node --test runner)
 // does not pull the whole agent-gui barrel, whose extensionless internal
@@ -91,10 +86,11 @@ export async function runDesktopAgentGUILinkAction(
         workspaceId: dependencies.workspaceId
       });
     case "open-url":
-      if (
-        action.source === AGENT_EXTERNAL_LINK_ACTION_SOURCE &&
-        dependencies.openExternalUrl
-      ) {
+      // HTTP/HTTPS always leave the app. DinTalDock does not keep a built-in
+      // browser for conversation links; the workbench Browser Node is Electron
+      // only, so embedded markdown clicks used to vanish. Fall back to that
+      // node only when the host cannot open the system browser.
+      if (dependencies.openExternalUrl) {
         await dependencies.openExternalUrl(action.url);
         return true;
       }

@@ -145,7 +145,33 @@ test("desktop agent gui link actions validate pasted text archives before openin
   ]);
 });
 
-test("desktop agent gui link actions open urls through the workspace browser", async () => {
+test("desktop agent gui markdown urls open in the system browser when the host can", async () => {
+  const openedExternal: string[] = [];
+
+  const handled = await runDesktopAgentGUILinkAction(
+    {
+      source: "agent-markdown",
+      type: "open-url",
+      url: "https://example.com"
+    },
+    {
+      getAgentSession: failGetAgentSession,
+      launchAgentGui: failLaunchAgentGui,
+      launchWorkspaceIssueManager: failLaunchWorkspaceIssueManager,
+      launchWorkspaceFiles: failLaunchWorkspaceFiles,
+      openBrowserUrl: failOpenBrowserUrl,
+      openExternalUrl(url) {
+        openedExternal.push(url);
+      },
+      workspaceId: "workspace-1"
+    }
+  );
+
+  assert.equal(handled, true);
+  assert.deepEqual(openedExternal, ["https://example.com"]);
+});
+
+test("desktop agent gui link actions open urls through the workspace browser without a host opener", async () => {
   const openedUrls: unknown[] = [];
 
   const handled = await runDesktopAgentGUILinkAction(
