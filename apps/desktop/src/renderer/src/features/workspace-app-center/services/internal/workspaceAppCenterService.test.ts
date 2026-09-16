@@ -685,6 +685,7 @@ test("WorkspaceAppCenterService opens local-dev package folders from localPackag
     hostFilesApi: createHostFilesApi({
       revealInFolder: async (path) => {
         revealedPaths.push(path);
+        return { fallbackToDirectory: false, path };
       }
     }),
     hostWorkspaceApi: createHostWorkspaceApi({
@@ -1379,6 +1380,7 @@ test("WorkspaceAppCenterService reveals exported app archives", async () => {
     hostFilesApi: createHostFilesApi({
       async revealInFolder(path) {
         revealedPaths.push(path);
+        return { fallbackToDirectory: false, path };
       },
       async selectAppArchiveExportPath(input) {
         assert.equal(input.defaultPath, "App_One_0.2.0.zip");
@@ -1770,7 +1772,7 @@ function createHostFilesApi(
 ): WorkspaceAppCenterServiceDependencies["hostFilesApi"] {
   return {
     openExternal: async () => {},
-    revealInFolder: async () => {},
+    revealInFolder: async (path) => ({ fallbackToDirectory: false, path }),
     selectAppArchive: async () => null,
     selectAppArchiveExportPath: async () => null,
     selectDirectory: async () => null,

@@ -18,6 +18,7 @@ import type {
   DesktopCreateUserDocumentsProjectDirectoryResult,
   DesktopCustomWallpaperImage,
   DesktopLocalFileTextResult,
+  DesktopRevealLocalFileResult,
   DesktopHostNotificationNavigationPayload,
   DesktopHostNotificationPayload,
   DesktopHostNotificationResult,
@@ -249,8 +250,11 @@ export interface DesktopHostFilesApi {
     workspaceID: string,
     path: string
   ): Promise<string>;
-  revealInFolder(path: string): Promise<void>;
-  revealWorkspaceFile(workspaceID: string, path: string): Promise<void>;
+  revealInFolder(path: string): Promise<DesktopRevealLocalFileResult>;
+  revealWorkspaceFile(
+    workspaceID: string,
+    path: string
+  ): Promise<DesktopRevealLocalFileResult>;
   openExternal(url: string): Promise<void>;
   openTerminalLink(input: {
     column?: number;

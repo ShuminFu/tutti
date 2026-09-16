@@ -25,6 +25,10 @@ vi.mock("@tutti-os/ui-system", () => {
     TooltipContent: ({ children }: MockTooltipProps) => (
       <div role="tooltip">{children}</div>
     ),
+    ContextMenu: Passthrough,
+    ContextMenuTrigger: Passthrough,
+    ContextMenuContent: () => null,
+    ContextMenuItem: () => null,
     toast: {
       error: vi.fn()
     }

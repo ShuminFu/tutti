@@ -50,17 +50,15 @@ export function resolveWorkspaceFilePathCandidate({
         normalizeWorkspaceFilePath(workspaceRoot?.trim() ?? "") || directoryPath
     };
   }
-  if (
-    isAbsoluteLocalPath(normalizedPath) &&
-    (isDirectAgentGeneratedMediaPath(normalizedPath) ||
-      isDirectWorkspaceAppDataPath(normalizedPath))
-  ) {
+  if (isAbsoluteLocalPath(normalizedPath)) {
     const directoryPath = dirname(normalizedPath);
     return {
       path: normalizedPath,
       directoryPath,
       workspaceRoot:
-        normalizeWorkspaceFilePath(workspaceRoot?.trim() ?? "") || directoryPath
+        normalizeWorkspaceFilePath(workspaceRoot?.trim() ?? "") ||
+        normalizeWorkspaceFilePath(basePath?.trim() ?? "") ||
+        directoryPath
     };
   }
 
@@ -69,14 +67,6 @@ export function resolveWorkspaceFilePathCandidate({
   const root = selectedRoot || sessionRoot;
   if (!root) {
     return null;
-  }
-  if (isAbsoluteLocalPath(normalizedPath)) {
-    const directoryPath = dirname(normalizedPath);
-    return {
-      path: normalizedPath,
-      directoryPath,
-      workspaceRoot: root
-    };
   }
   const base = normalizeWorkspaceFilePath(basePath?.trim() || root);
   const resolvedPath = normalizeWorkspaceFilePath(`${base}/${normalizedPath}`);
@@ -253,21 +243,6 @@ function isStagedLocalAssetPath(path: string): boolean {
   return (
     path !== LOCAL_ASSET_ROOT &&
     isInsideOrEqualWorkspaceFilePath(path, LOCAL_ASSET_ROOT)
-  );
-}
-
-function isDirectWorkspaceAppDataPath(path: string): boolean {
-  if (!isAbsoluteLocalPath(path)) {
-    return false;
-  }
-  const statePath = getTuttiStatePathSegments(path);
-  if (!statePath) {
-    return false;
-  }
-  return (
-    statePath[1] === "apps" &&
-    statePath[2] === "workspaces" &&
-    statePath.length > 5
   );
 }
 

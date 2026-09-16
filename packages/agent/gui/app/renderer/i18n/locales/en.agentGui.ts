@@ -337,6 +337,12 @@ export const enAgentGui = {
   continuedFromTask: "Continued from task",
   sourceConversationNotFound: "Original conversation not found",
   copyImage: "Copy image",
+  openWithDefaultApp: "Open",
+  revealInFinder: "Reveal in Finder",
+  revealInFileExplorer: "Reveal in File Explorer",
+  revealInFileManager: "Reveal in File Manager",
+  revealFallbackDirectory:
+    "The file is missing or unreadable, so its folder was opened instead",
   editRetryEditMessage: "Edit message",
   editRetryCancel: "Cancel",
   editRetrySubmit: "Save and retry",

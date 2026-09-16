@@ -1,4 +1,7 @@
-import { desktopIpcChannels } from "../../shared/contracts/ipc";
+import {
+  desktopIpcChannels,
+  type DesktopRevealLocalFileResult
+} from "../../shared/contracts/ipc";
 import type { DesktopHostApi } from "../types";
 import { invokeDesktopApi } from "./invoke";
 import { ipcRenderer, type IpcRendererEvent } from "electron";
@@ -99,13 +102,16 @@ export function createHostDesktopApi(): DesktopHostApi {
           }
         );
       },
-      revealInFolder(path: string): Promise<void> {
+      revealInFolder(path: string): Promise<DesktopRevealLocalFileResult> {
         return invokeDesktopApi(
           desktopIpcChannels.host.files.revealInFolder,
           path
         );
       },
-      revealWorkspaceFile(workspaceID: string, path: string): Promise<void> {
+      revealWorkspaceFile(
+        workspaceID: string,
+        path: string
+      ): Promise<DesktopRevealLocalFileResult> {
         return invokeDesktopApi(
           desktopIpcChannels.host.files.revealWorkspaceFile,
           {

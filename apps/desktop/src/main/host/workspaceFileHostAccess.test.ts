@@ -286,6 +286,34 @@ test("workspace file host access reveals workspace files and directories", async
   }
 });
 
+test("workspace file host access falls back to the parent directory when the file is missing", async () => {
+  const workspaceRoot = await createWorkspaceRootWithFile("src/App.tsx", "app");
+  const restoreHome = installHomeDirectory(workspaceRoot);
+  try {
+    let openedPath = "";
+    const hostAccess = createWorkspaceFileHostAccess({
+      openPath: async (targetPath) => {
+        openedPath = targetPath;
+        return "";
+      },
+      showItemInFolder() {
+        throw new Error("missing files must not be selected");
+      }
+    });
+
+    const result = await hostAccess.revealWorkspaceFile({
+      path: "/workspace/src/missing.tsx",
+      workspaceID: "workspace-1"
+    });
+
+    assert.equal(result.fallbackToDirectory, true);
+    assert.equal(openedPath, path.resolve(workspaceRoot, "src"));
+    assert.equal(result.path, path.resolve(workspaceRoot, "src"));
+  } finally {
+    restoreHome();
+  }
+});
+
 test("workspace file host access reads preview bytes under the workspace root", async () => {
   const workspaceRoot = await createWorkspaceRootWithFile(
     "notes/todo.txt",

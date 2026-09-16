@@ -12,7 +12,7 @@ import {
   DESKTOP_AGENT_PROMPT_FILE_MAX_BYTES,
   DESKTOP_AGENT_PROMPT_FILE_TOO_LARGE_ERROR_CODE
 } from "../../shared/agentPromptAssets.ts";
-import { app, shell } from "electron";
+import { app } from "electron";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { chmod, copyFile, mkdir, stat, writeFile } from "node:fs/promises";
@@ -90,7 +90,7 @@ export function registerHostFilesIpc(deps: HostFilesIpcDependencies): void {
   );
   registerDesktopIpcHandler(
     desktopIpcChannels.host.files.revealInFolder,
-    (_event, payload: string) => shell.showItemInFolder(payload)
+    (_event, payload: string) => hostAccess.revealLocalPath(payload)
   );
   registerDesktopIpcHandler(
     desktopIpcChannels.host.files.revealWorkspaceFile,

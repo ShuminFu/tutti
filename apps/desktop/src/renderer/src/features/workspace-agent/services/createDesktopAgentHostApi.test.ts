@@ -952,8 +952,12 @@ function createHostFilesApi(
     },
     async openExternal() {},
     async openFile() {},
-    async revealInFolder() {},
-    async revealWorkspaceFile() {},
+    async revealInFolder(path) {
+      return { fallbackToDirectory: false, path };
+    },
+    async revealWorkspaceFile(_workspaceID, path) {
+      return { fallbackToDirectory: false, path };
+    },
     async openTerminalLink() {},
     async readLocalFileText(path) {
       return { content: "", name: "", path };

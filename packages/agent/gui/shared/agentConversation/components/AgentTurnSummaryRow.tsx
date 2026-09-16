@@ -33,6 +33,7 @@ import {
 } from "../rules/agentTurnSummaryPatchRuntime";
 import { AgentCodeBlock } from "./tool-renderers/code/AgentCodeBlock";
 import { CollapsibleReveal } from "./CollapsibleReveal";
+import { ConversationFileContextMenu } from "./ConversationFileContextMenu";
 import { AgentMonacoDiffViewer } from "./tool-renderers/file-diff/AgentMonacoDiffViewer";
 import {
   agentFileChangeStats,
@@ -431,86 +432,98 @@ function TurnSummaryFileCard({
   const stats = summarizeFileDiff(file);
   const preview = filePreview(file);
 
+  const revealPath = action?.path || file.path;
+
   return (
-    <div className="agent-turn-summary-card__file">
-      <div className="agent-turn-summary-card__file-row flex min-w-0 items-center gap-2.5 overflow-hidden px-4 py-2.5">
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <button
-            type="button"
-            className="group/file-toggle flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-left"
-            aria-expanded={expanded}
-            onClick={onToggle}
-          >
-            <div className="min-w-0 flex-1 overflow-hidden">
-              <span
-                className={`agent-turn-summary-card__path flex min-w-0 max-w-full overflow-hidden whitespace-nowrap text-[13px] font-medium leading-5 text-[var(--text-secondary)] ${
-                  file.changeType === "deleted" ? "line-through" : ""
-                }`}
-                title={file.path}
-              >
-                {file.directory ? (
-                  <span className="agent-turn-summary-card__path-directory">
-                    {file.directory}/
+    <ConversationFileContextMenu
+      path={revealPath}
+      asChild
+      onOpen={() => {
+        if (action) {
+          onLinkAction?.(action);
+        }
+      }}
+    >
+      <div className="agent-turn-summary-card__file">
+        <div className="agent-turn-summary-card__file-row flex min-w-0 items-center gap-2.5 overflow-hidden px-4 py-2.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <button
+              type="button"
+              className="group/file-toggle flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-left"
+              aria-expanded={expanded}
+              onClick={onToggle}
+            >
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <span
+                  className={`agent-turn-summary-card__path flex min-w-0 max-w-full overflow-hidden whitespace-nowrap text-[13px] font-medium leading-5 text-[var(--text-secondary)] ${
+                    file.changeType === "deleted" ? "line-through" : ""
+                  }`}
+                  title={file.path}
+                >
+                  {file.directory ? (
+                    <span className="agent-turn-summary-card__path-directory">
+                      {file.directory}/
+                    </span>
+                  ) : null}
+                  <span className="agent-turn-summary-card__path-file">
+                    {file.fileName}
                   </span>
-                ) : null}
-                <span className="agent-turn-summary-card__path-file">
-                  {file.fileName}
                 </span>
+              </div>
+              <span className="shrink-0 text-[var(--text-tertiary)] opacity-0 transition-opacity group-hover/file-toggle:opacity-100 group-focus-visible/file-toggle:opacity-100">
+                <ChevronRight
+                  size={14}
+                  strokeWidth={2.2}
+                  aria-hidden="true"
+                  className={`transition-transform duration-150 ease-out ${expanded ? "rotate-90" : "rotate-0"}`}
+                />
               </span>
-            </div>
-            <span className="shrink-0 text-[var(--text-tertiary)] opacity-0 transition-opacity group-hover/file-toggle:opacity-100 group-focus-visible/file-toggle:opacity-100">
-              <ChevronRight
-                size={14}
-                strokeWidth={2.2}
-                aria-hidden="true"
-                className={`transition-transform duration-150 ease-out ${expanded ? "rotate-90" : "rotate-0"}`}
-              />
+            </button>
+            <span className="ml-auto inline-flex shrink-0 items-center gap-2 text-[11px] font-semibold">
+              {stats.added > 0 ? (
+                <span className="workspace-agents-status-panel__detail-tool-diff-added">
+                  +{stats.added}
+                </span>
+              ) : null}
+              {stats.removed > 0 ? (
+                <span className="workspace-agents-status-panel__detail-tool-diff-removed">
+                  -{stats.removed}
+                </span>
+              ) : null}
             </span>
-          </button>
-          <span className="ml-auto inline-flex shrink-0 items-center gap-2 text-[11px] font-semibold">
-            {stats.added > 0 ? (
-              <span className="workspace-agents-status-panel__detail-tool-diff-added">
-                +{stats.added}
-              </span>
-            ) : null}
-            {stats.removed > 0 ? (
-              <span className="workspace-agents-status-panel__detail-tool-diff-removed">
-                -{stats.removed}
-              </span>
-            ) : null}
-          </span>
+          </div>
+
+          {canOpen ? (
+            <CanvasNodeGhostIconButton
+              aria-label={translate(
+                "agentHost.workspaceAgentSessionDetailOpenFile",
+                {
+                  path: file.path
+                }
+              )}
+              onClick={() => {
+                onLinkAction?.(action as WorkspaceLinkAction);
+              }}
+            >
+              <DirectLinedIcon
+                width={14}
+                height={14}
+                aria-hidden="true"
+                className="text-[var(--text-secondary)]"
+              />
+            </CanvasNodeGhostIconButton>
+          ) : null}
         </div>
 
-        {canOpen ? (
-          <CanvasNodeGhostIconButton
-            aria-label={translate(
-              "agentHost.workspaceAgentSessionDetailOpenFile",
-              {
-                path: file.path
-              }
-            )}
-            onClick={() => {
-              onLinkAction?.(action as WorkspaceLinkAction);
-            }}
-          >
-            <DirectLinedIcon
-              width={14}
-              height={14}
-              aria-hidden="true"
-              className="text-[var(--text-secondary)]"
-            />
-          </CanvasNodeGhostIconButton>
+        {preview ? (
+          <CollapsibleReveal expanded={expanded} preMountOnIdle>
+            <div className="agent-turn-summary-card__preview rounded-none px-4 pb-3 pt-2">
+              {preview}
+            </div>
+          </CollapsibleReveal>
         ) : null}
       </div>
-
-      {preview ? (
-        <CollapsibleReveal expanded={expanded} preMountOnIdle>
-          <div className="agent-turn-summary-card__preview rounded-none px-4 pb-3 pt-2">
-            {preview}
-          </div>
-        </CollapsibleReveal>
-      ) : null}
-    </div>
+    </ConversationFileContextMenu>
   );
 }
 

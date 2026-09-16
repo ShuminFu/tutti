@@ -44,6 +44,7 @@ import {
 } from "./agentMessageMarkdownRuntime";
 import {
   isClickableMarkdownHref,
+  isExplicitWorkspaceFilePath,
   isLocalAbsolutePath,
   isWindowsAbsolutePath,
   isMentionOnlyMarkdownContent,
@@ -68,6 +69,7 @@ import {
   textFromReactNode
 } from "./AgentMessageMarkdownRenderers";
 import { MarkdownMedia } from "./AgentMessageMarkdownMedia";
+import { ConversationFileContextMenu } from "./agentConversation/components/ConversationFileContextMenu";
 import { remarkLiteralAutolinkBoundary } from "./remarkLiteralAutolinkBoundary";
 import { cachedMarkdownParser } from "./cachedMarkdownParser";
 export { resetCachedMarkdownImagesForTests } from "./AgentMessageMarkdownMedia";
@@ -481,12 +483,14 @@ function MarkdownLink({
     : null;
   if (fileMention) {
     return (
-      <WorkspaceFileMentionLink
-        {...props}
-        href={targetHref}
-        mention={fileMention}
-        onLinkClick={onLinkClick}
-      />
+      <ConversationFileContextMenu path={fileMention.href} asChild>
+        <WorkspaceFileMentionLink
+          {...props}
+          href={targetHref}
+          mention={fileMention}
+          onLinkClick={onLinkClick}
+        />
+      </ConversationFileContextMenu>
     );
   }
   if (!isClickableMarkdownHref(targetHref)) {
@@ -499,23 +503,35 @@ function MarkdownLink({
     );
   }
 
+  const localFilePath = isExplicitWorkspaceFilePath(targetHref)
+    ? targetHref
+    : "";
+  const anchor = (
+    <a
+      {...props}
+      data-agent-link-href={targetHref}
+      role="link"
+      tabIndex={0}
+      onClick={(event) => {
+        activateMarkdownLink(event, targetHref, onLinkClick);
+      }}
+      onPointerDown={(event) => {
+        activateMarkdownLinkFromPointer(event, targetHref, onLinkClick);
+      }}
+      onKeyDown={(event) => {
+        activateMarkdownLinkFromKey(event, targetHref, onLinkClick);
+      }}
+    />
+  );
   return (
     <MarkdownLinkContext.Provider value={true}>
-      <a
-        {...props}
-        data-agent-link-href={targetHref}
-        role="link"
-        tabIndex={0}
-        onClick={(event) => {
-          activateMarkdownLink(event, targetHref, onLinkClick);
-        }}
-        onPointerDown={(event) => {
-          activateMarkdownLinkFromPointer(event, targetHref, onLinkClick);
-        }}
-        onKeyDown={(event) => {
-          activateMarkdownLinkFromKey(event, targetHref, onLinkClick);
-        }}
-      />
+      {localFilePath ? (
+        <ConversationFileContextMenu path={localFilePath} asChild>
+          {anchor}
+        </ConversationFileContextMenu>
+      ) : (
+        anchor
+      )}
     </MarkdownLinkContext.Provider>
   );
 }

@@ -489,6 +489,11 @@ export interface DesktopLocalFileTextResult {
   path: string;
 }
 
+export interface DesktopRevealLocalFileResult {
+  fallbackToDirectory: boolean;
+  path: string;
+}
+
 export interface DesktopCreateUserDocumentsProjectDirectoryInput {
   name: string;
   /**
@@ -1469,8 +1474,9 @@ export interface DesktopInvokeResultByChannel {
   [desktopIpcChannels.host.files.openFileWithOtherApplication]: void;
   [desktopIpcChannels.host.files.openFileInBrowser]: void;
   [desktopIpcChannels.host.files.resolveWorkspaceFileFileUrl]: string;
-  [desktopIpcChannels.host.files.revealInFolder]: void;
-  [desktopIpcChannels.host.files.revealWorkspaceFile]: void;
+  [desktopIpcChannels.host.files.revealInFolder]: DesktopRevealLocalFileResult;
+  [desktopIpcChannels.host.files
+    .revealWorkspaceFile]: DesktopRevealLocalFileResult;
   [desktopIpcChannels.host.files.openTerminalLink]: void;
   [desktopIpcChannels.host.files.readLocalFileText]: DesktopLocalFileTextResult;
   [desktopIpcChannels.host.files.readLocalPreviewFile]: Uint8Array;

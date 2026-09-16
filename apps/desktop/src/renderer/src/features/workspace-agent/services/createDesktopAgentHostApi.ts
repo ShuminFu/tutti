@@ -274,6 +274,12 @@ export function createDesktopAgentHostApi({
       readFileText: async (payload: { path?: string; uri?: string }) => {
         const path = pathFromFileReadPayload(payload);
         return hostFilesApi.readLocalFileText(path);
+      },
+      openPath: async (payload: { path: string }) => {
+        await hostFilesApi.openFile(workspaceId, payload.path);
+      },
+      revealInFolder: async (payload: { path: string }) => {
+        return hostFilesApi.revealWorkspaceFile(workspaceId, payload.path);
       }
     },
     account: {

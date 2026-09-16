@@ -11,6 +11,7 @@ import type {
   DesktopLocalFileTextResult,
   DesktopTerminalLinkPathPayload,
   DesktopWorkspaceFileEntryIconPayload,
+  DesktopRevealLocalFileResult,
   DesktopWorkspaceFileOpenWithOtherPayload,
   DesktopWorkspaceFilePathPayload
 } from "../../shared/contracts/ipc";
@@ -48,7 +49,10 @@ export interface WorkspaceFileHostAccess {
   resolveWorkspaceFileFileUrl(
     payload: DesktopWorkspaceFilePathPayload
   ): Promise<string>;
-  revealWorkspaceFile(payload: DesktopWorkspaceFilePathPayload): Promise<void>;
+  revealLocalPath(path: string): Promise<DesktopRevealLocalFileResult>;
+  revealWorkspaceFile(
+    payload: DesktopWorkspaceFilePathPayload
+  ): Promise<DesktopRevealLocalFileResult>;
   openTerminalLink(payload: DesktopTerminalLinkPathPayload): Promise<void>;
   readLocalFileText(path: string): Promise<DesktopLocalFileTextResult>;
   readLocalPreviewFile(path: string): Promise<Uint8Array>;
@@ -160,9 +164,17 @@ export function createWorkspaceFileHostAccess(
       return Promise.resolve(pathToFileURL(targetPath).href);
     },
 
+    async revealLocalPath(targetPath) {
+      return revealPathInOsFileManager(targetPath, {
+        openPath,
+        showItemInFolder,
+        stat: statImpl
+      });
+    },
+
     async revealWorkspaceFile(payload) {
       const targetPath = resolveWorkspaceTargetPath(payload);
-      await revealPathInOsFileManager(targetPath, {
+      return revealPathInOsFileManager(targetPath, {
         openPath,
         showItemInFolder,
         stat: statImpl
@@ -405,12 +417,33 @@ async function revealPathInOsFileManager(
     showItemInFolder: (path: string) => void;
     stat: (path: string) => Promise<Stats>;
   }
-): Promise<void> {
-  let fileStat: Stats;
+): Promise<DesktopRevealLocalFileResult> {
+  let fileStat: Stats | null = null;
   try {
     fileStat = await deps.stat(targetPath);
   } catch {
-    throw new Error(`workspace file does not exist: ${targetPath}`);
+    fileStat = null;
+  }
+
+  if (!fileStat) {
+    const parentPath = path.dirname(targetPath);
+    if (!parentPath || parentPath === targetPath) {
+      throw new Error(`file not found: ${targetPath}`);
+    }
+    let parentStat: Stats;
+    try {
+      parentStat = await deps.stat(parentPath);
+    } catch {
+      throw new Error(`file not found: ${targetPath}`);
+    }
+    if (!parentStat.isDirectory()) {
+      throw new Error(`file not found: ${targetPath}`);
+    }
+    const openError = await deps.openPath(parentPath);
+    if (openError) {
+      throw new Error(openError);
+    }
+    return { fallbackToDirectory: true, path: parentPath };
   }
 
   if (fileStat.isDirectory()) {
@@ -418,10 +451,11 @@ async function revealPathInOsFileManager(
     if (openError) {
       throw new Error(openError);
     }
-    return;
+    return { fallbackToDirectory: false, path: targetPath };
   }
 
   deps.showItemInFolder(targetPath);
+  return { fallbackToDirectory: false, path: targetPath };
 }
 
 async function ensureFileWithinPreviewBudget(

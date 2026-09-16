@@ -87,6 +87,22 @@ describe("resolveWorkspaceFileLinkAction", () => {
     });
   });
 
+  it("allows explicit local absolute paths even without a workspace root", () => {
+    expect(
+      resolveWorkspaceFileLinkAction({
+        path: "/tmp/generated/report.md",
+        workspaceRoot: "",
+        basePath: "",
+        source: "agent-markdown"
+      })
+    ).toMatchObject({
+      type: "open-workspace-file",
+      path: "/tmp/generated/report.md",
+      directoryPath: "/tmp/generated",
+      workspaceRoot: "/tmp/generated"
+    });
+  });
+
   it("allows explicit local absolute paths outside the selected workspace root", () => {
     expect(
       resolveWorkspaceFileLinkAction({
@@ -226,16 +242,12 @@ describe("resolveWorkspaceFileLinkAction", () => {
         basePath: "",
         source: "agent-markdown"
       })
-    ).toBeNull();
-
-    expect(
-      resolveWorkspaceFileLinkAction({
-        path: "/Users/test/.tutti-dev/apps/workspaces/workspace-1",
-        workspaceRoot: "",
-        basePath: "",
-        source: "agent-markdown"
-      })
-    ).toBeNull();
+    ).toMatchObject({
+      type: "open-workspace-file",
+      path: "/Users/test/Downloads/image.png",
+      directoryPath: "/Users/test/Downloads",
+      workspaceRoot: "/Users/test/Downloads"
+    });
   });
 
   it("preserves the selected workspace root for direct workspace app data paths", () => {
