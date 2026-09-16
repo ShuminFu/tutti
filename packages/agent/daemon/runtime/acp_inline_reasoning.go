@@ -159,6 +159,21 @@ func inlineReasoningIsTagPrefix(candidate string) bool {
 	return false
 }
 
+// splitInlineReasoningSnapshot parses one finished assistant string with a
+// fresh splitter. Authoritative snapshots (item/completed, turn/completed)
+// replay the whole provider text, including any <think> block already seen
+// as deltas; they must not reuse the streaming splitter or they extract the
+// same block twice.
+func splitInlineReasoningSnapshot(text string) (assistant, reasoning string, unterminated bool) {
+	if text == "" {
+		return "", "", false
+	}
+	splitter := &inlineReasoningSplitter{}
+	assistant, reasoning = splitter.Feed(text)
+	assistantTail, reasoningTail, unterminated := splitter.Flush()
+	return assistant + assistantTail, reasoning + reasoningTail, unterminated
+}
+
 // stripInlineReasoningTags removes complete <think>...</think> blocks and any
 // dangling opening tag from a whole authoritative text. It exists for paths
 // outside the streaming splitter (such as the plan item snapshot) that receive
@@ -170,8 +185,6 @@ func stripInlineReasoningTags(text string) string {
 	if !strings.Contains(text, "<think") {
 		return text
 	}
-	splitter := &inlineReasoningSplitter{}
-	assistant, _ := splitter.Feed(text)
-	assistantTail, _, _ := splitter.Flush()
-	return assistant + assistantTail
+	assistant, _, _ := splitInlineReasoningSnapshot(text)
+	return assistant
 }

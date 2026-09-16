@@ -204,17 +204,24 @@ func (n *acpTurnNormalizer) splitInlineReasoning(
 	return assistant, n.AppendThinkingChunk(session, turnID, reasoning)
 }
 
-// bufferInlineReasoning splits raw text into the assistant and reasoning
-// channels, returning the assistant remainder. Thinking is buffered rather than
-// emitted because the authoritative-final path has no session or turn id at
-// hand; Finish publishes the buffered segment.
-func (n *acpTurnNormalizer) bufferInlineReasoning(raw string) string {
-	if n == nil || raw == "" {
-		return raw
+// replaceInlineReasoning installs snapshot reasoning as the thinking segment.
+// Streamed deltas already appended the same <think> body; a second append
+// would duplicate it. Equal text is left in place so a completed replay does
+// not open a second thinking row.
+func (n *acpTurnNormalizer) replaceInlineReasoning(reasoning string) {
+	if n == nil || reasoning == "" {
+		return
 	}
-	assistant, reasoning := n.inlineReasoning.Feed(raw)
-	n.appendInlineReasoning(reasoning)
-	return assistant
+	if n.thinkingMessageID != "" &&
+		strings.TrimSpace(n.thinkingContent.String()) == strings.TrimSpace(reasoning) {
+		return
+	}
+	if n.thinkingMessageID == "" || n.thinkingSegmentCompleted {
+		n.thinkingMessageID = newID()
+		n.thinkingSegmentCompleted = false
+	}
+	n.thinkingContent.Reset()
+	_, _ = n.thinkingContent.WriteString(reasoning)
 }
 
 // appendInlineReasoning buffers diverted reasoning into the thinking segment,
@@ -321,8 +328,13 @@ func (n *acpTurnNormalizer) applyAssistantFinalText(finalText string) {
 	if finalText == "" {
 		return
 	}
-	finalText = strings.TrimSpace(n.bufferInlineReasoning(finalText))
-	if finalText == "" {
+	// Parse the snapshot independently of streamed deltas. Re-feeding the
+	// live splitter would extract the same <think> block again and append it.
+	assistant, reasoning, unterminated := splitInlineReasoningSnapshot(finalText)
+	n.replaceInlineReasoning(reasoning)
+	n.inlineReasoning.Reset()
+	finalText = strings.TrimSpace(assistant)
+	if finalText == "" || unterminated {
 		// The whole final text was reasoning, so this turn has no answer. Any
 		// assistant text already accumulated for the segment was that same
 		// monologue; drop it rather than publishing it as the reply.

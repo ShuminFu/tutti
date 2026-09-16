@@ -215,6 +215,58 @@ func TestApplyAssistantFinalTextClearsStreamedMonologueOnTruncatedTurn(t *testin
 	}
 }
 
+func TestApplyAssistantFinalTextDoesNotDuplicateStreamedClosedThink(t *testing.T) {
+	t.Parallel()
+
+	session := testSession()
+	normalizer := newACPTurnNormalizer()
+	const reasoning = "User asks Chinese \"Hello who are you\". Need answer simple. No tool."
+	const answer = "你好，我是 Codex。"
+	full := "<think>\n" + reasoning + "\n</think>\n" + answer
+
+	for _, chunk := range []string{"<think>\n", reasoning, "\n</think>\n", answer} {
+		_ = normalizer.AppendAssistantChunk(session, "turn-1", chunk)
+	}
+	normalizer.ApplyAssistantFinalText(full)
+	events := normalizer.Finish(session, "turn-1", messageStreamStateCompleted)
+
+	content, ok := assertCompletedAssistantContent(t, events)
+	if !ok {
+		t.Fatal("no completed assistant message")
+	}
+	if content != answer {
+		t.Fatalf("assistant content = %q, want the post-think answer", content)
+	}
+	thinking, ok := assertCompletedThinkingContent(t, events)
+	if !ok {
+		t.Fatal("no completed thinking message")
+	}
+	if strings.Count(thinking, reasoning) != 1 {
+		t.Fatalf("thinking duplicated: %q", thinking)
+	}
+}
+
+func TestApplyAssistantFinalTextReplayDoesNotDuplicateThinking(t *testing.T) {
+	t.Parallel()
+
+	session := testSession()
+	normalizer := newACPTurnNormalizer()
+	const reasoning = "weighing it"
+	full := "<think>" + reasoning + "</think>\n已按工单要求完成修改。"
+
+	normalizer.ApplyAssistantFinalText(full)
+	normalizer.ApplyAssistantFinalText(full)
+	events := normalizer.Finish(session, "turn-1", messageStreamStateCompleted)
+
+	thinking, ok := assertCompletedThinkingContent(t, events)
+	if !ok {
+		t.Fatal("no completed thinking message")
+	}
+	if strings.Count(thinking, reasoning) != 1 {
+		t.Fatalf("thinking duplicated after snapshot replay: %q", thinking)
+	}
+}
+
 func TestAppendAssistantChunkLeavesPlainTextUntouched(t *testing.T) {
 	t.Parallel()
 
