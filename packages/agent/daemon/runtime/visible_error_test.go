@@ -528,7 +528,6 @@ func TestProjectStoredTurnErrorPreservesUnrelatedErrors(t *testing.T) {
 			)
 		}
 	}
-	assertPreserved("provider_error", "provider available but exploded")
 	assertPreserved("", "codex process exited with code 1")
 	assertPreserved("cli_not_found", "spawn codex ENOENT")
 	assertPreserved("auth_required", demoProviderToolProtocolFailureDetail)

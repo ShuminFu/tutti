@@ -71,18 +71,62 @@ func (a *CodexAppServerAdapter) transitionActiveTurnPhase(
 // initial turn snapshot. The blocking Exec wrapper observes the terminal
 // channel; it no longer owns terminal classification.
 func (a *CodexAppServerAdapter) completeActiveTurn(agentSessionID string, turn map[string]any) {
+	failed := false
 	a.settleActiveTurn(agentSessionID, asString(turn["id"]), func(activeTurn *codexAppServerActiveTurn) codexAppServerTurnTerminal {
 		phase := appServerProjectedTurnTerminalPhase(turn, activeTurn.forceCanceled)
 		appServerLogTurnTerminalShadowMismatch(agentSessionID, turn, phase)
+		failed = phase == codexAppServerTurnPhaseFailed
 		return codexAppServerTurnTerminal{turn: turn, phase: phase}
 	})
+	if failed {
+		appServerLogTurnFailure(agentSessionID, asString(turn["id"]), "turn_completed", payloadObject(turn["error"]))
+	}
 }
 
 func (a *CodexAppServerAdapter) failActiveTurnFromAppServerError(agentSessionID string, params map[string]any) {
 	err := appServerNotificationError(params)
+	settled := false
 	a.settleActiveTurn(agentSessionID, asString(params["turnId"]), func(*codexAppServerActiveTurn) codexAppServerTurnTerminal {
+		settled = true
 		return codexAppServerTurnTerminal{err: err, phase: codexAppServerTurnPhaseFailed}
 	})
+	if settled {
+		turnError := payloadObject(params["error"])
+		if len(turnError) == 0 {
+			turnError = map[string]any{"message": params["message"]}
+		}
+		appServerLogTurnFailure(agentSessionID, asString(params["turnId"]), "error_notification", turnError)
+	}
+}
+
+// appServerLogTurnFailure records why codex failed a turn in the daemon log.
+// The raw failure text already reaches the canonical Turn error; this line
+// exists so a failed turn is diagnosable from the log alone. It logs only the
+// readable, credential-masked, length-capped detail, never the raw payload.
+func appServerLogTurnFailure(agentSessionID string, providerTurnID string, source string, turnError map[string]any) {
+	slog.Warn("agent session app-server turn failed",
+		"event", "agent_session.app_server.turn.failed",
+		"agent_session_id", agentSessionID,
+		"provider_turn_id", strings.TrimSpace(providerTurnID),
+		"source", source,
+		"codex_error_info", appServerCodexErrorInfoLabel(turnError["codexErrorInfo"]),
+		"detail", ProviderErrorReadableDetail(asStringRaw(turnError["message"])),
+	)
+}
+
+// appServerCodexErrorInfoLabel reduces codexErrorInfo — a bare string such as
+// "other" or a single-key object such as {"httpConnectionFailed":{...}} — to
+// its variant name.
+func appServerCodexErrorInfoLabel(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case map[string]any:
+		for key := range typed {
+			return key
+		}
+	}
+	return ""
 }
 
 // settleActiveTurn owns the shared settle sequence — lock, session lookup,

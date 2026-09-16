@@ -372,6 +372,54 @@ func TestCodexAppServerAdapterTerminalErrorNotificationFailsTurn(t *testing.T) {
 	}
 }
 
+// A codex turn rejected upstream (here: a host-local account pool with every
+// account disabled) must keep the upstream body as the failed turn's error,
+// through both the error notification and the later turn/completed, so the
+// canonical Turn error and host integrations can explain the failure.
+func TestCodexAppServerAdapterUpstreamRejectionKeepsErrorText(t *testing.T) {
+	t.Parallel()
+
+	adapter, transport, session := startedAppServerAdapter(t)
+	transport.server.holdTurn = true
+
+	var events []activityshared.Event
+	execDone := make(chan struct{})
+	go func() {
+		events, _ = adapter.Exec(context.Background(), session, []PromptContentBlock{{
+			Type: "text", Text: "go",
+		}}, "", "turn-local-1", nil, nil)
+		close(execDone)
+	}()
+	waitForCondition(t, func() bool {
+		return adapter.sessionActiveTurnID(session.AgentSessionID) == "turn-1"
+	})
+
+	turnError := map[string]any{"message": localPoolDisabledBody, "codexErrorInfo": "other", "additionalDetails": nil}
+	transport.conn.notify(appServerNotifyError, map[string]any{
+		"threadId": "codex-thread-1", "turnId": "turn-1", "willRetry": false, "error": turnError,
+	})
+	transport.conn.notify(appServerNotifyTurnCompleted, map[string]any{
+		"threadId": "codex-thread-1",
+		"turn":     map[string]any{"id": "turn-1", "status": "failed", "error": turnError},
+	})
+
+	select {
+	case <-execDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Exec did not unblock after the upstream rejection")
+	}
+	failed := eventsOfType(events, activityshared.EventRootProviderTurnCompleted)
+	if len(failed) != 1 || failed[0].Payload.TurnOutcome != string(activityshared.TurnOutcomeFailed) {
+		t.Fatalf("root provider failed events = %#v, want one failed outcome", failed)
+	}
+	if got := activityshared.BestEffortErrorMessage(failed[0].Payload); got != localPoolDisabledBody {
+		t.Fatalf("turn failure error = %q, want the upstream body", got)
+	}
+	if code, detail := ProjectStoredTurnError(visibleFailureCode(localPoolDisabledBody), localPoolDisabledBody); code != "provider_error" || detail != localPoolDisabledReadable {
+		t.Fatalf("projected turn error = (%q, %q), want provider_error with the readable pool sentence", code, detail)
+	}
+}
+
 func TestCodexAppServerAdapterDefaultControllerUsesAppServerForCodex(t *testing.T) {
 	t.Parallel()
 

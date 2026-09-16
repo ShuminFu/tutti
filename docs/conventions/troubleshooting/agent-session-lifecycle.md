@@ -1071,6 +1071,45 @@ catalog revision mismatch`, fully restart `dev:desktop`; renderer HMR cannot
   [visible_error.go](../../../packages/agent/daemon/runtime/visible_error.go)
   [agent_runtime_adapter.go](../../../services/tuttid/agent_runtime_adapter.go)
 
+### Upstream rejection shows only "request failed" and hosts report no reason
+
+- Symptom:
+  A Codex turn is rejected by its model endpoint (for example a host-local
+  account pool answering HTTP 400 with an OpenAI-style error body). The card
+  shows only the generic "request failed" headline with no details, and a host
+  integration that follows the session over HTTP reports a bare
+  `turn failed` without the upstream sentence. `tuttid.log` has no trace of it.
+- Quick checks:
+  Read the session over HTTP and inspect `latestTurn.error`. `message` holds the
+  raw upstream body; the session itself has no `lastError` in protocol v2.
+  Search `tuttid.log` for `agent_session.app_server.turn.failed`.
+- Root cause:
+  Nothing is dropped: codex reports the body as the turn error message and the
+  canonical Turn stores it. But the body classifies as the unclassified
+  `provider_error`, whose read-side projection returned no `detail`, so the
+  card offered no disclosure; the human sentence stays buried inside a JSON
+  envelope in `message`; and hosts still reading session `lastError` see
+  nothing.
+- Fix:
+  `ProjectStoredTurnError` gives `provider_error` a readable `detail` built by
+  `ProviderErrorReadableDetail`: the envelope's `error.message` plus its code,
+  credentials masked, capped at the published 240-byte limit. The card shows it
+  behind the raw-details disclosure; hosts should read
+  `latestTurn.error.detail`, falling back to `message`. The Codex adapter logs
+  the same readable detail once per failed turn. Classification and the stored
+  `message` are unchanged.
+- Validation:
+  `TestProviderErrorReadableDetailExtractsUpstreamEnvelope`,
+  `TestProjectStoredTurnErrorExposesReadableProviderErrorDetail`,
+  `TestCodexAppServerAdapterUpstreamRejectionKeepsErrorText`, and the
+  `TestGeneratedWorkspaceAgentTurnExposesReadableProviderErrorDetail` pair in
+  `services/tuttid`.
+- References:
+  [provider_error_detail.go](../../../packages/agent/daemon/runtime/provider_error_detail.go)
+  [provider_protocol_error.go](../../../packages/agent/daemon/runtime/provider_protocol_error.go)
+  [codex_appserver_turn_machine.go](../../../packages/agent/daemon/runtime/codex_appserver_turn_machine.go)
+  [workspaceAgentTurnErrorProjection.ts](../../../packages/agent/gui/shared/workspaceAgentTurnErrorProjection.ts)
+
 ### Failed Claude Turn looks like no reply or renders raw 522 payload
 
 - Symptom:
