@@ -240,12 +240,29 @@ func rawJSONString(encoded json.RawMessage) string {
 	return string(trimmed)
 }
 
+// hasTerminalFinishReason reports whether the upstream actually named a reason
+// for stopping. An empty string is a placeholder some gateways stamp on every
+// chunk rather than a statement that the answer is over, so a stream that only
+// ever carried placeholders never announced an ending at all. Letting such a
+// stream reach responseStatus is how a truncated answer gets reported as a
+// finished turn.
+func hasTerminalFinishReason(finishReason *string) bool {
+	return finishReason != nil && strings.TrimSpace(*finishReason) != ""
+}
+
+// responseStatus maps the upstream's stop reason onto the Responses status.
+//
+// A nil reason means "the upstream never spoke about why it stopped", which is
+// only benign on the non-streaming path: there the whole Chat body arrived as
+// one JSON document, so there is no such thing as a fragment and a missing
+// reason costs nothing. The streaming converter must never reach here with nil
+// (it fails the turn first) — see convertChatStream.
 func responseStatus(finishReason *string) (string, any, any) {
 	if finishReason == nil {
 		return "completed", nil, nil
 	}
 	switch strings.TrimSpace(*finishReason) {
-	case "", "stop", "tool_calls", "function_call":
+	case "stop", "tool_calls", "function_call":
 		return "completed", nil, nil
 	case "length", "max_tokens":
 		return "incomplete", map[string]any{"reason": "max_output_tokens"}, nil
@@ -253,6 +270,10 @@ func responseStatus(finishReason *string) (string, any, any) {
 		return "failed", nil, map[string]any{
 			"code": "content_filter", "message": "The upstream model blocked the response",
 		}
+	case "":
+		// A named-but-empty reason is not a clean stop either; the upstream
+		// declined to say why it ended, so the answer is not known to be whole.
+		return "incomplete", map[string]any{"reason": "upstream_finish_reason"}, nil
 	default:
 		return "incomplete", map[string]any{"reason": "upstream_finish_reason"}, nil
 	}

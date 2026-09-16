@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 )
 
 type chatStreamChunk struct {
@@ -364,7 +365,11 @@ func (s *chatStreamState) process(chunk chatStreamChunk) error {
 		if err := s.processDelta(choice.Delta); err != nil {
 			return err
 		}
-		if choice.FinishReason != nil {
+		// Only a reason that names something counts as the upstream saying it
+		// stopped. Gateways that stamp an empty finish_reason on every chunk would
+		// otherwise mark the turn finished one chunk in, and a later truncation
+		// would then be indistinguishable from a clean ending.
+		if hasTerminalFinishReason(choice.FinishReason) {
 			s.finishReason = choice.FinishReason
 			s.sawFinish = true
 		}
@@ -474,6 +479,25 @@ func (s *chatStreamState) addText(delta string) error {
 		"item_id": s.message.id, "output_index": s.message.index, "content_index": 0,
 		"delta": delta,
 	})
+}
+
+// messageTextProgress reports how much assistant text has already been sent and
+// the tail of it. That pair is what tells a truncated stream apart from a model
+// that simply answered briefly; the tail is cut on a rune boundary so a log line
+// never ends in half a character.
+func (s *chatStreamState) messageTextProgress(byteLimit int) (int, string) {
+	if s.message == nil {
+		return 0, ""
+	}
+	text := s.message.text.String()
+	if len(text) <= byteLimit {
+		return len(text), text
+	}
+	tail := text[len(text)-byteLimit:]
+	for len(tail) > 0 && !utf8.RuneStart(tail[0]) {
+		tail = tail[1:]
+	}
+	return len(text), tail
 }
 
 func (s *chatStreamState) addToolDelta(delta chatToolCall) error {
@@ -634,7 +658,27 @@ func (g *Gateway) convertChatStream(
 			return
 		}
 	}
-	if !done && !state.sawFinish {
+	if !state.sawFinish {
+		// No chunk ever carried a usable finish_reason, so the upstream never said
+		// why it stopped — whatever already reached the client is a fragment, not an
+		// answer. Fail the turn instead of letting responseStatus fall back to
+		// "completed": a half-streamed reply reported as a finished turn is what
+		// makes a cut-off session look like a completed one.
+		//
+		// done (the Chat [DONE] marker) is deliberately not part of this decision.
+		// Gateways are free to omit it — finish_reason is the authoritative signal —
+		// and a gateway that emits [DONE] after the upstream connection dropped
+		// would otherwise turn a truncation into a clean ending.
+		textBytes, textTail := state.messageTextProgress(80)
+		g.logger.WarnContext(
+			clientRequest.Context(),
+			"upstream Chat stream ended without a finish reason",
+			"event", "model_gateway.stream.terminal_reason_missing",
+			"model", strings.TrimSpace(state.model),
+			"chat_done_marker_seen", done,
+			"output_text_bytes", textBytes,
+			"output_text_tail", textTail,
+		)
 		_ = state.fail("upstream_stream_error", "Upstream Chat stream closed before a finish reason")
 		return
 	}

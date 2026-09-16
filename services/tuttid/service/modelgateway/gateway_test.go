@@ -1,11 +1,13 @@
 package modelgateway
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -575,6 +577,122 @@ func TestGatewayStreamsInterleavedToolCallsReasoningAndUTF8WithoutDone(t *testin
 	responseObject := completed["response"].(map[string]any)
 	if responseObject["status"] != "completed" {
 		t.Fatalf("completed response = %#v", responseObject)
+	}
+}
+
+// A Chat stream can end without ever naming a finish_reason. Either the upstream
+// connection simply stops mid-answer, or the gateway emits the [DONE] marker as a
+// stand-in for a real stop reason. Both shapes used to be reported to codex as a
+// completed turn, which is how a reply cut off mid-sentence reached the client
+// looking like a finished answer. Only a chunk that names a reason may complete
+// the Responses stream; anything else is a truncated turn and must fail.
+func TestGatewayFailsStreamThatNeverNamesAFinishReason(t *testing.T) {
+	t.Parallel()
+
+	const partial = "the answer stops mid-wo"
+	tests := []struct {
+		name     string
+		events   []string
+		wantType string
+		wantCode string
+	}{
+		{
+			name: "stream ends without a finish reason",
+			events: []string{
+				fmt.Sprintf(`{"id":"chat-1","model":"model-a","choices":[{"index":0,"delta":{"content":%q}}]}`, partial),
+			},
+			wantType: "response.failed",
+			wantCode: "upstream_stream_error",
+		},
+		{
+			name: "done marker stands in for a finish reason",
+			events: []string{
+				fmt.Sprintf(`{"id":"chat-1","model":"model-a","choices":[{"index":0,"delta":{"content":%q}}]}`, partial),
+				`[DONE]`,
+			},
+			wantType: "response.failed",
+			wantCode: "upstream_stream_error",
+		},
+		{
+			name: "empty finish reason placeholder",
+			events: []string{
+				fmt.Sprintf(`{"id":"chat-1","model":"model-a","choices":[{"index":0,"delta":{"content":%q}}]}`, partial),
+				`{"id":"chat-1","model":"model-a","choices":[{"index":0,"delta":{},"finish_reason":""}]}`,
+				`[DONE]`,
+			},
+			wantType: "response.failed",
+			wantCode: "upstream_stream_error",
+		},
+		{
+			// Positive control: a named reason must still complete the stream,
+			// with or without the [DONE] marker.
+			name: "named finish reason completes",
+			events: []string{
+				fmt.Sprintf(`{"id":"chat-1","model":"model-a","choices":[{"index":0,"delta":{"content":%q}}]}`, partial),
+				`{"id":"chat-1","model":"model-a","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+			},
+			wantType: "response.completed",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+				writer.Header().Set("Content-Type", "text/event-stream")
+				flusher := writer.(http.Flusher)
+				for _, event := range test.events {
+					_, _ = io.WriteString(writer, "data: "+event+"\n\n")
+					flusher.Flush()
+				}
+			}))
+			defer upstream.Close()
+
+			var gatewayLogs bytes.Buffer
+			gateway := newTestGateway(t, Config{
+				Logger: slog.New(slog.NewJSONHandler(&gatewayLogs, nil)),
+			})
+			endpoint := registerTestRoute(t, gateway, upstream.URL, "secret", "model-a", "workspace", test.name)
+			response := postResponses(t, endpoint, `{"model":"model-a","input":"x","stream":true}`, nil)
+			defer response.Body.Close()
+
+			events := readSSEEvents(t, response.Body)
+			terminal := events[len(events)-1]
+			if terminal.Event != test.wantType {
+				t.Fatalf("terminal event = %q in %#v", terminal.Event, events)
+			}
+			var payload map[string]any
+			if err := json.Unmarshal(terminal.Data, &payload); err != nil {
+				t.Fatalf("decode %s: %v", terminal.Event, err)
+			}
+			responseObject := payload["response"].(map[string]any)
+			if responseObject["status"] != strings.TrimPrefix(test.wantType, "response.") {
+				t.Fatalf("response = %#v", responseObject)
+			}
+			if test.wantCode != "" {
+				responseError := responseObject["error"].(map[string]any)
+				if responseError["code"] != test.wantCode {
+					t.Fatalf("error = %#v", responseError)
+				}
+			}
+			// The partial answer still reaches the client as deltas; what changes is
+			// that the turn no longer claims to have finished. The diagnostic log is
+			// what makes a truncation attributable after the fact.
+			logs := gatewayLogs.String()
+			warned := strings.Contains(logs, `"event":"model_gateway.stream.terminal_reason_missing"`)
+			if test.wantCode == "" && warned {
+				t.Fatalf("unexpected truncation warning for a named finish reason: %s", logs)
+			}
+			if test.wantCode != "" {
+				if !warned {
+					t.Fatalf("missing truncation warning: %s", logs)
+				}
+				if !strings.Contains(logs, `"output_text_bytes":23`) {
+					t.Fatalf("warning did not report streamed text progress: %s", logs)
+				}
+			}
+		})
 	}
 }
 
