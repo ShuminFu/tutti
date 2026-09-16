@@ -2310,6 +2310,71 @@ test("settings effort after idle-retire bakes into resumed query settings withou
   }
 });
 
+// `max` is the one effort level the SDK's persisted settings type excludes, so it
+// has to ride the query `Options.effort` field instead of `Settings.effortLevel`.
+// If it rides neither, the user's Maximum never reaches the CLI — and because the
+// level is absent rather than invalid, nothing downstream reports an error.
+test("max effort rides query options and never create-time settings", async () => {
+  for (const level of ["low", "high", "max"]) {
+    const events: Array<{ type: string; payload?: Record<string, unknown> }> =
+      [];
+    const restoreSink = withSidecarEventSinkForTest((event) =>
+      events.push(event)
+    );
+    const createdOptions: ClaudeQueryOptions[] = [];
+    try {
+      const session = new SessionRuntime(
+        `provider-session-effort-${level}`,
+        "/repo",
+        {},
+        false,
+        false,
+        {
+          model: "",
+          permissionModeId: "default",
+          planMode: false,
+          effort: level,
+          speed: "standard"
+        },
+        sidecarClaudeOptionsFromPayload({}),
+        undefined,
+        ({ prompt, options }) => {
+          createdOptions.push(options);
+          return fakeSimpleResultQuery(prompt, { text: "ok" });
+        }
+      );
+
+      await session.start();
+      session.exec("turn-1", "first");
+      await waitForEvent(events, "turn_completed");
+
+      assert.ok(createdOptions.length > 0, `${level}: query was created`);
+      const options = createdOptions[0] as {
+        effort?: string;
+        settings?: Record<string, unknown>;
+      };
+      const settings = options.settings ?? {};
+      if (level === "max") {
+        assert.equal(options.effort, "max", "max must ride Options.effort");
+        assert.equal(
+          Object.hasOwn(settings, "effortLevel"),
+          false,
+          "max must not be written into create-time settings"
+        );
+      } else {
+        assert.equal(
+          Object.hasOwn(options, "effort"),
+          false,
+          `${level} keeps the settings vehicle`
+        );
+        assert.equal(settings.effortLevel, level);
+      }
+    } finally {
+      restoreSink();
+    }
+  }
+});
+
 test("result usage remains available when context snapshot is unavailable", async () => {
   const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
   const restoreSink = withSidecarEventSinkForTest((event) =>

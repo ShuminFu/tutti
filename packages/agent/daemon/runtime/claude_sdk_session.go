@@ -372,21 +372,30 @@ func ensureClaudeSDKConfigOption(options *[]map[string]any, fallback map[string]
 	*options = append(*options, clonePayloadDeep(fallback))
 }
 
+// claudeSDKEffortLabels is the display name of each level in
+// claudeSDKEffortLevels.
+var claudeSDKEffortLabels = map[string]string{
+	"low":    "Low",
+	"medium": "Medium",
+	"high":   "High",
+	"xhigh":  "Extra High",
+	"max":    "Max",
+}
+
 func claudeSDKEffortConfigOption(effort string) map[string]any {
 	selectedEffort := claudeSDKCanonicalEffort(effort)
 	if selectedEffort == "" {
 		selectedEffort = "high"
 	}
+	options := make([]map[string]string, 0, len(claudeSDKEffortLevels))
+	for _, level := range claudeSDKEffortLevels {
+		options = append(options, map[string]string{"name": claudeSDKEffortLabels[level], "value": level})
+	}
 	return map[string]any{
 		"id":           "effort",
 		"name":         "Reasoning",
 		"currentValue": selectedEffort,
-		"options": []map[string]string{
-			{"name": "Low", "value": "low"},
-			{"name": "Medium", "value": "medium"},
-			{"name": "High", "value": "high"},
-			{"name": "Extra High", "value": "xhigh"},
-		},
+		"options":      options,
 	}
 }
 
@@ -460,13 +469,21 @@ func claudeSDKCanonicalModel(model string) string {
 	return model
 }
 
+// claudeSDKEffortLevels is Claude Code's own reasoning-effort ladder, ascending.
+// It is the protocol's ladder, not a per-model capability table: the host
+// offers what the CLI/SDK accepts and lets the upstream decide whether it can
+// honor a given level. Keep it in sync with the sidecar's own ladder
+// (claude-sdk-sidecar/src/sessionSettings.ts).
+var claudeSDKEffortLevels = []string{"low", "medium", "high", "xhigh", "max"}
+
 func claudeSDKCanonicalEffort(effort string) string {
-	switch strings.TrimSpace(effort) {
-	case "low", "medium", "high", "xhigh":
-		return strings.TrimSpace(effort)
-	default:
-		return ""
+	effort = strings.TrimSpace(effort)
+	for _, level := range claudeSDKEffortLevels {
+		if level == effort {
+			return effort
+		}
 	}
+	return ""
 }
 
 func claudeSDKCanonicalSpeed(speed string) string {

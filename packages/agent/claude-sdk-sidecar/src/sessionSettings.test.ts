@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  queryCreateCarriesEffort,
+  queryEffortOverride,
   querySettingsFromSessionSettings,
   sidecarSessionSettings
 } from "./sessionSettings.ts";
@@ -54,4 +56,30 @@ test("query create settings include effortLevel for the next resumed query", () 
     }),
     {}
   );
+});
+
+// `max` is the one level the SDK's persisted settings type excludes, so it must
+// not be written into create-time settings; it rides the query's own
+// `Options.effort` field instead. Both vehicles count as "already carried", so
+// live applyFlagSettings does not have to deliver the level again.
+test("max effort rides query options instead of create-time settings", () => {
+  const settings = {
+    model: "",
+    permissionModeId: "default",
+    planMode: false,
+    effort: "max",
+    speed: "standard"
+  };
+
+  assert.equal(
+    querySettingsFromSessionSettings(settings).effortLevel,
+    undefined
+  );
+  assert.equal(queryEffortOverride("max"), "max");
+  assert.equal(queryCreateCarriesEffort("max"), true);
+
+  assert.equal(queryEffortOverride("high"), undefined);
+  assert.equal(queryCreateCarriesEffort("high"), true);
+  assert.equal(queryCreateCarriesEffort(""), false);
+  assert.equal(queryCreateCarriesEffort("ultra"), false);
 });

@@ -82,8 +82,11 @@ func claudeCodeDescriptor() ProviderDescriptor {
 				HiddenProbe:   true,
 				AccountScoped: true,
 			},
-			ReasoningEffort:        true,
-			ReasoningEffortValues:  []string{"low", "medium", "high", "xhigh"},
+			ReasoningEffort: true,
+			// The full ladder Claude Code itself accepts, `max` included. This is
+			// the protocol's ladder, not a per-model capability table — an upstream
+			// that cannot honor a level reports that on its own.
+			ReasoningEffortValues:  []string{"low", "medium", "high", "xhigh", "max"},
 			ReasoningEffortOptions: ReasoningEffortOptionsStatic,
 			DefaultReasoningEffort: "high",
 			Speed:                  true,

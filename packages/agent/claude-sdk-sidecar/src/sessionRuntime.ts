@@ -62,6 +62,7 @@ import {
   canBypassPermissions,
   effectivePermissionMode,
   modelOptionValue,
+  queryEffortOverride,
   querySettingsFromSessionSettings,
   type SidecarSessionSettings
 } from "./sessionSettings.ts";
@@ -949,6 +950,12 @@ export class SessionRuntime {
     const querySettings = querySettingsFromSessionSettings(
       this.configuration.settings
     );
+    // `max` cannot ride `Settings.effortLevel` (the SDK's persisted settings
+    // type excludes it), so it is delivered through the query `Options.effort`
+    // field, which takes the full EffortLevel union. Other levels keep the
+    // settings path, so a mid-session change keeps flowing through the
+    // higher-precedence flag layer instead of being pinned by this option.
+    const queryEffort = queryEffortOverride(this.configuration.settings.effort);
     // Pending effort/speed from apply_settings after idle-retire must land in
     // create-time settings above. Absorb them here so the post-ensureQuery
     // applyPendingFlags path does not call applyFlagSettings on this quiet
@@ -994,6 +1001,7 @@ export class SessionRuntime {
         ? { model: modelOptionValue(this.configuration.settings.model) }
         : {}),
       ...(permissionMode ? { permissionMode } : {}),
+      ...(queryEffort ? { effort: queryEffort } : {}),
       allowDangerouslySkipPermissions: allowBypassPermissions,
       ...(Object.keys(querySettings).length > 0
         ? { settings: querySettings }
@@ -1018,6 +1026,7 @@ export class SessionRuntime {
       permissionMode,
       hasExecutablePathOverride: Boolean(claudeExecutablePath),
       hasModel: Boolean(modelOptionValue(this.configuration.settings.model)),
+      hasQueryEffort: Boolean(queryEffort),
       hasResumeCursor: Boolean(this.resumeCursor),
       querySettingsKeys: Object.keys(querySettings),
       claudeOptionKeys: Object.keys(

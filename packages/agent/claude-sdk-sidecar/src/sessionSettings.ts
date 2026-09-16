@@ -1,11 +1,23 @@
-import type { PermissionMode, Settings } from "@anthropic-ai/claude-agent-sdk";
+import type {
+  EffortLevel,
+  PermissionMode,
+  Settings
+} from "@anthropic-ai/claude-agent-sdk";
 import { recordValue } from "./normalizer.ts";
 import { booleanValue, stringValue } from "./runtimeValues.ts";
 
 const claudePlansDirectoryEnv = "TUTTI_CLAUDE_PLANS_DIRECTORY";
 
+/**
+ * Pending live flag-settings write. Mirrors the SDK's own `applyFlagSettings`
+ * parameter shape: `effortLevel` accepts the full {@link EffortLevel} union
+ * (including `max`, which is session-scoped and deliberately absent from the
+ * persisted settings type), every other key keeps its `Settings` type.
+ */
 export type PendingFlagSettings = {
-  [K in keyof Settings]?: Settings[K] | null;
+  [K in keyof Settings]?: K extends "effortLevel"
+    ? EffortLevel | null
+    : Settings[K] | null;
 };
 
 export type SidecarSessionSettings = {
@@ -89,6 +101,20 @@ export function modelOptionValue(value: string): string | undefined {
   return model && model !== "default" ? model : undefined;
 }
 
+/**
+ * Effort levels the CLI/SDK itself understands (`EffortLevel` in the SDK types),
+ * i.e. the protocol's ladder. This is not a per-model capability table: the
+ * sidecar relays the user's choice and leaves "can this upstream honor it?" to
+ * the upstream.
+ */
+const claudeEffortLevels: readonly EffortLevel[] = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max"
+];
+
 export function sidecarModelOptionsFromInitializationResult(
   value: Record<string, unknown>
 ): SidecarConfigOption["options"] {
@@ -134,18 +160,52 @@ export function defaultSidecarModelOptionValue(
   );
 }
 
-export function effortLevelValue(
+/**
+ * Effort level as the live-apply vehicle accepts it: every SDK `EffortLevel`,
+ * `max` included (`applyFlagSettings` documents `effortLevel` as additionally
+ * accepting `'max'`, session-scoped).
+ */
+export function effortLevelValue(value: string): EffortLevel | null {
+  const level = stringValue(value) as EffortLevel;
+  return claudeEffortLevels.includes(level) ? level : null;
+}
+
+/**
+ * Effort level as create-time `Settings.effortLevel` accepts it. `max` is
+ * deliberately excluded by the SDK's persisted settings type ("never persisted
+ * to settings files"), so it must ride {@link queryEffortOverride} instead.
+ */
+export function settingsEffortLevel(
   value: string
 ): Settings["effortLevel"] | null {
-  switch (value) {
-    case "low":
-    case "medium":
-    case "high":
-    case "xhigh":
-      return value;
-    default:
-      return null;
+  const level = effortLevelValue(value);
+  if (!level || level === "max") {
+    return null;
   }
+  return level;
+}
+
+/**
+ * Effort levels create-time settings cannot express and that therefore ride the
+ * query `Options.effort` field instead. Currently only `max`; the indirection
+ * exists so the two vehicles can never drift apart.
+ */
+export function queryEffortOverride(value: string): EffortLevel | undefined {
+  return effortLevelValue(value) === "max" ? "max" : undefined;
+}
+
+/**
+ * Whether creating the next query already carries this effort level, i.e.
+ * whether live `applyFlagSettings` no longer has to deliver it. Covers both
+ * vehicles: `Settings.effortLevel` (low..xhigh) and `Options.effort` (max).
+ * Anything else — empty or unknown — is NOT carried and must stay pending, or
+ * the level is silently dropped instead of reaching the CLI.
+ */
+export function queryCreateCarriesEffort(value: string): boolean {
+  return (
+    settingsEffortLevel(value) !== null ||
+    queryEffortOverride(value) !== undefined
+  );
 }
 
 export function flagSettingsFromSessionSettings(
@@ -178,7 +238,7 @@ export function querySettingsFromSessionSettings(
   // Bake effort into query create settings. Live applyFlagSettings(effort) on a
   // quiet/resumed Claude query can return while still delaying the next prompt
   // for tens of seconds, which trips host delivery confirmation (~30s).
-  const effortLevel = effortLevelValue(settings.effort);
+  const effortLevel = settingsEffortLevel(settings.effort);
   if (effortLevel) {
     result.effortLevel = effortLevel;
   }

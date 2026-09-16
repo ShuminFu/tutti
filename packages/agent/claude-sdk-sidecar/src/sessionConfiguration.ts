@@ -6,6 +6,7 @@ import {
   effortLevelValue,
   flagSettingsFromSessionSettings,
   permissionModeValue,
+  queryCreateCarriesEffort,
   sidecarModelOptionsFromInitializationResult,
   type PendingFlagSettings,
   type SidecarConfigOption,
@@ -103,18 +104,34 @@ export class SessionConfiguration {
 
   /**
    * Clear pending effort/speed flags when the next Claude query will receive
-   * them through create-time `settings` instead of live applyFlagSettings.
+   * them through create-time vehicles instead of live applyFlagSettings.
    * Call after computing querySettingsFromSessionSettings so a retired idle
    * generation's pending write cannot poison the resumed query's first prompt.
+   *
+   * The clear is conditional on a create-time vehicle really delivering the
+   * level (`queryCreateCarriesEffort`): `Settings.effortLevel` for low..xhigh,
+   * the query `Options.effort` field for `max`. Clearing unconditionally would
+   * silently drop a level the create-time query never carried — the shape of
+   * bug that kept `max` off the wire — so the invariant is stated here rather
+   * than assumed. A null/unknown level has no pending write to preserve and
+   * keeps being absorbed.
    */
   absorbPendingFlagsIntoQueryCreate(): void {
     if (Object.keys(this.pendingFlagSettings).length === 0) {
       return;
     }
     const enabled = this.pendingFlagSettings.fastMode;
+    const effort = this.pendingFlagSettings.effortLevel;
     this.pendingFlagSettings = {};
     if (typeof enabled === "boolean") {
       this.emitFastModeState(enabled ? "on" : "off");
+    }
+    if (
+      effort !== undefined &&
+      effort !== null &&
+      !queryCreateCarriesEffort(this.settings.effort)
+    ) {
+      this.pendingFlagSettings.effortLevel = effort;
     }
   }
 
