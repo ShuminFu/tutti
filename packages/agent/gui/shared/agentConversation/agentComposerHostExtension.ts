@@ -91,18 +91,6 @@ export function agentPromptSubmitText(
     .trim();
 }
 
-/** 用户原话：各文字块去空白后按行拼，与 agentPromptContentDisplayText 同口径（本文件不做运行时 import）。 */
-function agentPromptOriginalDisplayText(
-  content: readonly AgentPromptContentBlock[]
-): string | undefined {
-  const text = content
-    .filter((block) => block.type === "text")
-    .map((block) => block.text?.trim() ?? "")
-    .filter(Boolean)
-    .join("\n");
-  return text || undefined;
-}
-
 /**
  * 斜杠命令（`/compact`、`/review` …）永远不交给宿主：它们不是「一句话」，拼卡会把
  * 命令变成普通正文、provider 就不认了（票 05）。空文字（纯贴图）同样不拦——没有
@@ -185,12 +173,13 @@ export async function runPreparedAgentPromptSubmit(
     input.onDispatched?.();
     return;
   }
-  // 回显一律用用户原话（评审 E）：displayPrompt 会进排队面板、引擎的待发记录和 tuttid
-  // 的消息负载，带上开工卡的话，排队项的文字 / 编辑回填都会露出一大段协议。
-  // 模型收到的仍是拼了卡的 content。
+  // 回显与 content 保持一致（用户确认的方案：发送栏转录 = 结对卡 + 原话）。
+  // 原本有 displayPrompt（如 bundle 折叠成 chip）就把块拼在它前面；原本为空就留空，
+  // 转录从 content 读。转录里由 AgentMessageBlock 用 splitLeadingPairCard 剥成卡 + 原话；
+  // 排队面板显示、排队项编辑、已发消息编辑 / 复制、上箭头历史各自用同一套解析剥掉块。
   const displayPrompt = input.displayPrompt?.trim()
-    ? input.displayPrompt
-    : agentPromptOriginalDisplayText(input.content);
+    ? `${preparation.prefix}\n\n${input.displayPrompt}`
+    : input.displayPrompt;
   let receipt: AgentPromptSubmitReceipt | null = null;
   let sent = false;
   try {

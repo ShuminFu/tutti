@@ -454,7 +454,7 @@ test("评审补充 3：send 抛错时清掉在途，下一句还能拼卡；错�
   h.controller.dispose();
 });
 
-test("评审 E：拦截时回显一律是用户原话，不带开工卡", async () => {
+test("回显与 content 一致：原本有 displayPrompt 就把块拼在前面，原本为空就留空", async () => {
   const h = await harness();
   const displays: (string | undefined)[] = [];
   for (const displayPrompt of [undefined, "  ", "折叠成 chip 的原话"]) {
@@ -470,6 +470,7 @@ test("评审 E：拦截时回显一律是用户原话，不带开工卡", async 
       }
     });
   }
-  assert.deepEqual(displays, ["修登录页", "修登录页", "折叠成 chip 的原话"]);
+  // 发送栏转录 = 结对卡 + 原话（用户确认的方案）；排队面板 / 编辑 / 复制 / 历史各自剥块。
+  assert.deepEqual(displays, [undefined, "  ", `${BLOCK}\n\n折叠成 chip 的原话`]);
   h.controller.dispose();
 });

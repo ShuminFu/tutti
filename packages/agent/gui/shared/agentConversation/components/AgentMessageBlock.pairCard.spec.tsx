@@ -9,6 +9,7 @@ import {
   stripLeadingPairKickoffFromContent
 } from "./pairKickoffEnvelope";
 import { projectAgentMessageFinalText } from "../projection/agentMessageFinalTextProjection";
+import { runPreparedAgentPromptSubmit } from "../agentComposerHostExtension";
 import type { AgentMessageRowVM } from "../contracts/agentMessageRowVM";
 
 // 分栏结对模式（peer-pair-mode 票 05）：<pair-kickoff> / <pair-ended> 的解析与卡片。
@@ -224,6 +225,41 @@ describe("AgentMessageBlock pair card", () => {
     );
     expect(getByTestId("agent-pair-card").getAttribute("data-pair-card-kind")).toBe("ended");
     expect(getByTestId("agent-pair-card-title").textContent).toBe("Pairing ended");
+  });
+
+  // 用户确认的方案：发送栏转录 = 结对卡 + 原话。拦截链路给引擎的回显（displayPrompt，
+  // 空时转录退回读 content）必须仍带块，AgentMessageBlock 才能剥成卡。
+  it("sender transcript echo of an intercepted submit renders the pair card with the original words", async () => {
+    const block = kickoff(SENDER_ATTRS, PROTOCOL);
+    for (const displayPrompt of [undefined, "修一下登录页"]) {
+      let echoed = "";
+      await runPreparedAgentPromptSubmit({
+        agentSessionId: "session-a",
+        content: [{ type: "text", text: "修一下登录页" }],
+        ...(displayPrompt ? { displayPrompt } : {}),
+        extension: {
+          prepareSubmit: async () => ({
+            onAccepted: () => {},
+            onRejected: () => {},
+            prefix: block
+          })
+        },
+        send: (content, display) => {
+          // 与 tuttid 回灌的 messageText 同口径：displayPrompt 优先，否则取文字块。
+          echoed = display?.trim() || (content[0]?.text ?? "");
+          return { settle: async () => false };
+        }
+      });
+      const { getByTestId, container, unmount } = renderRow(userRow(echoed));
+      expect(getByTestId("agent-pair-card-title").textContent).toBe(
+        "Pairing started · Your role: Developer"
+      );
+      expect(getByTestId("agent-pair-card-with-prompt").textContent).toContain(
+        "修一下登录页"
+      );
+      expect(container.textContent).not.toContain("<pair-kickoff");
+      unmount();
+    }
   });
 
   it("copy text of the sender's first message is the original words only", () => {

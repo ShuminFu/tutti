@@ -575,7 +575,7 @@ describe("existing-session prompt submission", () => {
 describe("host-prepared submit (pair kickoff)", () => {
   const BLOCK = '<pair-kickoff role="developer">\n协议\n</pair-kickoff>';
 
-  it("snapshots the draft at submit time, echoes the user's own words, and keeps text typed while preparing", async () => {
+  it("snapshots the draft at submit time and keeps text typed while preparing", async () => {
     const goalControl = vi.fn(async () => undefined);
     const { input, draftByScopeKeyRef, sessionEngine } =
       createGoalControlInput(goalControl as never);
@@ -614,10 +614,11 @@ describe("host-prepared submit (pair kickoff)", () => {
       await waitFor(() => expect(submitPrompt).toHaveBeenCalledTimes(1));
       expect(submitPrompt).toHaveBeenCalledWith(
         expect.objectContaining({
-          content: [{ type: "text", text: `${BLOCK}\n\n修登录页` }],
-          displayPrompt: "修登录页"
+          content: [{ type: "text", text: `${BLOCK}\n\n修登录页` }]
         })
       );
+      // 原本没有 displayPrompt：留空，转录从 content 读（卡 + 原话）。
+      expect(submitPrompt.mock.calls[0]![0]).not.toHaveProperty("displayPrompt");
       // 新打的字没被当成「已提交的草稿」清掉。
       expect(
         agentComposerDraftPrompt(
