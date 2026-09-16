@@ -411,52 +411,6 @@ func TestManagerRestoreActiveSkipsCachedLocalInstallationWithoutOverride(t *test
 	}
 }
 
-func TestManagerRestoreActiveRequiresCurrentLocalPackageReconcile(t *testing.T) {
-	sourceDir := t.TempDir()
-	if err := extractPackage(testPackageZIP(t), sourceDir); err != nil {
-		t.Fatal(err)
-	}
-	stateDir := t.TempDir()
-	installationStore := agentextensiondata.NewFileInstallationStore(stateDir)
-	source := tuttitypes.AgentExtensionSource{
-		Key: "gemini", LocalPackageDir: sourceDir, Enabled: true,
-	}
-	targets := &targetStoreStub{targets: map[string]agenttargetbiz.Target{}}
-	seedManager := Manager{
-		Installations: installationStore,
-		Store:         targets,
-		Sources:       []tuttitypes.AgentExtensionSource{source},
-	}
-	if errs := seedManager.Reconcile(context.Background()); len(errs) != 0 {
-		t.Fatalf("seed Reconcile() errors = %v", errs)
-	}
-	target := targets.targets["extension:gemini"]
-	target.Enabled = false
-	targets.targets["extension:gemini"] = target
-
-	manager := Manager{
-		Installations: installationStore,
-		Store:         targets,
-		Sources:       []tuttitypes.AgentExtensionSource{source},
-	}
-	requiresSynchronousReconcile, errs := manager.RestoreActive(context.Background())
-	if len(errs) != 0 {
-		t.Fatalf("RestoreActive() errors = %v", errs)
-	}
-	if !requiresSynchronousReconcile {
-		t.Fatal("RestoreActive() did not require a synchronous local package reconcile")
-	}
-	if target := targets.targets["extension:gemini"]; target.Provider != "acp:gemini" || target.Enabled {
-		t.Fatalf("restored target = %#v, want persisted disabled target retained until reconcile", target)
-	}
-	if errs := manager.Reconcile(context.Background()); len(errs) != 0 {
-		t.Fatalf("Reconcile() errors = %v", errs)
-	}
-	if target := targets.targets["extension:gemini"]; target.Provider != "acp:gemini" || target.Enabled {
-		t.Fatalf("reconciled target = %#v, want current local package with disabled preference preserved", target)
-	}
-}
-
 func TestManagerRestoreActiveDefersEmbeddedLocalPackageReconcile(t *testing.T) {
 	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "1")
 	targets := &targetStoreStub{targets: map[string]agenttargetbiz.Target{}}

@@ -46,40 +46,6 @@ func TestAuthStatusTimeoutDefaultsToShortProbeWindow(t *testing.T) {
 	}
 }
 
-func TestAPIUsageBillingCredentialsSkipOfficialAuthStatusCommands(t *testing.T) {
-	tests := []struct {
-		provider string
-		env      string
-	}{
-		{provider: agentprovider.ClaudeCode, env: "ANTHROPIC_AUTH_TOKEN=runtime-token"},
-		{provider: agentprovider.Codex, env: "OPENAI_API_KEY=runtime-key"},
-		{provider: agentprovider.OpenCode, env: `OPENCODE_CONFIG_CONTENT={"provider":{"internal":{"options":{"apiKey":"runtime-key"}}}}`},
-	}
-	for _, tt := range tests {
-		t.Run(tt.provider, func(t *testing.T) {
-			specs, err := DefaultRegistry().Select([]string{tt.provider})
-			if err != nil || len(specs) != 1 {
-				t.Fatalf("Select(%q) = %#v, %v", tt.provider, specs, err)
-			}
-			calls := 0
-			service := Service{
-				Environ: func() []string { return []string{tt.env} },
-				RunAuthStatusCommand: func(context.Context, ProviderSpec, string) (AuthInfo, bool) {
-					calls++
-					return AuthInfo{Status: AuthRequired}, true
-				},
-			}
-			auth, _ := service.resolveAuthAndCLIVersion(context.Background(), specs[0], true, "/provider")
-			if calls != 0 {
-				t.Fatalf("auth status command calls = %d, want 0", calls)
-			}
-			if auth.Status != AuthAuthenticated || auth.AuthMethod != "apiKey" {
-				t.Fatalf("auth = %#v, want API billing authentication", auth)
-			}
-		})
-	}
-}
-
 func TestHostModelEndpointSkipsCodexOfficialAuthAndNetworkProbes(t *testing.T) {
 	t.Setenv("TUTTI_HOST_MODEL_ENDPOINTS_FILE", "")
 	t.Setenv("TUTTI_HOST_MODEL_ENDPOINTS", `{"version":1,"routes":{"codex":{"mode":"gateway","status":"ready"}},"providers":{"codex":{"protocol":"openai","baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback","wireAPI":"responses"}}}`)

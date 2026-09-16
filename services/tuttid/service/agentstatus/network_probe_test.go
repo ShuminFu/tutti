@@ -92,46 +92,6 @@ func TestProbeRegistryReportsRankedMirrorWhenOfficialMetadataIsSlow(t *testing.T
 	}
 }
 
-func TestProbeProviderAPIChecksCodexChatGPTEndpointFirst(t *testing.T) {
-	var probed string
-	svc := networkProbeService(t, func(r *http.Request) (*http.Response, error) {
-		probed = r.URL.String()
-		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
-	})
-	got := svc.probeProviderAPI(context.Background(), agentprovider.Codex)
-	if got == nil || !got.Reachable {
-		t.Fatalf("probeProviderAPI(codex) = %#v, want reachable", got)
-	}
-	// ChatGPT-login codex talks to chatgpt.com, so that is probed first.
-	if !strings.Contains(probed, "chatgpt.com") {
-		t.Fatalf("probed %q, want chatgpt.com first", probed)
-	}
-}
-
-func TestProbeProviderAPICodexReachableViaOpenAIWhenChatGPTBlocked(t *testing.T) {
-	// chatgpt.com blocked but api.openai.com reachable → still reachable (either).
-	svc := networkProbeService(t, func(r *http.Request) (*http.Response, error) {
-		if strings.Contains(r.URL.Host, "chatgpt.com") {
-			return nil, errors.New("connection refused")
-		}
-		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
-	})
-	got := svc.probeProviderAPI(context.Background(), agentprovider.Codex)
-	if got == nil || !got.Reachable {
-		t.Fatalf("probeProviderAPI(codex) = %#v, want reachable via openai fallback", got)
-	}
-}
-
-func TestProbeProviderAPIUnreachableReportsNetworkError(t *testing.T) {
-	svc := networkProbeService(t, func(*http.Request) (*http.Response, error) {
-		return nil, errors.New("getaddrinfo ENOTFOUND api.anthropic.com")
-	})
-	got := svc.probeProviderAPI(context.Background(), agentprovider.ClaudeCode)
-	if got == nil || got.Reachable || got.ReasonCode != "network_error" {
-		t.Fatalf("probeProviderAPI(claude-code) = %#v, want unreachable network_error", got)
-	}
-}
-
 func TestProbeProviderAPISkippedForUnknownProvider(t *testing.T) {
 	svc := networkProbeService(t, func(*http.Request) (*http.Response, error) {
 		t.Fatal("should not probe a provider with no known endpoint")

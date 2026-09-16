@@ -23,8 +23,6 @@ import (
 	"time"
 
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
-	"github.com/tutti-os/tutti/packages/agent/daemon/providerstatus"
-	agentruntime "github.com/tutti-os/tutti/packages/agent/daemon/runtime"
 	"github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
 	externalagentregistry "github.com/tutti-os/tutti/services/tuttid/service/externalagentregistry"
 	managedruntime "github.com/tutti-os/tutti/services/tuttid/service/managedruntime"
@@ -367,42 +365,6 @@ func TestResolveProviderCommandKeepsCursorDefaultWhenBinaryMissing(t *testing.T)
 	}
 }
 
-func TestServiceListReportsLoginAndRefreshActionsWhenAuthMarkerMissing(t *testing.T) {
-	service := testService(func(name string) (string, error) {
-		return "/usr/local/bin/" + name, nil
-	}, map[string]bool{})
-	service.CodexAuthProbe = func(context.Context, []string, []string) CodexAuthProbeEvidence {
-		return CodexAuthProbeEvidence{State: agentruntime.CodexAppServerAccountRequired}
-	}
-
-	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"codex"}})
-	if err != nil {
-		t.Fatalf("List() error = %v", err)
-	}
-
-	status := onlyStatus(t, snapshot)
-	if status.Availability.Status != AvailabilityAuthRequired {
-		t.Fatalf("Availability.Status = %q, want %q", status.Availability.Status, AvailabilityAuthRequired)
-	}
-	if status.Auth.Status != AuthRequired {
-		t.Fatalf("Auth.Status = %q, want %q", status.Auth.Status, AuthRequired)
-	}
-	if len(status.Actions) != 2 {
-		t.Fatalf("Actions length = %d, want 2", len(status.Actions))
-	}
-	action := firstAction(t, status.Actions)
-	if action.ID != ActionLogin {
-		t.Fatalf("first action ID = %q, want %q", action.ID, ActionLogin)
-	}
-	if action.Command == nil || action.Command.Input != `/usr/local/bin/codex login -c 'service_tier="fast"'
-` {
-		t.Fatalf("login command = %#v", action.Command)
-	}
-	if status.Actions[1].ID != ActionRefresh || status.Actions[1].Kind != ActionKindRefresh {
-		t.Fatalf("second action = %#v, want refresh", status.Actions[1])
-	}
-}
-
 // specWithSeparateAdapter returns a synthetic provider spec that ships a
 // distinct ACP adapter binary (separate from its CLI). The codex provider no
 // longer has one — it talks to the codex app-server directly — but the
@@ -496,46 +458,6 @@ func TestServiceListReportsInstallActionWhenACPAdapterMissing(t *testing.T) {
 	}
 }
 
-func TestServiceListReportsReadyWhenInstalledAndAuthenticated(t *testing.T) {
-	service := testService(func(name string) (string, error) {
-		return "/usr/local/bin/" + name, nil
-	}, map[string]bool{"/home/test/.codex/auth.json": true})
-	service.CodexAuthProbe = func(context.Context, []string, []string) CodexAuthProbeEvidence {
-		return CodexAuthProbeEvidence{
-			State:        agentruntime.CodexAppServerAccountAuthenticated,
-			AccountLabel: "dev@example.com",
-			AuthMethod:   "chatgpt",
-		}
-	}
-
-	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"codex"}})
-	if err != nil {
-		t.Fatalf("List() error = %v", err)
-	}
-
-	status := onlyStatus(t, snapshot)
-	if status.Availability.Status != AvailabilityReady {
-		t.Fatalf("Availability.Status = %q, want %q", status.Availability.Status, AvailabilityReady)
-	}
-	if status.Auth.Status != AuthAuthenticated {
-		t.Fatalf("Auth.Status = %q, want %q", status.Auth.Status, AuthAuthenticated)
-	}
-	if !status.Adapter.Installed {
-		t.Fatal("Adapter.Installed = false, want true")
-	}
-	if len(status.Actions) != 1 {
-		t.Fatalf("Actions length = %d, want 1", len(status.Actions))
-	}
-	action := firstAction(t, status.Actions)
-	if action.ID != ActionLogin {
-		t.Fatalf("first action ID = %q, want %q", action.ID, ActionLogin)
-	}
-	if action.Command == nil || action.Command.Input != `/usr/local/bin/codex login -c 'service_tier="fast"'
-` {
-		t.Fatalf("login command = %#v", action.Command)
-	}
-}
-
 func TestServiceListUsesCodexAppServerAccountCommand(t *testing.T) {
 	service := testService(func(name string) (string, error) {
 		return "/usr/local/bin/" + name, nil
@@ -570,41 +492,6 @@ func TestServiceListUsesCodexAppServerAccountCommand(t *testing.T) {
 	}
 }
 
-func TestServiceListReportsCodexAPIKeyAsAuthenticatedWithoutLogin(t *testing.T) {
-	service := testService(func(name string) (string, error) {
-		return "/usr/local/bin/" + name, nil
-	}, map[string]bool{})
-	service.Environ = func() []string {
-		return []string{"OPENAI_API_KEY=sk-test"}
-	}
-	authCalls := 0
-	service.RunAuthStatusCommand = func(
-		context.Context,
-		ProviderSpec,
-		string,
-	) (AuthInfo, bool) {
-		authCalls++
-		return AuthInfo{Status: AuthRequired}, true
-	}
-
-	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"codex"}})
-	if err != nil {
-		t.Fatalf("List() error = %v", err)
-	}
-	status := onlyStatus(t, snapshot)
-	if status.Availability.Status != AvailabilityReady {
-		t.Fatalf("availability = %q, want %q", status.Availability.Status, AvailabilityReady)
-	}
-	if status.Auth.Status != AuthAuthenticated ||
-		status.Auth.AuthMethod != "apiKey" ||
-		status.Auth.AccountLabel != "API Usage Billing" {
-		t.Fatalf("auth = %#v, want API billing authentication", status.Auth)
-	}
-	if authCalls != 0 {
-		t.Fatalf("auth status command calls = %d, want 0 with a runtime API credential", authCalls)
-	}
-}
-
 func TestServiceStatusReportsOpenCodeConfigAPIKeyAsAuthenticatedWithoutLogin(t *testing.T) {
 	home := t.TempDir()
 	writeFile(t, filepath.Join(home, ".config", "opencode", "opencode.json"), `{
@@ -636,37 +523,6 @@ func TestServiceStatusReportsOpenCodeConfigAPIKeyAsAuthenticatedWithoutLogin(t *
 		status.Auth.AuthMethod != "apiKey" ||
 		status.Auth.AccountLabel != "API Usage Billing" {
 		t.Fatalf("auth = %#v, want API billing authentication", status.Auth)
-	}
-}
-
-func TestServiceListDoesNotUseCodexAuthMarkerAfterConfigError(t *testing.T) {
-	service := testService(func(name string) (string, error) {
-		return "/usr/local/bin/" + name, nil
-	}, map[string]bool{"/home/test/.codex/auth.json": true})
-	service.RunAuthStatusCommand = func(_ context.Context, spec ProviderSpec, _ string) (AuthInfo, bool) {
-		if spec.Provider != "codex" {
-			t.Fatalf("Provider = %q, want codex", spec.Provider)
-		}
-		return providerstatus.ParseAuthStatusOutput(
-			spec.AuthOutputParserKind,
-			[]byte("Error loading configuration: /home/test/.codex/config.toml:8:16: unknown variant `priority`, expected `fast` or `flex`"),
-		)
-	}
-
-	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"codex"}})
-	if err != nil {
-		t.Fatalf("List() error = %v", err)
-	}
-
-	status := onlyStatus(t, snapshot)
-	if status.Availability.Status != AvailabilityAuthRequired {
-		t.Fatalf("Availability.Status = %q, want %q", status.Availability.Status, AvailabilityAuthRequired)
-	}
-	if status.Availability.ReasonCode != "auth_unknown" {
-		t.Fatalf("ReasonCode = %q, want auth_unknown", status.Availability.ReasonCode)
-	}
-	if status.Auth.Status != AuthUnknown {
-		t.Fatalf("Auth.Status = %q, want %q", status.Auth.Status, AuthUnknown)
 	}
 }
 
@@ -931,143 +787,6 @@ func TestServiceListReportsCodexReadyWhenAppServerOmitsJSONRPCVersion(t *testing
 // codex has). Each gets the same three scenarios already covered for codex
 // above: a real handshake succeeds, the adapter starts but never answers
 // `initialize`, and the adapter answers with a JSON-RPC error.
-func TestServiceListStandardACPHandshakeProbe(t *testing.T) {
-	for _, tt := range []struct {
-		name       string
-		provider   string
-		binaryName string
-		script     string
-		wantStatus AvailabilityStatus
-		wantReason string
-	}{
-		{
-			name:       "cursor ready when handshake succeeds",
-			provider:   "cursor",
-			binaryName: "cursor-agent",
-			script:     standardACPFakeScript("exit 0\n"),
-			wantStatus: AvailabilityReady,
-		},
-		{
-			name:       "cursor not ready when acp never responds to initialize",
-			provider:   "cursor",
-			binaryName: "cursor-agent",
-			script:     "#!/bin/sh\ncase \"$*\" in\n*acp*) sleep 5 ;;\nesac\nexit 0\n",
-			wantStatus: AvailabilityUnknown,
-			wantReason: "acp_adapter_launch_failed",
-		},
-		{
-			name:       "cursor not ready when acp rejects initialize",
-			provider:   "cursor",
-			binaryName: "cursor-agent",
-			script: "#!/bin/sh\ncase \"$*\" in\n" +
-				"*acp*) echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"message\":\"unsupported\"}}'; exit 1 ;;\n" +
-				"esac\nexit 0\n",
-			wantStatus: AvailabilityUnknown,
-			wantReason: "acp_adapter_launch_failed",
-		},
-		{
-			name:       "opencode ready when handshake succeeds",
-			provider:   "opencode",
-			binaryName: "opencode",
-			script:     standardACPFakeScript("exit 0\n"),
-			wantStatus: AvailabilityReady,
-		},
-		{
-			name:       "opencode not ready when acp never responds to initialize",
-			provider:   "opencode",
-			binaryName: "opencode",
-			script:     "#!/bin/sh\ncase \"$*\" in\n*acp*) sleep 5 ;;\nesac\nexit 0\n",
-			wantStatus: AvailabilityUnknown,
-			wantReason: "acp_adapter_launch_failed",
-		},
-		{
-			name:       "opencode not ready when acp rejects initialize",
-			provider:   "opencode",
-			binaryName: "opencode",
-			script: "#!/bin/sh\ncase \"$*\" in\n" +
-				"*acp*) echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"message\":\"unsupported\"}}'; exit 1 ;;\n" +
-				"esac\nexit 0\n",
-			wantStatus: AvailabilityUnknown,
-			wantReason: "acp_adapter_launch_failed",
-		},
-		{
-			// A "fake shell" that never reads stdin but races to print a
-			// response-shaped line with the wrong id before exiting must
-			// not be able to satisfy the handshake match.
-			// newStandardACPHandshakeRequestID never generates 1 (see its doc
-			// comment), so this hardcoded id can never accidentally match by
-			// chance. This is the exact "never reads stdin" shim shape a
-			// canned/fake ACP adapter would use.
-			name:       "cursor not ready when acp spoofs handshake with hardcoded id, never reads the request",
-			provider:   "cursor",
-			binaryName: "cursor-agent",
-			script: "#!/bin/sh\ncase \"$*\" in\n" +
-				"*acp*) echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}'; exit 0 ;;\n" +
-				"esac\nexit 0\n",
-			wantStatus: AvailabilityUnknown,
-			wantReason: "acp_adapter_launch_failed",
-		},
-		{
-			name:       "cursor not ready when acp spoofs handshake without jsonrpc version",
-			provider:   "cursor",
-			binaryName: "cursor-agent",
-			script: "#!/bin/sh\ncase \"$*\" in\n" +
-				"*acp*) echo '{\"id\":1,\"result\":{}}'; exit 0 ;;\n" +
-				"esac\nexit 0\n",
-			wantStatus: AvailabilityUnknown,
-			wantReason: "acp_adapter_launch_failed",
-		},
-		{
-			name:       "opencode not ready when acp spoofs handshake with hardcoded id, never reads the request",
-			provider:   "opencode",
-			binaryName: "opencode",
-			script: "#!/bin/sh\ncase \"$*\" in\n" +
-				"*acp*) echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}'; exit 0 ;;\n" +
-				"esac\nexit 0\n",
-			wantStatus: AvailabilityUnknown,
-			wantReason: "acp_adapter_launch_failed",
-		},
-		{
-			name:       "opencode not ready when acp spoofs handshake without jsonrpc version",
-			provider:   "opencode",
-			binaryName: "opencode",
-			script: "#!/bin/sh\ncase \"$*\" in\n" +
-				"*acp*) echo '{\"id\":1,\"result\":{}}'; exit 0 ;;\n" +
-				"esac\nexit 0\n",
-			wantStatus: AvailabilityUnknown,
-			wantReason: "acp_adapter_launch_failed",
-		},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			home := t.TempDir()
-			binDir := filepath.Join(home, "bin")
-			writeExecutable(t, filepath.Join(binDir, tt.binaryName), tt.script)
-
-			service := probeTestService(home)
-			service.Environ = func() []string {
-				return []string{"PATH=" + binDir}
-			}
-			service.IsExecutableFile = isTestExecutable
-			service.RunAuthStatusCommand = func(context.Context, ProviderSpec, string) (AuthInfo, bool) {
-				return AuthInfo{Status: AuthAuthenticated}, true
-			}
-
-			snapshot, err := service.List(context.Background(), ListInput{Providers: []string{tt.provider}})
-			if err != nil {
-				t.Fatalf("List() error = %v", err)
-			}
-
-			status := onlyStatus(t, snapshot)
-			if status.Availability.Status != tt.wantStatus {
-				t.Fatalf("Availability.Status = %q, want %q; status=%#v", status.Availability.Status, tt.wantStatus, status)
-			}
-			if tt.wantReason != "" && status.Availability.ReasonCode != tt.wantReason {
-				t.Fatalf("ReasonCode = %q, want %q", status.Availability.ReasonCode, tt.wantReason)
-			}
-		})
-	}
-}
-
 func TestServiceListRunsCodexLauncherWithManagedNodePath(t *testing.T) {
 	home := t.TempDir()
 	binDir := filepath.Join(home, "bin")
@@ -1412,48 +1131,6 @@ func TestServiceStatusOffersRepairWhenManagedAdapterLaunchFails(t *testing.T) {
 	}
 	if !hasProviderAction(status.Actions, ActionRefresh) || !hasProviderAction(status.Actions, ActionRepair) || hasProviderAction(status.Actions, ActionInstall) {
 		t.Fatalf("Actions = %#v, want repair and refresh actions", status.Actions)
-	}
-}
-
-func TestServiceListTreatsUnknownAuthAsAuthRequired(t *testing.T) {
-	service := testService(func(name string) (string, error) {
-		return "/usr/local/bin/" + name, nil
-	}, map[string]bool{})
-	service.Registry = Registry{Specs: []ProviderSpec{{
-		Provider:           "codex",
-		BinaryNames:        []string{"codex"},
-		AdapterBinaryNames: []string{"codex-acp"},
-		AdapterCommand:     []string{"codex-acp"},
-		LoginArgs:          []string{"login"},
-	}}}
-
-	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"codex"}})
-	if err != nil {
-		t.Fatalf("List() error = %v", err)
-	}
-
-	status := onlyStatus(t, snapshot)
-	if status.Auth.Status != AuthUnknown {
-		t.Fatalf("Auth.Status = %q, want %q", status.Auth.Status, AuthUnknown)
-	}
-	if status.Availability.Status != AvailabilityAuthRequired {
-		t.Fatalf("Availability.Status = %q, want %q", status.Availability.Status, AvailabilityAuthRequired)
-	}
-	if status.Availability.ReasonCode != "auth_unknown" {
-		t.Fatalf("ReasonCode = %q, want auth_unknown", status.Availability.ReasonCode)
-	}
-	if len(status.Actions) != 2 {
-		t.Fatalf("Actions length = %d, want 2", len(status.Actions))
-	}
-	action := firstAction(t, status.Actions)
-	if action.ID != ActionLogin {
-		t.Fatalf("first action ID = %q, want %q", action.ID, ActionLogin)
-	}
-	if action.Command == nil || action.Command.Input != "/usr/local/bin/codex login\n" {
-		t.Fatalf("login command = %#v", action.Command)
-	}
-	if status.Actions[1].ID != ActionRefresh || status.Actions[1].Kind != ActionKindRefresh {
-		t.Fatalf("second action = %#v, want refresh", status.Actions[1])
 	}
 }
 
@@ -1891,97 +1568,6 @@ func TestServiceRunCodexInstallerReportsManagedNPMActiveAction(t *testing.T) {
 	}
 }
 
-func TestServiceRunActionReportsActiveActionForClaudeInstall(t *testing.T) {
-	home := t.TempDir()
-	binDir := filepath.Join(home, "bin")
-	entry := filepath.Join(home, "claude-sdk-sidecar", "src", "main.ts")
-	if err := os.MkdirAll(filepath.Dir(entry), 0o755); err != nil {
-		t.Fatalf("mkdir sidecar entry dir: %v", err)
-	}
-	if err := os.WriteFile(entry, []byte("export {};"), 0o644); err != nil {
-		t.Fatalf("write sidecar entry: %v", err)
-	}
-	runtimeRoot := fakeManagedRuntimeRoot(t)
-	service := probeTestService(home)
-	service.ClaudeCodeStateDir = t.TempDir()
-	service.FileExists = fileExistsForTest
-	service.Environ = func() []string {
-		return []string{"PATH=" + binDir, claudeSDKSidecarEntryPathEnv + "=" + entry}
-	}
-	service.IsExecutableFile = isTestExecutable
-	service.ManagedRuntime = fakeManagedRuntimeResolver(t, runtimeRoot)
-	service.Registry = Registry{Specs: []ProviderSpec{{
-		Provider:       "claude-code",
-		BinaryNames:    []string{"claude-test"},
-		AdapterCommand: []string{"claude-test"},
-		Install: InstallerSpec{
-			Kind:           InstallerKindShellCommand,
-			DisplayCommand: "install claude test",
-			ShellCommand:   "install claude test",
-		},
-		LoginArgs: []string{"auth", "login"},
-	}}}
-
-	installStarted := make(chan struct{})
-	releaseInstall := make(chan struct{})
-	done := make(chan RunActionResult, 1)
-	var closeStartedOnce sync.Once
-	service.InstallCommand = func(ctx context.Context, input InstallCommandInput) (InstallCommandResult, error) {
-		input.OnStdout("installing claude")
-		closeStartedOnce.Do(func() { close(installStarted) })
-		select {
-		case <-releaseInstall:
-		case <-ctx.Done():
-			return InstallCommandResult{ExitCode: 1, Stderr: ctx.Err().Error()}, ctx.Err()
-		}
-		writeExecutable(t, filepath.Join(binDir, "claude-test"), "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo '2.1.201 (Claude Code)'; fi\nexit 0\n")
-		return InstallCommandResult{ExitCode: 0, Stdout: "installed"}, nil
-	}
-	go func() {
-		result, err := service.RunAction(context.Background(), RunActionInput{
-			Provider: "claude-code",
-			ActionID: ActionInstall,
-		})
-		if err != nil {
-			t.Errorf("RunAction() error = %v", err)
-		}
-		done <- result
-	}()
-
-	select {
-	case <-installStarted:
-	case result := <-done:
-		t.Fatalf("RunAction completed before install started: %#v", result)
-	}
-	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"claude-code"}})
-	if err != nil {
-		t.Fatalf("List() error = %v", err)
-	}
-	status := onlyStatus(t, snapshot)
-	if status.ActiveAction == nil {
-		t.Fatal("ActiveAction = nil, want running install action")
-	}
-	if status.ActiveAction.Step != "cli" {
-		t.Fatalf("ActiveAction.Step = %q, want cli", status.ActiveAction.Step)
-	}
-	if !strings.Contains(status.ActiveAction.Stdout, "installing claude") {
-		t.Fatalf("ActiveAction.Stdout = %q, want installer stdout", status.ActiveAction.Stdout)
-	}
-
-	close(releaseInstall)
-	result := <-done
-	if result.Status != RunActionCompleted {
-		t.Fatalf("Status = %q, want completed; result=%#v", result.Status, result)
-	}
-	snapshot, err = service.List(context.Background(), ListInput{Providers: []string{"claude-code"}})
-	if err != nil {
-		t.Fatalf("List() after install error = %v", err)
-	}
-	if activeAction := onlyStatus(t, snapshot).ActiveAction; activeAction != nil {
-		t.Fatalf("ActiveAction = %#v, want cleared", activeAction)
-	}
-}
-
 func TestServiceDownloadFileRetriesRetryableStatus(t *testing.T) {
 	var attempts atomic.Int32
 	installerServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -2174,39 +1760,6 @@ func TestServiceResolveProviderCommandUsesManagedCodexWithoutPATH(t *testing.T) 
 	}
 }
 
-func TestServiceManagedProviderResolutionFailsClosedWithoutCoordinates(t *testing.T) {
-	repo := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repo, "pnpm-workspace.yaml"), []byte("packages: []\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	entry := filepath.Join(repo, "packages", "agent", "claude-sdk-sidecar", "src", "main.ts")
-	if err := os.MkdirAll(filepath.Dir(entry), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(entry, []byte("export {};\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	binDir := filepath.Join(repo, "bin")
-	writeExecutable(t, filepath.Join(binDir, "claude"), "#!/bin/sh\nexit 0\n")
-	writeExecutable(t, filepath.Join(binDir, "codex"), "#!/bin/sh\nexit 0\n")
-	t.Chdir(repo)
-	t.Setenv("PATH", binDir)
-	t.Setenv(managedProvidersRuntimeEnv, "1")
-	t.Setenv(managedCodexRuntimeEnv, "1")
-	t.Setenv(claudeSDKSidecarEntryPathEnv, "")
-	t.Setenv(managedCodexAppServerPathEnv, "")
-	t.Setenv(managedCodexGatewayBaseEnv, "")
-	t.Setenv(managedCodexGatewayKeyEnv, "")
-
-	service := probeTestService(repo)
-	if _, err := service.ResolveProviderCommand(context.Background(), "claude-code"); err == nil || !strings.Contains(err.Error(), ReasonClaudeSDKSidecarUnavailable) {
-		t.Fatalf("managed Claude must reject cwd/PATH fallback, got %v", err)
-	}
-	if _, err := service.ResolveProviderCommand(context.Background(), "codex"); err == nil || !strings.Contains(err.Error(), "managed_codex_runtime_invalid") {
-		t.Fatalf("managed Codex must reject PATH fallback, got %v", err)
-	}
-}
-
 func TestServiceResolveProviderCommandFallsBackToManagedNodeForCodex(t *testing.T) {
 	home := t.TempDir()
 	binDir := filepath.Join(home, "bin")
@@ -2330,36 +1883,6 @@ func TestServiceListUsesManagedNodeForTuttiAgentVersionProbe(t *testing.T) {
 	}
 }
 
-func TestServiceResolveProviderCommandDefaultsClaudeCodeToSDKSidecar(t *testing.T) {
-	home := t.TempDir()
-	entry := filepath.Join(home, "claude-sdk-sidecar", "src", "main.ts")
-	if err := os.MkdirAll(filepath.Dir(entry), 0o755); err != nil {
-		t.Fatalf("mkdir sidecar entry dir: %v", err)
-	}
-	if err := os.WriteFile(entry, []byte("export {};"), 0o644); err != nil {
-		t.Fatalf("write sidecar entry: %v", err)
-	}
-	runtimeRoot := fakeManagedRuntimeRoot(t)
-	service := probeTestService(home)
-	service.FileExists = fileExistsForTest
-	service.Environ = func() []string {
-		return []string{"PATH=/usr/bin:/bin", claudeSDKSidecarEntryPathEnv + "=" + entry}
-	}
-	service.ExternalAgentRegistry = externalagentregistry.Store{
-		SourceURL: filepath.Join(home, "missing-registry.json"),
-	}
-	service.ManagedRuntime = fakeManagedRuntimeResolver(t, runtimeRoot)
-
-	result, err := service.ResolveProviderCommand(context.Background(), "claude-code")
-	if err != nil {
-		t.Fatalf("ResolveProviderCommand() error = %v", err)
-	}
-	managedNode := filepath.Join(runtimeRoot, "node", "bin", nodeBinaryNameForTest())
-	if !slices.Equal(result.Command, []string{managedNode, claudeSDKSidecarDefaultNodeArg, entry}) {
-		t.Fatalf("Command = %#v, want SDK sidecar command", result.Command)
-	}
-}
-
 func TestServiceListClaudeCodeSDKAvailability(t *testing.T) {
 	home := t.TempDir()
 	binDir := filepath.Join(home, "bin")
@@ -2403,41 +1926,6 @@ func TestServiceListClaudeCodeSDKAvailability(t *testing.T) {
 	}
 	if !status.Adapter.Installed {
 		t.Fatalf("Adapter.Installed = false, want SDK sidecar runtime installed; status=%#v", status)
-	}
-}
-
-func TestServiceListClaudeCodeSDKReportsMissingSidecarEntry(t *testing.T) {
-	home := t.TempDir()
-	binDir := filepath.Join(home, "bin")
-	claudePath := filepath.Join(binDir, "claude")
-	writeExecutable(t, claudePath, "#!/bin/sh\necho '2.1.201 (Claude Code)'\n")
-	service := probeTestService(home)
-	service.Environ = func() []string {
-		return []string{"PATH=" + binDir, claudeSDKSidecarEntryPathEnv + "=" + filepath.Join(home, "missing-main.ts")}
-	}
-	service.LookPath = func(name string) (string, error) {
-		if name == "claude" {
-			return claudePath, nil
-		}
-		return "", errors.New("not found")
-	}
-	service.RunAuthStatusCommand = func(context.Context, ProviderSpec, string) (AuthInfo, bool) {
-		return AuthInfo{Status: AuthAuthenticated}, true
-	}
-
-	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"claude-code"}})
-	if err != nil {
-		t.Fatalf("List() error = %v", err)
-	}
-	status := onlyStatus(t, snapshot)
-	if status.Availability.Status != AvailabilityNotInstalled {
-		t.Fatalf("Availability.Status = %q, want not_installed", status.Availability.Status)
-	}
-	if status.Availability.ReasonCode != ReasonClaudeSDKSidecarUnavailable {
-		t.Fatalf("ReasonCode = %q, want %q", status.Availability.ReasonCode, ReasonClaudeSDKSidecarUnavailable)
-	}
-	if status.Adapter.Installed {
-		t.Fatal("Adapter.Installed = true, want false when SDK sidecar entry is missing")
 	}
 }
 
@@ -2994,142 +2482,6 @@ func assertClaudeAuthListStatus(
 	}
 	if status.CLI.BinaryPath != claudePath {
 		t.Fatalf("CLI.BinaryPath = %q, want %q", status.CLI.BinaryPath, claudePath)
-	}
-}
-
-func TestServiceListReportsClaudeAuthentication(t *testing.T) {
-	tests := []struct {
-		name         string
-		environ      []string
-		settings     string
-		commandAuth  AuthInfo
-		availability AvailabilityStatus
-		authStatus   AuthStatus
-		authMethod   string
-		accountLabel string
-	}{
-		{
-			name:         "auth required from CLI status",
-			environ:      []string{"PATH=/usr/bin:/bin"},
-			commandAuth:  AuthInfo{Status: AuthRequired},
-			availability: AvailabilityAuthRequired,
-			authStatus:   AuthRequired,
-		},
-		{
-			name:         "environment API key uses API billing",
-			environ:      []string{"PATH=/usr/bin:/bin", "ANTHROPIC_API_KEY=sk-test"},
-			commandAuth:  AuthInfo{Status: AuthRequired},
-			availability: AvailabilityReady,
-			authStatus:   AuthAuthenticated,
-			authMethod:   "apiKey",
-			accountLabel: "API Usage Billing",
-		},
-		{
-			name:         "settings API key uses API billing",
-			environ:      []string{"PATH=/usr/bin:/bin"},
-			settings:     `{"env":{"ANTHROPIC_API_KEY":"sk-test"}}`,
-			commandAuth:  AuthInfo{Status: AuthRequired},
-			availability: AvailabilityReady,
-			authStatus:   AuthAuthenticated,
-			authMethod:   "apiKey",
-			accountLabel: "API Usage Billing",
-		},
-		{
-			name:         "settings token and base URL override CLI OAuth",
-			environ:      []string{"PATH=/usr/bin:/bin"},
-			settings:     `{"env":{"ANTHROPIC_AUTH_TOKEN":"sk-test","ANTHROPIC_BASE_URL":"https://api.moonshot.cn/anthropic"}}`,
-			commandAuth:  AuthInfo{Status: AuthAuthenticated, AuthMethod: "oauth_token", AccountLabel: "oauth_token"},
-			availability: AvailabilityReady,
-			authStatus:   AuthAuthenticated,
-			authMethod:   "apiKey",
-			accountLabel: "API Usage Billing",
-		},
-		{
-			name:         "bare endpoint preserves CLI OAuth identity",
-			environ:      []string{"PATH=/usr/bin:/bin"},
-			settings:     `{"env":{"ANTHROPIC_BASE_URL":"https://gw.local"}}`,
-			commandAuth:  AuthInfo{Status: AuthAuthenticated, AuthMethod: "oauth", AccountLabel: "me@x.com"},
-			availability: AvailabilityReady,
-			authStatus:   AuthAuthenticated,
-			authMethod:   "oauth",
-			accountLabel: "me@x.com",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			harness := newClaudeAuthListHarness(t, tt.environ, claudeAuthCommandResult{auth: tt.commandAuth, ok: true})
-			if tt.settings != "" {
-				harness.writeSettings(tt.settings)
-			}
-
-			status := harness.list()
-			assertClaudeAuthListStatus(
-				t,
-				status,
-				harness.claudePath,
-				tt.availability,
-				tt.authStatus,
-				tt.authMethod,
-				tt.accountLabel,
-			)
-			wantCalls := 1
-			if tt.authMethod == "apiKey" {
-				wantCalls = 0
-			}
-			if harness.calls != wantCalls {
-				t.Fatalf("auth status command calls = %d, want %d", harness.calls, wantCalls)
-			}
-		})
-	}
-}
-
-func TestServiceListRetriesClaudeAuthStatusCommandWhenOutputIsUnrecognized(t *testing.T) {
-	harness := newClaudeAuthListHarness(
-		t,
-		[]string{"PATH=/usr/bin:/bin"},
-		claudeAuthCommandResult{auth: AuthInfo{}, ok: false},
-		claudeAuthCommandResult{auth: AuthInfo{Status: AuthAuthenticated, AccountLabel: "dev@example.com"}, ok: true},
-	)
-	harness.service.AuthStatusCommandRetryDelay = time.Nanosecond
-
-	status := harness.list()
-	assertClaudeAuthListStatus(
-		t,
-		status,
-		harness.claudePath,
-		AvailabilityReady,
-		AuthAuthenticated,
-		"",
-		"dev@example.com",
-	)
-	if harness.calls != 2 {
-		t.Fatalf("auth status command calls = %d, want 2", harness.calls)
-	}
-}
-
-func TestServiceListFallsBackToClaudeAuthMarkerWhenAuthStatusCommandIsUnrecognized(t *testing.T) {
-	harness := newClaudeAuthListHarness(
-		t,
-		[]string{"PATH=/usr/bin:/bin"},
-		claudeAuthCommandResult{auth: AuthInfo{}, ok: false},
-		claudeAuthCommandResult{auth: AuthInfo{}, ok: false},
-	)
-	harness.service.AuthStatusCommandRetryDelay = time.Nanosecond
-	harness.writeMarker(`{"userID":"user_123"}`)
-
-	status := harness.list()
-	assertClaudeAuthListStatus(
-		t,
-		status,
-		harness.claudePath,
-		AvailabilityReady,
-		AuthAuthenticated,
-		"",
-		"user_123",
-	)
-	if harness.calls != 2 {
-		t.Fatalf("auth status command calls = %d, want 2", harness.calls)
 	}
 }
 

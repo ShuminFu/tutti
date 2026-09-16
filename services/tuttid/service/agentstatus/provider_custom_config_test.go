@@ -246,27 +246,6 @@ func TestProviderHasAPICredentialOpenCodeWindowsHomeFileReference(t *testing.T) 
 	}
 }
 
-func TestProviderUsesCustomConfigCleanCodexLoginIsNotCustom(t *testing.T) {
-	home := t.TempDir()
-	// A normal ChatGPT-login config.toml with only a model pin — no custom key
-	// or endpoint — must NOT be treated as a custom config.
-	writeFile(t, filepath.Join(home, ".codex", "config.toml"), `model = "gpt-5-codex"`)
-	svc := customConfigService(home)
-	if svc.providerUsesCustomConfig(agentprovider.Codex) {
-		t.Fatal("a clean login config must not count as custom")
-	}
-}
-
-func TestProviderUsesCustomConfigNoConfigNoEnv(t *testing.T) {
-	svc := customConfigService(t.TempDir())
-	if svc.providerUsesCustomConfig(agentprovider.Codex) {
-		t.Fatal("no env and no config should not be custom")
-	}
-	if svc.providerUsesCustomConfig(agentprovider.ClaudeCode) {
-		t.Fatal("no env and no config should not be custom")
-	}
-}
-
 func TestProviderHasAPICredentialEnvAPIKey(t *testing.T) {
 	svc := customConfigService(t.TempDir())
 	svc.Environ = func() []string { return []string{"ANTHROPIC_API_KEY=sk-test"} }

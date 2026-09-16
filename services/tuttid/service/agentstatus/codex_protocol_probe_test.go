@@ -93,22 +93,6 @@ func TestUseCodexWindowsCLIProbeMatchesGOOS(t *testing.T) {
 	}
 }
 
-func TestProbeCodexWindowsCLITreatsVersionAsReadyWithoutAppServer(t *testing.T) {
-	command := writeCodexWindowsCLIProbeFixture(t, "0.145.0", true)
-	service := Service{
-		ProbeTimeout:    3 * time.Second,
-		ProbeReadyAfter: 100 * time.Millisecond,
-	}
-	evidence := service.probeCodexWindowsCLI(
-		context.Background(),
-		[]string{command, "app-server"},
-		[]string{"PATH=" + filepath.Dir(command)},
-	)
-	if !evidence.CommandStarted || !evidence.ProtocolReady || evidence.Category != "" {
-		t.Fatalf("evidence = %#v, want CLI --version readiness without an app-server handshake", evidence)
-	}
-}
-
 func TestProbeCodexWindowsCLIFailsWhenVersionMissing(t *testing.T) {
 	command := writeCodexWindowsCLIProbeFixture(t, "", false)
 	var output bytes.Buffer

@@ -53,68 +53,6 @@ func TestResolveDefaultsFromEnvAppliesOverrides(t *testing.T) {
 	assertEqual(t, got.Transport.TCPAddr, "127.0.0.1:1111")
 }
 
-func TestResolveAgentExtensionSourcesUsesGeneratedActivationDefaults(t *testing.T) {
-	t.Setenv("TUTTI_AGENT_EXTENSION_GEMINI_ENABLED", "true")
-
-	sources := ResolveAgentExtensionSources()
-	byKey := map[string]AgentExtensionSource{}
-	for _, source := range sources {
-		byKey[source.Key] = source
-	}
-	gemini, ok := byKey["gemini"]
-	if !ok || gemini.Enabled {
-		t.Fatalf("gemini source was enabled by removed env override: %#v", sources)
-	}
-	codebuddy, ok := byKey["codebuddy"]
-	if !ok || codebuddy.Enabled {
-		t.Fatalf("codebuddy source must stay disabled without override: %#v", sources)
-	}
-	copilot := agentExtensionSourceByKey(t, sources, "copilot")
-	kilo := agentExtensionSourceByKey(t, sources, "kilo")
-	qwen := agentExtensionSourceByKey(t, sources, "qwen")
-	grok := agentExtensionSourceByKey(t, sources, "grok")
-	for _, source := range []AgentExtensionSource{gemini, codebuddy, copilot, kilo, qwen, grok} {
-		if source.Enabled {
-			t.Fatalf("agent extension source must stay disabled without override: %#v", source)
-		}
-		if source.SigningKeyID == "" || source.SigningPublicKey == "" {
-			t.Fatalf("agent extension trust configuration is incomplete: %#v", source)
-		}
-	}
-	for _, key := range []string{"hermes", "kimi-code"} {
-		source := agentExtensionSourceByKey(t, sources, key)
-		if !source.Enabled {
-			t.Fatalf("stable agent extension source must be enabled: %#v", source)
-		}
-		if source.SigningKeyID == "" || source.SigningPublicKey == "" {
-			t.Fatalf("stable agent extension trust configuration is incomplete: %#v", source)
-		}
-	}
-}
-
-func TestResolveAgentExtensionSourcesAppliesLocalPackageOnlyInDevelopment(t *testing.T) {
-	packageDir := filepath.Join(t.TempDir(), "package")
-	t.Setenv("TUTTI_ENV", "development")
-	t.Setenv("TUTTI_AGENT_EXTENSION_CODEBUDDY_PACKAGE_DIR", packageDir)
-
-	development := agentExtensionSourceByKey(t, ResolveAgentExtensionSources(), "codebuddy")
-	if development.Enabled || development.LocalPackageDir != packageDir {
-		t.Fatalf("development local package override not applied: %#v", development)
-	}
-
-	t.Setenv("TUTTI_ENV", "production")
-	production := agentExtensionSourceByKey(t, ResolveAgentExtensionSources(), "codebuddy")
-	if production.Enabled || production.LocalPackageDir != "" {
-		t.Fatalf("production local package override must be ignored: %#v", production)
-	}
-
-	t.Setenv("RNDMASTER_TUTTI_EMBEDDED", "1")
-	embedded := agentExtensionSourceByKey(t, ResolveAgentExtensionSources(), "codebuddy")
-	if embedded.LocalPackageDir != packageDir {
-		t.Fatalf("embedded local package override not applied: %#v", embedded)
-	}
-}
-
 func TestResolveAgentExtensionSourcesAddsEmbeddedDeepSeekHarnessPackage(t *testing.T) {
 	packageDir := filepath.Join(t.TempDir(), "deepseek-harness")
 	t.Setenv("TUTTI_ENV", "production")

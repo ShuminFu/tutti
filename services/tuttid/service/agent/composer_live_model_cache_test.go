@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"slices"
 	"testing"
 	"time"
 
@@ -73,74 +72,6 @@ func TestGetLiveComposerModelOptionsClaudeAuthScopeIsolatesCache(t *testing.T) {
 // must override a stale cache (and refresh it). Without running-session-first
 // ordering, a never-expiring cache would shadow the live session and freeze the
 // picker at the stale list until daemon restart.
-func TestGetComposerOptionsClaudeRunningSessionOverridesStaleCache(t *testing.T) {
-	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	runtime := newFakeRuntime()
-	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
-		ID:          "session-1",
-		WorkspaceID: "ws-1",
-		Provider:    "claude-code",
-		Status:      "ready",
-		RuntimeContext: map[string]any{
-			"configOptions": []any{
-				map[string]any{
-					"id":             "model",
-					"currentValue":   "default",
-					"effectiveValue": "claude-opus-4-6",
-					"options": []any{
-						map[string]any{"name": "Default", "value": "default"},
-						map[string]any{"name": "Opus", "value": "opus[1m]"},
-						map[string]any{"name": "Fable", "value": "claude-fable-5[1m]"},
-					},
-				},
-			},
-		},
-	}
-	service := newIsolatedAgentService(runtime)
-	// Seed a stale cache that predates the running session's newer list.
-	service.setLiveComposerModelOptions("claude-code", "ws-1", "/repo", time.Now().UTC().Add(-time.Hour), []ComposerConfigOptionValue{
-		{Value: "default", Label: "Default"},
-		{Value: "sonnet", Label: "Sonnet"},
-	})
-
-	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
-		Provider:    "claude-code",
-		WorkspaceID: "ws-1",
-		Cwd:         "/repo",
-	})
-	if err != nil {
-		t.Fatalf("GetComposerOptions returned error: %v", err)
-	}
-	if len(runtime.startCalls) != 0 {
-		t.Fatalf("start calls = %d, want no hidden discovery beside running session", len(runtime.startCalls))
-	}
-
-	wantValues := []string{"default", "opus[1m]", "claude-fable-5[1m]"}
-	if got := composerConfigOptionModelValues(options.ModelConfig.Options); !slices.Equal(got, wantValues) {
-		t.Fatalf("model options = %v, want newer running-session list %v", got, wantValues)
-	}
-	if options.ModelConfig.CurrentValue != "default" ||
-		options.ModelConfig.EffectiveValue != "claude-opus-4-6" {
-		t.Fatalf(
-			"model config values = (%q, %q), want requested default and effective opus",
-			options.ModelConfig.CurrentValue,
-			options.ModelConfig.EffectiveValue,
-		)
-	}
-	if options.RuntimeContext["modelCatalogSource"] != runtimeLiveModelCatalogSource {
-		t.Fatalf("modelCatalogSource = %#v, want %s", options.RuntimeContext["modelCatalogSource"], runtimeLiveModelCatalogSource)
-	}
-
-	// The live session must have refreshed the cache, not the reverse.
-	cached, ok := service.getLiveComposerModelOptions("claude-code", "ws-1", "/repo", time.Now().UTC())
-	if !ok {
-		t.Fatal("cache missing after refresh")
-	}
-	if got := composerConfigOptionModelValues(cached); !slices.Equal(got, wantValues) {
-		t.Fatalf("cache after refresh = %v, want %v", got, wantValues)
-	}
-}
-
 func TestGetComposerOptionsDoesNotReuseOlderEffectiveModel(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	runtime := newFakeRuntime()

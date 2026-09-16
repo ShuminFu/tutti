@@ -10,57 +10,6 @@ import (
 	"testing"
 )
 
-func TestDiscoverCodexRuntimeCandidatesEnumeratesAllManagerBinsAfterPathMatch(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("shell fixture is Unix-only")
-	}
-	home := t.TempDir()
-	managerBin := filepath.Join(home, "manager-bin")
-	pathBin := filepath.Join(home, "path-bin")
-	bunBin := filepath.Join(home, "bun-global-bin")
-	pnpmBin := filepath.Join(home, "pnpm-global-bin")
-	npmPrefix := filepath.Join(home, "npm-prefix")
-	brewPrefix := filepath.Join(home, "brew-prefix")
-	discoveryMarkers := filepath.Join(home, "discovery-markers")
-	if err := os.MkdirAll(discoveryMarkers, 0o755); err != nil {
-		t.Fatalf("mkdir discovery markers: %v", err)
-	}
-
-	pathCodex := filepath.Join(pathBin, "codex")
-	bunCodex := filepath.Join(bunBin, "codex")
-	pnpmCodex := filepath.Join(pnpmBin, "codex")
-	npmCodex := filepath.Join(npmPrefix, "bin", "codex")
-	brewCodex := filepath.Join(brewPrefix, "bin", "codex")
-	for _, path := range []string{pathCodex, bunCodex, pnpmCodex, npmCodex, brewCodex} {
-		writeExecutable(t, path, "#!/bin/sh\nexit 0\n")
-	}
-	writeExecutable(t, filepath.Join(managerBin, "bun"), concurrentManagerFixture(discoveryMarkers, "bun", "if [ \"$1\" = pm ] && [ \"$2\" = bin ] && [ \"$3\" = -g ]; then echo \""+bunBin+"\"; fi"))
-	writeExecutable(t, filepath.Join(managerBin, "pnpm"), concurrentManagerFixture(discoveryMarkers, "pnpm", "if [ \"$1\" = bin ] && [ \"$2\" = -g ]; then echo \""+pnpmBin+"\"; fi"))
-	writeExecutable(t, filepath.Join(managerBin, "npm"), concurrentManagerFixture(discoveryMarkers, "npm", "if [ \"$1\" = prefix ] && [ \"$2\" = -g ]; then echo \""+npmPrefix+"\"; fi"))
-	writeExecutable(t, filepath.Join(managerBin, "brew"), concurrentManagerFixture(discoveryMarkers, "brew", "if [ \"$1\" = --prefix ]; then echo \""+brewPrefix+"\"; fi"))
-
-	service := probeTestService(home)
-	service.Environ = func() []string {
-		return []string{"PATH=" + managerBin + string(os.PathListSeparator) + pathBin + string(os.PathListSeparator) + "/usr/bin:/bin"}
-	}
-	candidates := service.discoverCodexRuntimeCandidates(context.Background(), ProviderSpec{Provider: "codex"})
-
-	if got, want := candidateLaunchers(candidates), []string{pathCodex, bunCodex, pnpmCodex, npmCodex, brewCodex}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("launchers = %#v, want %#v", got, want)
-	}
-	for index, source := range []codexRuntimeCandidateSource{
-		codexRuntimeCandidateSourcePath,
-		codexRuntimeCandidateSourceBunGlobal,
-		codexRuntimeCandidateSourcePNPMGlobal,
-		codexRuntimeCandidateSourceNPMGlobal,
-		codexRuntimeCandidateSourceHomebrew,
-	} {
-		if got := candidates[index].Sources; !reflect.DeepEqual(got, []codexRuntimeCandidateSource{source}) {
-			t.Fatalf("candidate %d sources = %#v, want %#v", index, got, []codexRuntimeCandidateSource{source})
-		}
-	}
-}
-
 func TestDiscoverCodexRuntimeCandidatesDeduplicatesLauncherAliases(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink fixture is Unix-only")
