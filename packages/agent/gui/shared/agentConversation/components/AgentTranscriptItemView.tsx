@@ -7,6 +7,7 @@ import type { AgentTranscriptRowVM } from "../contracts/agentTranscriptRowVM";
 import type { AgentConversationParticipantPresentation } from "../contracts/agentConversationParticipantPresentation";
 import { AgentGeneratedImageRow } from "./AgentGeneratedImageRow";
 import { AgentGoalControlRow } from "./AgentGoalControlRow";
+import { AgentMcpAppRow } from "./AgentMcpAppRow";
 import { AgentMessageBlock } from "./AgentMessageBlock";
 import { AgentProcessingRow } from "./AgentProcessingRow";
 import { AgentToolGroupRow } from "./AgentToolGroupRow";
@@ -83,6 +84,8 @@ export const AgentTranscriptItemView = memo(function AgentTranscriptItemView({
   switch (row.kind) {
     case "generated-image":
       return <AgentGeneratedImageRow row={row} />;
+    case "mcp-app":
+      return <AgentMcpAppRow row={row} />;
     case "goal-control":
       return (
         <AgentGoalControlRow

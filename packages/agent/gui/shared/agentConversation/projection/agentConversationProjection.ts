@@ -15,6 +15,7 @@ import type { AgentTranscriptRowVM } from "../contracts/agentTranscriptRowVM";
 import { projectAgentMessageFinalText } from "./agentMessageFinalTextProjection";
 import { computeAgentToolGroups } from "./agentToolGroupingProjection";
 import { buildAgentTurnSequenceItems } from "./agentTurnSequenceProjection";
+import { projectAgentMcpAppRow } from "./agentMcpAppProjection";
 import { projectTurnRows } from "./agentTurnRowProjection";
 import { projectAgentProcessingRow } from "./agentProcessingProjection";
 import { projectAgentTurnSummaryRows } from "./agentTurnSummaryProjection";
@@ -563,6 +564,12 @@ function promoteGeneratedImageRows(
       const artifact = projectGeneratedImageRow(call, row.turnId);
       if (artifact) {
         promoted.push(artifact);
+      }
+      // MCP Apps views follow their tool group like generated images; the
+      // original tool card stays in the group as the fallback surface.
+      const mcpApp = projectAgentMcpAppRow(call, row.turnId);
+      if (mcpApp) {
+        promoted.push(mcpApp);
       }
     }
   }

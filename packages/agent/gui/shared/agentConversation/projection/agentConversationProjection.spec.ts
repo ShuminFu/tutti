@@ -191,6 +191,85 @@ describe("projectAgentConversationVM", () => {
     });
   });
 
+  it("inserts an mcp-app row after the tool group that keeps the MCP tool card", () => {
+    const widgetArguments = {
+      title: "Sales",
+      widget_code: "<div id=chart></div>"
+    };
+    const widgetCall = (id: string, withReference: boolean) => ({
+      id,
+      name: "workflow_report / show_widget",
+      toolName: "mcp__workflow_report__show_widget",
+      callType: "tool",
+      status: "Completed",
+      statusKind: "completed" as const,
+      summary: "show_widget",
+      payload: {
+        input: widgetArguments,
+        output: { text: "Shown" },
+        ...(withReference
+          ? {
+              mcpApp: {
+                serverName: "workflow_report",
+                toolName: "show_widget",
+                resourceUri: "ui://workflow_report/widget",
+                resourceSha256: "b".repeat(64),
+                argumentsPointer: "/input"
+              }
+            }
+          : {})
+      }
+    });
+    const project = (call: ReturnType<typeof widgetCall>) =>
+      projectAgentConversationVM(
+        detailViewModel({
+          turns: [
+            {
+              id: "turn-widget",
+              userMessage: { id: "user-widget", body: "Chart sales" },
+              userMessages: [{ id: "user-widget", body: "Chart sales" }],
+              agentMessages: [],
+              toolCalls: [call],
+              toolCallCount: 1,
+              hasFailedToolCall: false,
+              agentItems: [
+                {
+                  kind: "tool-calls",
+                  id: "tools-widget",
+                  toolCalls: [call],
+                  toolCallCount: 1,
+                  hasFailedToolCall: false
+                }
+              ]
+            }
+          ],
+          showProcessingIndicator: false
+        })
+      );
+
+    const conversation = project(widgetCall("call:widget-1", true));
+    const kinds = conversation.rows.map((row) => row.kind);
+    const groupIndex = kinds.indexOf("tool-group");
+    expect(groupIndex).toBeGreaterThanOrEqual(0);
+    expect(kinds[groupIndex + 1]).toBe("mcp-app");
+    const group = conversation.rows[groupIndex];
+    expect(group?.kind === "tool-group" && group.calls[0]?.id).toBe(
+      "call:widget-1"
+    );
+    expect(conversation.rows[groupIndex + 1]).toMatchObject({
+      kind: "mcp-app",
+      id: "mcp-app:call:widget-1",
+      turnId: "turn-widget",
+      resourceSha256: "b".repeat(64),
+      toolArguments: widgetArguments
+    });
+
+    // Sessions stored before MCP Apps support keep only the tool card.
+    const legacy = project(widgetCall("call:widget-legacy", false));
+    expect(legacy.rows.some((row) => row.kind === "mcp-app")).toBe(false);
+    expect(legacy.rows.some((row) => row.kind === "tool-group")).toBe(true);
+  });
+
   it("does not promote an image before generation completes", () => {
     const imageCall = {
       id: "call:image-running",
@@ -1883,7 +1962,10 @@ describe("projectAgentConversationVM", () => {
     // it instead of hiding it (docs/architecture/agent-gui-node.md: important
     // output is never hidden).
     const rowKeys = conversation.rows.map((row) => transcriptRowKey(row));
-    const turnGroups = buildAgentTranscriptTurnGroups(conversation.rows, rowKeys);
+    const turnGroups = buildAgentTranscriptTurnGroups(
+      conversation.rows,
+      rowKeys
+    );
     const turn = conversation.sourceDetail.sessionTurns?.[0] ?? null;
     const model = buildAgentTurnWorkSectionModel(turnGroups[0]!, turn, false, {
       collapseIntermediateAssistantReplies: true

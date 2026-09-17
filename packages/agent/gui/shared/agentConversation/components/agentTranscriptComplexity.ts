@@ -75,7 +75,8 @@ function calculateTurnScore(
 
   for (const { row } of rows) {
     rowCount += 1;
-    if (row.kind === "generated-image") {
+    // An MCP App view is an embedded document of comparable layout cost.
+    if (row.kind === "generated-image" || row.kind === "mcp-app") {
       imageCount += 1;
       continue;
     }

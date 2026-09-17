@@ -693,6 +693,7 @@ export const zhCN = {
         rawPayload: "原始载荷",
         loadingDiff: "正在加载差异…",
         imagePreviewAlt: "图片生成预览",
+        mcpAppFrameTitle: "工具视图：{{title}}",
         showFullContent: "展开完整内容（{{count}} 行）",
         collapseContent: "收起内容",
         showFullDiff: "展开完整差异（{{count}} 行）"

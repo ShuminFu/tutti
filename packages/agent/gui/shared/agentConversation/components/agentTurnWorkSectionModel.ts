@@ -206,7 +206,9 @@ export function buildAgentTurnWorkSectionModel(
     turn.outcome === "completed" &&
     hasHiddenWork &&
     !groupContainsBlockingMessage(group) &&
-    !group.rows.some(({ row }) => row.kind === "generated-image");
+    !group.rows.some(
+      ({ row }) => row.kind === "generated-image" || row.kind === "mcp-app"
+    );
 
   return {
     timing:

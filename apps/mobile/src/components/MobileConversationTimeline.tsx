@@ -77,6 +77,9 @@ function MobileTranscriptRow({
       return <MobileGoalControlRow body={row.body} />;
     case "generated-image":
       return <MobileGeneratedImage prompt={row.prompt} uri={row.uri} />;
+    case "mcp-app":
+      // MCP Apps views need a sandboxed web frame; mobile keeps the tool card.
+      return null;
   }
 }
 

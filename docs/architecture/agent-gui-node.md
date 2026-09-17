@@ -1630,6 +1630,23 @@ disclosure, and theme-refresh state are UI-only and must not enter Message,
 Turn, Session, activity-runtime, or workspace-engine state. The renderer is
 packaged with AgentGUI and performs no runtime network fetch.
 
+A completed tool call whose payload carries tuttid's `mcpApp` reference
+(server, tool, `ui://` resource URI, snapshot `resourceSha256`, and an
+`argumentsPointer` JSON Pointer) projects an `mcp-app` row right after its tool
+group, like a generated image; the tool card stays in the group. The projection
+follows only `argumentsPointer`, because tuttid owns the provider payload
+shapes. The row reads the content-addressed HTML snapshot through the optional
+`AgentGUIRuntime.loadMcpAppResource(sha256)` port and renders nothing while
+loading, when the port is absent, or when the snapshot is missing or is not a
+`text/html;profile=mcp-app` resource. `McpAppFrame` is a display-only MCP Apps
+host (spec 2026-01-26): a single `sandbox="allow-scripts"` srcdoc iframe with a
+CSP meta emitted before any resource markup, messages accepted only from its
+own `contentWindow`, `tool-input` then `tool-result` after `initialized`,
+heights clamped to 40–800 px, theme tokens resolved from the host element and
+re-sent as `host-context-changed`, `ui/resource-teardown` on unmount, and
+JSON-RPC `-32601` for every interactive request. Frame protocol and height
+state are UI-local and never enter Message, Turn, or Session state.
+
 Attachment-only fallback labels such as `[Image]` may provide title or summary
 text, but they are not an additional transcript text block when the canonical
 structured content already renders the same image. Explicit display prompts

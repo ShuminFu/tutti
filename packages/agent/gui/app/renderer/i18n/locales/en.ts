@@ -732,6 +732,7 @@ export const en = {
         rawPayload: "Raw payload",
         loadingDiff: "Loading diff…",
         imagePreviewAlt: "Image generation preview",
+        mcpAppFrameTitle: "Tool view: {{title}}",
         showFullContent: "Show full content ({{count}} lines)",
         collapseContent: "Collapse content",
         showFullDiff: "Show full diff ({{count}} lines)"

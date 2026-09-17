@@ -98,6 +98,24 @@ export interface AgentActivityRuntimeGeneratedFile {
   path: string;
 }
 
+/**
+ * HTML snapshot of an MCP Apps UI resource, stored by tuttid and addressed by
+ * `sha256(html)`. `meta` is the resource's `_meta.ui` (CSP domains and border
+ * preference) captured together with the HTML.
+ */
+export interface AgentActivityRuntimeMcpAppResource {
+  uri: string;
+  mimeType: string;
+  html: string;
+  meta?: {
+    csp?: {
+      connectDomains?: string[];
+      resourceDomains?: string[];
+    };
+    prefersBorder?: boolean;
+  } | null;
+}
+
 export interface AgentActivityRuntimeGeneratedFileList {
   entries: AgentActivityRuntimeGeneratedFile[];
   hasMore?: boolean;
@@ -359,6 +377,14 @@ export interface AgentGUIRuntime {
   listAgentGeneratedFiles?(
     input: AgentActivityRuntimeListGeneratedFilesInput
   ): Promise<AgentActivityRuntimeGeneratedFileList>;
+  /**
+   * Reads an MCP Apps resource snapshot by content hash. Resolves `null` when
+   * the snapshot does not exist; AgentGUI then shows only the ordinary tool
+   * card. Omit on hosts that cannot serve snapshots.
+   */
+  loadMcpAppResource?(
+    sha256: string
+  ): Promise<AgentActivityRuntimeMcpAppResource | null>;
   listSessionsPage?(
     input: AgentActivityRuntimeListSessionsPageInput
   ): Promise<AgentActivityRuntimeSessionPageResult>;

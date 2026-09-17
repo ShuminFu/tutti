@@ -64,6 +64,7 @@ export function isAssistantParticipantContentRow(
     case "message":
       return row.speaker === "assistant";
     case "generated-image":
+    case "mcp-app":
     case "processing":
     case "tool-group":
     case "turn-summary":
@@ -188,7 +189,7 @@ export function hasAgentResponseForTurn(
     if (!row) {
       continue;
     }
-    if (row.kind === "generated-image") {
+    if (row.kind === "generated-image" || row.kind === "mcp-app") {
       return !turnId || row.turnId === turnId;
     }
     if (row.kind !== "message") {
