@@ -253,6 +253,39 @@ func TestClaudeCodeSDKAdapterCompletesCanonicalTurnByProviderIdentity(t *testing
 	}
 }
 
+func TestClaudeCodeSDKAdapterCopiesAssistantCompletedUsage(t *testing.T) {
+	adapter := NewClaudeCodeSDKAdapter(nil)
+	session := standardTestSession(ProviderClaudeCode)
+	adapterSession := &claudeSDKAdapterSession{liveState: newClaudeSDKLiveState()}
+
+	events, terminal, err := adapter.sidecarTurnEvents(adapterSession, session, "turn-usage", claudeSDKSidecarEvent{
+		Type: "assistant_completed",
+		Payload: map[string]any{
+			"turnId":    "turn-usage",
+			"messageId": "claude-sdk:assistant:msg-usage:live:0",
+			"content":   "Hi",
+			"usage": map[string]any{
+				"input_tokens":                int64(100),
+				"output_tokens":               int64(20),
+				"cache_read_input_tokens":     int64(7),
+				"cache_creation_input_tokens": int64(3),
+			},
+		},
+	})
+	if err != nil || terminal {
+		t.Fatalf("assistant_completed err=%v terminal=%v", err, terminal)
+	}
+	messages := activityMessagesWithRole(events, activityshared.MessageRoleAssistant)
+	if len(messages) == 0 {
+		t.Fatalf("events = %#v, want an assistant message", events)
+	}
+	usage, _ := messages[0].Payload.Metadata["usage"].(map[string]any)
+	if usage["input_tokens"] != int64(100) || usage["output_tokens"] != int64(20) ||
+		usage["cache_read_input_tokens"] != int64(7) || usage["cache_creation_input_tokens"] != int64(3) {
+		t.Fatalf("assistant metadata = %#v, want Claude usage keys", messages[0].Payload.Metadata)
+	}
+}
+
 func TestClaudeCodeSDKAdapterUsesSidecarAssistantMessageID(t *testing.T) {
 	adapter := NewClaudeCodeSDKAdapter(nil)
 	session := standardTestSession(ProviderClaudeCode)

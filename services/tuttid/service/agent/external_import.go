@@ -548,6 +548,9 @@ func (s *Service) importExternalSession(
 		"externalImportNoProject": session.NoProject,
 		"externalSourcePath":      session.SourcePath,
 	}
+	if usage := lastExternalImportedUsage(session.Messages); len(usage) > 0 {
+		runtimeContext["usage"] = map[string]any{"tokens": usage}
+	}
 	if session.ResumeSupported != nil {
 		runtimeContext["externalImportResumeSupported"] = *session.ResumeSupported
 	}
@@ -690,7 +693,31 @@ func externalImportedMessagePayload(message externalImportedMessage) map[string]
 	if strings.TrimSpace(message.Kind) == "text" {
 		payload["text"] = message.Text
 	}
+	if usage := externalImportedUsage(message.Usage); len(usage) > 0 {
+		payload["usage"] = usage
+	}
 	return payload
+}
+
+func externalImportedUsage(values ...any) map[string]any {
+	for _, value := range values {
+		if usage := agentactivitybiz.ParseProviderTokenUsage(value); usage.HasReported() {
+			return usage.Map()
+		}
+	}
+	return nil
+}
+
+func lastExternalImportedUsage(messages []externalImportedMessage) map[string]any {
+	for index := len(messages) - 1; index >= 0; index-- {
+		if usage := externalImportedUsage(messages[index].Usage); len(usage) > 0 {
+			return usage
+		}
+		if usage := externalImportedUsage(messages[index].Payload["usage"]); len(usage) > 0 {
+			return usage
+		}
+	}
+	return nil
 }
 
 func externalStableHash(input string) string {

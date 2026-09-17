@@ -42,6 +42,7 @@ type claudeExportMessage struct {
 	Text              string                   `json:"text"`
 	UpdatedAt         string                   `json:"updated_at"`
 	UUID              string                   `json:"uuid"`
+	Usage             json.RawMessage          `json:"usage"`
 }
 
 type claudeExportContent struct {
@@ -360,6 +361,7 @@ func parseClaudeExportConversation(
 			Status:            "completed",
 			Text:              parsed.Text,
 			Payload:           payload,
+			Usage:             externalImportedUsage(parsed.Source.Usage),
 			OccurredAtUnixMS:  parsed.OccurredAtUnixMS,
 			StartedAtUnixMS:   parsed.OccurredAtUnixMS,
 			CompletedAtUnixMS: parsed.OccurredAtUnixMS,

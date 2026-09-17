@@ -524,6 +524,53 @@ func TestParseClaudeCodeJSONLDoesNotUseCodexScratchCwdNoProjectRule(t *testing.T
 	}
 }
 
+func TestParseClaudeCodeJSONLCopiesAssistantMessageUsage(t *testing.T) {
+	cwd := t.TempDir()
+	session, ok, err := parseClaudeCodeJSONL(
+		filepath.Join(cwd, "claude.jsonl"),
+		strings.NewReader(testAgentJSONL(t,
+			map[string]any{
+				"timestamp": "2026-06-18T00:00:00Z",
+				"sessionId": "claude-usage",
+				"cwd":       cwd,
+				"uuid":      "claude-user",
+				"message":   map[string]any{"role": "user", "content": []any{map[string]any{"type": "text", "text": "Hello"}}},
+			},
+			map[string]any{
+				"timestamp": "2026-06-18T00:00:01Z",
+				"sessionId": "claude-usage",
+				"cwd":       cwd,
+				"uuid":      "claude-assistant",
+				"message": map[string]any{
+					"role":    "assistant",
+					"model":   "claude-opus-4-6",
+					"content": []any{map[string]any{"type": "text", "text": "Hi"}},
+					"usage": map[string]any{
+						"input_tokens":                100,
+						"output_tokens":               20,
+						"cache_read_input_tokens":     7,
+						"cache_creation_input_tokens": 3,
+					},
+				},
+			},
+		)),
+	)
+	if err != nil || !ok {
+		t.Fatalf("parseClaudeCodeJSONL ok=%v err=%v", ok, err)
+	}
+	if len(session.Messages) != 2 {
+		t.Fatalf("messages = %#v, want user and assistant", session.Messages)
+	}
+	usage := session.Messages[1].Usage
+	if usage["input_tokens"] != int64(100) || usage["output_tokens"] != int64(20) ||
+		usage["cache_read_input_tokens"] != int64(7) || usage["cache_creation_input_tokens"] != int64(3) {
+		t.Fatalf("assistant usage = %#v, want source Claude message.usage", usage)
+	}
+	if session.Messages[0].Usage != nil {
+		t.Fatalf("user usage = %#v, want omitted when the source has no usage", session.Messages[0].Usage)
+	}
+}
+
 func TestParseClaudeCodeJSONLPrefersCustomTitle(t *testing.T) {
 	cwd := t.TempDir()
 	session, ok, err := parseClaudeCodeJSONL(

@@ -298,13 +298,16 @@ func (a *ClaudeCodeSDKAdapter) sidecarTurnEvents(adapterSession *claudeSDKAdapte
 		return a.claudeSDKAssistantEvents(adapterSession, session, rootTurnID, messageID, content, false), false, nil
 	case "assistant_completed":
 		messageID := firstNonEmptyString(payloadString(event.Payload, "messageId"), adapterSession.assistantMessageID(providerTurnID))
-		return a.claudeSDKAssistantEvents(
-			adapterSession,
-			session,
-			rootTurnID,
-			messageID,
-			payloadString(event.Payload, "content"),
-			true,
+		return stampClaudeSDKUsageMetadata(
+			a.claudeSDKAssistantEvents(
+				adapterSession,
+				session,
+				rootTurnID,
+				messageID,
+				payloadString(event.Payload, "content"),
+				true,
+			),
+			event.Payload,
 		), false, nil
 	case "assistant_failed":
 		messageID := firstNonEmptyString(payloadString(event.Payload, "messageId"), adapterSession.assistantMessageID(providerTurnID))

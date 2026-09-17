@@ -130,6 +130,7 @@ type externalImportedMessage struct {
 	Status            string
 	Text              string
 	Payload           map[string]any
+	Usage             map[string]any
 	OccurredAtUnixMS  int64
 	StartedAtUnixMS   int64
 	CompletedAtUnixMS int64
