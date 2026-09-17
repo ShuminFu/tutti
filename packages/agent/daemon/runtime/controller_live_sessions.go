@@ -261,6 +261,17 @@ func isResumeRecreatableError(err error) bool {
 // silently forgot the conversation, so a visible system notice is appended
 // alongside the started events.
 func (c *Controller) recreateAdapterSession(ctx context.Context, session Session, adapter Adapter) error {
+	// 这是「同一条 agent 会话换一个全新 provider 会话」降级唯一可查的痕迹：界面上只有
+	// 一条 system_notice，历史与后续回复在会话里连成一片，事后在日志里根本找不回来
+	// （2026-09-17 排查收件箱导入会话续不上时，tuttid.log 里 grep 不到任何 recreate 痕迹）。
+	// 有这一行才能统计这条降级到底发生了多少次、落在哪些 provider / 会话上。
+	slog.Warn("agent provider session recreated without history",
+		"room_id", strings.TrimSpace(session.RoomID),
+		"agent_session_id", strings.TrimSpace(session.AgentSessionID),
+		"provider", strings.TrimSpace(session.Provider),
+		"provider_session_id", strings.TrimSpace(session.ProviderSessionID),
+		"cwd", strings.TrimSpace(session.CWD),
+	)
 	fresh := session
 	fresh.ProviderSessionID = ""
 	fresh.Status = SessionStatusReady

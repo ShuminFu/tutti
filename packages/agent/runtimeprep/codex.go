@@ -285,7 +285,7 @@ func exposeUserCodexFiles(codexHome string, fastStart bool) error {
 		if _, err := os.Lstat(target); err == nil {
 			continue
 		}
-		if err := exposeCodexFile(source, target, 0o600); err != nil {
+		if err := exposeImportedProviderFile(source, target, 0o600); err != nil {
 			if copyErr := copyFile(source, target, 0o600); copyErr != nil {
 				return fmt.Errorf("expose codex %s: link failed: %v; copy failed: %w", name, err, copyErr)
 			}
@@ -353,7 +353,7 @@ func exposeCodexImportedRolloutFile(codexHome string, sourcePath string) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 		return fmt.Errorf("create codex imported rollout parent dir: %w", err)
 	}
-	if err := exposeCodexFile(sourcePath, target, 0o600); err != nil {
+	if err := exposeImportedProviderFile(sourcePath, target, 0o600); err != nil {
 		return fmt.Errorf("expose codex imported rollout file: %w", err)
 	}
 	return nil

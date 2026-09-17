@@ -12,7 +12,7 @@ func initializeCodexModelsCacheForWindows(source, target string) error {
 	if err := os.WriteFile(source, nil, 0o600); err != nil {
 		return err
 	}
-	if err := exposeCodexFile(source, target, 0o600); err != nil {
+	if err := exposeImportedProviderFile(source, target, 0o600); err != nil {
 		return err
 	}
 	return nil

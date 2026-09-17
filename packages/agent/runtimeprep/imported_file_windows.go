@@ -11,7 +11,7 @@ import (
 // the Windows symlink privilege and preserve shared-file updates when the
 // source already exists. If the source is not present yet, the caller may
 // treat the failed link as a cache miss and let the CLI create a private file.
-func exposeCodexFile(source, target string, mode os.FileMode) error {
+func exposeImportedProviderFile(source, target string, mode os.FileMode) error {
 	if err := os.Symlink(source, target); err == nil {
 		return nil
 	} else {

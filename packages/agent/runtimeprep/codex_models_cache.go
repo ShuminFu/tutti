@@ -43,7 +43,7 @@ func exposeUserCodexModelsCache(codexHome, userCodexHome string) error {
 		return fmt.Errorf("create shared codex home for models cache: %w", err)
 	}
 	source := filepath.Join(userCodexHome, "models_cache.json")
-	linkErr := exposeCodexFile(source, target, 0o600)
+	linkErr := exposeImportedProviderFile(source, target, 0o600)
 	if linkErr == nil {
 		return nil
 	}

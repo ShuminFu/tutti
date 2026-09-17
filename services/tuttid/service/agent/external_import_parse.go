@@ -375,6 +375,17 @@ func resolveExternalImportSessionCwd(raw string) (string, bool) {
 		// project. Resolve it upfront so every downstream consumer of this
 		// cwd (project selection, initial rail classification, and the persisted
 		// session record) agrees on the same canonical project identity.
+		//
+		// ⚠️ This value is ALSO the provider's launch cwd once the imported
+		// conversation is continued, so a session that ran in a worktree is
+		// continued in the main checkout (真机 2026-09-12：导入会话的续轮确实落在主检出里)。
+		// Unfolding it is not a local change: importedAgentSessionRailSection
+		// (store-sqlite/rail.go) only places an imported session in its project
+		// section when cwd is inside the selected project path, so the rail and
+		// selection-matching sides would have to fold instead. Until that is done,
+		// the provider preparers compute the resume transcript's location from this
+		// same cwd (see exposeClaudeImportedTranscriptFile), so at least the
+		// conversation is found again rather than silently restarted empty.
 		if resolved, ok := resolveExternalImportWorktreeCwd(canonical); ok {
 			return resolved, true
 		}

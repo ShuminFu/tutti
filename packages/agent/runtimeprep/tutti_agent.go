@@ -232,7 +232,7 @@ func exposeTuttiAgentAuthWithProjector(ctx context.Context, home string, source 
 		}
 		return cleanup, nil
 	}
-	if err := exposeCodexFile(source, target, 0o600); err != nil {
+	if err := exposeImportedProviderFile(source, target, 0o600); err != nil {
 		return nil, fmt.Errorf("expose tutti-agent auth.json: %w", err)
 	}
 	return nil, nil
@@ -330,7 +330,7 @@ func tuttiAgentConfigWithoutLegacyPinnedProvider(content string) (string, bool) 
 		return content, false
 	}
 	legacyKeys := map[string]bool{
-		`name = "DinTalDock LLM"`:                       false,
+		`name = "DinTalDock LLM"`:                  false,
 		`base_url = "https://llm-api.tutti.sh/v1"`: false,
 		`wire_api = "responses"`:                   false,
 	}

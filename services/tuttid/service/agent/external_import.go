@@ -473,6 +473,16 @@ func externalProviderJSONLFiles(descriptor providerregistry.ExternalImportDescri
 				}
 				return nil
 			}
+			if entry.Type()&os.ModeSymlink != 0 {
+				// A dangling link is not a session. Importers expose an imported
+				// transcript into the scan root as a link (see the claude/codex
+				// provider preparers); once the user's own copy is pruned or moved
+				// the link dangles, and reading it would surface an opaque error for
+				// a conversation that simply is not there any more. Skip it instead.
+				if _, statErr := os.Stat(path); statErr != nil {
+					return nil
+				}
+			}
 			if strings.EqualFold(filepath.Ext(path), ".jsonl") {
 				files = append(files, path)
 			}

@@ -80,6 +80,12 @@ func (p ClaudeCodePreparer) Prepare(_ context.Context, input ProviderPrepareInpu
 	// so plan turns fail with "Not logged in · Please run /login" (-32000) for
 	// OAuth users while every other mode keeps working. input.PlanMode is left
 	// unused here on purpose.
+	//
+	// That decision is also why exposeClaudeImportedTranscriptFile has to mirror
+	// the transcript into the inherited config root instead of re-pointing
+	// CLAUDE_CONFIG_DIR at the transcript's own root. It degrades to the recreate
+	// fallback on failure rather than failing this Prepare.
+	exposeClaudeImportedTranscriptFile(input)
 	return ProviderPrepareResult{
 		Cwd: input.Cwd,
 		Env: env,
