@@ -261,6 +261,11 @@ func (c *Controller) configureAdapter(adapter Adapter) {
 	if sinkAdapter, ok := adapter.(InteractiveDispositionSinkAdapter); ok {
 		sinkAdapter.SetInteractiveDispositionSink(c.recordTerminalInteractiveDisposition)
 	}
+	if sourceAdapter, ok := adapter.(MCPServerInstructionsSourceAdapter); ok {
+		// Only adapters whose provider drops MCP initialize instructions opt in;
+		// the resolver is read lazily because tuttid installs it after construction.
+		sourceAdapter.SetMCPServerInstructionsSource(c.contractMCPServerInstructions)
+	}
 }
 
 func NewDefaultController(reporter DurableActivityReporter) *Controller {

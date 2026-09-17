@@ -70,6 +70,7 @@ func appServerTurnStartParams(
 	defaultModeMask map[string]any,
 	defaultModel string,
 	tuttiModeHostContext string,
+	mcpServerInstructions string,
 	commandNetworkAccess bool,
 ) map[string]any {
 	settings := session.SettingsValue()
@@ -92,6 +93,15 @@ func appServerTurnStartParams(
 			} else {
 				tuttiModeHostContext = prompt
 			}
+		}
+	}
+	// codex never puts MCP initialize instructions into the prompt, so the
+	// contract servers' own guidance rides the same per-turn developer channel.
+	if instructions := strings.TrimSpace(mcpServerInstructions); instructions != "" {
+		if tuttiModeHostContext = strings.TrimSpace(tuttiModeHostContext); tuttiModeHostContext != "" {
+			tuttiModeHostContext += "\n\n" + instructions
+		} else {
+			tuttiModeHostContext = instructions
 		}
 	}
 	if collaborationMode := appServerCollaborationMode(settings, planModeMask, defaultModeMask, defaultModel, tuttiModeHostContext); collaborationMode != nil {

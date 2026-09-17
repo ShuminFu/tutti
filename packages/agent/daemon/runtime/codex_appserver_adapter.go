@@ -162,6 +162,10 @@ type CodexAppServerAdapter struct {
 	promptImageMaterializer    providerPromptImageMaterializer
 	goalReconcileAckTimeout    time.Duration
 	configSink                 ConfigOptionsUpdateSink
+	// mcpServerInstructions supplies the contract MCP servers' initialize
+	// instructions, which the codex app-server itself never puts into the
+	// model prompt (see mcp_server_instructions.go). Nil means none.
+	mcpServerInstructions MCPServerInstructionsSource
 	// lifecycleMu guards lifecycleLocks; the per-session locks serialize
 	// Start/Resume/Close/ReleaseLiveSession per agent session so concurrent
 	// lifecycle calls can never leave two live app-server processes for the
@@ -596,6 +600,30 @@ func (a *CodexAppServerAdapter) SetConfigOptionsUpdateSink(sink ConfigOptionsUpd
 	a.mu.Lock()
 	a.configSink = sink
 	a.mu.Unlock()
+}
+
+func (a *CodexAppServerAdapter) SetMCPServerInstructionsSource(source MCPServerInstructionsSource) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	a.mcpServerInstructions = source
+	a.mu.Unlock()
+}
+
+// contractMCPServerInstructions returns the rendered MCP server instructions
+// block for this turn, or "" when no source is installed or lookup fails.
+func (a *CodexAppServerAdapter) contractMCPServerInstructions(ctx context.Context, session Session) string {
+	if a == nil {
+		return ""
+	}
+	a.mu.Lock()
+	source := a.mcpServerInstructions
+	a.mu.Unlock()
+	if source == nil {
+		return ""
+	}
+	return source(ctx, session)
 }
 
 func (a *CodexAppServerAdapter) SetProviderLaunchPreparer(preparer ProviderLaunchPreparer) {

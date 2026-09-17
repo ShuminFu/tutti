@@ -31,6 +31,7 @@ func TestRnDMasterContractFlowsIntoCodexParams(t *testing.T) {
 		map[string]any{"mode": "default"},
 		"gpt-test",
 		"",
+		"",
 		false,
 	)
 	mode := payloadObject(turn["collaborationMode"])

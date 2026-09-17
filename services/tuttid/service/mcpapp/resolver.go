@@ -9,6 +9,9 @@
 // initialize -> tools/list -> resources/read, and snapshots the HTML into the
 // agent store. The server process is spawned for catalog reads only; it is
 // never sent tools/call.
+//
+// The same client also answers a server's initialize instructions for
+// providers that drop them (instructions.go).
 package mcpapp
 
 import (
@@ -69,11 +72,12 @@ type Resolver struct {
 	FailureTTL time.Duration
 	Now        func() time.Time
 
-	mu       sync.Mutex
-	cache    map[string]catalogEntry
-	inflight map[string][]func()
-	slots    chan struct{}
-	slotOnce sync.Once
+	mu           sync.Mutex
+	cache        map[string]catalogEntry
+	instructions map[string]instructionsEntry
+	inflight     map[string][]func()
+	slots        chan struct{}
+	slotOnce     sync.Once
 }
 
 type catalogEntry struct {
@@ -183,55 +187,14 @@ func (r *Resolver) resolve(server agentruntime.MCPAppServer) (tools map[string]a
 	if r.Transport == nil || r.Store == nil {
 		return nil, false, errors.New("MCP App resolver is not configured")
 	}
-	if strings.TrimSpace(server.Command) == "" {
-		return nil, false, errors.New("MCP App server command is empty")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout())
 	defer cancel()
 
-	command := append([]string{server.Command}, server.Args...)
-	conn, err := r.Transport.Start(ctx, agentruntime.ProcessSpec{
-		Provider: resolverProcessName,
-		CWD:      server.CWD,
-		Command:  command,
-		Env:      append([]string(nil), server.Env...),
-	})
-	if err != nil {
-		return nil, false, fmt.Errorf("start MCP server: %w", err)
-	}
-	defer func() {
-		// Never let process teardown delay the catalog: a well-behaved server
-		// exits on stdin EOF, but Close's grace periods would otherwise stall
-		// the done callbacks for seconds. A failed/hung server is killed.
-		if err != nil {
-			if killer, ok := conn.(interface{ Kill() error }); ok {
-				_ = killer.Kill()
-			}
-		}
-		go func() { _ = conn.Close() }()
-	}()
-	client, err := runtimemcp.NewStdioClient(runtimemcp.StdioClientConfig{
-		Connection:  conn,
-		ProcessName: server.Name + " MCP App resolver",
-	})
+	client, closeClient, _, err := openInitializedClient(ctx, r.Transport, server)
 	if err != nil {
 		return nil, false, err
 	}
-
-	if _, err := client.Call(ctx, "initialize", map[string]any{
-		"protocolVersion": protocolVersion,
-		"capabilities": map[string]any{
-			"extensions": map[string]any{
-				ExtensionID: map[string]any{"mimeTypes": []string{ResourceMIMEType}},
-			},
-		},
-		"clientInfo": map[string]any{"name": "tuttid-mcp-app-resolver", "version": "1"},
-	}); err != nil {
-		return nil, false, fmt.Errorf("initialize: %w", err)
-	}
-	if err := client.Notify("notifications/initialized", map[string]any{}); err != nil {
-		return nil, false, fmt.Errorf("notifications/initialized: %w", err)
-	}
+	defer func() { closeClient(err != nil) }()
 
 	toolResources, err := listUIToolResources(ctx, client)
 	if err != nil {
@@ -264,6 +227,78 @@ func (r *Resolver) resolve(server agentruntime.MCPAppServer) (tools map[string]a
 		tools[toolName] = agentruntime.MCPAppToolUI{ResourceURI: uri, ResourceSHA256: sha}
 	}
 	return tools, retrySoon, nil
+}
+
+type initializeResult struct {
+	Instructions string `json:"instructions"`
+}
+
+// openInitializedClient launches the server exactly as configured and runs the
+// initialize handshake. The returned closer never delays the caller: a
+// well-behaved server exits on stdin EOF, but Close's grace periods would
+// otherwise stall callbacks for seconds; kill=true kills a failed/hung server.
+func openInitializedClient(
+	ctx context.Context,
+	transport agentruntime.ProcessTransport,
+	server agentruntime.MCPAppServer,
+) (*runtimemcp.StdioClient, func(kill bool), initializeResult, error) {
+	if transport == nil {
+		return nil, nil, initializeResult{}, errors.New("MCP client transport is not configured")
+	}
+	if strings.TrimSpace(server.Command) == "" {
+		return nil, nil, initializeResult{}, errors.New("MCP server command is empty")
+	}
+	command := append([]string{server.Command}, server.Args...)
+	conn, err := transport.Start(ctx, agentruntime.ProcessSpec{
+		Provider: resolverProcessName,
+		CWD:      server.CWD,
+		Command:  command,
+		Env:      append([]string(nil), server.Env...),
+	})
+	if err != nil {
+		return nil, nil, initializeResult{}, fmt.Errorf("start MCP server: %w", err)
+	}
+	closeConn := func(kill bool) {
+		if kill {
+			if killer, ok := conn.(interface{ Kill() error }); ok {
+				_ = killer.Kill()
+			}
+		}
+		go func() { _ = conn.Close() }()
+	}
+	client, err := runtimemcp.NewStdioClient(runtimemcp.StdioClientConfig{
+		Connection:  conn,
+		ProcessName: server.Name + " MCP App resolver",
+	})
+	if err != nil {
+		closeConn(true)
+		return nil, nil, initializeResult{}, err
+	}
+	raw, err := client.Call(ctx, "initialize", map[string]any{
+		"protocolVersion": protocolVersion,
+		"capabilities": map[string]any{
+			"extensions": map[string]any{
+				ExtensionID: map[string]any{"mimeTypes": []string{ResourceMIMEType}},
+			},
+		},
+		"clientInfo": map[string]any{"name": "tuttid-mcp-app-resolver", "version": "1"},
+	})
+	if err != nil {
+		closeConn(true)
+		return nil, nil, initializeResult{}, fmt.Errorf("initialize: %w", err)
+	}
+	var result initializeResult
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &result); err != nil {
+			closeConn(true)
+			return nil, nil, initializeResult{}, fmt.Errorf("decode initialize: %w", err)
+		}
+	}
+	if err := client.Notify("notifications/initialized", map[string]any{}); err != nil {
+		closeConn(true)
+		return nil, nil, initializeResult{}, fmt.Errorf("notifications/initialized: %w", err)
+	}
+	return client, closeConn, result, nil
 }
 
 type toolsListResult struct {

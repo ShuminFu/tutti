@@ -69,7 +69,11 @@ func runFakeMCPServer(mode string) int {
 			if mode == "hang" {
 				continue
 			}
-			reply(map[string]any{"protocolVersion": "2024-11-05", "capabilities": map[string]any{"tools": map[string]any{}, "resources": map[string]any{}}})
+			result := map[string]any{"protocolVersion": "2024-11-05", "capabilities": map[string]any{"tools": map[string]any{}, "resources": map[string]any{}}}
+			if instructions := os.Getenv("MCPAPP_FAKE_SERVER_INSTRUCTIONS"); instructions != "" {
+				result["instructions"] = instructions
+			}
+			reply(result)
 		case "tools/list":
 			reply(map[string]any{"tools": fakeTools(mode)})
 		case "resources/read":

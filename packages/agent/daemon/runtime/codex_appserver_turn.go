@@ -537,6 +537,7 @@ func (a *CodexAppServerAdapter) execBlocking(
 		appSession.defaultModeMask,
 		execState.defaultModel,
 		renderTuttiModeHostContext(tuttiModeTurnSnapshotFromContext(ctx)),
+		a.contractMCPServerInstructions(ctx, session),
 		a.config.commandNetworkAccess,
 	)
 	if clientUserMessageID := metadataString(execMetadata, "clientSubmitId"); clientUserMessageID != "" {

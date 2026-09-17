@@ -300,6 +300,7 @@ func TestAppServerTurnStartKeepsTuttiContextOutOfUserInput(t *testing.T) {
 		},
 		"gpt-test",
 		hostContext,
+		"",
 		false,
 	)
 	input := payloadArray(params["input"])
@@ -326,6 +327,7 @@ func TestAppServerTurnStartUsesProviderOnlyTuttiFallbackWithoutCollaborationMask
 		nil,
 		"gpt-test",
 		hostContext,
+		"",
 		false,
 	)
 	input := payloadArray(params["input"])
