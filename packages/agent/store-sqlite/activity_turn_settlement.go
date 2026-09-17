@@ -67,6 +67,31 @@ LIMIT 1
 	return strings.TrimSpace(messageID), nil
 }
 
+func completeStreamingAssistantMessagesOnSettleTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	workspaceID string,
+	agentSessionID string,
+	turnID string,
+	now int64,
+) error {
+	_, err := tx.ExecContext(ctx, `
+UPDATE workspace_agent_messages
+SET status = 'completed',
+    completed_at_unix_ms = CASE WHEN completed_at_unix_ms = 0 THEN ? ELSE completed_at_unix_ms END,
+    updated_at_unix_ms = ?
+WHERE workspace_id = ? AND agent_session_id = ? AND turn_id = ?
+  AND deleted_at_unix_ms = 0
+  AND LOWER(TRIM(role)) = 'assistant'
+  AND LOWER(TRIM(kind)) = 'text'
+  AND LOWER(TRIM(status)) IN ('streaming', 'working', 'running')
+`, now, now, workspaceID, agentSessionID, turnID)
+	if err != nil {
+		return fmt.Errorf("complete leftover streaming assistant messages on settle: %w", err)
+	}
+	return nil
+}
+
 func encodeTurnErrorJSON(message string, code string) any {
 	message = strings.TrimSpace(message)
 	if message == "" {

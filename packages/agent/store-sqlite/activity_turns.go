@@ -192,6 +192,11 @@ WHERE workspace_id = ? AND agent_session_id = ? AND turn_id = ? AND status = ?
 `, InteractionStatusSuperseded, now, workspaceID, agentSessionID, turnID, InteractionStatusPending); err != nil {
 			return Turn{}, false, fmt.Errorf("supersede workspace agent interactions on settle: %w", err)
 		}
+		if err := completeStreamingAssistantMessagesOnSettleTx(
+			ctx, tx, workspaceID, agentSessionID, turnID, now,
+		); err != nil {
+			return Turn{}, false, err
+		}
 	} else {
 		if _, err := tx.ExecContext(ctx, `
 UPDATE workspace_agent_sessions

@@ -334,10 +334,11 @@ func (n *acpTurnNormalizer) applyAssistantFinalText(finalText string) {
 	n.replaceInlineReasoning(reasoning)
 	n.inlineReasoning.Reset()
 	finalText = strings.TrimSpace(assistant)
-	if finalText == "" || unterminated {
-		// The whole final text was reasoning, so this turn has no answer. Any
-		// assistant text already accumulated for the segment was that same
-		// monologue; drop it rather than publishing it as the reply.
+	if finalText == "" || unterminated || isAssistantProtocolFragment(finalText) {
+		// The whole final text was reasoning or a protocol fragment (unterminated
+		// think, leaked DSML tool markup). Any assistant text already accumulated
+		// for the segment was that same leftover; drop it rather than publishing
+		// it as the reply.
 		n.assistantContent.Reset()
 		n.assistantMessageID = ""
 		return
@@ -506,6 +507,10 @@ func (n *acpTurnNormalizer) Finish(session Session, turnID string, streamState s
 		return nil
 	}
 	n.settleInlineReasoning()
+	if isAssistantProtocolFragment(n.assistantContent.String()) {
+		n.assistantContent.Reset()
+		n.assistantMessageID = ""
+	}
 	events := make([]activityshared.Event, 0, 2)
 	if n.thinkingMessageID != "" && n.thinkingContent.Len() > 0 && !n.thinkingSegmentCompleted {
 		events = append(events, n.thinkingSnapshotEvent(session, turnID, streamState))
