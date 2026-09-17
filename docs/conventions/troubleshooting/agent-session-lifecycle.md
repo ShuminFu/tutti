@@ -3475,6 +3475,41 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   [workspaceAgentMessageCenterModel.ts](../../../packages/agent/gui/agent-message-center/workspaceAgentMessageCenterModel.ts)
   [workspaceAgentMessageCenterViewModel.ts](../../../packages/agent/gui/agent-message-center/workspaceAgentMessageCenterViewModel.ts)
 
+### Archive events have no top-level usage after a Dock session
+
+- Symptom:
+  Session archive JSONL written from Dock sessions (live or external-imported)
+  has no copyable top-level `usage` / `input_tokens` object, so OBS/audit ingest
+  reports zero tokens even though the Claude transcript had `message.usage` or
+  the runtime logged a usage update.
+- Quick checks:
+  Read `workspace_agent_messages.payload_json.usage` on assistant messages
+  first. Sessionarchive also accepts the same Claude keys (or nested
+  `message.usage` / `usage.lastTurn.models` camelCase) in `semantics_json`,
+  then that turn's `provider_turn_binding_json` / `completed_command_json`.
+  `session_metadata_json.usage.tokens` is only a latest-turn SQLite fallback.
+  Do not treat HTTP `runtimeContext.usage.lastTurn` as the archive source.
+- Root cause:
+  Native Dock Claude transcripts already store `message.usage` on assistant
+  rows, but the daemon previously copied only text/content into
+  `workspace_agent_messages`. Session metadata also kept only context-window
+  and quota fields, so `lastTurn` token counts were dropped. External import
+  skipped Claude `message.usage` when writing message payloads.
+- Fix:
+  Persist reported counts on assistant `payload_json.usage`. Keep
+  `session_metadata_json.usage.tokens` / `lastTurn` as a latest-turn fallback.
+  Do not invent missing keys. Archive writers in the sessionarchive consumer
+  still must copy that stored object onto each usage-bearing archive event.
+- Validation:
+  `go test ./packages/agent/store-sqlite -run 'TokenUsage|SessionRuntimeContextPreservesLastTurn|ReportSessionStatePersistsLastTurn|ReportActivityStatePersistsCodex'`
+  and
+  `cd services/tuttid && go test ./service/agent -run 'ParseClaudeCodeJSONLCopiesAssistantMessageUsage|ImportExternalSessionsPersistsClaude'`.
+- References:
+  [token_usage.go](../../../packages/agent/store-sqlite/token_usage.go)
+  [session_metadata.go](../../../packages/agent/store-sqlite/session_metadata.go)
+  [external_import_parse.go](../../../services/tuttid/service/agent/external_import_parse.go)
+  [external_import.go](../../../services/tuttid/service/agent/external_import.go)
+
 ### Realtime agent completion does not show unread attention
 
 - Symptom:

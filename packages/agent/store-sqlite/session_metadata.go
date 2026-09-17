@@ -28,6 +28,14 @@ type persistedSessionMetadata struct {
 type SessionUsage struct {
 	ContextWindow *SessionUsageContextWindow `json:"contextWindow"`
 	Quotas        []SessionUsageQuota        `json:"quotas"`
+	// LastTurn keeps the provider snapshot that adapters already publish
+	// (Claude/Codex lastTurn.models). Sessionarchive should prefer
+	// workspace_agent_messages.payload_json.usage; this is a latest-turn
+	// SQLite fallback, not an HTTP contract.
+	LastTurn map[string]any `json:"lastTurn,omitempty"`
+	// Tokens is the flattened Claude-compatible object copied from LastTurn
+	// or a source transcript. Sessionarchive lifts payload.usage first.
+	Tokens *ProviderTokenUsage `json:"tokens,omitempty"`
 }
 
 type SessionUsageContextWindow struct {
@@ -100,6 +108,12 @@ func splitSessionRuntimeContext(runtimeContext map[string]any) (SessionMetadata,
 		if value.Quotas == nil {
 			value.Quotas = []SessionUsageQuota{}
 		}
+		if !value.Tokens.HasReported() {
+			value.Tokens = ParseProviderTokenUsage(value.LastTurn)
+		}
+		if !value.Tokens.HasReported() {
+			value.Tokens = ParseProviderTokenUsage(raw)
+		}
 		if err := validateSessionUsage(value); err != nil {
 			return SessionMetadata{}, nil, nil, err
 		}
@@ -146,8 +160,9 @@ func validateSessionGoal(value SessionGoal) error {
 }
 
 func validateSessionUsage(value SessionUsage) error {
-	if value.ContextWindow == nil && len(value.Quotas) == 0 {
-		return fmt.Errorf("session usage requires a context window or quotas")
+	if value.ContextWindow == nil && len(value.Quotas) == 0 &&
+		len(value.LastTurn) == 0 && !value.Tokens.HasReported() {
+		return fmt.Errorf("session usage requires a context window, quotas, or reported tokens")
 	}
 	if value.ContextWindow != nil && (value.ContextWindow.UsedTokens < 0 || value.ContextWindow.TotalTokens <= 0) {
 		return fmt.Errorf("session usage context tokens must be non-negative with a positive total")
@@ -218,6 +233,9 @@ func unmarshalSessionMetadata(raw string) (SessionMetadata, *canonical.Capabilit
 	}
 	if record.Usage != nil && record.Usage.Quotas == nil {
 		record.Usage.Quotas = []SessionUsageQuota{}
+	}
+	if record.Usage != nil && !record.Usage.Tokens.HasReported() {
+		record.Usage.Tokens = ParseProviderTokenUsage(record.Usage.LastTurn)
 	}
 	if err != nil {
 		return SessionMetadata{}, nil, err

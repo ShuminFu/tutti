@@ -71,6 +71,35 @@ test("assistant SDK error replaces completion with a failed message", () => {
   );
 });
 
+test("assistant completion copies pending usage onto the completed payload", () => {
+  const events: Array<Omit<ClaudeSDKSidecarEvent, "version">> = [];
+  const projector = new AssistantStreamProjector(
+    () => "turn-1",
+    (event) => events.push(event)
+  );
+
+  projector.setMessageBase("message-1");
+  projector.setPendingUsage({
+    input_tokens: 100,
+    output_tokens: 20,
+    cache_read_input_tokens: 7,
+    cache_creation_input_tokens: 3
+  });
+  projector.completeContent(
+    "assistant",
+    "message-1",
+    "hello",
+    new Set<string>()
+  );
+
+  assert.deepEqual(events[0]?.payload?.usage, {
+    input_tokens: 100,
+    output_tokens: 20,
+    cache_read_input_tokens: 7,
+    cache_creation_input_tokens: 3
+  });
+});
+
 test("assistant stream reset drops stale indexes", () => {
   const events: Array<Omit<ClaudeSDKSidecarEvent, "version">> = [];
   const projector = new AssistantStreamProjector(

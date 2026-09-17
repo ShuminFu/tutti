@@ -88,6 +88,7 @@ func codexMessageFromPayload(payload map[string]any, index int, timestamp int64)
 			Kind:              "text",
 			Status:            "completed",
 			Text:              externalContentText(payload["content"]),
+			Usage:             externalImportedUsage(payload["usage"], payload["tokenUsage"]),
 			OccurredAtUnixMS:  timestamp,
 			StartedAtUnixMS:   timestamp,
 			CompletedAtUnixMS: timestamp,
@@ -295,6 +296,7 @@ func parseClaudeCodeJSONL(ctx context.Context, path string, reader io.Reader) (e
 			Kind:             "text",
 			Status:           "completed",
 			Text:             externalContentText(content),
+			Usage:            externalImportedUsage(messageMap["usage"], raw["usage"]),
 			OccurredAtUnixMS: unixMSFromAny(raw["timestamp"]),
 		}
 		if message.Text != "" {

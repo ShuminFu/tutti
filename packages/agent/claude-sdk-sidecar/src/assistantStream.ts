@@ -16,6 +16,7 @@ export class AssistantStreamProjector {
   private readonly emit: ClaudeSDKSidecarEventEmitter;
   private currentMessageBase = "";
   private sequence = 0;
+  private pendingUsage: Record<string, unknown> | undefined;
   private readonly segmentsByKey = new Map<string, AssistantSegmentState>();
   private readonly segmentKeyByIndex = new Map<string, string>();
 
@@ -27,8 +28,13 @@ export class AssistantStreamProjector {
   reset(): void {
     this.currentMessageBase = "";
     this.sequence = 0;
+    this.pendingUsage = undefined;
     this.segmentsByKey.clear();
     this.segmentKeyByIndex.clear();
+  }
+
+  setPendingUsage(usage: Record<string, unknown> | undefined): void {
+    this.pendingUsage = usage;
   }
 
   setMessageBase(messageId: string): void {
@@ -200,6 +206,14 @@ export class AssistantStreamProjector {
     if (!segment.snapshot) {
       return;
     }
+    const payload: Record<string, unknown> = {
+      turnId: this.activeTurnId(),
+      messageId: segment.messageId,
+      content: segment.snapshot
+    };
+    if (segment.kind === "assistant" && this.pendingUsage) {
+      payload.usage = this.pendingUsage;
+    }
     this.emit({
       type:
         segment.kind === "assistant"
@@ -207,11 +221,7 @@ export class AssistantStreamProjector {
             ? "assistant_failed"
             : "assistant_completed"
           : "thinking_completed",
-      payload: {
-        turnId: this.activeTurnId(),
-        messageId: segment.messageId,
-        content: segment.snapshot
-      }
+      payload
     });
   }
 

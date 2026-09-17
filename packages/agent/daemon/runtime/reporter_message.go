@@ -56,6 +56,9 @@ func textMessageUpdateFromSessionEvent(
 	if displayPrompt := stringFromPayload(event.Payload.Metadata, "displayPrompt"); displayPrompt != "" {
 		payload["displayPrompt"] = displayPrompt
 	}
+	if usage, ok := event.Payload.Metadata["usage"].(map[string]any); ok && len(usage) > 0 {
+		payload["usage"] = clonePayload(usage)
+	}
 	if clientSubmitID := stringFromPayload(event.Payload.Metadata, "clientSubmitId"); clientSubmitID != "" {
 		payload["clientSubmitId"] = clientSubmitID
 	}

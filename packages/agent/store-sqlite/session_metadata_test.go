@@ -85,6 +85,38 @@ func TestSplitSessionRuntimeContextUsesClosedMetadataVocabularies(t *testing.T) 
 	}
 }
 
+func TestSplitSessionRuntimeContextPreservesLastTurnTokens(t *testing.T) {
+	metadata, _, _, err := splitSessionRuntimeContext(map[string]any{
+		"usage": map[string]any{
+			"contextWindow": map[string]any{"usedTokens": 33_168, "totalTokens": 400_000},
+			"quotas":        []any{},
+			"lastTurn": map[string]any{
+				"models": map[string]any{
+					"claude-opus-4-6": map[string]any{
+						"inputTokens":              100,
+						"outputTokens":             20,
+						"cacheReadInputTokens":     7,
+						"cacheCreationInputTokens": 3,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metadata.Usage == nil || len(metadata.Usage.LastTurn) == 0 {
+		t.Fatalf("usage=%#v, want lastTurn kept", metadata.Usage)
+	}
+	if !metadata.Usage.Tokens.HasReported() ||
+		metadata.Usage.Tokens.InputTokens == nil || *metadata.Usage.Tokens.InputTokens != 100 ||
+		metadata.Usage.Tokens.OutputTokens == nil || *metadata.Usage.Tokens.OutputTokens != 20 ||
+		metadata.Usage.Tokens.CacheReadInputTokens == nil || *metadata.Usage.Tokens.CacheReadInputTokens != 7 ||
+		metadata.Usage.Tokens.CacheCreationInputTokens == nil || *metadata.Usage.Tokens.CacheCreationInputTokens != 3 {
+		t.Fatalf("tokens=%#v, want flattened lastTurn counts", metadata.Usage.Tokens)
+	}
+}
+
 func TestDecodeSessionGoalUsesCanonicalValidation(t *testing.T) {
 	goal, err := DecodeSessionGoal(map[string]any{
 		"objective": "ship", "status": "paused", "startedAtUnixMs": 10, "iterations": 2,

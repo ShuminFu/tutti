@@ -56,6 +56,13 @@ export function readSDKAssistantMessageID(message: SDKMessage): string {
   return stringValue(record?.id);
 }
 
+export function readSDKAssistantUsage(
+  message: SDKMessage
+): Record<string, unknown> | undefined {
+  const inner = recordValue((message as { message?: unknown }).message);
+  return recordValue(inner?.usage) ?? recordValue((message as { usage?: unknown }).usage);
+}
+
 export function readSDKParentToolUseID(message: SDKMessage): string {
   const value = (message as { parent_tool_use_id?: unknown })
     .parent_tool_use_id;

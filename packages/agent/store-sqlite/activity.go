@@ -87,6 +87,7 @@ func (s *Store) ReportActivityState(
 	if err != nil {
 		return ActivityStateReportResult{}, err
 	}
+	changedTokens := session.changedTokenUsage
 	sessionWritable, err := sessionActivityWritableTx(ctx, tx, workspaceID, agentSessionID)
 	if err != nil {
 		return ActivityStateReportResult{}, err
@@ -176,7 +177,21 @@ func (s *Store) ReportActivityState(
 			result.Messages.Messages = append(result.Messages.Messages, acceptedMessage)
 		}
 	}
+	attached, attachedOK, attachErr := attachTokenUsageToLatestAssistantMessageTx(
+		ctx, tx, workspaceID, agentSessionID, changedTokens, now,
+	)
+	if attachErr != nil {
+		return ActivityStateReportResult{}, attachErr
+	}
 	mutations := activityStateMutations(result)
+	if attachedOK {
+		if attached.Version > result.Messages.LatestVersion {
+			result.Messages.LatestVersion = attached.Version
+		}
+		mutations = append(mutations, transactionMutation(
+			workspaceID, agentSessionID, MutationEntityMessage, attached.MessageID, "upsert", int64(attached.Version),
+		))
+	}
 	goalMutations, err := sessionGoalMutationsTx(ctx, tx, input.Session, goalBefore)
 	if err != nil {
 		return ActivityStateReportResult{}, err

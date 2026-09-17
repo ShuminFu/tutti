@@ -170,6 +170,23 @@ func stampClaudeSDKAdapterMetadata(events []activityshared.Event) []activityshar
 	return events
 }
 
+func stampClaudeSDKUsageMetadata(events []activityshared.Event, payload map[string]any) []activityshared.Event {
+	usage := payloadMap(payload, "usage")
+	if len(events) == 0 || len(usage) == 0 {
+		return events
+	}
+	for index := range events {
+		if events[index].Payload.Role != activityshared.MessageRoleAssistant {
+			continue
+		}
+		if events[index].Payload.Metadata == nil {
+			events[index].Payload.Metadata = map[string]any{}
+		}
+		events[index].Payload.Metadata["usage"] = clonePayload(usage)
+	}
+	return events
+}
+
 // takeClaudeSDKTurnNormalizerLocked removes and returns the turn lifecycle
 // owner for turnID. Caller must hold the adapter mutex.
 func (s *claudeSDKAdapterSession) takeClaudeSDKTurnNormalizerLocked(turnID string) *acpTurnNormalizer {

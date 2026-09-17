@@ -368,8 +368,12 @@ type SessionSectionsPage struct {
 type Session struct {
 	// CommitTransactionID is populated only by a successful mutating call and
 	// is not persisted as canonical session state.
-	CommitTransactionID    string           `json:"-"`
-	CommitDelta            TransactionDelta `json:"-"`
+	CommitTransactionID string           `json:"-"`
+	CommitDelta         TransactionDelta `json:"-"`
+	// changedTokenUsage is set by a session upsert when provider token
+	// counts changed. Callers copy it onto the current turn's assistant
+	// message. It is not a persisted session field.
+	changedTokenUsage      *ProviderTokenUsage
 	ID                     string
 	WorkspaceID            string
 	Kind                   string

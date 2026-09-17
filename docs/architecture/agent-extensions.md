@@ -680,6 +680,13 @@ process. The fake ACP tests separately verify the exact declared spawn argv and
 all permission tiers; keeping those checks separate lets the smoke remain
 non-billable even when a CLI release makes `session/new` contact the service.
 
+Grok ACP initialize/smoke coverage does not persist token usage. The shared
+Claude/Codex path stores provider-reported counts on assistant
+`payload_json.usage` (sessionarchive's preferred SQLite field) and keeps
+session `usage.tokens` only as a latest-turn fallback; Grok does not yet
+emit an equivalent `input_tokens` / `lastTurn` snapshot, so archive writers
+will keep seeing absent tokens for Grok sessions until that report exists.
+
 This support does not add a Grok provider, icon, executable wrapper, credential
 persistence, private authentication protocol, headless/TSH integration,
 automatic CLI updates, or private `x.ai/*` operations. End-to-end AgentGUI
