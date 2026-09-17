@@ -9,6 +9,8 @@ import type { McpCallToolResult } from "../mcpApps/mcpAppProtocol";
 export interface AgentMcpAppRowVM {
   kind: "mcp-app";
   id: string;
+  /** Exact workspace owning the snapshot; the read route is workspace-scoped. */
+  workspaceId: string;
   turnId: string;
   sourceCallId: string;
   serverName: string;

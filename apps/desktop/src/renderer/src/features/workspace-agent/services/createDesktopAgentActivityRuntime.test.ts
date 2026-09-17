@@ -462,6 +462,33 @@ test("desktop agent activity runtime delegates canonical session synchronization
   );
 });
 
+test("desktop agent activity runtime reads MCP App snapshots for the owning workspace", async () => {
+  const calls: unknown[] = [];
+  const resource = {
+    html: "<!doctype html><html></html>",
+    meta: { csp: { resourceDomains: ["https://registry.npmmirror.com"] } },
+    mimeType: "text/html;profile=mcp-app",
+    uri: "ui://workflow_report/widget"
+  };
+  const runtime = createDesktopAgentActivityRuntime({
+    ...createWorkspaceAgentActivityService(),
+    async loadMcpAppResource(input) {
+      calls.push(input);
+      return resource;
+    }
+  });
+
+  const result = await runtime.loadMcpAppResource?.({
+    workspaceId: "workspace-2",
+    resourceSha256: "f".repeat(64)
+  });
+
+  assert.equal(result, resource);
+  assert.deepEqual(calls, [
+    { workspaceId: "workspace-2", resourceSha256: "f".repeat(64) }
+  ]);
+});
+
 function createWorkspaceAgentActivityService(): IWorkspaceAgentActivityService {
   return {
     _serviceBrand: undefined,
@@ -502,6 +529,9 @@ function createWorkspaceAgentActivityService(): IWorkspaceAgentActivityService {
       throw new Error("not implemented");
     },
     listAgentGeneratedFiles: async () => {
+      throw new Error("not implemented");
+    },
+    loadMcpAppResource: async () => {
       throw new Error("not implemented");
     },
     listSessionsPage: async () => ({

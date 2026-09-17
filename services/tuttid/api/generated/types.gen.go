@@ -5256,7 +5256,7 @@ type AgentProviderStatus struct {
 	Auth          AgentProviderAuthInfo           `json:"auth"`
 	Availability  AgentProviderAvailability       `json:"availability"`
 	Cli           AgentProviderCliStatus          `json:"cli"`
-	ConfigOptions []map[string]interface{}         `json:"configOptions,omitempty"`
+	ConfigOptions []map[string]interface{}        `json:"configOptions,omitempty"`
 	LastOperation *AgentProviderActionRunResponse `json:"lastOperation,omitempty"`
 	Network       *AgentProviderNetworkStatus     `json:"network,omitempty"`
 	Provider      WorkspaceAgentProvider          `json:"provider"`
@@ -6525,10 +6525,10 @@ type CreateWorkspaceAgentSessionRequest struct {
 
 	// ResumeProviderSessionId Optional Cursor ACP session id imported into the new Tutti session via session/load.
 	ResumeProviderSessionId *string                 `json:"resumeProviderSessionId,omitempty"`
-	Speed               *string                 `json:"speed,omitempty"`
-	SubmitDiagnostics   *AgentSubmitDiagnostics `json:"submitDiagnostics,omitempty"`
-	Title               *string                 `json:"title,omitempty"`
-	Visible             *bool                   `json:"visible,omitempty"`
+	Speed                   *string                 `json:"speed,omitempty"`
+	SubmitDiagnostics       *AgentSubmitDiagnostics `json:"submitDiagnostics,omitempty"`
+	Title                   *string                 `json:"title,omitempty"`
+	Visible                 *bool                   `json:"visible,omitempty"`
 }
 
 // CreateWorkspaceAppFactoryJobRequest defines model for CreateWorkspaceAppFactoryJobRequest.

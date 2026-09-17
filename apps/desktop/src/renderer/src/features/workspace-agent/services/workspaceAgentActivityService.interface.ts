@@ -2,6 +2,8 @@ import { createDecorator } from "@tutti-os/infra/di";
 import type {
   AgentGUIRuntime,
   AgentActivityRuntimeActivateSessionInput,
+  AgentActivityRuntimeLoadMcpAppResourceInput,
+  AgentActivityRuntimeMcpAppResource,
   AgentActivityRuntimeUnactivateSessionInput,
   AgentActivityRuntimeUpdateSessionSettingsResult
 } from "@tutti-os/agent-gui";
@@ -199,6 +201,13 @@ export interface IWorkspaceAgentActivityService {
   listAgentGeneratedFiles(
     input: WorkspaceAgentActivityListGeneratedFilesInput
   ): Promise<WorkspaceAgentGeneratedFileListResponse>;
+  /**
+   * Reads the MCP Apps UI resource snapshot a tool_call payload references.
+   * Resolves `null` when tuttid has no such snapshot in the workspace.
+   */
+  loadMcpAppResource(
+    input: AgentActivityRuntimeLoadMcpAppResourceInput
+  ): Promise<AgentActivityRuntimeMcpAppResource | null>;
   listSessionsPage(
     input: WorkspaceAgentActivityListSessionsPageInput
   ): Promise<WorkspaceAgentActivitySessionPageResult>;

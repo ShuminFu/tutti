@@ -1544,6 +1544,9 @@ function createWorkspaceAgentActivityService(
     async listAgentGeneratedFiles() {
       return { entries: [], hasMore: false, workspaceId };
     },
+    async loadMcpAppResource() {
+      return null;
+    },
     async listSessionsPage(input) {
       return { hasMore: false, sessions: [], workspaceId: input.workspaceId };
     },

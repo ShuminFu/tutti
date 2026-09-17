@@ -2938,6 +2938,112 @@ test("WorkspaceAgentActivityService.listAgentGeneratedFiles delegates to tuttid 
   ]);
 });
 
+test("WorkspaceAgentActivityService.loadMcpAppResource reads the workspace snapshot from tuttid", async () => {
+  const calls: unknown[] = [];
+  const service = new WorkspaceAgentActivityService({
+    tuttidClient: {
+      getWorkspaceAgentMcpAppResource: async (
+        workspaceId: string,
+        resourceSha256: string
+      ) => {
+        calls.push({ resourceSha256, workspaceId });
+        return {
+          html: "<!doctype html><html></html>",
+          meta: {
+            csp: {
+              baseUriDomains: ["https://base.example"],
+              connectDomains: [],
+              frameDomains: ["https://frame.example"],
+              resourceDomains: ["https://registry.npmmirror.com"]
+            },
+            prefersBorder: false
+          },
+          mimeType: "text/html;profile=mcp-app",
+          resourceSha256,
+          uri: "ui://workflow_report/widget"
+        };
+      }
+    } as unknown as TuttidClient,
+    runtimeApi: {
+      logTerminalDiagnostic: async () => {}
+    }
+  });
+
+  const result = await service.loadMcpAppResource({
+    resourceSha256: ` ${"a".repeat(64)} `,
+    workspaceId: " ws-1 "
+  });
+
+  assert.deepEqual(calls, [
+    { resourceSha256: "a".repeat(64), workspaceId: "ws-1" }
+  ]);
+  assert.deepEqual(result, {
+    html: "<!doctype html><html></html>",
+    meta: {
+      csp: {
+        connectDomains: [],
+        resourceDomains: ["https://registry.npmmirror.com"]
+      },
+      prefersBorder: false
+    },
+    mimeType: "text/html;profile=mcp-app",
+    uri: "ui://workflow_report/widget"
+  });
+});
+
+test("WorkspaceAgentActivityService.loadMcpAppResource resolves null for a missing snapshot", async () => {
+  const service = new WorkspaceAgentActivityService({
+    tuttidClient: {
+      getWorkspaceAgentMcpAppResource: async () => {
+        throw new TuttidProtocolError({
+          code: "workspace_not_found",
+          developerMessage: "workspace agent MCP App resource not found",
+          reason: "workspace_agent_mcp_app_resource_not_found",
+          statusCode: 404
+        });
+      }
+    } as unknown as TuttidClient,
+    runtimeApi: {
+      logTerminalDiagnostic: async () => {}
+    }
+  });
+
+  assert.equal(
+    await service.loadMcpAppResource({
+      resourceSha256: "a".repeat(64),
+      workspaceId: "ws-1"
+    }),
+    null
+  );
+});
+
+test("WorkspaceAgentActivityService.loadMcpAppResource rejects other tuttid failures", async () => {
+  const failure = new TuttidProtocolError({
+    code: "service_unavailable",
+    developerMessage: "MCP App resource reader is not configured",
+    reason: "workspace_agent_session_service_unavailable",
+    statusCode: 503
+  });
+  const service = new WorkspaceAgentActivityService({
+    tuttidClient: {
+      getWorkspaceAgentMcpAppResource: async () => {
+        throw failure;
+      }
+    } as unknown as TuttidClient,
+    runtimeApi: {
+      logTerminalDiagnostic: async () => {}
+    }
+  });
+
+  await assert.rejects(
+    service.loadMcpAppResource({
+      resourceSha256: "a".repeat(64),
+      workspaceId: "ws-1"
+    }),
+    (error) => error === failure
+  );
+});
+
 test("WorkspaceAgentActivityService.listAgentGeneratedFiles fails closed for an empty target constraint", async () => {
   let requestCount = 0;
   const service = new WorkspaceAgentActivityService({

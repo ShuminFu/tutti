@@ -99,9 +99,19 @@ export interface AgentActivityRuntimeGeneratedFile {
 }
 
 /**
- * HTML snapshot of an MCP Apps UI resource, stored by tuttid and addressed by
- * `sha256(html)`. `meta` is the resource's `_meta.ui` (CSP domains and border
- * preference) captured together with the HTML.
+ * Identity of an MCP Apps resource snapshot. Snapshots are stored per
+ * workspace, so the runtime (which serves several workspaces) needs the owning
+ * workspace alongside the tool_call payload's opaque `mcpApp.resourceSha256`.
+ */
+export interface AgentActivityRuntimeLoadMcpAppResourceInput {
+  workspaceId: string;
+  resourceSha256: string;
+}
+
+/**
+ * HTML snapshot of an MCP Apps UI resource as stored by tuttid. `meta` is the
+ * resource's `_meta.ui` (CSP domains and border preference) captured together
+ * with the HTML.
  */
 export interface AgentActivityRuntimeMcpAppResource {
   uri: string;
@@ -378,12 +388,12 @@ export interface AgentGUIRuntime {
     input: AgentActivityRuntimeListGeneratedFilesInput
   ): Promise<AgentActivityRuntimeGeneratedFileList>;
   /**
-   * Reads an MCP Apps resource snapshot by content hash. Resolves `null` when
+   * Reads an MCP Apps resource snapshot by workspace and content hash. Resolves `null` when
    * the snapshot does not exist; AgentGUI then shows only the ordinary tool
    * card. Omit on hosts that cannot serve snapshots.
    */
   loadMcpAppResource?(
-    sha256: string
+    input: AgentActivityRuntimeLoadMcpAppResourceInput
   ): Promise<AgentActivityRuntimeMcpAppResource | null>;
   listSessionsPage?(
     input: AgentActivityRuntimeListSessionsPageInput

@@ -14,6 +14,7 @@ const row: AgentMcpAppRowVM = {
   kind: "mcp-app",
   id: "mcp-app:call:widget-1",
   turnId: "turn-1",
+  workspaceId: "workspace-1",
   sourceCallId: "call:widget-1",
   serverName: "workflow_report",
   toolName: "show_widget",
@@ -51,7 +52,10 @@ describe("AgentMcpAppRow", () => {
     renderRow(load);
 
     const iframe = await screen.findByTitle("Tool view: Sales");
-    expect(load).toHaveBeenCalledWith(SHA);
+    expect(load).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      resourceSha256: SHA
+    });
     expect(iframe.getAttribute("sandbox")).toBe("allow-scripts");
     expect(screen.getByTestId("agent-mcp-app-artifact")).toBeInTheDocument();
   });

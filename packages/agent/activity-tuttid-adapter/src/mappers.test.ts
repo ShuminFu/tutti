@@ -230,6 +230,45 @@ test("message mapping preserves session-level ownership and trims turn ids", () 
   assert.equal(turnOwned.turnId, "turn-1");
 });
 
+test("message mapping keeps the MCP App snapshot reference on tool_call payloads", () => {
+  // Shape tuttid serves after the MCP App resolver republishes the tool call
+  // (services/tuttid/service/mcpapp integration test): the GUI projects the
+  // transcript View row straight from payload.mcpApp.
+  const mcpApp = {
+    argumentsPointer: "/input",
+    resourceSha256: "e".repeat(64),
+    resourceUri: "ui://workflow_report/widget",
+    serverName: "workflow_report",
+    toolName: "show_widget"
+  };
+  const message = agentActivityMessageFromTuttidMessage("workspace-1", {
+    agentSessionId: "session-1",
+    kind: "tool_call",
+    messageId: "tool-widget",
+    occurredAtUnixMs: 3,
+    payload: {
+      callId: "widget-1",
+      input: { title: "Sales", widget_code: "<div id=chart></div>" },
+      mcpApp,
+      output: { text: "Shown" },
+      toolName: "mcp__workflow_report__show_widget"
+    },
+    role: "assistant",
+    sequence: 3,
+    status: "completed",
+    turnId: "turn-1",
+    version: 2
+  } satisfies WorkspaceAgentSessionMessage);
+
+  assert.equal(message.workspaceId, "workspace-1");
+  assert.equal(message.version, 2);
+  assert.deepEqual(message.payload?.mcpApp, mcpApp);
+  assert.deepEqual(message.payload?.input, {
+    title: "Sales",
+    widget_code: "<div id=chart></div>"
+  });
+});
+
 function createSession(): WorkspaceAgentSession {
   return {
     activeTurn: null,

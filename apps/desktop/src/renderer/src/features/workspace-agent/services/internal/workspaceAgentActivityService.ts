@@ -376,6 +376,12 @@ export class WorkspaceAgentActivityService
     return this.queryOperations.listAgentGeneratedFiles(input);
   }
 
+  async loadMcpAppResource(
+    input: Parameters<IWorkspaceAgentActivityService["loadMcpAppResource"]>[0]
+  ): ReturnType<IWorkspaceAgentActivityService["loadMcpAppResource"]> {
+    return this.queryOperations.loadMcpAppResource(input);
+  }
+
   async listSessionsPage(
     input: Parameters<IWorkspaceAgentActivityService["listSessionsPage"]>[0]
   ): ReturnType<IWorkspaceAgentActivityService["listSessionsPage"]> {

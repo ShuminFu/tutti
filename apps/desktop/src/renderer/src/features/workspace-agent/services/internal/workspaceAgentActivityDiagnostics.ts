@@ -48,6 +48,15 @@ export function isWorkspaceAgentSessionNotFoundError(error: unknown): boolean {
   );
 }
 
+export function isWorkspaceAgentMcpAppResourceNotFoundError(
+  error: unknown
+): boolean {
+  return (
+    normalizeTuttidError(error)?.reason ===
+    "workspace_agent_mcp_app_resource_not_found"
+  );
+}
+
 export function hasInlineMessagesData(data: unknown): boolean {
   return (
     typeof data === "object" &&

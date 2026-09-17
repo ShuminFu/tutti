@@ -547,12 +547,14 @@ function projectTurnConversationRows(
       skippedIndices,
       turn.id,
       options.agentSessionId
-    )
+    ),
+    workspaceId
   );
 }
 
 function promoteGeneratedImageRows(
-  rows: readonly AgentTranscriptRowVM[]
+  rows: readonly AgentTranscriptRowVM[],
+  workspaceId: string | null | undefined
 ): AgentTranscriptRowVM[] {
   const promoted: AgentTranscriptRowVM[] = [];
   for (const row of rows) {
@@ -567,7 +569,7 @@ function promoteGeneratedImageRows(
       }
       // MCP Apps views follow their tool group like generated images; the
       // original tool card stays in the group as the fallback surface.
-      const mcpApp = projectAgentMcpAppRow(call, row.turnId);
+      const mcpApp = projectAgentMcpAppRow(call, row.turnId, workspaceId);
       if (mcpApp) {
         promoted.push(mcpApp);
       }

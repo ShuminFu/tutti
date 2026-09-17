@@ -117,6 +117,8 @@ export class McpAppHostBridge {
         this.dispose();
         resolve();
       };
+      // An unresponsive View must not keep the bridge alive after unmount.
+      // timing: bound the spec's ui/resource-teardown handshake
       const timer = setTimeout(finish, TEARDOWN_TIMEOUT_MS);
       this.pendingResponses.set(id, finish);
       this.options.postToView({

@@ -1056,6 +1056,7 @@ function createDependenciesStub(): {
       rollbackWorkspaceApp: fail,
       cancelWorkspaceAgentTurn: fail,
       goalControlWorkspaceAgentSession: fail,
+      getWorkspaceAgentMcpAppResource: fail,
       getWorkspaceAgentSessionGoal: fail,
       reconcileWorkspaceAgentSessionGoal: fail,
       sendWorkspaceAgentSessionInput: fail,

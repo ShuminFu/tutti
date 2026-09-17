@@ -260,6 +260,7 @@ describe("projectAgentConversationVM", () => {
       kind: "mcp-app",
       id: "mcp-app:call:widget-1",
       turnId: "turn-widget",
+      workspaceId: "workspace-1",
       resourceSha256: "b".repeat(64),
       toolArguments: widgetArguments
     });

@@ -151,23 +151,25 @@ export function McpAppFrame({
       }
     );
 
-    const resizeObserver =
-      typeof ResizeObserver === "function"
-        ? new ResizeObserver(() => {
-            const nextWidth = readContainerWidth();
-            if (nextWidth === lastWidth) {
-              return;
-            }
-            lastWidth = nextWidth;
-            bridge.notifyHostContextChanged({
-              containerDimensions: {
-                width: nextWidth,
-                maxHeight: MCP_APP_MAX_HEIGHT_PX
-              }
-            });
-          })
-        : null;
-    resizeObserver?.observe(container);
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver === "function") {
+      // Forwards width changes as containerDimensions; disconnected on unmount.
+      // presentation-work: lifetime of the mounted View only
+      resizeObserver = new ResizeObserver(() => {
+        const nextWidth = readContainerWidth();
+        if (nextWidth === lastWidth) {
+          return;
+        }
+        lastWidth = nextWidth;
+        bridge.notifyHostContextChanged({
+          containerDimensions: {
+            width: nextWidth,
+            maxHeight: MCP_APP_MAX_HEIGHT_PX
+          }
+        });
+      });
+      resizeObserver.observe(container);
+    }
 
     return () => {
       stopThemeObservation();

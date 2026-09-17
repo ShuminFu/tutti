@@ -16,9 +16,15 @@ const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/i;
  */
 export function projectAgentMcpAppRow(
   call: AgentToolCallVM,
-  turnId: string
+  turnId: string,
+  workspaceId: string | null | undefined
 ): AgentMcpAppRowVM | null {
-  if (call.statusKind !== "completed" || !call.payload) {
+  const normalizedWorkspaceId = workspaceId?.trim();
+  if (
+    !normalizedWorkspaceId ||
+    call.statusKind !== "completed" ||
+    !call.payload
+  ) {
     return null;
   }
   const reference = recordValue(call.payload.mcpApp);
@@ -49,6 +55,7 @@ export function projectAgentMcpAppRow(
   return {
     kind: "mcp-app",
     id: `mcp-app:${call.id}`,
+    workspaceId: normalizedWorkspaceId,
     turnId,
     sourceCallId: call.id,
     serverName,

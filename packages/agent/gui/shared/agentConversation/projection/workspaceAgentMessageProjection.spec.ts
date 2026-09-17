@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  mergeAgentActivityMessages,
   normalizeAgentActivitySession,
   type AgentActivityMessage,
   type AgentActivitySnapshot,
@@ -980,6 +981,67 @@ describe("projectWorkspaceAgentMessagesToConversationVM", () => {
     expect(call?.statusKind).toBe("completed");
     expect(call?.input).toEqual({ path: "/workspace/demo/README.md" });
     expect(call?.output).toEqual({ text: "README contents" });
+  });
+
+  it("adds the mcp-app row when a later message version attaches the snapshot reference", () => {
+    // tuttid stores the MCP tool call first and republishes the same message
+    // with payload.mcpApp once the resource snapshot resolves in background.
+    const widgetPayload = {
+      callId: "widget-1",
+      title: "workflow_report / show_widget",
+      toolName: "mcp__workflow_report__show_widget",
+      input: { title: "Sales", widget_code: "<div id=chart></div>" },
+      output: { text: "Shown" }
+    };
+    const firstVersion = message({
+      messageId: "tool-widget",
+      version: 1,
+      kind: "tool_call",
+      status: "completed",
+      payload: widgetPayload
+    });
+    const project = (messages: AgentActivityMessage[]) =>
+      projectWorkspaceAgentMessagesToConversationVM({
+        activity: activity(),
+        session: session(),
+        messages
+      });
+
+    const before = project([firstVersion]);
+    expect(before.rows.some((row) => row.kind === "tool-group")).toBe(true);
+    expect(before.rows.some((row) => row.kind === "mcp-app")).toBe(false);
+
+    const updated = mergeAgentActivityMessages(
+      [firstVersion],
+      [
+        message({
+          messageId: "tool-widget",
+          version: 2,
+          kind: "tool_call",
+          status: "completed",
+          payload: {
+            ...widgetPayload,
+            mcpApp: {
+              serverName: "workflow_report",
+              toolName: "show_widget",
+              resourceUri: "ui://workflow_report/widget",
+              resourceSha256: "d".repeat(64),
+              argumentsPointer: "/input"
+            }
+          }
+        })
+      ]
+    );
+    const after = project(updated);
+    const kinds = after.rows.map((row) => row.kind);
+    expect(kinds.filter((kind) => kind === "tool-group")).toHaveLength(1);
+    expect(kinds[kinds.indexOf("tool-group") + 1]).toBe("mcp-app");
+    expect(after.rows.find((row) => row.kind === "mcp-app")).toMatchObject({
+      workspaceId: "workspace-1",
+      resourceSha256: "d".repeat(64),
+      toolName: "show_widget",
+      toolArguments: { title: "Sales", widget_code: "<div id=chart></div>" }
+    });
   });
 
   it("projects durable AskUserQuestion tool_call messages as pending interactive prompts", () => {

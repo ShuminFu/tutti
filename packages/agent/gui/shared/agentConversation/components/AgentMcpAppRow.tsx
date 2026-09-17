@@ -1,6 +1,7 @@
 import { useEffect, useState, type JSX } from "react";
 import {
   useOptionalAgentGUIRuntime,
+  type AgentActivityRuntimeLoadMcpAppResourceInput,
   type AgentActivityRuntimeMcpAppResource,
   type AgentGUIRuntime
 } from "../../../agentActivityRuntime";
@@ -21,26 +22,33 @@ export function AgentMcpAppRow({
   row: AgentMcpAppRowVM;
 }): JSX.Element | null {
   const runtime = useOptionalAgentGUIRuntime();
+  const resourceKey = mcpAppResourceCacheKey(row);
   const [loaded, setLoaded] = useState<{
-    sha256: string;
+    key: string;
     resource: AgentActivityRuntimeMcpAppResource | null;
   } | null>(null);
 
+  // Keyed on the exact (workspace, snapshot) identity rather than run once on
+  // mount: tuttid may attach `mcpApp` to an already rendered tool call in a
+  // later message version, and the projection then mounts this row fresh.
   useEffect(() => {
     let canceled = false;
-    const sha256 = row.resourceSha256;
-    void loadMcpAppResourceCached(runtime, sha256).then((resource) => {
+    const input = {
+      workspaceId: row.workspaceId,
+      resourceSha256: row.resourceSha256
+    };
+    const key = mcpAppResourceCacheKey(input);
+    void loadMcpAppResourceCached(runtime, input).then((resource) => {
       if (!canceled) {
-        setLoaded({ sha256, resource });
+        setLoaded({ key, resource });
       }
     });
     return () => {
       canceled = true;
     };
-  }, [row.resourceSha256, runtime]);
+  }, [row.resourceSha256, row.workspaceId, runtime]);
 
-  const resource =
-    loaded?.sha256 === row.resourceSha256 ? loaded.resource : null;
+  const resource = loaded?.key === resourceKey ? loaded.resource : null;
   if (!resource) {
     return null;
   }
@@ -56,7 +64,7 @@ export function AgentMcpAppRow({
       data-testid="agent-mcp-app-artifact"
     >
       <McpAppFrame
-        key={row.resourceSha256}
+        key={resourceKey}
         html={resource.html}
         csp={resource.meta?.csp}
         prefersBorder={resource.meta?.prefersBorder}
@@ -80,11 +88,18 @@ const resourceCacheByRuntime = new WeakMap<
   Map<string, Promise<AgentActivityRuntimeMcpAppResource | null>>
 >();
 
+function mcpAppResourceCacheKey(
+  input: AgentActivityRuntimeLoadMcpAppResourceInput
+): string {
+  return `${input.workspaceId}\u0000${input.resourceSha256}`;
+}
+
 export function loadMcpAppResourceCached(
   runtime: AgentGUIRuntime | null,
-  sha256: string
+  input: AgentActivityRuntimeLoadMcpAppResourceInput
 ): Promise<AgentActivityRuntimeMcpAppResource | null> {
-  if (!runtime?.loadMcpAppResource) {
+  const loadMcpAppResource = runtime?.loadMcpAppResource;
+  if (!runtime || !loadMcpAppResource) {
     return Promise.resolve(null);
   }
   let cache = resourceCacheByRuntime.get(runtime);
@@ -92,22 +107,24 @@ export function loadMcpAppResourceCached(
     cache = new Map();
     resourceCacheByRuntime.set(runtime, cache);
   }
-  const cached = cache.get(sha256);
+  const key = mcpAppResourceCacheKey(input);
+  const cached = cache.get(key);
   if (cached) {
     return cached;
   }
   const resourceCache = cache;
-  const pending = Promise.resolve()
-    .then(() => runtime.loadMcpAppResource?.(sha256) ?? null)
-    .then(validMcpAppResource)
-    .catch(() => null)
-    .then((resource) => {
-      if (!resource) {
-        resourceCache.delete(sha256);
-      }
-      return resource;
-    });
-  cache.set(sha256, pending);
+  const pending: Promise<AgentActivityRuntimeMcpAppResource | null> =
+    Promise.resolve()
+      .then(() => loadMcpAppResource.call(runtime, input))
+      .then(validMcpAppResource)
+      .catch(() => null)
+      .then((resource) => {
+        if (!resource && resourceCache.get(key) === pending) {
+          resourceCache.delete(key);
+        }
+        return resource;
+      });
+  cache.set(key, pending);
   if (cache.size > MCP_APP_RESOURCE_CACHE_LIMIT) {
     const oldest = cache.keys().next().value;
     if (oldest !== undefined) {

@@ -193,6 +193,8 @@ export type {
   AgentActivitySessionMessages,
   AgentActivityRuntimeActivateSessionInput,
   AgentActivityRuntimeListSessionMessagesInput,
+  AgentActivityRuntimeLoadMcpAppResourceInput,
+  AgentActivityRuntimeMcpAppResource,
   AgentActivityRuntimePromptContentBlock,
   AgentActivityRuntimeDeleteSessionsBatchInput,
   AgentActivityRuntimeDeleteSessionsBatchResult,

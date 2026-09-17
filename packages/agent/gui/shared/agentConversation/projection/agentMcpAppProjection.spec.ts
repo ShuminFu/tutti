@@ -83,10 +83,13 @@ describe("projectAgentMcpAppRow", () => {
   ])(
     "follows argumentsPointer for the %s payload shape",
     (_provider, payload) => {
-      expect(projectAgentMcpAppRow(toolCall(payload), "turn-1")).toMatchObject({
+      expect(
+        projectAgentMcpAppRow(toolCall(payload), "turn-1", "workspace-1")
+      ).toMatchObject({
         kind: "mcp-app",
         id: "mcp-app:call:widget-1",
         turnId: "turn-1",
+        workspaceId: "workspace-1",
         sourceCallId: "call:widget-1",
         serverName: "workflow_report",
         toolName: "show_widget",
@@ -105,7 +108,8 @@ describe("projectAgentMcpAppRow", () => {
         output: { text: "Shown to the user" },
         mcpApp: mcpApp("/input")
       }),
-      "turn-1"
+      "turn-1",
+      "workspace-1"
     );
     expect(row?.toolResult).toEqual({
       content: [{ type: "text", text: "Shown to the user" }]
@@ -113,7 +117,8 @@ describe("projectAgentMcpAppRow", () => {
     expect(
       projectAgentMcpAppRow(
         toolCall({ input: WIDGET_ARGUMENTS, mcpApp: mcpApp("/input") }),
-        "turn-1"
+        "turn-1",
+        "workspace-1"
       )?.toolResult
     ).toEqual({ content: [] });
   });
@@ -126,11 +131,25 @@ describe("projectAgentMcpAppRow", () => {
             { input: WIDGET_ARGUMENTS, mcpApp: mcpApp("/input") },
             { statusKind: statusKind as AgentToolCallVM["statusKind"] }
           ),
-          "turn-1"
+          "turn-1",
+          "workspace-1"
         )
       ).toBeNull();
     }
   });
+
+  it.each([undefined, null, "", "  "])(
+    "does not project without the owning workspace (%s)",
+    (workspaceId) => {
+      expect(
+        projectAgentMcpAppRow(
+          toolCall({ input: WIDGET_ARGUMENTS, mcpApp: mcpApp("/input") }),
+          "turn-1",
+          workspaceId
+        )
+      ).toBeNull();
+    }
+  );
 
   it.each([
     ["no mcpApp reference", { input: WIDGET_ARGUMENTS }],
@@ -159,7 +178,9 @@ describe("projectAgentMcpAppRow", () => {
     ],
     ["a relative pointer", { input: WIDGET_ARGUMENTS, mcpApp: mcpApp("input") }]
   ])("does not project %s", (_case, payload) => {
-    expect(projectAgentMcpAppRow(toolCall(payload), "turn-1")).toBeNull();
+    expect(
+      projectAgentMcpAppRow(toolCall(payload), "turn-1", "workspace-1")
+    ).toBeNull();
   });
 });
 

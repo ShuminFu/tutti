@@ -1635,10 +1635,15 @@ A completed tool call whose payload carries tuttid's `mcpApp` reference
 `argumentsPointer` JSON Pointer) projects an `mcp-app` row right after its tool
 group, like a generated image; the tool card stays in the group. The projection
 follows only `argumentsPointer`, because tuttid owns the provider payload
-shapes. The row reads the content-addressed HTML snapshot through the optional
-`AgentGUIRuntime.loadMcpAppResource(sha256)` port and renders nothing while
-loading, when the port is absent, or when the snapshot is missing or is not a
-`text/html;profile=mcp-app` resource. `McpAppFrame` is a display-only MCP Apps
+shapes. The row carries the owning session's `workspaceId`, because snapshots
+are stored per workspace, and reads the HTML snapshot through the optional
+`AgentGUIRuntime.loadMcpAppResource({ workspaceId, resourceSha256 })` port. It
+renders nothing while loading, when the port is absent, or when the snapshot is
+missing (the desktop host maps tuttid's
+`workspace_agent_mcp_app_resource_not_found` to `null`) or is not a
+`text/html;profile=mcp-app` resource. tuttid may attach `mcpApp` in a later
+version of an already stored tool_call message, so the row appears on that
+message update without a reload. `McpAppFrame` is a display-only MCP Apps
 host (spec 2026-01-26): a single `sandbox="allow-scripts"` srcdoc iframe with a
 CSP meta emitted before any resource markup, messages accepted only from its
 own `contentWindow`, `tool-input` then `tool-result` after `initialized`,

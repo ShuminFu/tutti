@@ -1,7 +1,10 @@
 import type { TuttidClient } from "@tutti-os/client-tuttid-ts";
 import { agentActivitySessionFromTuttidSession } from "../desktopAgentActivityAdapter.ts";
 import type { IWorkspaceAgentActivityService } from "../workspaceAgentActivityService.interface.ts";
-import { normalizeWorkspaceId } from "./workspaceAgentActivityDiagnostics.ts";
+import {
+  isWorkspaceAgentMcpAppResourceNotFoundError,
+  normalizeWorkspaceId
+} from "./workspaceAgentActivityDiagnostics.ts";
 
 export class WorkspaceAgentActivityQueryOperations {
   private readonly tuttidClient: TuttidClient;
@@ -37,6 +40,43 @@ export class WorkspaceAgentActivityQueryOperations {
       },
       { signal: input.signal }
     );
+  }
+
+  async loadMcpAppResource(
+    input: Parameters<IWorkspaceAgentActivityService["loadMcpAppResource"]>[0]
+  ): ReturnType<IWorkspaceAgentActivityService["loadMcpAppResource"]> {
+    let response;
+    try {
+      response = await this.tuttidClient.getWorkspaceAgentMcpAppResource(
+        normalizeWorkspaceId(input.workspaceId),
+        input.resourceSha256.trim()
+      );
+    } catch (error) {
+      // A missing snapshot is an expected state (older sessions, a resolve
+      // that never finished): the transcript keeps the plain tool card.
+      // Everything else still rejects so transport faults stay visible.
+      if (isWorkspaceAgentMcpAppResourceNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+    const csp = response.meta?.csp;
+    return {
+      html: response.html,
+      // Only the domains this host enforces are forwarded; the iframe CSP
+      // always denies nested frames and <base>, whatever the resource asks.
+      meta: {
+        csp: csp
+          ? {
+              connectDomains: csp.connectDomains,
+              resourceDomains: csp.resourceDomains
+            }
+          : undefined,
+        prefersBorder: response.meta?.prefersBorder
+      },
+      mimeType: response.mimeType,
+      uri: response.uri
+    };
   }
 
   async listSessionsPage(

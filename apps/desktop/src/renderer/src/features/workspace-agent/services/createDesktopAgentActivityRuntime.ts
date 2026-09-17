@@ -157,6 +157,8 @@ export function createDesktopAgentActivityRuntime(
     },
     listAgentGeneratedFiles: (input) =>
       workspaceAgentActivityService.listAgentGeneratedFiles(input),
+    loadMcpAppResource: (input) =>
+      workspaceAgentActivityService.loadMcpAppResource(input),
     async load(workspaceId, signal) {
       const snapshot = await workspaceAgentActivityService.load(
         workspaceId,
