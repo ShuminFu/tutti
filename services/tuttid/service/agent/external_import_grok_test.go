@@ -10,11 +10,15 @@ import (
 	"testing"
 	"time"
 
+	agentactivitybiz "github.com/tutti-os/tutti/packages/agent/store-sqlite"
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
 )
 
 func TestParseGrokSessionDirUsesUpdatesAndSummary(t *testing.T) {
 	cwd := t.TempDir()
+	if canonical, ok := canonicalExistingDir(cwd); ok {
+		cwd = canonical
+	}
 	sessionID := "0193f0a8-2c1e-7b6a-9d44-3a1c8e5f0011"
 	dir := writeGrokLocalSession(t, t.TempDir(), cwd, sessionID, grokLocalSessionFixture{
 		title:     "Investigate import layout",
@@ -79,7 +83,7 @@ func TestParseGrokSessionDirUsesUpdatesAndSummary(t *testing.T) {
 		t.Fatalf("assistant message = %#v", session.Messages[1])
 	}
 	if session.Messages[1].Usage != nil {
-		t.Fatalf("assistant usage = %#v, want empty; Grok ACP has no persistable token snapshot", session.Messages[1].Usage)
+		t.Fatalf("assistant usage = %#v, want empty; this fixture has no usage.json", session.Messages[1].Usage)
 	}
 	if session.Messages[2].Kind != "tool_call" || session.Messages[2].Payload["callId"] != "call-read-1" {
 		t.Fatalf("tool call = %#v", session.Messages[2])
@@ -150,9 +154,10 @@ func TestScanAndImportGrokSessionsPersistsStableProviderSessionID(t *testing.T) 
 				"content": map[string]any{"type": "text", "text": "Import this Grok thread"},
 			}),
 			grokUpdateLine(sessionID, now.UnixMilli(), 0, "agent_message_chunk", map[string]any{
-				"content": map[string]any{"type": "text", "text": "Imported without token counts."},
+				"content": map[string]any{"type": "text", "text": "Imported with token counts."},
 			}),
 		},
+		usage: grokUsageSnapshot(sessionID),
 	})
 
 	service := newIsolatedAgentService(newFakeRuntime())
@@ -207,8 +212,10 @@ func TestScanAndImportGrokSessionsPersistsStableProviderSessionID(t *testing.T) 
 	if imported.Settings == nil || imported.Settings.Model != "grok-4.6" {
 		t.Fatalf("settings = %#v, want imported model grok-4.6", imported.Settings)
 	}
-	if imported.Metadata.Usage != nil && imported.Metadata.Usage.Tokens.HasReported() {
-		t.Fatalf("session usage = %#v, want empty Grok token snapshot", imported.Metadata.Usage)
+	if imported.Metadata.Usage == nil || !imported.Metadata.Usage.Tokens.HasReported() ||
+		imported.Metadata.Usage.Tokens.InputTokens == nil || *imported.Metadata.Usage.Tokens.InputTokens != 421051 ||
+		imported.Metadata.Usage.Tokens.OutputTokens == nil || *imported.Metadata.Usage.Tokens.OutputTokens != 10894 {
+		t.Fatalf("session usage = %#v, want the usage.json session totals", imported.Metadata.Usage)
 	}
 
 	page, err := service.ListMessages(ctx, "ws-1", importedID, ListMessagesInput{Limit: 10})
@@ -218,8 +225,141 @@ func TestScanAndImportGrokSessionsPersistsStableProviderSessionID(t *testing.T) 
 	if len(page.Messages) != 2 {
 		t.Fatalf("imported messages = %#v, want user and assistant", page.Messages)
 	}
-	if usage, _ := page.Messages[1].Payload["usage"].(map[string]any); len(usage) != 0 {
-		t.Fatalf("assistant payload.usage = %#v, want omitted", usage)
+	usage := agentactivitybiz.ParseProviderTokenUsage(assistantImportUsage(page.Messages))
+	if !usage.HasReported() ||
+		usage.InputTokens == nil || *usage.InputTokens != 421051 ||
+		usage.OutputTokens == nil || *usage.OutputTokens != 10894 ||
+		usage.CacheReadInputTokens == nil || *usage.CacheReadInputTokens != 306048 ||
+		usage.CacheCreationInputTokens == nil || *usage.CacheCreationInputTokens != 512 {
+		t.Fatalf("assistant payload.usage = %#v, want the mapped usage.json counts", page.Messages[1].Payload["usage"])
+	}
+}
+
+// grokUsageSnapshot mirrors the on-disk `~/.grok/.../usage.json` shape:
+// camelCase session totals plus a per-turn breakdown.
+func grokUsageSnapshot(sessionID string) map[string]any {
+	totals := map[string]any{
+		"inputTokens":         421051,
+		"outputTokens":        10894,
+		"cachedReadTokens":    306048,
+		"cacheCreationTokens": 512,
+		"reasoningTokens":     7510,
+		"totalTokens":         431945,
+		"modelCalls":          10,
+		"costUsdTicks":        1524539600,
+		"turnCount":           1,
+		"primaryModelId":      "grok-4.6-build",
+		"modelUsage": map[string]any{
+			"grok-4.6-build": map[string]any{
+				"inputTokens":         421051,
+				"outputTokens":        10894,
+				"cachedReadTokens":    306048,
+				"cacheCreationTokens": 512,
+			},
+		},
+	}
+	turn := map[string]any{"turnNumber": 1}
+	for key, value := range totals {
+		turn[key] = value
+	}
+	return map[string]any{
+		"sessionId": sessionID,
+		"updatedAt": "2026-09-15T02:20:58.582820+00:00",
+		"session":   totals,
+		"turns":     []any{turn},
+	}
+}
+
+func TestParseGrokSessionDirMapsUsageJSONOntoLastAssistantMessage(t *testing.T) {
+	cwd := t.TempDir()
+	if canonical, ok := canonicalExistingDir(cwd); ok {
+		cwd = canonical
+	}
+	sessionID := "0193f0a8-2c1e-7b6a-9d44-3a1c8e5f0022"
+	dir := writeGrokLocalSession(t, t.TempDir(), cwd, sessionID, grokLocalSessionFixture{
+		title: "Token snapshot",
+		model: "grok-4.6-build",
+		updates: []map[string]any{
+			grokUpdateLine(sessionID, 1_725_188_400_000, 0, "user_message_chunk", map[string]any{
+				"content": map[string]any{"type": "text", "text": "Count my tokens"},
+			}),
+			grokUpdateLine(sessionID, 1_725_188_401_000, 0, "agent_message_chunk", map[string]any{
+				"content": map[string]any{"type": "text", "text": "Counted."},
+			}),
+		},
+		usage: grokUsageSnapshot(sessionID),
+	})
+
+	session, ok, err := parseGrokSessionDir(dir)
+	if err != nil {
+		t.Fatalf("parseGrokSessionDir error = %v", err)
+	}
+	if !ok {
+		t.Fatal("parseGrokSessionDir ok = false")
+	}
+	if len(session.Messages) != 2 {
+		t.Fatalf("messages = %#v, want user and assistant", session.Messages)
+	}
+	if session.Messages[0].Usage != nil {
+		t.Fatalf("user usage = %#v, want the snapshot only on the assistant message", session.Messages[0].Usage)
+	}
+	usage := agentactivitybiz.ParseProviderTokenUsage(session.Messages[1].Usage)
+	if !usage.HasReported() ||
+		usage.InputTokens == nil || *usage.InputTokens != 421051 ||
+		usage.OutputTokens == nil || *usage.OutputTokens != 10894 ||
+		usage.CacheReadInputTokens == nil || *usage.CacheReadInputTokens != 306048 ||
+		usage.CacheCreationInputTokens == nil || *usage.CacheCreationInputTokens != 512 {
+		t.Fatalf("assistant usage = %#v, want the usage.json session totals", session.Messages[1].Usage)
+	}
+	// Grok reports reasoning/total/cost alongside the token counts; they have no
+	// Claude usage counterpart and must not leak into the mapped object.
+	for _, key := range []string{"reasoningTokens", "totalTokens", "costUsdTicks", "modelCalls"} {
+		if _, exists := session.Messages[1].Usage[key]; exists {
+			t.Fatalf("assistant usage = %#v, want %q dropped", session.Messages[1].Usage, key)
+		}
+	}
+}
+
+func TestParseGrokSessionDirLeavesUsageEmptyWithoutUsageJSON(t *testing.T) {
+	cwd := t.TempDir()
+	if canonical, ok := canonicalExistingDir(cwd); ok {
+		cwd = canonical
+	}
+	sessionID := "0193f0a8-2c1e-7b6a-9d44-3a1c8e5f0033"
+	dir := writeGrokLocalSession(t, t.TempDir(), cwd, sessionID, grokLocalSessionFixture{
+		title: "No token snapshot",
+		updates: []map[string]any{
+			grokUpdateLine(sessionID, 1_725_188_400_000, 0, "user_message_chunk", map[string]any{
+				"content": map[string]any{"type": "text", "text": "Count my tokens"},
+			}),
+			grokUpdateLine(sessionID, 1_725_188_401_000, 0, "agent_message_chunk", map[string]any{
+				"content": map[string]any{"type": "text", "text": "Counted."},
+			}),
+		},
+	})
+	// signals.json is deliberately not a token source: a session dir carrying one
+	// but no usage.json still reports nothing.
+	if err := os.WriteFile(filepath.Join(dir, "signals.json"), []byte(`{"inputTokens":999}`), 0o644); err != nil {
+		t.Fatalf("write grok signals error = %v", err)
+	}
+
+	session, ok, err := parseGrokSessionDir(dir)
+	if err != nil {
+		t.Fatalf("parseGrokSessionDir error = %v", err)
+	}
+	if !ok {
+		t.Fatal("parseGrokSessionDir ok = false")
+	}
+	for _, message := range session.Messages {
+		if len(message.Usage) != 0 {
+			t.Fatalf("message usage = %#v, want empty without usage.json", message.Usage)
+		}
+		if usage, _ := message.Payload["usage"].(map[string]any); len(usage) != 0 {
+			t.Fatalf("payload.usage = %#v, want empty without usage.json", usage)
+		}
+	}
+	if usage := lastExternalImportedUsage(session.Messages); len(usage) != 0 {
+		t.Fatalf("session usage = %#v, want empty without usage.json", usage)
 	}
 }
 
@@ -240,6 +380,7 @@ type grokLocalSessionFixture struct {
 	updatedAt time.Time
 	updates   []map[string]any
 	chat      []map[string]any
+	usage     map[string]any
 }
 
 func writeGrokLocalSession(t *testing.T, grokHome string, cwd string, sessionID string, fixture grokLocalSessionFixture) string {
@@ -279,6 +420,15 @@ func writeGrokLocalSession(t *testing.T, grokHome string, cwd string, sessionID 
 	}
 	if len(fixture.chat) > 0 {
 		writeAgentServiceJSONL(t, filepath.Join(dir, grokChatHistoryFileName), fixture.chat...)
+	}
+	if len(fixture.usage) > 0 {
+		encodedUsage, err := json.Marshal(fixture.usage)
+		if err != nil {
+			t.Fatalf("marshal grok usage error = %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, grokUsageFileName), encodedUsage, 0o644); err != nil {
+			t.Fatalf("write grok usage error = %v", err)
+		}
 	}
 	return dir
 }

@@ -25,6 +25,7 @@ const (
 	grokSummaryFileName        = "summary.json"
 	grokUpdatesFileName        = "updates.jsonl"
 	grokChatHistoryFileName    = "chat_history.jsonl"
+	grokUsageFileName          = "usage.json"
 	grokGroupCwdFileName       = ".cwd"
 )
 
@@ -164,12 +165,15 @@ func parseGrokSessionDir(dir string) (externalImportedSession, bool, error) {
 		session.Messages = messages
 		session.Model = firstNonEmptyString(session.Model, model)
 	}
-	// Grok ACP does not yet emit a persistable token snapshot. Leave usage
-	// empty rather than mapping signals.json or inventing counts.
+	usage, err := readGrokSessionUsage(dir)
+	if err != nil {
+		return externalImportedSession{}, false, err
+	}
 	normalized, ok, err := normalizeExternalParsedSession(session)
 	if err != nil || !ok {
 		return normalized, ok, err
 	}
+	attachGrokSessionUsage(normalized.Messages, usage)
 	if normalized.StartedAtUnixMS <= 0 {
 		normalized.StartedAtUnixMS = summary.createdAtUnixMS
 	}
@@ -177,6 +181,116 @@ func parseGrokSessionDir(dir string) (externalImportedSession, bool, error) {
 		normalized.UpdatedAtUnixMS = firstNonZeroInt64(summary.updatedAtUnixMS, summary.createdAtUnixMS)
 	}
 	return normalized, true, nil
+}
+
+// readGrokSessionUsage loads the `usage.json` token snapshot the Grok CLI
+// writes beside each session transcript and maps it onto the Claude
+// `message.usage` key shape the import path already understands. A session dir
+// without the file reports no usage: counts are copied verbatim from the
+// snapshot and never derived from signals.json or from message text.
+func readGrokSessionUsage(dir string) (map[string]any, error) {
+	raw, err := os.ReadFile(filepath.Join(dir, grokUsageFileName))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil, err
+	}
+	if usage := grokUsageTokens(mapField(decoded, "session")); len(usage) > 0 {
+		return usage, nil
+	}
+	return grokUsageTokens(decoded), nil
+}
+
+// grokUsageTokenKeys renames Grok's camelCase totals to the Claude usage keys
+// ParseProviderTokenUsage reads. `inputTokens`/`outputTokens` are already
+// aliases there, but Grok's `cachedReadTokens`/`cacheCreationTokens` are not,
+// so every key is mapped explicitly here rather than relying on the aliases.
+var grokUsageTokenKeys = []struct {
+	target  string
+	sources []string
+}{
+	{target: "input_tokens", sources: []string{"inputTokens", "input_tokens"}},
+	{target: "output_tokens", sources: []string{"outputTokens", "output_tokens"}},
+	{target: "cache_read_input_tokens", sources: []string{"cachedReadTokens", "cacheReadInputTokens", "cache_read_input_tokens"}},
+	{target: "cache_creation_input_tokens", sources: []string{"cacheCreationTokens", "cacheCreationInputTokens", "cache_creation_input_tokens"}},
+}
+
+// grokUsageTokens copies the reported counts out of a Grok usage snapshot.
+// Keys the snapshot omits stay absent so a partial report never turns into a
+// fabricated zero. Grok also records `reasoningTokens`, `totalTokens`,
+// `modelCalls` and `costUsdTicks`; those have no Claude usage counterpart and
+// are deliberately dropped instead of being folded into another count.
+func grokUsageTokens(raw map[string]any) map[string]any {
+	if len(raw) == 0 {
+		return nil
+	}
+	usage := make(map[string]any, len(grokUsageTokenKeys))
+	for _, key := range grokUsageTokenKeys {
+		for _, source := range key.sources {
+			count, ok := grokUsageCount(raw[source])
+			if !ok {
+				continue
+			}
+			usage[key.target] = count
+			break
+		}
+	}
+	if len(usage) == 0 {
+		return nil
+	}
+	return usage
+}
+
+func grokUsageCount(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return int64(typed), true
+	case int64:
+		return typed, true
+	case int:
+		return int64(typed), true
+	case json.Number:
+		if parsed, err := typed.Int64(); err == nil {
+			return parsed, true
+		}
+		if parsed, err := typed.Float64(); err == nil {
+			return int64(parsed), true
+		}
+	}
+	return 0, false
+}
+
+// attachGrokSessionUsage reports the session-level snapshot on the newest
+// assistant message. Grok's usage.json only totals the whole session, and this
+// is the same carrier Claude import uses: the message payload picks the counts
+// up through externalImportedUsage, and session metadata picks the same object
+// up through lastExternalImportedUsage. A session with no assistant message has
+// nothing to attribute the tokens to, so the snapshot is left off.
+func attachGrokSessionUsage(messages []externalImportedMessage, usage map[string]any) {
+	if len(usage) == 0 {
+		return
+	}
+	fallback := -1
+	for index := len(messages) - 1; index >= 0; index-- {
+		if messages[index].Role != "assistant" {
+			continue
+		}
+		if messages[index].Kind == "text" {
+			messages[index].Usage = usage
+			return
+		}
+		if fallback < 0 {
+			fallback = index
+		}
+	}
+	if fallback >= 0 {
+		messages[fallback].Usage = usage
+	}
 }
 
 type grokSummary struct {
