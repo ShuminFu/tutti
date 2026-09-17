@@ -101,6 +101,7 @@ export const HOST_OPEN_AGENT_SESSION_ACK_TYPE =
   "tutti-host-open-agent-session-ack";
 export const HOST_WORKBENCH_LAYOUT_TYPE = "tutti-host-workbench-layout";
 export const HOST_THEME_TYPE = "tutti-host-theme";
+export const HOST_LOCALE_TYPE = "tutti-host-locale";
 const FULLSCREEN_WORKBENCH_WINDOW_SELECTOR =
   '.workbench-window-shell[data-display-mode="fullscreen"]';
 const TERMINAL_FOCUS_SELECTOR =
@@ -318,6 +319,47 @@ export function installHostThemeBridge(
         applyHostWindowInsets(insets);
       }
     }
+  };
+
+  windowRef.addEventListener("message", onMessage);
+  return () => windowRef.removeEventListener("message", onMessage);
+}
+
+// The embedding host owns interface language for the embedded build. The
+// initial locale already arrives on the iframe URL (see i18n/runtime.ts); this
+// bridge keeps it in sync when the host switches language afterwards, using the
+// same source/origin/nonce triple as every other host-to-iframe notification.
+export function installHostLocaleBridge(
+  applyHostLocale: (locale: "en" | "zh-CN") => void,
+  windowRef: Window = window
+): () => void {
+  const coordinates = bridgeCoordinates(windowRef.location.search);
+  if (!coordinates || !windowRef.parent || windowRef.parent === windowRef) {
+    return () => undefined;
+  }
+
+  const parent = windowRef.parent;
+  const onMessage = (event: MessageEvent): void => {
+    const data = event.data as
+      | {
+          type?: unknown;
+          nonce?: unknown;
+          locale?: unknown;
+        }
+      | null
+      | undefined;
+    if (
+      !data ||
+      typeof data !== "object" ||
+      data.type !== HOST_LOCALE_TYPE ||
+      data.nonce !== coordinates.nonce ||
+      event.source !== parent ||
+      event.origin !== coordinates.hostOrigin ||
+      (data.locale !== "en" && data.locale !== "zh-CN")
+    ) {
+      return;
+    }
+    applyHostLocale(data.locale);
   };
 
   windowRef.addEventListener("message", onMessage);

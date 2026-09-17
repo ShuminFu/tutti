@@ -18,6 +18,7 @@ import type {
   ExportDeveloperLogsResult
 } from "@shared/contracts/ipc";
 import { desktopErrorCodes } from "@shared/errors/desktopErrors";
+import { setHostLocale } from "@renderer/i18n/runtime";
 import {
   setHostThemeAppearance,
   setHostThemeTokens,
@@ -28,6 +29,7 @@ import {
   HostBridgeUnavailableError,
   installHostFileDropBridge,
   installHostFocusRecovery,
+  installHostLocaleBridge,
   installHostThemeBridge,
   installHostWorkbenchLayoutNotifications,
   isHostBridgeAvailable,
@@ -60,6 +62,9 @@ export function createWebDesktopApi(): DesktopApi {
     setHostThemeTokens,
     setHostWindowInsets
   );
+  installHostLocaleBridge((locale) => {
+    setHostLocale(locale);
+  });
   installHostWorkbenchLayoutNotifications();
 
   return {

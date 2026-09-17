@@ -6,11 +6,13 @@ import {
   HOST_FOCUS_TYPE,
   HOST_OPEN_AGENT_SESSION_ACK_TYPE,
   HOST_OPEN_AGENT_SESSION_TYPE,
+  HOST_LOCALE_TYPE,
   HOST_THEME_TYPE,
   HOST_WORKBENCH_LAYOUT_TYPE,
   installHostAgentSessionBridge,
   installHostFileDropBridge,
   installHostFocusRecovery,
+  installHostLocaleBridge,
   installHostThemeBridge,
   installHostWorkbenchLayoutNotifications,
   requestHostCapability,
@@ -20,35 +22,43 @@ import {
 test("createAgentSession reuses the host capability channel and frozen args shape", async () => {
   const previousWindow = globalThis.window;
   let messageListener: ((event: MessageEvent) => void) | null = null;
-  const posted: Array<{ message: Record<string, unknown>; origin: string }> = [];
+  const posted: Array<{ message: Record<string, unknown>; origin: string }> =
+    [];
   const parent = {
     postMessage(message: Record<string, unknown>, origin: string) {
       posted.push({ message, origin });
-      queueMicrotask(() => messageListener?.({
-        data: {
-          type: "tutti-host-response",
-          id: message.id,
-          nonce: "nonce-1",
-          result: { taskId: "task-1", agentSessionId: "host-session-1" }
-        },
-        origin: "http://wails.localhost",
-        source: parent
-      } as MessageEvent));
+      queueMicrotask(() =>
+        messageListener?.({
+          data: {
+            type: "tutti-host-response",
+            id: message.id,
+            nonce: "nonce-1",
+            result: { taskId: "task-1", agentSessionId: "host-session-1" }
+          },
+          origin: "http://wails.localhost",
+          source: parent
+        } as MessageEvent)
+      );
     }
   } as unknown as WindowProxy;
   const windowRef = {
     addEventListener(type: string, listener: EventListener) {
-      if (type === "message") messageListener = listener as (event: MessageEvent) => void;
+      if (type === "message")
+        messageListener = listener as (event: MessageEvent) => void;
     },
     clearTimeout,
     location: {
-      search: "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+      search:
+        "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
     },
     parent,
     removeEventListener() {},
     setTimeout
   } as unknown as Window;
-  Object.defineProperty(globalThis, "window", { configurable: true, value: windowRef });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: windowRef
+  });
 
   try {
     const result = await requestHostCreateAgentSession({
@@ -78,7 +88,10 @@ test("createAgentSession reuses the host capability channel and frozen args shap
     ]);
     assert.equal(typeof posted[0]?.message.id, "string");
   } finally {
-    Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: previousWindow
+    });
   }
 });
 
@@ -87,32 +100,39 @@ test("host capability errors preserve stable error codes", async () => {
   let messageListener: ((event: MessageEvent) => void) | null = null;
   const parent = {
     postMessage(message: { id: string }, _origin: string) {
-      queueMicrotask(() => messageListener?.({
-        data: {
-          type: "tutti-host-response",
-          id: message.id,
-          nonce: "nonce-1",
-          error: "Agent prompt file is too large.",
-          code: "file_too_large"
-        },
-        origin: "http://wails.localhost",
-        source: parent
-      } as MessageEvent));
+      queueMicrotask(() =>
+        messageListener?.({
+          data: {
+            type: "tutti-host-response",
+            id: message.id,
+            nonce: "nonce-1",
+            error: "Agent prompt file is too large.",
+            code: "file_too_large"
+          },
+          origin: "http://wails.localhost",
+          source: parent
+        } as MessageEvent)
+      );
     }
   } as unknown as WindowProxy;
   const windowRef = {
     addEventListener(type: string, listener: EventListener) {
-      if (type === "message") messageListener = listener as (event: MessageEvent) => void;
+      if (type === "message")
+        messageListener = listener as (event: MessageEvent) => void;
     },
     clearTimeout,
     location: {
-      search: "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+      search:
+        "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
     },
     parent,
     removeEventListener() {},
     setTimeout
   } as unknown as Window;
-  Object.defineProperty(globalThis, "window", { configurable: true, value: windowRef });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: windowRef
+  });
 
   try {
     await assert.rejects(
@@ -122,7 +142,10 @@ test("host capability errors preserve stable error codes", async () => {
         error.code === "file_too_large"
     );
   } finally {
-    Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: previousWindow
+    });
   }
 });
 
@@ -147,7 +170,8 @@ test("embedded host file drops reuse the workspace-file composer path", () => {
       }
     },
     location: {
-      search: "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+      search:
+        "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
     },
     parent,
     removeEventListener() {}
@@ -288,10 +312,12 @@ test("embedded host opens only secured Agent sessions and acknowledges the resul
   const opened: string[] = [];
   const windowRef = {
     addEventListener(type: string, listener: EventListener) {
-      if (type === "message") messageListener = listener as (event: MessageEvent) => void;
+      if (type === "message")
+        messageListener = listener as (event: MessageEvent) => void;
     },
     location: {
-      search: "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+      search:
+        "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
     },
     parent,
     removeEventListener() {}
@@ -300,22 +326,25 @@ test("embedded host opens only secured Agent sessions and acknowledges the resul
     opened.push(id);
     return id === "session-1";
   }, windowRef);
-  assert.deepEqual(parentPosts, [{
-    message: { type: HOST_AGENT_SESSION_READY_TYPE, nonce: "nonce-1" },
-    origin: "http://wails.localhost"
-  }]);
-  const send = (overrides: Record<string, unknown> = {}) => messageListener?.({
-    data: {
-      type: HOST_OPEN_AGENT_SESSION_TYPE,
-      nonce: "nonce-1",
-      requestId: "request-1",
-      agentSessionId: " session-1 ",
-      ...(overrides.data as object | undefined)
-    },
-    origin: "http://wails.localhost",
-    source: parent,
-    ...overrides
-  } as MessageEvent);
+  assert.deepEqual(parentPosts, [
+    {
+      message: { type: HOST_AGENT_SESSION_READY_TYPE, nonce: "nonce-1" },
+      origin: "http://wails.localhost"
+    }
+  ]);
+  const send = (overrides: Record<string, unknown> = {}) =>
+    messageListener?.({
+      data: {
+        type: HOST_OPEN_AGENT_SESSION_TYPE,
+        nonce: "nonce-1",
+        requestId: "request-1",
+        agentSessionId: " session-1 ",
+        ...(overrides.data as object | undefined)
+      },
+      origin: "http://wails.localhost",
+      source: parent,
+      ...overrides
+    } as MessageEvent);
 
   send({ origin: "https://evil.example" });
   send({ source: {} as WindowProxy });
@@ -588,6 +617,78 @@ test("embedded theme bridge forwards host window insets and drops bad payloads",
   send({ insets: { platform: 42, controlsTop: 62 } });
   assert.equal(insetPushes.length, 1);
   assert.equal(applied.length, 10);
+});
+
+test("embedded locale follows only secured host language pushes", () => {
+  let messageListener: ((event: MessageEvent) => void) | null = null;
+  const parent = {} as WindowProxy;
+  const applied: string[] = [];
+  const windowRef = {
+    addEventListener(type: string, listener: EventListener) {
+      if (type === "message") {
+        messageListener = listener as (event: MessageEvent) => void;
+      }
+    },
+    location: {
+      search:
+        "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+    },
+    parent,
+    removeEventListener(type: string) {
+      if (type === "message") {
+        messageListener = null;
+      }
+    }
+  } as unknown as Window;
+
+  const dispose = installHostLocaleBridge(
+    (locale) => applied.push(locale),
+    windowRef
+  );
+  const send = (overrides: Record<string, unknown> = {}) => {
+    const { data, ...event } = overrides;
+    messageListener?.({
+      data: {
+        type: HOST_LOCALE_TYPE,
+        nonce: "nonce-1",
+        locale: "zh-CN",
+        ...(data as object | undefined)
+      },
+      origin: "http://wails.localhost",
+      source: parent,
+      ...event
+    } as MessageEvent);
+  };
+
+  send({ data: { nonce: "wrong" } });
+  send({ origin: "https://evil.example" });
+  send({ source: {} as WindowProxy });
+  send({ data: { locale: "fr" } });
+  send({ data: { type: HOST_THEME_TYPE } });
+  assert.deepEqual(applied, []);
+
+  send();
+  send({ data: { locale: "en" } });
+  assert.deepEqual(applied, ["zh-CN", "en"]);
+
+  dispose();
+  send();
+  assert.deepEqual(applied, ["zh-CN", "en"]);
+});
+
+test("host locale bridge stays inert outside the embedded host", () => {
+  const windowRef = {
+    addEventListener() {
+      throw new Error("must not listen outside the embedded host");
+    },
+    location: { search: "" },
+    parent: undefined,
+    removeEventListener() {}
+  } as unknown as Window;
+
+  installHostLocaleBridge(() => {
+    throw new Error("must not apply a locale outside the embedded host");
+  }, windowRef)();
 });
 
 test("host theme bridge stays inert outside the embedded host", () => {

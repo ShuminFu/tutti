@@ -9,11 +9,12 @@ import { getAppI18nRuntime, type AppI18nRuntime } from "./appRuntime.ts";
 import {
   applyLocale,
   getActiveLocale,
+  setHostLocale,
   subscribeLocale,
   syncDocumentLanguage
 } from "./runtime.ts";
 
-export { applyLocale, getActiveLocale };
+export { applyLocale, getActiveLocale, setHostLocale };
 export { connectDesktopLocaleSource } from "./runtime.ts";
 export { translate } from "./appRuntime.ts";
 

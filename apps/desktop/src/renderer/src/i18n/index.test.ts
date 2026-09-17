@@ -4,13 +4,56 @@ import { translate } from "./appRuntime.ts";
 import {
   applyLocale,
   connectDesktopLocaleSource,
-  getActiveLocale
+  getActiveLocale,
+  readHostLocaleFromSearch,
+  setHostLocale
 } from "./runtime.ts";
 import {
   applyTheme,
   connectDesktopThemeSource,
   getActiveTheme
 } from "../theme/runtime.ts";
+
+test("host locale query is ignored without secured bridge coordinates", () => {
+  assert.equal(readHostLocaleFromSearch("?tuttiHostLang=zh-CN"), null);
+  assert.equal(
+    readHostLocaleFromSearch(
+      "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost&tuttiHostLang=fr"
+    ),
+    null
+  );
+});
+
+test("host locale query pins zh-CN and en when the bridge coordinates are present", () => {
+  assert.equal(
+    readHostLocaleFromSearch(
+      "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost&tuttiHostLang=zh"
+    ),
+    "zh-CN"
+  );
+  assert.equal(
+    readHostLocaleFromSearch(
+      "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost&tuttiHostLang=en-US"
+    ),
+    "en"
+  );
+});
+
+test("host locale pin keeps daemon preference writes from moving the rendered language", () => {
+  const originalLocale = getActiveLocale();
+
+  try {
+    setHostLocale("zh-CN");
+    applyLocale("en");
+    assert.equal(getActiveLocale(), "zh-CN");
+
+    setHostLocale("en");
+    assert.equal(getActiveLocale(), "en");
+  } finally {
+    setHostLocale(null);
+    applyLocale(originalLocale);
+  }
+});
 
 test("translate follows locale changes through the app i18n runtime", () => {
   const originalLocale = getActiveLocale();

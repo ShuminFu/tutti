@@ -2,7 +2,7 @@ export const zhCNAgentGuiCollaboration = {
   collaborationModeConsult: "咨询",
   collaborationModeFork: "Fork",
   collaborationModeDelegate: "委派",
-  collaborationModeHandoff: "Handoff",
+  collaborationModeHandoff: "交接",
   collaborationTriggerUser: "手动",
   collaborationTriggerAgent: "Agent",
   collaborationTriggerPolicy: "策略",
