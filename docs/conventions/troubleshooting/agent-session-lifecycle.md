@@ -3352,6 +3352,11 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   unterminated keeps the Mermaid placeholder: that content was truncated
   mid-stream, and `AgentMessageMarkdown` additionally consults a content-derived
   fence heuristic.
+  The Turn work section also must not hide ordinary assistant replies that
+  happen to precede that stamp. Thinking, tool groups, `specific-progress`, and
+  `turn-boundary` rows stay in the collapsible process block; locally created
+  and imported sessions share that classification. A later supplement after
+  tool work does not send the earlier analysis into the collapsed region.
 - Validation:
   `pnpm --dir packages/agent/gui exec vitest run shared/agentConversation/projection/agentConversationProjection.spec.ts`
   covers a settled Turn whose final reply never left `streaming`, and

@@ -1959,18 +1959,16 @@ describe("projectAgentConversationVM", () => {
       }
     ]);
 
-    // The reply is the Turn's final text, so the work section collapses around
-    // it instead of hiding it (docs/architecture/agent-gui-node.md: important
-    // output is never hidden).
+    // The reply is the Turn's final text, so collapse remains eligible. Ordinary
+    // assistant narration stays visible; only the tool group is process work
+    // (docs/architecture/agent-gui-node.md: important output is never hidden).
     const rowKeys = conversation.rows.map((row) => transcriptRowKey(row));
     const turnGroups = buildAgentTranscriptTurnGroups(
       conversation.rows,
       rowKeys
     );
     const turn = conversation.sourceDetail.sessionTurns?.[0] ?? null;
-    const model = buildAgentTurnWorkSectionModel(turnGroups[0]!, turn, false, {
-      collapseIntermediateAssistantReplies: true
-    });
+    const model = buildAgentTurnWorkSectionModel(turnGroups[0]!, turn, false);
     const messageIdsBySectionKind = (kind: "visible" | "work") =>
       (model?.sections ?? [])
         .filter((section) => section.kind === kind)
@@ -1982,11 +1980,15 @@ describe("projectAgentConversationVM", () => {
 
     expect(model?.collapseEligible).toBe(true);
     expect(model?.sections.map((section) => section.kind)).toEqual([
+      "visible",
       "work",
       "visible"
     ]);
-    expect(messageIdsBySectionKind("work")).toEqual(["assistant-process"]);
-    expect(messageIdsBySectionKind("visible")).toEqual(["assistant-reply"]);
+    expect(messageIdsBySectionKind("work")).toEqual([]);
+    expect(messageIdsBySectionKind("visible")).toEqual([
+      "assistant-process",
+      "assistant-reply"
+    ]);
   });
 
   it("marks prior turn assistant replies copyable while the latest turn is still working", () => {

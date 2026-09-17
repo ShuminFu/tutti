@@ -198,8 +198,6 @@ function transcriptConversationRenderInputEquals(
         next.sourceDetail.session.activeTurn?.turnId &&
       previous.sourceDetail.session.activeTurn?.phase ===
         next.sourceDetail.session.activeTurn?.phase &&
-      previous.sourceDetail.session.imported ===
-        next.sourceDetail.session.imported &&
       previous.sourceDetail.session.kind === next.sourceDetail.session.kind &&
       previous.sourceDetail.session.lifecycleCapabilities.forkThroughTurn ===
         next.sourceDetail.session.lifecycleCapabilities.forkThroughTurn &&
@@ -371,8 +369,6 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
           group.turnId ? (canonicalTurnById.get(group.turnId) ?? null) : null,
           isActiveTurn,
           {
-            collapseIntermediateAssistantReplies:
-              !conversation.sourceDetail.session.imported,
             liveFrozenAtUnixMs:
               group.turnId !== null && group.turnId === activeTurnId
                 ? observationGap?.startedAtUnixMs

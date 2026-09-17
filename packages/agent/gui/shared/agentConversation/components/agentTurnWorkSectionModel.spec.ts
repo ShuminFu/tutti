@@ -117,7 +117,7 @@ describe("agentTurnWorkSectionModel", () => {
     ).toBeNull();
   });
 
-  it("keeps the final assistant copy target visible and moves work around it", () => {
+  it("keeps ordinary assistant text visible and folds only thinking around it", () => {
     const model = buildAgentTurnWorkSectionModel(
       turnGroup([
         userRow(),
@@ -137,9 +137,7 @@ describe("agentTurnWorkSectionModel", () => {
         phase: "settled",
         outcome: "completed",
         settledAtUnixMs: 15_000
-      }),
-      false,
-      { collapseIntermediateAssistantReplies: true }
+      })
     );
 
     expect(model.leadingRows).toHaveLength(1);
@@ -151,29 +149,33 @@ describe("agentTurnWorkSectionModel", () => {
     ]);
     expect(model.collapseEligible).toBe(true);
 
-    const finalRow = model.sections[1]?.rows[0]?.row;
-    expect(finalRow?.kind).toBe("message");
-    if (finalRow?.kind === "message") {
-      expect(finalRow.id).toBe("assistant-row");
-      expect(finalRow.messages.map((item) => item.body)).toEqual(["final"]);
-      expect(finalRow.thinking).toEqual([]);
+    const thinkingRow = model.sections[0]?.rows[0]?.row;
+    expect(thinkingRow?.kind).toBe("message");
+    if (thinkingRow?.kind === "message") {
+      expect(thinkingRow.thinking.map((item) => item.body)).toEqual([
+        "Inspecting files"
+      ]);
+      expect(thinkingRow.messages).toEqual([]);
     }
     expect(model.sections[0]?.rows[0]?.renderKey).toBe(
-      "assistant-row:turn-work-before"
+      "assistant-row:turn-work-0"
     );
-    expect(model.sections[1]?.rows[0]?.renderKey).toBe(
-      "assistant-row:turn-final"
-    );
-    expect(model.sections[2]?.rows[0]?.renderKey).toBe(
-      "assistant-row:turn-work-after"
-    );
-    const afterFinalRow = model.sections[2]?.rows[0]?.row;
-    expect(afterFinalRow?.kind).toBe("message");
-    if (afterFinalRow?.kind === "message") {
-      expect(afterFinalRow.messages.map((item) => item.body)).toEqual([
+
+    const visibleRow = model.sections[1]?.rows[0]?.row;
+    expect(visibleRow?.kind).toBe("message");
+    if (visibleRow?.kind === "message") {
+      expect(visibleRow.id).toBe("assistant-row");
+      expect(visibleRow.messages.map((item) => item.body)).toEqual([
+        "draft",
+        "final",
         "epilogue"
       ]);
+      expect(visibleRow.thinking).toEqual([]);
     }
+    expect(model.sections[1]?.rows[0]?.renderKey).toBe(
+      "assistant-row:turn-visible-1"
+    );
+    expect(model.sections[2]?.rows.map(({ row }) => row.id)).toEqual(["tools"]);
     expect(model.sections[3]?.rows.map(({ row }) => row.id)).toEqual([
       "summary"
     ]);
@@ -192,9 +194,7 @@ describe("agentTurnWorkSectionModel", () => {
         phase: "settled",
         outcome: "completed",
         settledAtUnixMs: 15_000
-      }),
-      false,
-      { collapseIntermediateAssistantReplies: true }
+      })
     );
 
     expect(model.collapseEligible).toBe(true);
@@ -225,9 +225,7 @@ describe("agentTurnWorkSectionModel", () => {
         phase: "settled",
         outcome: "completed",
         settledAtUnixMs: 15_000
-      }),
-      false,
-      { collapseIntermediateAssistantReplies: true }
+      })
     );
 
     expect(model.leadingRows.map(({ row }) => row.id)).toEqual(["user-row"]);
@@ -237,14 +235,13 @@ describe("agentTurnWorkSectionModel", () => {
         rowIds: section.rows.map(({ row }) => row.id)
       }))
     ).toEqual([
-      { kind: "work", rowIds: ["assistant-1"] },
-      { kind: "visible", rowIds: ["user-2"] },
+      { kind: "visible", rowIds: ["assistant-1", "user-2"] },
       { kind: "work", rowIds: ["tools"] },
       { kind: "visible", rowIds: ["assistant-2"] }
     ]);
   });
 
-  it("collapses all assistant work before the final answer for Tutti-created conversations", () => {
+  it("folds thinking and progress while keeping earlier ordinary replies visible", () => {
     const model = buildAgentTurnWorkSectionModel(
       turnGroup([
         userRow(),
@@ -268,9 +265,7 @@ describe("agentTurnWorkSectionModel", () => {
         phase: "settled",
         outcome: "completed",
         settledAtUnixMs: 15_000
-      }),
-      false,
-      { collapseIntermediateAssistantReplies: true }
+      })
     );
 
     expect(
@@ -288,37 +283,35 @@ describe("agentTurnWorkSectionModel", () => {
     ).toEqual([
       {
         kind: "work",
-        bodies: ["Inspecting files", "Compacting context", "Earlier answer"]
+        bodies: ["Inspecting files", "Compacting context"]
       },
       {
         kind: "visible",
-        bodies: ["Final answer"]
+        bodies: ["Earlier answer", "Final answer"]
       }
     ]);
     expect(model.collapseEligible).toBe(true);
   });
 
-  it("preserves ordinary assistant replies for imported conversation history", () => {
+  it("keeps the main reply and later supplement visible around tool work", () => {
     const model = buildAgentTurnWorkSectionModel(
       turnGroup([
         userRow(),
         assistantRow({
           id: "assistant-earlier",
-          messages: [message("Earlier answer", null)]
+          messages: [message("Main analysis and A/B/C options", null)]
         }),
         toolRow(),
         assistantRow({
           id: "assistant-final",
-          messages: [message("Final answer", "Final answer", true)]
+          messages: [message("Two extra notes", "Two extra notes", true)]
         })
       ]),
       canonicalTurn({
         phase: "settled",
         outcome: "completed",
         settledAtUnixMs: 15_000
-      }),
-      false,
-      { collapseIntermediateAssistantReplies: false }
+      })
     );
 
     expect(
@@ -329,10 +322,11 @@ describe("agentTurnWorkSectionModel", () => {
         )
       }))
     ).toEqual([
-      { kind: "visible", bodies: ["Earlier answer"] },
+      { kind: "visible", bodies: ["Main analysis and A/B/C options"] },
       { kind: "work", bodies: [] },
-      { kind: "visible", bodies: ["Final answer"] }
+      { kind: "visible", bodies: ["Two extra notes"] }
     ]);
+    expect(model.collapseEligible).toBe(true);
   });
 
   it("fails open when no visible final text is explicitly marked", () => {

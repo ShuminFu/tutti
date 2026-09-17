@@ -236,7 +236,7 @@ describe("AgentTurnWorkSection", () => {
     ]);
   });
 
-  it("collapses ordinary assistant replies while keeping follow-up guidance visible", () => {
+  it("keeps ordinary assistant replies visible while collapsing tool work", () => {
     render(
       <AgentTurnWorkSection
         group={interleavedTurnGroup()}
@@ -256,7 +256,7 @@ describe("AgentTurnWorkSection", () => {
       />
     );
 
-    expect(screen.queryByText("Earlier answer")).toBeNull();
+    expect(screen.getByText("Earlier answer")).toBeTruthy();
     expect(screen.getByText("Follow-up")).toBeTruthy();
     expect(screen.getByText("Final answer")).toBeTruthy();
     expect(screen.queryByText("tools")).toBeNull();
@@ -302,7 +302,13 @@ describe("AgentTurnWorkSection", () => {
       [...container.querySelectorAll("[data-test-row-id]")].map(
         (element) => element.textContent
       )
-    ).toEqual(["First request", "Follow-up", "Final answer", "file-diff"]);
+    ).toEqual([
+      "First request",
+      "Earlier answer",
+      "Follow-up",
+      "Final answer",
+      "file-diff"
+    ]);
   });
 
   it("makes the duration text part of the turn disclosure button", () => {
@@ -390,7 +396,6 @@ function AgentTurnWorkSection({
   ) => JSX.Element;
 }): JSX.Element {
   const model = buildAgentTurnWorkSectionModel(group, turn, isActiveTurn, {
-    collapseIntermediateAssistantReplies: true,
     liveObservationGapPresentationState: observationGapPresentationState
   });
   if (!model) {

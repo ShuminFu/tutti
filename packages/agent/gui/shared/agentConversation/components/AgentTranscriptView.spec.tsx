@@ -1119,14 +1119,9 @@ describe("AgentTranscriptView", () => {
           '[data-agent-conversation-participant-header="assistant"]'
         )
         ?.closest("[data-agent-transcript-row]")
-    ).toHaveAttribute(
-      "data-agent-transcript-row",
-      "assistant-final:turn-final"
-    );
+    ).toHaveAttribute("data-agent-transcript-row", "assistant-final");
     expect(
-      container.querySelector(
-        '[data-agent-transcript-row="assistant-final:turn-final"]'
-      )
+      container.querySelector('[data-agent-transcript-row="assistant-final"]')
     ).not.toHaveAttribute("data-agent-transcript-row-participant-content");
     fireEvent.click(
       screen.getByRole("button", { name: "Expand task details" })
@@ -1348,7 +1343,7 @@ describe("AgentTranscriptView", () => {
     ).toBe(false);
   });
 
-  it("rerenders when imported history changes the assistant disclosure policy", () => {
+  it("does not rerender when only imported history markers change", () => {
     const labels = {
       thinkingLabel: "Thought process",
       toolCallsLabel: (count: number) => `Tool calls (${count})`,
@@ -1372,7 +1367,7 @@ describe("AgentTranscriptView", () => {
         { conversation, labels },
         { conversation: importedConversation, labels }
       )
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("keeps the legacy transcript rows flat when canonical timing is unavailable", () => {
