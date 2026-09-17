@@ -319,7 +319,7 @@ func externalSessionSelected(session externalImportedSession, sessionIDs []strin
 func externalProviderSelected(provider string, providers []string) bool {
 	normalized := agentproviderbiz.Normalize(provider)
 	if normalized == "" {
-		// Import-only archive providers (e.g. chatgpt) are not runnable
+		// Import-only sources (e.g. chatgpt, acp:grok) are not runnable
 		// registry providers, so normalize them the same way the selection
 		// providers are normalized below.
 		normalized = normalizeExternalArchiveImportProvider(provider)

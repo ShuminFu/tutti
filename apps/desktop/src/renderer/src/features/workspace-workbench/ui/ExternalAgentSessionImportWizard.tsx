@@ -51,7 +51,8 @@ import {
 
 const externalImportProviderOptions: WorkspaceAgentProvider[] = [
   "codex",
-  "claude-code"
+  "claude-code",
+  "acp:grok"
 ];
 
 type ExternalImportStep = "providers" | "select";

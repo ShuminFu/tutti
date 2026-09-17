@@ -482,9 +482,9 @@ export const en = {
       chooseArchive: "Choose ZIP",
       chooseChatgptArchive: "Choose ZIP",
       description:
-        "Import local Codex and Claude Code history or a Claude data export",
+        "Import local Codex, Claude Code, and Grok history or a Claude data export",
       done: "Done",
-      empty: "No local Codex or Claude Code project history was found",
+      empty: "No local Codex, Claude Code, or Grok project history was found",
       errors: "Skipped items",
       import: "Import",
       importFailed: "We couldn't import external agent history right now.",
@@ -527,7 +527,7 @@ export const en = {
       selectImportOption: "Select {{label}}",
       settingsAction: "Import",
       settingsDescription:
-        "Bring local Codex and Claude Code history or Claude export conversations into Tutti",
+        "Bring local Codex, Claude Code, and Grok history or Claude export conversations into Tutti",
       settingsLabel: "Import session history",
       title: "Import from AI apps"
     },

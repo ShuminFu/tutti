@@ -680,12 +680,35 @@ process. The fake ACP tests separately verify the exact declared spawn argv and
 all permission tiers; keeping those checks separate lets the smoke remain
 non-billable even when a CLI release makes `session/new` contact the service.
 
-Grok ACP initialize/smoke coverage does not persist token usage. The shared
-Claude/Codex path stores provider-reported counts on assistant
+## Local Grok External Import
+
+Local Grok CLI sessions live under `$GROK_HOME/sessions` (default `~/.grok/sessions`)
+as one directory per conversation:
+
+```text
+~/.grok/sessions/<urlencoded-cwd>/<session-id>/
+  summary.json
+  updates.jsonl
+  chat_history.jsonl
+```
+
+External import scans those directories the same way it scans Claude Code and
+Codex transcripts. `updates.jsonl` is the ACP display log and is preferred;
+`chat_history.jsonl` is a fallback when the display log is missing. Imported
+rows keep the Grok session UUID as `provider_session_id`, record provider
+`acp:grok`, and point `agent_target_id` at `extension:grok`. This is an
+import-only adapter: it does not add a runnable Grok provider or renderer
+branch. Hosts that isolate `GROK_HOME` can still expose the user's own CLI
+root through `TUTTI_GROK_EXTRA_IMPORT_ROOTS`.
+
+Grok ACP initialize/smoke coverage and this local importer do not persist token
+usage. The shared Claude/Codex path stores provider-reported counts on assistant
 `payload_json.usage` (sessionarchive's preferred SQLite field) and keeps
 session `usage.tokens` only as a latest-turn fallback; Grok does not yet
 emit an equivalent `input_tokens` / `lastTurn` snapshot, so archive writers
 will keep seeing absent tokens for Grok sessions until that report exists.
+The importer copies transcript text and timestamps only. It does not read
+`signals.json` or invent token counts.
 
 This support does not add a Grok provider, icon, executable wrapper, credential
 persistence, private authentication protocol, headless/TSH integration,

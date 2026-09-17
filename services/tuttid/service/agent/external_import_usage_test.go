@@ -28,6 +28,7 @@ func TestImportExternalSessionsPersistsClaudeMessageUsage(t *testing.T) {
 	claudeHome := filepath.Join(root, "claude-home")
 	t.Setenv("CODEX_HOME", filepath.Join(root, "codex-home"))
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeHome)
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	timestamp := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
 	writeAgentServiceJSONL(t, filepath.Join(claudeHome, "projects", "project-a", "claude-usage.jsonl"),
 		map[string]any{

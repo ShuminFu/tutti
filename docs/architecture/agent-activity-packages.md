@@ -907,7 +907,9 @@ The object uses Claude keys (`input_tokens`, `output_tokens`,
 not reported and must stay absent. Sessionarchive (or any archive writer)
 still has to copy the stored object onto each usage-bearing archive event's
 top-level `usage` field. Grok ACP does not yet emit persistable token
-counts; treat that as a follow-up once the provider reports them. Existing
+counts, and local Grok external import therefore stores transcript text and
+timestamps with empty usage; treat that as a follow-up once the provider
+reports them. Existing
 session control state is read from the daemon; pre-session edits remain in the
 engine-owned activation/draft record until the daemon confirms the session.
 `AgentHostWorkspaceAgent*` types may only appear in compatibility or projection

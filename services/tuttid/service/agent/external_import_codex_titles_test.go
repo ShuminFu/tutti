@@ -21,6 +21,7 @@ func TestScanExternalImportsAppliesCodexSQLiteTitle(t *testing.T) {
 	}
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 
 	// The scan applies a rolling 30-day cutoff, so a fixed fixture date rots:
 	// hardcoded stamps aged out of the window exactly 30 days after they were
