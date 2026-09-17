@@ -57,7 +57,9 @@ const agentGuiWorkbenchLabelProviders = [
 // have no descriptor in the provider identity catalog. They still need a human
 // label wherever imported history surfaces (e.g. ChatGPT data-export history).
 const agentGuiWorkbenchImportOnlyProviderLabels: Record<string, string> = {
-  chatgpt: "ChatGPT"
+  chatgpt: "ChatGPT",
+  grok: "Grok",
+  "acp:grok": "Grok"
 };
 
 export const agentGuiWorkbenchProviderLabels = {

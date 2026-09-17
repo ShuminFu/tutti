@@ -113,6 +113,7 @@ func TestServiceScanReadsHostDeclaredExtraImportRoot(t *testing.T) {
 	userHome := filepath.Join(root, "user-claude")
 	t.Setenv("CODEX_HOME", filepath.Join(root, "codex-home"))
 	t.Setenv("CLAUDE_CONFIG_DIR", managedHome)
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	t.Setenv(testClaudeExtraRootsEnv, userHome)
 
 	newer := time.Now().UTC().Truncate(time.Second)
@@ -217,6 +218,7 @@ func TestServiceScanIgnoresExtraImportRootsWhenUnset(t *testing.T) {
 	userHome := filepath.Join(root, "user-claude")
 	t.Setenv("CODEX_HOME", filepath.Join(root, "codex-home"))
 	t.Setenv("CLAUDE_CONFIG_DIR", managedHome)
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	t.Setenv(testClaudeExtraRootsEnv, "")
 	writeAgentServiceJSONL(t, filepath.Join(userHome, "projects", "project-a", "user-only.jsonl"),
 		map[string]any{

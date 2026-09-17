@@ -461,9 +461,9 @@ export const zhCN = {
         "ChatGPT 导出扫描完成，有 {{count}} 个对话可供检查。",
       chooseArchive: "选择 ZIP",
       chooseChatgptArchive: "选择 ZIP",
-      description: "导入本机 Codex、Claude Code 历史或 Claude 数据导出",
+      description: "导入本机 Codex、Claude Code、Grok 历史或 Claude 数据导出",
       done: "完成",
-      empty: "未找到本机 Codex 或 Claude Code 的项目历史",
+      empty: "未找到本机 Codex、Claude Code 或 Grok 的项目历史",
       errors: "跳过的项目",
       import: "导入",
       importFailed: "暂时无法导入外部 Agent 历史。",
@@ -503,7 +503,7 @@ export const zhCN = {
       selectImportOption: "选择 {{label}}",
       settingsAction: "导入",
       settingsDescription:
-        "将本机 Codex、Claude Code 历史或 Claude 导出对话导入 Tutti",
+        "将本机 Codex、Claude Code、Grok 历史或 Claude 导出对话导入 Tutti",
       settingsLabel: "导入会话历史",
       title: "从 AI 应用导入"
     },

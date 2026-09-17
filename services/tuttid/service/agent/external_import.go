@@ -104,10 +104,16 @@ func (s *Service) ImportExternalSessions(ctx context.Context, workspaceID string
 func normalizeExternalImportProviders(input []string) []string {
 	if len(input) == 0 {
 		out := make([]string, 0)
+		seen := map[string]struct{}{}
 		for _, descriptor := range providerregistry.Migrated() {
-			if descriptor.ExternalImport.Enabled {
-				out = append(out, descriptor.Identity.ID)
+			if !descriptor.ExternalImport.Enabled {
+				continue
 			}
+			out = append(out, descriptor.Identity.ID)
+			seen[descriptor.Identity.ID] = struct{}{}
+		}
+		if _, ok := seen[grokImportProvider]; !ok {
+			out = append(out, grokImportProvider)
 		}
 		return out
 	}
@@ -116,7 +122,7 @@ func normalizeExternalImportProviders(input []string) []string {
 	for _, provider := range input {
 		normalized := agentproviderbiz.Normalize(provider)
 		if normalized == "" {
-			// Import-only archive providers (e.g. the ChatGPT data export) are
+			// Import-only sources (ChatGPT archive, local Grok CLI) are
 			// deliberately not runnable registry providers, so they never
 			// resolve through providerregistry. Preserve their identity here so
 			// import selections that reference them survive normalization.
@@ -139,13 +145,15 @@ func normalizeExternalImportProviders(input []string) []string {
 	return out
 }
 
-// normalizeExternalArchiveImportProvider recognizes import-only archive
-// providers that have no runnable providerregistry descriptor. Returns the
-// canonical identity, or "" if the value is not a known archive-only provider.
+// normalizeExternalArchiveImportProvider recognizes import-only sources that
+// have no runnable providerregistry descriptor. Returns the canonical
+// identity, or "" if the value is not a known import-only provider.
 func normalizeExternalArchiveImportProvider(provider string) string {
 	switch strings.TrimSpace(strings.ToLower(provider)) {
 	case chatgptExportProvider:
 		return chatgptExportProvider
+	case grokImportProvider, "grok":
+		return grokImportProvider
 	default:
 		return ""
 	}
@@ -219,6 +227,9 @@ func externalImportedSessionSettings(session externalImportedSession) map[string
 }
 
 func externalImportAgentTargetID(provider string) string {
+	if normalizeExternalArchiveImportProvider(provider) == grokImportProvider {
+		return grokImportTargetID
+	}
 	normalized := agentproviderbiz.Normalize(provider)
 	if descriptor, ok := providerregistry.Find(normalized); ok {
 		return descriptor.Target.ID
@@ -340,6 +351,9 @@ func externalScanCutoffUnixMS(days int) int64 {
 }
 
 func scanExternalProviderSessions(provider string, cutoffUnixMS int64) ([]externalImportedSession, ExternalImportProvider, []ExternalImportError) {
+	if normalizeExternalArchiveImportProvider(provider) == grokImportProvider {
+		return scanGrokProviderSessions(cutoffUnixMS)
+	}
 	descriptor, ok := providerregistry.Find(provider)
 	if !ok || !descriptor.ExternalImport.Enabled {
 		return nil, ExternalImportProvider{Provider: provider}, nil

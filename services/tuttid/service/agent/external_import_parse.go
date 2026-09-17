@@ -487,6 +487,14 @@ func externalImportCleanUserText(provider string, text string) (string, bool) {
 	}
 	descriptor, ok := providerregistry.Find(provider)
 	if !ok || !descriptor.ExternalImport.Enabled {
+		// Import-only sources are not registry providers. Grok strips its
+		// injected <user_info> preamble; other import-only text stays visible.
+		if normalizeExternalArchiveImportProvider(provider) == grokImportProvider {
+			return grokCleanUserText(trimmed)
+		}
+		if normalizeExternalArchiveImportProvider(provider) != "" {
+			return trimmed, true
+		}
 		return "", false
 	}
 	switch descriptor.ExternalImport.UserTextCleanerKind {
