@@ -118,6 +118,8 @@ export function createAgentSessionEngine({
   let batchFlushTask: EngineScheduledTask | null = null;
   let draining = false;
   let disposed = false;
+  // 引擎释放时要通知的等待方（如分栏结对模式等一次提交的结局），释放后清空。
+  const disposeListeners = new Set<() => void>();
   let composerOptionsCommandSequence = 1;
   let interactionResponseCommandSequence = 1;
   let sessionGoalControlCommandSequence = 1;
@@ -698,6 +700,14 @@ export function createAgentSessionEngine({
       expiryClock.dispose();
       effectExecutor.dispose();
       listeners.clear();
+      for (const onDisposed of [...disposeListeners]) {
+        try {
+          onDisposed();
+        } catch {
+          // 等待方自己的收尾出错不能挡住引擎释放。
+        }
+      }
+      disposeListeners.clear();
     },
     getSnapshot() {
       return publicSnapshot;
@@ -748,6 +758,17 @@ export function createAgentSessionEngine({
         throw new Error("agent_session_pin_result_missing");
       }
       return session;
+    },
+    onDispose(listener) {
+      // 已经释放过的引擎不会再有状态推送，直接告诉等待方，免得它永远挂着。
+      if (disposed) {
+        listener();
+        return () => {};
+      }
+      disposeListeners.add(listener);
+      return () => {
+        disposeListeners.delete(listener);
+      };
     },
     submitInteractionResponse,
     submitPrompt,

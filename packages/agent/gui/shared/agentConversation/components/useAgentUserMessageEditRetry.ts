@@ -1,6 +1,7 @@
 import { useCallback, useState, type KeyboardEvent } from "react";
 import type { AgentMessageRowVM } from "../contracts/agentMessageRowVM";
 import type { AgentUserMessageEditRetryControl } from "./AgentUserMessageEditRetry";
+import { stripLeadingPairKickoff } from "./pairKickoffEnvelope";
 
 interface AgentUserMessageEditState {
   draft: string;
@@ -50,7 +51,9 @@ export function useAgentUserMessageEditRetry(input: {
       return;
     }
     setEditState({
-      draft: rawFirstTextBlock,
+      // 分栏结对模式的第一句：编辑框里只放用户原话，不露开工卡（票 05 评审 E）。
+      // originalText 仍记原始块，用来判「还在编辑同一条」。
+      draft: stripLeadingPairKickoff(rawFirstTextBlock),
       originalText: rawFirstTextBlock,
       rowId: input.row.id
     });

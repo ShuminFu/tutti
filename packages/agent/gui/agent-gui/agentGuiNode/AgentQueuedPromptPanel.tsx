@@ -25,6 +25,7 @@ import {
   type AgentMessageMarkdownWorkspaceAppIcon
 } from "../../shared/AgentMessageMarkdown";
 import type { AgentPromptContentBlock } from "../../shared/contracts/dto/agentSession";
+import { stripLeadingPairKickoff } from "../../shared/agentConversation/components/pairKickoffEnvelope";
 import type {
   AgentGUIQueueStatus,
   AgentGUIQueuedPromptVM
@@ -245,11 +246,17 @@ class AgentQueuedPromptImage extends Component<
  * block with no text) still renders its reference instead of appearing blank.
  */
 function queuedPromptDisplayText(queuedPrompt: AgentGUIQueuedPromptVM): string {
-  const displayPrompt = queuedPrompt.displayPrompt?.trim();
+  // 分栏结对模式的第一句带着开工卡（displayPrompt / 第一个文字块前面都有）：排队行只显示
+  // 用户原话，与转录里 splitLeadingPairCard 同一套解析（票 05）。
+  const displayPrompt = stripLeadingPairKickoff(
+    queuedPrompt.displayPrompt ?? ""
+  ).trim();
   if (displayPrompt) {
     return displayPrompt;
   }
-  const prompt = agentPromptContentDisplayText(queuedPrompt.content);
+  const prompt = stripLeadingPairKickoff(
+    agentPromptContentDisplayText(queuedPrompt.content)
+  ).trim();
   if (prompt) {
     return prompt;
   }

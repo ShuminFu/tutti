@@ -31,6 +31,17 @@ export const enAgentGuiSessionActions = {
   splitResetRatio: "Reset split width",
   splitSwapPanes: "Swap sides",
   splitUntitledSession: "Untitled session",
+  // Split pair mode (peer-pair-mode issues 04/05): composer radio, header role pill, kickoff card notices.
+  splitPairModeSolo: "Solo",
+  splitPairModeLabel: "Pair mode:",
+  splitPairRoleDeveloper: "Developer",
+  splitPairRoleReviewer: "Reviewer",
+  splitPairKickoffPreviewFailed:
+    "The pairing kickoff card was not ready; sent as a normal message",
+  splitPairKickoffCommitFailed:
+    "Your partner did not receive the kickoff card; the next message will retry",
+  splitPairKickoffRolesChanged:
+    "Pairing roles just changed, so this kickoff card was not delivered; the next message will use the new roles",
   retryConversations: "Retry",
   conversationCopyImage: "Image",
   conversationCopyMentionPrefix: "@",

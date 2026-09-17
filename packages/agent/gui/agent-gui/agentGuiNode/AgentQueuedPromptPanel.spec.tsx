@@ -182,6 +182,51 @@ describe("AgentQueuedPromptPanel", () => {
     clientWidth.mockRestore();
   });
 
+  // 分栏结对模式（票 05）：排队的第一句带着开工卡，排队行（正文 + 截断时的提示）只显示用户原话。
+  it("shows only the original words for a queued pair-kickoff prompt, including its tooltip", async () => {
+    const block =
+      '<pair-kickoff role="developer" partner="codex-b" partner_provider="codex" partner_role="reviewer" reason="start">\n结对模式开始：你是开发者。\n</pair-kickoff>';
+    const scrollWidth = vi
+      .spyOn(HTMLElement.prototype, "scrollWidth", "get")
+      .mockReturnValue(240);
+    const clientWidth = vi
+      .spyOn(HTMLElement.prototype, "clientWidth", "get")
+      .mockReturnValue(120);
+    try {
+      const { container } = render(
+        <AgentQueuedPromptPanel
+          queuedPrompts={[
+            {
+              ...textQueuedPrompt("queued-1", `${block}\n\n修登录页`),
+              displayPrompt: `${block}\n\n修登录页`
+            }
+          ]}
+          drainingQueuedPromptId={null}
+          labels={labels}
+          onSendQueuedPromptNext={vi.fn()}
+          onRemoveQueuedPrompt={vi.fn()}
+          onEditQueuedPrompt={vi.fn()}
+        />
+      );
+      expect(container.textContent).toContain("修登录页");
+      expect(container.textContent).not.toContain("结对模式开始");
+
+      const text = container.querySelector(
+        ".agent-gui-node__composer-queued-prompt-text"
+      );
+      expect(text).not.toBeNull();
+      fireEvent.pointerMove(text as Element, { pointerType: "mouse" });
+      const tooltips = await screen.findAllByRole("tooltip");
+      expect(tooltips).toHaveLength(1);
+      expect(tooltips[0]).toHaveTextContent("修登录页");
+      expect(tooltips[0]?.textContent).not.toContain("结对模式开始");
+      expect(tooltips[0]?.textContent).not.toContain("pair-kickoff");
+    } finally {
+      scrollWidth.mockRestore();
+      clientWidth.mockRestore();
+    }
+  });
+
   it("renders queued mention prompts as entity tokens instead of raw markdown links", () => {
     const { container } = render(
       <AgentQueuedPromptPanel

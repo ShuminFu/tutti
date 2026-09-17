@@ -7,6 +7,7 @@
 import type { SplitSide } from "@tutti-os/agent-gui/conversation-rail-projection";
 import type {
   EmbeddedSplitPairingState,
+  EmbeddedSplitPairRole,
   EmbeddedSplitViewSnapshot
 } from "./embeddedSplitView.ts";
 
@@ -32,6 +33,12 @@ export interface EmbeddedSplitPaneHeaderModel {
   pairingLabel: string;
   /** 链条的状态色：paired 主色、其余灰。unsupported 时整枚不画。 */
   pairingState: EmbeddedSplitPairingState | null;
+  /**
+   * 结对模式下这一栏的角色（票 04）：标题后的紫色胶囊。独立模式 / 不满足显示条件
+   * 时为 null，胶囊整枚不画。取自快照的 pairMode 投影，按会话的 task 算，不按左右。
+   */
+  pairRole: EmbeddedSplitPairRole | null;
+  pairRoleLabel: string | null;
   projectLabel: string | null;
   provider: string | null;
   /** 窗口刚点过「新建会话」、还没落地新号时为 null。 */
@@ -47,6 +54,9 @@ export interface EmbeddedSplitPaneHeaderLabels {
   closeSession: string;
   menu: string;
   pair: string;
+  /** 角色胶囊文案（票 04）：「开发者」「审查者」。 */
+  pairRoleDeveloper?: string;
+  pairRoleReviewer?: string;
   resetRatio: string;
   swapPanes: string;
   unpair: string;
@@ -98,6 +108,16 @@ export function buildEmbeddedSplitPaneHeaders(
   return sides.map((side) => {
     // 单栏时 sides 只有 "left"，right 为 null 的分支走不到；分栏时 right 非空。
     const pane = side === "left" ? left : right!;
+    const pairRole =
+      split && snapshot.pairMode?.mode === "pair"
+        ? (snapshot.pairMode.roles[side] ?? null)
+        : null;
+    const pairRoleLabel =
+      pairRole === "developer"
+        ? (labels.pairRoleDeveloper ?? "developer")
+        : pairRole === "reviewer"
+          ? (labels.pairRoleReviewer ?? "reviewer")
+          : null;
     const geometry =
       !split || snapshot.collapsed
         ? { leftFraction: 0, widthFraction: 1 }
@@ -114,6 +134,8 @@ export function buildEmbeddedSplitPaneHeaders(
       pairingEnabled,
       pairingLabel,
       pairingState,
+      pairRole,
+      pairRoleLabel,
       projectLabel: pane.session?.projectLabel ?? null,
       provider: pane.session?.provider ?? null,
       sessionId: pane.sessionId,

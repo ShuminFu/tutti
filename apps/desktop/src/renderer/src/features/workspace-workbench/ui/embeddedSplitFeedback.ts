@@ -35,6 +35,15 @@ export const embeddedSplitToast: EmbeddedSplitToast = {
 /** 每次读都重新取：语言可以在运行时切。 */
 export function embeddedSplitPairingLabels(): EmbeddedSplitPairingLabels {
   return {
+    kickoffCommitFailed: translateEmbeddedSplitLabel(
+      "agentHost.agentGui.splitPairKickoffCommitFailed"
+    ),
+    kickoffRolesChanged: translateEmbeddedSplitLabel(
+      "agentHost.agentGui.splitPairKickoffRolesChanged"
+    ),
+    kickoffPreviewFailed: translateEmbeddedSplitLabel(
+      "agentHost.agentGui.splitPairKickoffPreviewFailed"
+    ),
     paired: translateEmbeddedSplitLabel("agentHost.agentGui.splitPaired"),
     relaunchTimeout: translateEmbeddedSplitLabel(
       "agentHost.agentGui.splitRelaunchTimeout"

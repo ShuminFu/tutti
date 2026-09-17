@@ -15,7 +15,10 @@ export {
   subscribeConversationRailPeerPairsChanged,
   type ConversationRailCreatePeerPairInput,
   type ConversationRailCreatePeerPairResult,
-  type ConversationRailPeerPairingHost
+  type ConversationRailCommitPairKickoffInput,
+  type ConversationRailPairKickoffInput,
+  type ConversationRailPeerPairingHost,
+  type ConversationRailSetPeerPairModeInput
 } from "./agent-gui/agentGuiNode/model/conversationRailPeerPairingHost.ts";
 export {
   applyConversationRailPeerPairAdjacency,
@@ -28,7 +31,9 @@ export {
   type ConversationRailPeerPair,
   type ConversationRailPeerPairEndpoint,
   type ConversationRailPeerPairIndex,
-  type ConversationRailPeerPairLink
+  type ConversationRailPeerPairKickoffState,
+  type ConversationRailPeerPairLink,
+  type ConversationRailPeerPairMode
 } from "./agent-gui/agentGuiNode/model/conversationRailPeerPairing.ts";
 
 // 分栏配对（补丁 0108）：宿主端口注册口 + 状态机，同样挂在这个子路径上。
@@ -73,3 +78,20 @@ export {
   type HostSessionLivenessState,
   type SessionLivenessHost
 } from "./shared/agentConversation/sessionLivenessHost.ts";
+
+// 分栏结对模式（peer-pair-mode 票 04/05）：作曲区宿主扩展口（上方附加行 + 提交前拼块），
+// 同样挂在这个子路径上，apps/desktop 的分栏层据此注册，不新增 package exports 入口。
+export {
+  agentComposerHostExtension,
+  agentPromptSubmitText,
+  isAgentPromptSubmitPreparable,
+  prefixAgentPromptContent,
+  registerAgentComposerHostExtension,
+  runPreparedAgentPromptSubmit,
+  subscribeAgentComposerHostExtension,
+  type AgentComposerHostExtension,
+  type AgentComposerSubmitPreparationInput,
+  type AgentPromptSubmitPreparation,
+  type AgentPromptSubmitReceipt,
+  type RunPreparedAgentPromptSubmitInput
+} from "./shared/agentConversation/agentComposerHostExtension.ts";

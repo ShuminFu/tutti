@@ -180,6 +180,20 @@ test("factory rejects empty identity parts", () => {
   );
 });
 
+test("onDispose fires once on dispose, can unsubscribe, and fires immediately after dispose", () => {
+  // 分栏结对模式等提交结局靠它：dispose 会清掉订阅者，不通知就会永远挂着。
+  const { engine } = createHarness();
+  const calls: string[] = [];
+  engine.onDispose?.(() => calls.push("kept"));
+  const off = engine.onDispose?.(() => calls.push("removed"));
+  off?.();
+  engine.dispose();
+  engine.dispose();
+  assert.deepEqual(calls, ["kept"]);
+  engine.onDispose?.(() => calls.push("late"));
+  assert.deepEqual(calls, ["kept", "late"]);
+});
+
 test("engine drops intents scoped to another workspace", () => {
   const harness = createHarness({ workspaceId: "workspace-a" });
   harness.engine.dispatch({

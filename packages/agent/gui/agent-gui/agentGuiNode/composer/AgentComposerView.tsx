@@ -1,4 +1,5 @@
 import {
+  useSyncExternalStore,
   type Dispatch,
   type MutableRefObject,
   type RefObject,
@@ -17,6 +18,10 @@ import { cn } from "../../../app/renderer/lib/utils";
 import styles from "../AgentGUINode.styles";
 import { AgentInteractivePromptSurface } from "../AgentInteractivePromptSurface";
 import { AgentPeerPairRequestSurface } from "../../../shared/agentConversation/components/AgentPeerPairRequestSurface";
+import {
+  agentComposerHostExtension,
+  subscribeAgentComposerHostExtension
+} from "../../../shared/agentConversation/agentComposerHostExtension";
 import { AgentQueuedPromptPanel } from "../AgentQueuedPromptPanel";
 import {
   AgentProjectDropdown,
@@ -395,6 +400,11 @@ export function AgentComposerView(input: Props): React.JSX.Element {
         }
         provider={provider}
         visibleOnHome={isHeroLayout}
+      />
+      {/* 作曲区上方的宿主附加行（分栏结对模式单选，peer-pair-mode 票 04）：放在正常文档流里、
+          输入框正上方；宿主没注册或判定不画时整行不占位。 */}
+      <AgentComposerHostAccessorySlot
+        agentSessionId={input.props.agentSessionId ?? null}
       />
       <div
         className={cn(
@@ -825,4 +835,20 @@ function AgentPeerPairRequestSurfaceSlot({
       </div>
     </div>
   );
+}
+
+// 宿主扩展口的渲染位：注册可能晚于作曲区首次渲染，所以订阅注册口而不是只读一次。
+// 画什么、画不画全由宿主决定（agentComposerHostExtension.ts），这里不认识「结对」。
+function AgentComposerHostAccessorySlot({
+  agentSessionId
+}: {
+  agentSessionId: string | null;
+}): React.JSX.Element | null {
+  const extension = useSyncExternalStore(
+    subscribeAgentComposerHostExtension,
+    agentComposerHostExtension,
+    agentComposerHostExtension
+  );
+  const node = extension?.renderAboveComposer?.({ agentSessionId }) ?? null;
+  return node ? <>{node}</> : null;
 }

@@ -20,7 +20,9 @@ import {
   saveSplitLayout,
   splitLayoutStorageKey,
   subscribeConversationRailPeerPairsChanged,
+  type AgentPromptSubmitPreparation,
   type ConversationRailPeerPair,
+  type ConversationRailPeerPairEndpoint,
   type ConversationRailPeerPairingHost,
   type ConversationRailSplitDragSession,
   type ConversationRailSplitPoint,
@@ -55,6 +57,31 @@ export type EmbeddedSplitPairingState =
   | "unsupported"
   | "pending";
 
+/** 结对模式里的角色（后端词 developer / reviewer）。 */
+export type EmbeddedSplitPairRole = "developer" | "reviewer";
+
+/** composer 上方单选的三个取值：独立模式 / 结对·开发者 / 结对·审查者。 */
+export type EmbeddedSplitPairModeChoice = "solo" | EmbeddedSplitPairRole;
+
+/**
+ * 分栏结对模式（peer-pair-mode 票 04）的投影。**不是**前端自己存的一份状态：
+ * 每一项都由配对表里「连着左右两栏的那一行」现算（PRD「一个事实一个所有者」），
+ * 写只走 `setPairMode` → 宿主 → 后端，写完重拉配对表。
+ * 为 null 时整排单选与栏头角色胶囊都不渲染（PRD D6）。
+ */
+export interface EmbeddedSplitPairModeSnapshot {
+  /** 正在 setPeerPairMode：单选暂时不可点，免得连点发出互相覆盖的两次写。 */
+  busy: boolean;
+  kickoffState: "" | "pending" | "sent";
+  mode: "solo" | "pair";
+  pairId: string;
+  /**
+   * 每栏的角色：按「这一栏那条会话的 task 是不是 developerTaskId」算，
+   * 所以交换左右栏之后角色跟着会话走，而不是跟着左右走。
+   */
+  roles: { left: EmbeddedSplitPairRole | null; right: EmbeddedSplitPairRole | null };
+}
+
 /** 栏头要写的那点身份信息（票 04）：来自侧栏上报 / 拖动摘要，拿不到就是 null。 */
 export interface EmbeddedSplitPaneSessionSnapshot {
   iconUrl: string | null;
@@ -82,6 +109,8 @@ export interface EmbeddedSplitViewSnapshot {
   dragging: EmbeddedSplitDragSnapshot | null;
   focus: SplitSide;
   pairing: EmbeddedSplitPairingState;
+  /** 结对模式单选 / 角色胶囊的投影；不满足显示条件时为 null（票 04）。 */
+  pairMode: EmbeddedSplitPairModeSnapshot | null;
   panes: {
     left: EmbeddedSplitPaneSnapshot | null;
     right: EmbeddedSplitPaneSnapshot | null;
@@ -179,6 +208,16 @@ export interface EmbeddedSplitViewController {
   getSnapshot(): EmbeddedSplitViewSnapshot;
   /** 链条图标的「配对」动作，也是放下之后自动跑的那一段。 */
   pairPanes(): Promise<PairOnDropResult>;
+  /**
+   * 结对第一句的开工卡准备（票 05）。只在「这条会话所在的一对是 pair 模式且
+   * kickoffState=pending」时给出前缀；其余一律 null（不拦截）。
+   */
+  preparePairKickoff(input: {
+    agentSessionId: string;
+    text: string;
+  }): Promise<AgentPromptSubmitPreparation | null>;
+  /** 同步预判版：给提交链路决定要不要走异步准备（不要时零延迟）。 */
+  wantsPairKickoff(agentSessionId: string): boolean;
   resetRatio(): void;
   resize(ratio: number): void;
   /**
@@ -189,6 +228,10 @@ export interface EmbeddedSplitViewController {
   /** 点选 / 宿主 open-session / 新建落地，统一入口。 */
   select(agentSessionId: string): boolean;
   setFocus(side: SplitSide): void;
+  /** composer 上方单选：从 `side` 这一栏的视角选模式 / 角色（票 04）。 */
+  setPairMode(side: SplitSide, choice: EmbeddedSplitPairModeChoice): Promise<void>;
+  /** 这条会话现在在哪一栏（给 composer 上方那排单选认栏用）。 */
+  sideForSessionId(agentSessionId: string): SplitSide | null;
   sideForNodeId(nodeId: string): SplitSide | null;
   subscribe(listener: () => void): () => void;
   /** 栏头 ⋮ 的「交换左右」：两栏各自换成对方那条会话，焦点跟着人走。 */
@@ -203,6 +246,9 @@ const noopToast: EmbeddedSplitToast = {
 };
 
 const defaultLabels = (): EmbeddedSplitPairingLabels => ({
+  kickoffCommitFailed: "Your partner did not receive the pairing kickoff card",
+  kickoffPreviewFailed:
+    "Could not prepare the pairing kickoff card; sent as a normal message",
   paired: "Paired",
   relaunchTimeout: "The relaunched session did not show up in time",
   unmanaged: "Unmanaged sessions cannot be paired"
@@ -384,6 +430,15 @@ export function createEmbeddedSplitViewController(
   let pairs: readonly ConversationRailPeerPair[] = [];
   let pairingBusy = 0;
   let pairingUnsupported = readPairingHost() === null;
+  // 结对模式写操作在途计数（票 04）。
+  let pairModeBusy = 0;
+  // 宿主桥对结对模式三件套回过 unsupported：粘住，整排单选不再渲染（PRD D6）。
+  // 与 pairingUnsupported 分开记：老宿主可能支持配对、不支持结对模式。
+  let pairModeUnsupported = false;
+  // 开工卡「已 preview、还没 commit 完」的 pairId（票 05）。这不是第二份
+  // kickoffState：它只挡住同一对在这段在途时间里的第二句又拼一张卡，
+  // commit 结束（成败都算）就摘掉，真相仍以配对表里的 kickoffState 为准。
+  const kickoffInFlight = new Set<string>();
   let disposed = false;
   // 配对时后端「先重开已结束的对端」还回来的新会话号。后端一拿到号就返回，而那条
   // Tutti 会话要等派工器异步起来才真的存在（`ManagedTuttiSessionID(taskID)` 是算出来的，
@@ -517,6 +572,89 @@ export function createEmbeddedSplitViewController(
     return linked ? "paired" : "unpaired";
   }
 
+  /** 连着左右两栏那两条会话的配对行（无序比较）；任一栏空 / 没配对时为 null。 */
+  function splitPeerPair(): ConversationRailPeerPair | null {
+    // 先判空槽再问 isFreshPane：buildSnapshot 在控制器初始化时就会跑一次，
+    // 那时 freshNodeIds 还在暂时性死区里，空布局必须在碰它之前就返回。
+    if (layout.panes.left === null || layout.panes.right === null) return null;
+    const left = isFreshPane("left") ? null : layout.panes.left;
+    const right = isFreshPane("right") ? null : layout.panes.right;
+    if (left === null || right === null) return null;
+    return (
+      pairs.find((pair) => {
+        const a = pair?.a?.sessionId?.trim() ?? "";
+        const b = pair?.b?.sessionId?.trim() ?? "";
+        return (a === left && b === right) || (a === right && b === left);
+      }) ?? null
+    );
+  }
+
+  function endpointOf(
+    pair: ConversationRailPeerPair,
+    sessionId: string | null
+  ): ConversationRailPeerPairEndpoint | null {
+    if (!sessionId) return null;
+    if (pair.a?.sessionId?.trim() === sessionId) return pair.a;
+    if (pair.b?.sessionId?.trim() === sessionId) return pair.b;
+    return null;
+  }
+
+  /**
+   * 一条会话在这一对里的角色。判据**只看 task**：本端 task id 等于
+   * developerTaskId 就是开发者，否则是审查者 —— 不看它在左栏还是右栏，
+   * 交换左右之后角色才会跟着会话走（票 04 回退看红钉的就是这一条）。
+   */
+  function pairRoleOf(
+    pair: ConversationRailPeerPair,
+    sessionId: string | null
+  ): EmbeddedSplitPairRole | null {
+    if (pair.pairMode !== "pair") return null;
+    const developerTaskId = pair.developerTaskId?.trim() ?? "";
+    if (!developerTaskId) return null;
+    const own = endpointOf(pair, sessionId);
+    if (!own) return null;
+    return own.taskId?.trim() === developerTaskId ? "developer" : "reviewer";
+  }
+
+  /**
+   * 票 04 的显示条件，四条缺一不画：
+   *   ① 分栏（两栏都有会话）；② 两栏之间已配对（配对表里有这一行）；
+   *   ③ 两栏都是托管会话（不是导入的历史会话）；④ 宿主支持结对模式
+   *      —— 配对行上带 pairMode 字段，且三件套没回过 unsupported。
+   * 刻意不看 pairingState()：它在 refreshPairs 在途时是 "pending"，
+   * 拿它判会让单选每次刷新都闪一下。
+   */
+  function pairModeSnapshot(): EmbeddedSplitPairModeSnapshot | null {
+    if (pairingUnsupported || pairModeUnsupported) return null;
+    const pair = splitPeerPair();
+    if (!pair || pair.pairMode === undefined) return null;
+    const host = readPairingHost();
+    if (
+      !host?.setPeerPairMode ||
+      !host.previewPairKickoff ||
+      !host.commitPairKickoff
+    ) {
+      return null;
+    }
+    const left = pairingSideOf("left");
+    const right = pairingSideOf("right");
+    if (!left || !right || left.isImported || right.isImported) return null;
+    const mode = pair.pairMode === "pair" ? "pair" : "solo";
+    return {
+      busy: pairModeBusy > 0,
+      kickoffState:
+        pair.kickoffState === "pending" || pair.kickoffState === "sent"
+          ? pair.kickoffState
+          : "",
+      mode,
+      pairId: pair.pairId,
+      roles: {
+        left: pairRoleOf(pair, left.sessionId),
+        right: pairRoleOf(pair, right.sessionId)
+      }
+    };
+  }
+
   // 会话栏展开要「挤出空间」而不是盖住左栏：左栏加宽、分隔线右移、右栏变窄。
   // 夹逼是必须的 —— 右栏被推到 0 宽就等于分栏被会话栏吃掉了，用户还以为窗口坏了。
   // 折叠态（主区太窄、只显示焦点栏）下没有「两栏」可言，一律不推。
@@ -536,6 +674,7 @@ export function createEmbeddedSplitViewController(
       dragging,
       focus: layout.focus,
       pairing: pairingState(),
+      pairMode: pairModeSnapshot(),
       panes: { left: paneOf("left"), right: paneOf("right") },
       railPushRatio: railPushRatio(),
       ratio: layout.ratio
@@ -876,6 +1015,228 @@ export function createEmbeddedSplitViewController(
     }
   }
 
+  function errorText(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  function isUnsupported(error: unknown): boolean {
+    return error instanceof Error && error.message.trim() === "unsupported";
+  }
+
+  /** 宿主写回来的那一行替换进缓存（形状不全就不替换，等 refreshPairs 兜底）。 */
+  function replacePair(next: ConversationRailPeerPair | undefined): void {
+    if (!next?.pairId || !next.a || !next.b) return;
+    pairs = pairs.map((pair) => (pair.pairId === next.pairId ? next : pair));
+  }
+
+  /**
+   * 票 04：从 `side` 这一栏的视角选。开发者 → developerTaskId 是本栏的 task；
+   * 审查者 → 是另一栏的 task；独立模式 → 整对退回 solo（两栏一起退出）。
+   * 不做乐观更新：单选只投影配对表，写失败时它自然还是行里的值。
+   */
+  async function setPairMode(
+    side: SplitSide,
+    choice: EmbeddedSplitPairModeChoice
+  ): Promise<void> {
+    // 评审补充 2：上一次写还没回来就不接新的选择（连点 / 键盘连按），免得两次写互相覆盖。
+    if (pairModeBusy > 0) return;
+    const pairingHost = readPairingHost();
+    const current = pairModeSnapshot();
+    const pair = splitPeerPair();
+    if (!pairingHost?.setPeerPairMode || !current || !pair) return;
+    const currentChoice: EmbeddedSplitPairModeChoice =
+      current.mode === "pair" && current.roles[side]
+        ? current.roles[side]
+        : "solo";
+    if (currentChoice === choice) return;
+    const own = endpointOf(pair, layout.panes[side]);
+    const other = endpointOf(pair, layout.panes[otherSide(side)]);
+    if (!own || !other) return;
+    const developer = choice === "developer" ? own : other;
+    const input =
+      choice === "solo"
+        ? { mode: "solo" as const, pairId: pair.pairId }
+        : {
+            // 契约允许 task id 或 Tutti 会话号；task id 缺时退回会话号让后端归一。
+            developerTaskId:
+              developer.taskId?.trim() || developer.sessionId?.trim() || "",
+            mode: "pair" as const,
+            pairId: pair.pairId
+          };
+    pairModeBusy += 1;
+    emit();
+    let wrote = false;
+    try {
+      const result = await pairingHost.setPeerPairMode(input);
+      replacePair(result?.pair);
+      wrote = true;
+    } catch (error) {
+      if (isUnsupported(error)) {
+        pairModeUnsupported = true;
+      } else {
+        // 后端那句人话原样端出来（400 invalid_pair_mode / 409 pair_revoked …）。
+        toast.error(errorText(error));
+      }
+    } finally {
+      pairModeBusy -= 1;
+      emit();
+    }
+    // 写成功才广播（补丁 0130 的约定：刷新路径本身绝不 notify）。
+    if (wrote) broadcastPeerPairsChanged();
+    await refreshPairs();
+  }
+
+  /** 这条会话此刻显示在哪一栏（空槽 / 新建占位栏不算）。 */
+  function sideOfSession(agentSessionId: string): SplitSide | null {
+    const id = agentSessionId.trim();
+    if (!id) return null;
+    if (!isFreshPane("left") && layout.panes.left === id) return "left";
+    if (!isFreshPane("right") && layout.panes.right === id) return "right";
+    return null;
+  }
+
+  /**
+   * 这条会话要不要拼开工卡：只认**连着左右两栏的那一对**，且这条会话此刻就在某一栏里
+   * （评审 D）。不回退去翻整张配对表——同一条会话可能还有别的配对行处在 pending，
+   * 分栏里没露面的那一对不该劫持这句话（单选也只投影分栏这一对）。
+   */
+  function pendingKickoffPairFor(
+    agentSessionId: string
+  ): ConversationRailPeerPair | null {
+    const sessionId = agentSessionId.trim();
+    if (!sessionId || pairingUnsupported || pairModeUnsupported) return null;
+    if (sideOfSession(sessionId) === null) return null;
+    const pairingHost = readPairingHost();
+    if (!pairingHost?.previewPairKickoff || !pairingHost.commitPairKickoff) {
+      return null;
+    }
+    const isPending = (pair: ConversationRailPeerPair): boolean =>
+      pair.pairMode === "pair" &&
+      pair.kickoffState === "pending" &&
+      endpointOf(pair, sessionId) !== null &&
+      !kickoffInFlight.has(pair.pairId);
+    const split = splitPeerPair();
+    return split && isPending(split) ? split : null;
+  }
+
+  function wantsPairKickoff(agentSessionId: string): boolean {
+    return pendingKickoffPairFor(agentSessionId) !== null;
+  }
+
+  /**
+   * 票 05 的顺序：preview（纯函数、不写库）→ 由提交链路把块拼在用户原文前面发出 →
+   * 引擎确认接受后才 commit（PRD D4）。preview 失败不拦截、原样发送并提示；
+   * commit 失败提示「搭档没收到开工卡」并保持 pending，下一句重试。
+   */
+  async function preparePairKickoff(input: {
+    agentSessionId: string;
+    text: string;
+  }): Promise<AgentPromptSubmitPreparation | null> {
+    const goal = input.text.trim();
+    if (!goal || goal.startsWith("/")) return null;
+    const pair = pendingKickoffPairFor(input.agentSessionId);
+    const pairingHost = readPairingHost();
+    if (
+      !pair ||
+      !pairingHost?.previewPairKickoff ||
+      !pairingHost.commitPairKickoff
+    ) {
+      return null;
+    }
+    const sender = endpointOf(pair, input.agentSessionId.trim());
+    const senderTaskId =
+      sender?.taskId?.trim() || input.agentSessionId.trim();
+    const request = { goal, pairId: pair.pairId, senderTaskId };
+    // 评审 A：拍下 preview 时的开发者。块里的角色是按它写的；到 commit 时行里的
+    // developer 变了，这张卡就是错的，不能投（本地缓存先挡一道，后端 409 再挡一道）。
+    const expectedDeveloperTaskId = pair.developerTaskId?.trim() ?? "";
+    kickoffInFlight.add(pair.pairId);
+    let block = "";
+    try {
+      block = (await pairingHost.previewPairKickoff(request)).block ?? "";
+    } catch (error) {
+      kickoffInFlight.delete(pair.pairId);
+      if (isUnsupported(error)) {
+        pairModeUnsupported = true;
+        emit();
+      } else {
+        toast.error(
+          [labels().kickoffPreviewFailed, errorText(error)]
+            .filter(Boolean)
+            .join("：")
+        );
+      }
+      // 评审 C：preview 失败多半是缓存旧了（409 kickoff_not_pending：别处已开工 / 已退回
+      // 独立模式）。不重拉的话下一句还会按旧行拦截、再失败一次。
+      void refreshPairs();
+      return null;
+    }
+    if (!block.trim()) {
+      kickoffInFlight.delete(pair.pairId);
+      return null;
+    }
+    const commitHost = pairingHost;
+    return {
+      prefix: block,
+      onAccepted: async () => {
+        // 评审 A：等引擎接受的这段时间里用户可能换了角色 / 退回独立模式。缓存里这一行
+        // 已经不是 preview 时的样子，就别投了：提示、清在途、重拉，下一句按新行重新拼卡。
+        const latest = pairs.find((candidate) => candidate.pairId === pair.pairId);
+        if (
+          !latest ||
+          latest.pairMode !== "pair" ||
+          (latest.developerTaskId?.trim() ?? "") !== expectedDeveloperTaskId
+        ) {
+          kickoffInFlight.delete(pair.pairId);
+          toast.error(labels().kickoffRolesChanged ?? labels().kickoffCommitFailed ?? "");
+          emit();
+          await refreshPairs();
+          return;
+        }
+        let committed = false;
+        try {
+          const result = await commitHost.commitPairKickoff!({
+            ...request,
+            ...(expectedDeveloperTaskId ? { expectedDeveloperTaskId } : {})
+          });
+          // 行是真相：delivered=false 时后端那一行仍是 pending，照样换进缓存。
+          replacePair(result?.pair);
+          if (result?.delivered !== true) {
+            // 契约补充：搭档那张卡被环路闸 / 限流丢了。按 commit 失败处理——
+            // 提示、不动本栏，下一句再带卡重试。
+            toast.error(
+              [labels().kickoffCommitFailed, result?.reason?.trim()]
+                .filter(Boolean)
+                .join("：")
+            );
+          } else {
+            committed = true;
+          }
+        } catch (error) {
+          // 保持 pending：缓存里那一行不动，下一句会再拼一次卡、再 commit 一次。
+          toast.error(
+            [labels().kickoffCommitFailed, errorText(error)]
+              .filter(Boolean)
+              .join("：")
+          );
+          // 评审 C：失败不等于没投——超时的那次后端可能已经记成 sent，409
+          // kickoff_roles_changed 说明角色已变。重拉让缓存对齐真相，免得下一句按旧行再拼卡。
+          void refreshPairs();
+        } finally {
+          kickoffInFlight.delete(pair.pairId);
+          emit();
+        }
+        if (committed) {
+          broadcastPeerPairsChanged();
+          await refreshPairs();
+        }
+      },
+      onRejected: () => {
+        kickoffInFlight.delete(pair.pairId);
+      }
+    };
+  }
+
   async function unpairPanes(): Promise<void> {
     const pairingHost = readPairingHost();
     const left = layout.panes.left;
@@ -1135,6 +1496,7 @@ export function createEmbeddedSplitViewController(
     dropZoneRect,
     getSnapshot: () => snapshot,
     pairPanes,
+    preparePairKickoff,
     resetRatio() {
       dispatch({ ratio: 0.5, type: "resize" });
     },
@@ -1161,6 +1523,8 @@ export function createEmbeddedSplitViewController(
       persist();
       emit();
     },
+    setPairMode,
+    sideForSessionId: sideOfSession,
     sideForNodeId(nodeId) {
       if (nodeIdBySide.left === nodeId) return "left";
       if (nodeIdBySide.right === nodeId) return "right";
@@ -1189,7 +1553,8 @@ export function createEmbeddedSplitViewController(
         { persist: true }
       );
     },
-    unpairPanes
+    unpairPanes,
+    wantsPairKickoff
   };
 
   emit();

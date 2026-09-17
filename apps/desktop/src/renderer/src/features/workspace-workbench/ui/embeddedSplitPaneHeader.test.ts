@@ -14,6 +14,8 @@ const labels = {
   resetRatio: "重置分栏比例",
   swapPanes: "交换左右",
   unpair: "解除",
+  pairRoleDeveloper: "开发者",
+  pairRoleReviewer: "审查者",
   untitled: "未命名会话"
 };
 
@@ -32,6 +34,7 @@ function snapshot(
     dragging: null,
     focus: "left",
     pairing: "unpaired",
+    pairMode: null,
     panes: {
       left: pane("session-a", {
         iconUrl: "claude.png",
@@ -206,4 +209,52 @@ test("折叠时只有焦点栏那一条、占满整宽", () => {
   assert.equal(collapsed[0]?.side, "right");
   assert.equal(collapsed[0]?.leftFraction, 0);
   assert.equal(collapsed[0]?.widthFraction, 1);
+});
+
+// 结对模式（peer-pair-mode 票 04）：角色胶囊只在 pair 模式下出现，按快照投影的角色写。
+test("结对模式下栏头给角色胶囊，独立模式与未投影时不给", () => {
+  const paired = buildEmbeddedSplitPaneHeaders(
+    snapshot({
+      pairing: "paired",
+      pairMode: {
+        busy: false,
+        kickoffState: "pending",
+        mode: "pair",
+        pairId: "p1",
+        roles: { left: "reviewer", right: "developer" }
+      }
+    }),
+    labels
+  );
+  assert.deepEqual(
+    paired.map((header) => [header.pairRole, header.pairRoleLabel]),
+    [
+      ["reviewer", "审查者"],
+      ["developer", "开发者"]
+    ]
+  );
+
+  const solo = buildEmbeddedSplitPaneHeaders(
+    snapshot({
+      pairing: "paired",
+      pairMode: {
+        busy: false,
+        kickoffState: "",
+        mode: "solo",
+        pairId: "p1",
+        roles: { left: null, right: null }
+      }
+    }),
+    labels
+  );
+  assert.deepEqual(
+    solo.map((header) => header.pairRole),
+    [null, null]
+  );
+  assert.deepEqual(
+    buildEmbeddedSplitPaneHeaders(snapshot(), labels).map(
+      (header) => header.pairRoleLabel
+    ),
+    [null, null]
+  );
 });

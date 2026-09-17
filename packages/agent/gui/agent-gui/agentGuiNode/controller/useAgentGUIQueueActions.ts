@@ -16,6 +16,7 @@ import {
   updateAgentComposerDraft
 } from "../model/agentComposerDraft";
 import { resolveAgentComposerDraftScopeKey } from "../model/agentComposerDraftScope";
+import { stripLeadingPairKickoffFromContent } from "../../../shared/agentConversation/components/pairKickoffEnvelope";
 import { QueuedPromptImageLoadOwner } from "../queuedPromptImageLoadOwner";
 import { createAgentGUIConversationId } from "./agentGuiController.promptHelpers";
 
@@ -84,8 +85,10 @@ export function useAgentGUIQueueActions({
       const draftScopeKey = resolveAgentComposerDraftScopeKey({
         agentSessionId
       });
+      // 分栏结对模式：排队的第一句带着开工卡（拼在第一个文字块前面）。取回编辑时只回填
+      // 用户原话，重新发出时由宿主按那时的配对状态重新决定拼不拼卡（票 05 评审 E）。
       const restoredDraft = agentPromptContentToComposerDraft(
-        queuedPrompt.content,
+        stripLeadingPairKickoffFromContent(queuedPrompt.content),
         `restore-${queuedPrompt.id}`
       );
       sessionEngine.dispatch(

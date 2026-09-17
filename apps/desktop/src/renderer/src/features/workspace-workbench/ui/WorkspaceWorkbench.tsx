@@ -134,6 +134,7 @@ import {
   routeEmbeddedDintalDockSessionLaunch
 } from "./embeddedDintalDock.ts";
 import { EmbeddedSplitChrome } from "./EmbeddedSplitChrome.tsx";
+import { installEmbeddedSplitComposerHost } from "./EmbeddedSplitPairModeBar.tsx";
 import {
   embeddedSplitPairingLabels,
   embeddedSplitToast
@@ -730,6 +731,13 @@ function ReadyWorkspaceWorkbenchWithSession({
     if (!embeddedDintalDock || !workbenchHost) return undefined;
     return installEmbeddedDintalDockSessionBridge(workbenchHost);
   }, [embeddedDintalDock, workbenchHost]);
+  // 分栏结对模式（peer-pair-mode 票 04/05）：作曲区上方单选 + 第一句拼开工卡。
+  // 与上面那组宿主能力一样只在嵌入 DinTalDock 时装；判据在分栏 controller 里现取，
+  // 所以不依赖 workbenchHost 何时就绪。
+  useEffect(() => {
+    if (!embeddedDintalDock) return undefined;
+    return installEmbeddedSplitComposerHost();
+  }, [embeddedDintalDock]);
   const windowManagement = useMemo<WorkbenchWindowManagementConfig>(
     () => ({
       edgeSnapEnabled: runtime.workbenchWindowSnapping.enabled,

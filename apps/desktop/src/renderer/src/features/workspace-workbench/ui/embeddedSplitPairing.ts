@@ -28,6 +28,12 @@ export interface EmbeddedSplitToast {
 }
 
 export interface EmbeddedSplitPairingLabels {
+  /** 「搭档没收到开工卡」：结对第一句已发出、给搭档投卡失败（票 05，保持 pending 下一句重试）。 */
+  kickoffCommitFailed?: string;
+  /** 「开工卡没准备好，这句按普通消息发出」：preview 失败时原样发送（票 05）。 */
+  kickoffPreviewFailed?: string;
+  /** 「结对角色刚被调整，这张开工卡没投」：preview 之后、commit 之前角色 / 模式变了（评审 A）。 */
+  kickoffRolesChanged?: string;
   /** 「已配对」 */
   paired: string;
   /** 「重开的会话迟迟没有出现」：等重开对端在侧栏露面超时（见 embeddedSplitView）。 */

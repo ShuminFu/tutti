@@ -45,6 +45,8 @@ const SPLIT_LABEL_KEYS = {
   dropPair: "agentHost.agentGui.splitDropPair",
   dropRelaunch: "agentHost.agentGui.splitDropRelaunch",
   pair: "agentHost.agentGui.splitPair",
+  pairRoleDeveloper: "agentHost.agentGui.splitPairRoleDeveloper",
+  pairRoleReviewer: "agentHost.agentGui.splitPairRoleReviewer",
   paneMenu: "agentHost.agentGui.splitPaneMenu",
   resetRatio: "agentHost.agentGui.splitResetRatio",
   swapPanes: "agentHost.agentGui.splitSwapPanes",
@@ -290,6 +292,8 @@ export function EmbeddedSplitChrome(): ReactNode {
     closeSession: label(SPLIT_LABEL_KEYS.closeSession),
     menu: label(SPLIT_LABEL_KEYS.paneMenu),
     pair: label(SPLIT_LABEL_KEYS.pair),
+    pairRoleDeveloper: label(SPLIT_LABEL_KEYS.pairRoleDeveloper),
+    pairRoleReviewer: label(SPLIT_LABEL_KEYS.pairRoleReviewer),
     resetRatio: label(SPLIT_LABEL_KEYS.resetRatio),
     swapPanes: label(SPLIT_LABEL_KEYS.swapPanes),
     unpair: label(SPLIT_LABEL_KEYS.unpair),
@@ -389,6 +393,15 @@ export function EmbeddedSplitChrome(): ReactNode {
                 {header.title}
               </span>
             </span>
+            {/* 结对模式角色胶囊（票 04）：紧跟标题，颜色同 paired 链条；独立模式不画。 */}
+            {header.pairRole && header.pairRoleLabel ? (
+              <span
+                className="rndmaster-split-pane-header__pair-role"
+                data-role={header.pairRole}
+              >
+                {header.pairRoleLabel}
+              </span>
+            ) : null}
             {header.projectLabel ? (
               <span className="rndmaster-split-pane-header__project">
                 {header.projectLabel}

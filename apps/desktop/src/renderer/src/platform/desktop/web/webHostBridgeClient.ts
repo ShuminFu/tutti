@@ -39,6 +39,17 @@
 // deletePeerPair  args[0] = { taskId, pairId }
 //                 result  = { ok: true }
 //
+// 分栏结对模式（peer-pair-mode 接口契约，三个能力一组注册、缺一不挂）：
+// listPeerPairs 每个 pair 增 { pairMode: "solo"|"pair", developerTaskId, kickoffState: ""|"pending"|"sent" }
+// setPeerPairMode    args[0] = { pairId, mode: "solo"|"pair", developerTaskId? }
+//                    result  = { pair }
+// previewPairKickoff args[0] = { pairId, senderTaskId, goal }
+//                    result  = { block }                 —— 纯函数，不写库
+// commitPairKickoff  args[0] = { pairId, senderTaskId, goal, expectedDeveloperTaskId? }
+//                    result  = { pair, delivered, reason? } —— 给搭档投卡并记为 sent，幂等；
+//                              delivered=false（卡被环路闸/限流丢了）时行仍是 pending
+// 未注册时 iframe 收到 unsupported，分栏层整排单选不渲染。
+//
 // 配对请求就地审批（补丁 0116）：
 // listPeerRequests  args[0] = { agentSessionId, status: "pending" }
 //                   result  = { requests: [{ id, status, reason, createdAt, from: Endpoint, to: Endpoint }] }
@@ -707,6 +718,11 @@ export interface HostPeerPair {
   a: HostPeerPairEndpoint;
   b: HostPeerPairEndpoint;
   pairId: string;
+  // 结对模式（peer-pair-mode 契约）。老宿主不带这三项：分栏层靠「行上有没有
+  // pairMode」判宿主支不支持结对模式。
+  pairMode?: "solo" | "pair";
+  developerTaskId?: string;
+  kickoffState?: "" | "pending" | "sent";
 }
 
 export interface HostCreatePeerPairArgs {
@@ -763,6 +779,71 @@ export function requestHostDeletePeerPair(args: {
   taskId: string;
 }): Promise<unknown> {
   return requestHostCapability<unknown>("deletePeerPair", [args]);
+}
+
+// 结对模式三件套：同样走 requestHostCapability（5s / nonce / 同源校验）。
+// 结果形状在这里校验一次，免得缺字段的回包一路漏到分栏层才炸。
+export function requestHostSetPeerPairMode(args: {
+  developerTaskId?: string;
+  mode: "solo" | "pair";
+  pairId: string;
+}): Promise<{ pair: HostPeerPair }> {
+  return requestHostCapability<{ pair?: HostPeerPair }>("setPeerPairMode", [
+    args
+  ]).then((result) => {
+    if (!result?.pair || typeof result.pair.pairId !== "string") {
+      throw new Error("tutti host bridge: setPeerPairMode result missing pair");
+    }
+    return { pair: result.pair };
+  });
+}
+
+export function requestHostPreviewPairKickoff(args: {
+  goal: string;
+  pairId: string;
+  senderTaskId: string;
+}): Promise<{ block: string }> {
+  return requestHostCapability<{ block?: string }>("previewPairKickoff", [
+    args
+  ]).then((result) => {
+    const block = typeof result?.block === "string" ? result.block : "";
+    if (!block.trim()) {
+      throw new Error(
+        "tutti host bridge: previewPairKickoff result missing block"
+      );
+    }
+    return { block };
+  });
+}
+
+export function requestHostCommitPairKickoff(args: {
+  /**
+   * preview 时拍下的开发者（契约补充 2026-09-16 评审 A）：与行里当前 developer 不一致时
+   * 后端回 409 kickoff_roles_changed，不投递、保持 pending。
+   */
+  expectedDeveloperTaskId?: string;
+  goal: string;
+  pairId: string;
+  senderTaskId: string;
+}): Promise<{ delivered: boolean; pair: HostPeerPair; reason?: string }> {
+  return requestHostCapability<{
+    delivered?: boolean;
+    pair?: HostPeerPair;
+    reason?: string;
+  }>("commitPairKickoff", [args]).then((result) => {
+    if (!result?.pair || typeof result.pair.pairId !== "string") {
+      throw new Error(
+        "tutti host bridge: commitPairKickoff result missing pair"
+      );
+    }
+    return {
+      delivered: result.delivered === true,
+      pair: result.pair,
+      ...(typeof result.reason === "string" && result.reason.trim()
+        ? { reason: result.reason.trim() }
+        : {})
+    };
+  });
 }
 
 export interface HostPeerRequest {
