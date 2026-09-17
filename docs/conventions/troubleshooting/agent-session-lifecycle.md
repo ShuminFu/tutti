@@ -2404,7 +2404,7 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   Run
   `pnpm --filter @tutti-os/agent-gui test -- agent-gui/agentGuiNode/model/agentGuiConversationModel.spec.ts`,
   `cd packages/agent/daemon && go test ./runtime`,
-  `cd services/tuttid && go test ./service/agent ./api -run 'ExternalImport|ParseCodex|ParseClaude'`,
+  `cd services/tuttid && go test ./service/agent ./api -run 'ExternalImport|ParseCodex|ParseClaude|ParseGrok'`,
   `go test ./packages/agent/store-sqlite -run 'ImportedRail|ClassifiesRail'`,
   `node --import ./test/register-asset-stub.mjs --test --experimental-strip-types ./src/renderer/src/features/workspace-user-project/services/internal/desktopWorkspaceUserProjectService.test.ts`
   from `apps/desktop`, then run `pnpm check:changed`.
@@ -2417,6 +2417,7 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   [external_import_parse.go](../../../services/tuttid/service/agent/external_import_parse.go)
   [external_import_projects.go](../../../services/tuttid/service/agent/external_import_projects.go)
   [external_import.go](../../../services/tuttid/service/agent/external_import.go)
+  [external_import_grok.go](../../../services/tuttid/service/agent/external_import_grok.go)
   [rail.go](../../../packages/agent/store-sqlite/rail.go)
   [agentGuiConversationModel.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/model/agentGuiConversationModel.ts)
   [desktopWorkspaceUserProjectService.ts](../../../apps/desktop/src/renderer/src/features/workspace-user-project/services/internal/desktopWorkspaceUserProjectService.ts)
@@ -3203,6 +3204,29 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   [ExternalAgentSessionImportWizard.tsx](../../../apps/desktop/src/renderer/src/features/workspace-workbench/ui/ExternalAgentSessionImportWizard.tsx)
   [service_session.go](../../../services/tuttid/service/agent/service_session.go)
 
+### Imported Grok sessions have transcript text but no token usage
+
+- Symptom:
+  A local Grok conversation imports into Tutti with messages and timestamps,
+  but sessionarchive / assistant `payload.usage` stays empty.
+- Quick checks:
+  Confirm the source is `$GROK_HOME/sessions/<cwd>/<session-id>/` (or
+  `~/.grok/sessions`) and that `updates.jsonl` or `chat_history.jsonl` has
+  user/assistant text. Do not expect counts from `signals.json`.
+- Root cause:
+  Grok ACP does not yet emit a persistable `input_tokens` / `lastTurn`
+  snapshot. The importer copies content only and must not invent token
+  counts.
+- Fix:
+  Keep usage absent until Grok reports Claude-compatible counts. Resume still
+  uses the Grok session UUID as `provider_session_id` with target
+  `extension:grok`.
+- Validation:
+  Run `cd services/tuttid && go test ./service/agent -run 'ParseGrok|ScanAndImportGrok'`.
+- References:
+  [external_import_grok.go](../../../services/tuttid/service/agent/external_import_grok.go)
+  [agent-extensions.md](../../architecture/agent-extensions.md)
+
 ### Imported long Turns show one disclosure per tool call
 
 - Symptom:
@@ -3233,6 +3257,7 @@ inline data URL instead`. Claude or standard ACP may instead receive no
 'ServiceImportsExternalAgentSessionsByProject|ServiceReimportRepairsLegacyTurnlessExternalMessages'`.
 - References:
   [external_import.go](../../../services/tuttid/service/agent/external_import.go)
+  [external_import_grok.go](../../../services/tuttid/service/agent/external_import_grok.go)
   [activity_historical_import_turns.go](../../../packages/agent/store-sqlite/activity_historical_import_turns.go)
   [agent-gui-node.md](../../architecture/agent-gui-node.md)
 

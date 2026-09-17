@@ -19,6 +19,9 @@ func TestExternalImportAgentTargetIDUsesMigratedProviderDescriptor(t *testing.T)
 	if got := externalImportAgentTargetID("claude-code"); got != agenttargetbiz.IDLocalClaudeCode {
 		t.Fatalf("externalImportAgentTargetID(claude-code) = %q, want %q", got, agenttargetbiz.IDLocalClaudeCode)
 	}
+	if got := externalImportAgentTargetID("acp:grok"); got != grokImportTargetID {
+		t.Fatalf("externalImportAgentTargetID(acp:grok) = %q, want %q", got, grokImportTargetID)
+	}
 }
 
 func TestExternalImportPoliciesAreDescriptorOwned(t *testing.T) {

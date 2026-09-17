@@ -10,6 +10,8 @@ import {
 describe("workbench provider catalog", () => {
   it("provides labels for every provider identity accepted by workbench state", () => {
     expect(resolveAgentGuiWorkbenchProviderLabel("nexight")).toBe("Nexight");
+    expect(resolveAgentGuiWorkbenchProviderLabel("acp:grok")).toBe("Grok");
+    expect(resolveAgentGuiWorkbenchProviderLabel("chatgpt")).toBe("ChatGPT");
     expect(Object.values(agentGuiWorkbenchProviderLabels)).not.toContain(
       undefined
     );
