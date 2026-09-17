@@ -5,6 +5,7 @@ import {
   type HostSessionLivenessEntry,
   type SessionLivenessHost
 } from "./sessionLivenessHost";
+import { resetHostSessionLivenessCacheForTests } from "./hostSessionLivenessCache";
 import {
   useHostSessionLiveness,
   type HostSessionLivenessMap
@@ -34,30 +35,43 @@ function entry(
 
 function Probe({
   ids,
+  workspaceId,
   onRender
 }: {
   ids: string[];
+  workspaceId?: string;
   onRender: (liveness: HostSessionLivenessMap) => void;
 }): null {
-  onRender(useHostSessionLiveness(ids));
+  onRender(useHostSessionLiveness(ids, workspaceId));
   return null;
 }
 
 // 每次渲染都传一个新数组：真实调用方（会话栏）就是 flatMap 出来的新数组，
 // 钩子必须靠内容而不是引用去判「要不要重新起一轮轮询」。
-function renderProbe(ids: string[]): {
+function renderProbe(
+  ids: string[],
+  workspaceId?: string
+): {
   latest: () => HostSessionLivenessMap;
-  rerender: (nextIds: string[]) => void;
+  rerender: (nextIds: string[], nextWorkspaceId?: string) => void;
 } {
   let latest: HostSessionLivenessMap = new Map();
   const view = render(
-    <Probe ids={[...ids]} onRender={(value) => (latest = value)} />
+    <Probe
+      ids={[...ids]}
+      workspaceId={workspaceId}
+      onRender={(value) => (latest = value)}
+    />
   );
   return {
     latest: () => latest,
-    rerender: (nextIds) =>
+    rerender: (nextIds, nextWorkspaceId = workspaceId) =>
       view.rerender(
-        <Probe ids={[...nextIds]} onRender={(value) => (latest = value)} />
+        <Probe
+          ids={[...nextIds]}
+          workspaceId={nextWorkspaceId}
+          onRender={(value) => (latest = value)}
+        />
       )
   };
 }
@@ -69,6 +83,7 @@ beforeEach(() => {
 afterEach(() => {
   unregister?.();
   unregister = null;
+  resetHostSessionLivenessCacheForTests();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -127,11 +142,13 @@ describe("useHostSessionLiveness", () => {
     });
     installHost({ querySessionLiveness: query });
 
-    renderProbe(["sess-a"]);
+    const probe = renderProbe(["sess-a"]);
     await waitFor(() => expect(query).toHaveBeenCalledTimes(1));
 
     await vi.advanceTimersByTimeAsync(20_000);
     expect(query).toHaveBeenCalledTimes(1);
+    // 不支持 ≠ 加载中：退回空表，presence 才能走 0119 绿点。
+    expect(probe.latest().size).toBe(0);
   });
 
   it("上一拍没回来就不叠第二拍", async () => {
@@ -221,6 +238,148 @@ describe("useHostSessionLiveness", () => {
       expect(probe.latest().get("sess-a")?.attached).toBe(true)
     );
     expect(probe.latest()).not.toBe(first);
+  });
+
+  it("第一拍还没回来时可见 id 是 pending，不是空闲", async () => {
+    const releases: (() => void)[] = [];
+    const query = vi.fn(
+      () =>
+        new Promise<{ sessions: Record<string, HostSessionLivenessEntry> }>(
+          (resolve) => {
+            releases.push(() =>
+              resolve({ sessions: { "sess-a": entry("closed") } })
+            );
+          }
+        )
+    );
+    installHost({ querySessionLiveness: query });
+
+    const probe = renderProbe(["sess-a"]);
+    expect(probe.latest().get("sess-a")).toEqual({
+      state: "pending",
+      attached: undefined
+    });
+
+    releases[0]?.();
+    await waitFor(() =>
+      expect(probe.latest().get("sess-a")?.state).toBe("closed")
+    );
+  });
+
+  it("切走再切回来：缓存里的权威状态立刻在，不等下一拍", async () => {
+    const query = vi.fn(async (input: { agentSessionIds: string[] }) => {
+      const sessions: Record<string, HostSessionLivenessEntry> = {};
+      for (const id of input.agentSessionIds) {
+        sessions[id] = entry(id === "sess-a" ? "closed" : "live");
+      }
+      return { sessions };
+    });
+    installHost({ querySessionLiveness: query });
+
+    const probe = renderProbe(["sess-a"], "ws-1");
+    await waitFor(() =>
+      expect(probe.latest().get("sess-a")?.state).toBe("closed")
+    );
+
+    probe.rerender(["sess-b"], "ws-1");
+    await waitFor(() =>
+      expect(probe.latest().get("sess-b")?.state).toBe("live")
+    );
+    expect(probe.latest().has("sess-a")).toBe(false);
+
+    probe.rerender(["sess-a"], "ws-1");
+    expect(probe.latest().get("sess-a")).toEqual({
+      state: "closed",
+      attached: true
+    });
+  });
+
+  it("工作区隔离：别的工作区缓存不能冒充当前会话状态", async () => {
+    const query = vi.fn(async () => ({
+      sessions: { "sess-a": entry("closed") }
+    }));
+    installHost({ querySessionLiveness: query });
+
+    const probe = renderProbe(["sess-a"], "ws-1");
+    await waitFor(() =>
+      expect(probe.latest().get("sess-a")?.state).toBe("closed")
+    );
+
+    probe.rerender(["sess-a"], "ws-2");
+    expect(probe.latest().get("sess-a")).toEqual({
+      state: "pending",
+      attached: undefined
+    });
+  });
+
+  it("被取消的旧回包不写缓存", async () => {
+    const releases: Array<
+      (value: { sessions: Record<string, HostSessionLivenessEntry> }) => void
+    > = [];
+    const query = vi.fn(
+      (_input: { agentSessionIds: string[] }) =>
+        new Promise<{ sessions: Record<string, HostSessionLivenessEntry> }>(
+          (resolve) => {
+            releases.push((value) => resolve(value));
+          }
+        )
+    );
+    installHost({ querySessionLiveness: query });
+
+    const probe = renderProbe(["sess-a"], "ws-1");
+    await waitFor(() => expect(query).toHaveBeenCalledTimes(1));
+
+    probe.rerender(["sess-b"], "ws-1");
+    await waitFor(() => expect(query).toHaveBeenCalledTimes(2));
+
+    releases[0]?.({ sessions: { "sess-a": entry("live") } });
+    releases[1]?.({ sessions: { "sess-b": entry("closed") } });
+    await waitFor(() =>
+      expect(probe.latest().get("sess-b")?.state).toBe("closed")
+    );
+
+    probe.rerender(["sess-a"], "ws-1");
+    expect(probe.latest().get("sess-a")).toEqual({
+      state: "pending",
+      attached: undefined
+    });
+  });
+
+  it("被取消的旧请求回 unsupported 不停拍、不清空当前视图", async () => {
+    const releases: Array<{
+      resolve: (value: {
+        sessions: Record<string, HostSessionLivenessEntry>;
+      }) => void;
+      reject: (reason: unknown) => void;
+    }> = [];
+    const query = vi.fn(
+      () =>
+        new Promise<{ sessions: Record<string, HostSessionLivenessEntry> }>(
+          (resolve, reject) => {
+            releases.push({ resolve, reject });
+          }
+        )
+    );
+    installHost({ querySessionLiveness: query });
+
+    const probe = renderProbe(["sess-a"], "ws-1");
+    await waitFor(() => expect(query).toHaveBeenCalledTimes(1));
+
+    probe.rerender(["sess-b"], "ws-1");
+    await waitFor(() => expect(query).toHaveBeenCalledTimes(2));
+
+    releases[1]?.resolve({ sessions: { "sess-b": entry("closed") } });
+    await waitFor(() =>
+      expect(probe.latest().get("sess-b")?.state).toBe("closed")
+    );
+
+    releases[0]?.reject(new Error("unsupported"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(probe.latest().get("sess-b")?.state).toBe("closed");
+    expect(probe.latest().size).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(query).toHaveBeenCalledTimes(3);
   });
 
   it("会话栏只是重排（同一批 id 换个顺序）不会多问一次", async () => {

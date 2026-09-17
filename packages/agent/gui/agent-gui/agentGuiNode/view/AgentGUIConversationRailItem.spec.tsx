@@ -514,6 +514,31 @@ describe("AgentGUIConversationRailItem 在线圆点", () => {
     ).not.toBeNull();
   });
 
+  it("加载中且 Tutti 侧看起来像闲着：不画绿点", () => {
+    const { container } = renderRailItem({
+      hostLiveness: "pending",
+      isRailInteractionLocked: () => false,
+      item: { status: "ready" }
+    });
+
+    expect(presenceDot(container)).toBeNull();
+    expect(
+      container.querySelector(".agent-gui-node__conversation-provider-icon")
+    ).not.toBeNull();
+  });
+
+  it("加载中且这一轮还开着：仍画蓝点", () => {
+    const { container } = renderRailItem({
+      hostLiveness: "pending",
+      isRailInteractionLocked: () => false,
+      item: { status: "working" }
+    });
+
+    expect(presenceDot(container)?.getAttribute("data-presence")).toBe(
+      "working"
+    );
+  });
+
   it("宿主判 live / unknown：照旧按 Tutti 判据画", () => {
     const live = renderRailItem({
       hostLiveness: "live",

@@ -380,7 +380,9 @@ export const AgentGUIConversationRailSection = memo(
                   pendingDeleteConversationId === item.id
                 }
                 isRailInteractionLocked={isRailInteractionLocked}
-                // 圆点仍然只看 state：0128 只把 map 的值换成小对象，画法一字未改。
+                // 圆点仍然只看 state：0128 只把 map 的值换成小对象。
+                // 宿主启用时 hook 会给每个可见 id 填 pending 或权威值；空表只出现
+                // 在不支持，此时 ?? null 退回 0119。
                 hostLiveness={hostLiveness?.get(item.id)?.state ?? null}
                 item={item}
                 labels={labels}

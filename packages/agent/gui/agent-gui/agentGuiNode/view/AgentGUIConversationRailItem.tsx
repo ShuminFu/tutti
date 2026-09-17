@@ -27,7 +27,7 @@ import type { AgentGUIConversationRailLabels } from "./agentGUIConversationRailL
 import styles from "../AgentGUINode.styles";
 import { conversationPlainTitle } from "./agentGUIViewUtils";
 import { agentGUIConversationPresence } from "./agentGUIConversationPresence";
-import type { HostSessionLivenessState } from "../../../shared/agentConversation/sessionLivenessHost";
+import type { AgentGUIConversationHostLiveness } from "./agentGUIConversationPresence";
 import { AgentGUIConversationRailRelativeTime } from "./AgentGUIConversationRailClock";
 import {
   AgentGUIConversationActionsContextMenu,
@@ -92,10 +92,11 @@ interface AgentGUIConversationRailItemProps {
   peerPairGrouped?: false | "member" | "end";
   /**
    * 宿主（rndmaster）对这条会话的死活判断（补丁 0122）。`"closed"` = 宿主
-   * 任务行已终态 → 不画在线圆点；其余值 / 缺省都退回 0119 的纯 Tutti 判据。
+   * 任务行已终态 → 不画在线圆点；`"pending"` = 已问宿主但还没进缓存 → 不画绿点；
+   * `"unknown"` / `"live"` / 缺省（不支持）都退回 0119 的纯 Tutti 判据。
    * 有意只传一个字符串而不是整张表，memo 才挡得住每 4s 一次的轮询重渲染。
    */
-  hostLiveness?: HostSessionLivenessState | null;
+  hostLiveness?: AgentGUIConversationHostLiveness;
   onSelectConversation: (agentSessionId: string) => void;
   onToggleConversationPinned: (agentSessionId: string, pinned: boolean) => void;
   onMarkConversationUnread: (agentSessionId: string) => void;
@@ -150,7 +151,11 @@ export const AgentGUIConversationRailItem = memo(
     // 「待配对」标记：虚线描边 + 右槽的 chip，chip 优先于徽标显示（T2）。
     const peerPairMarked =
       peerPairing.supported && peerPairing.marked?.sessionId === item.id;
-    const peerPairSlot = peerPairMarked ? "chip" : peerPairCount > 0 ? "badge" : null;
+    const peerPairSlot = peerPairMarked
+      ? "chip"
+      : peerPairCount > 0
+        ? "badge"
+        : null;
     const [actionsActivated, setActionsActivated] = useState(false);
     const [targetInfoOpen, setTargetInfoOpen] = useState(false);
     const agentTargets = useAgentTargetPresentations();

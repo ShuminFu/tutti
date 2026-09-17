@@ -77,15 +77,35 @@ describe("agentGUIConversationPresence", () => {
     );
   });
 
-  it("宿主判 unknown / 没数据：都当没这回事", () => {
+  it("宿主判 unknown / 没数据（不支持）：都当没这回事", () => {
     expect(agentGUIConversationPresence({ status: "ready" }, "unknown")).toBe(
       "idle"
     );
-    expect(agentGUIConversationPresence({ status: "ready" }, null)).toBe("idle");
-    expect(
-      agentGUIConversationPresence({ status: "ready" }, undefined)
-    ).toBe("idle");
+    expect(agentGUIConversationPresence({ status: "ready" }, null)).toBe(
+      "idle"
+    );
+    expect(agentGUIConversationPresence({ status: "ready" }, undefined)).toBe(
+      "idle"
+    );
     expect(agentGUIConversationPresence({ status: "ready" })).toBe("idle");
+  });
+
+  it("加载中：未加载 ≠ 空闲，不画绿点", () => {
+    expect(
+      agentGUIConversationPresence({ status: "ready" }, "pending")
+    ).toBeNull();
+    expect(
+      agentGUIConversationPresence({ status: "completed" }, "pending")
+    ).toBeNull();
+  });
+
+  it("加载中：这一轮还开着仍画蓝点，不必等宿主", () => {
+    expect(agentGUIConversationPresence({ status: "working" }, "pending")).toBe(
+      "working"
+    );
+    expect(agentGUIConversationPresence({ status: "waiting" }, "pending")).toBe(
+      "working"
+    );
   });
 
   it("宿主判 live 也救不回已结束的会话：endedAtUnixMs 仍然一票否决", () => {
