@@ -4912,6 +4912,41 @@ paths:
           $ref: "#/components/responses/WorkspaceOperationError"
         "503":
           $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/agent-mcp-app-resources/{resourceSha256}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - name: resourceSha256
+        in: path
+        required: true
+        description: Content address of an MCP App UI resource snapshot, as carried by a tool_call message payload's mcpApp.resourceSha256.
+        schema:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+    get:
+      operationId: getWorkspaceAgentMcpAppResource
+      tags:
+        - agent-session
+      summary: Read one MCP App UI resource snapshot
+      description: Returns the immutable HTML snapshot (and its _meta.ui rendering policy) that tuttid captured from an MCP server's resources/read when an agent tool call used it. History renders from the snapshot and never re-reads the server.
+      responses:
+        "200":
+          description: MCP App UI resource snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAgentMcpAppResourceResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
   /v1/workspaces/{workspaceID}/git-branches:
     parameters:
       - $ref: "#/components/parameters/WorkspaceID"
@@ -15225,6 +15260,57 @@ components:
           type: string
         data:
           type: string
+    WorkspaceAgentMcpAppResourceResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - resourceSha256
+        - uri
+        - mimeType
+        - html
+        - meta
+      properties:
+        resourceSha256:
+          type: string
+        uri:
+          type: string
+          description: The ui:// resource URI the snapshot was read from.
+        mimeType:
+          type: string
+          description: Always text/html;profile=mcp-app.
+        html:
+          type: string
+        meta:
+          $ref: "#/components/schemas/WorkspaceAgentMcpAppResourceMeta"
+    WorkspaceAgentMcpAppResourceMeta:
+      type: object
+      additionalProperties: false
+      description: Display-relevant subset of the resource's _meta.ui (MCP Apps spec 2026-01-26).
+      properties:
+        csp:
+          $ref: "#/components/schemas/WorkspaceAgentMcpAppResourceCsp"
+        prefersBorder:
+          type: boolean
+    WorkspaceAgentMcpAppResourceCsp:
+      type: object
+      additionalProperties: false
+      properties:
+        connectDomains:
+          type: array
+          items:
+            type: string
+        resourceDomains:
+          type: array
+          items:
+            type: string
+        frameDomains:
+          type: array
+          items:
+            type: string
+        baseUriDomains:
+          type: array
+          items:
+            type: string
     WorkspaceAgentSessionGitBranchesResponse:
       type: object
       additionalProperties: false

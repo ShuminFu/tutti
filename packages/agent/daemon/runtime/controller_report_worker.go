@@ -77,6 +77,7 @@ func (c *Controller) prepareSessionReportWithInitializationState(
 		report.MessageUpdates = nil
 		report.SessionAudits = nil
 	}
+	c.annotateMCPAppMessageUpdates(session, &report)
 	return report
 }
 

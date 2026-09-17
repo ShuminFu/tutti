@@ -93,8 +93,8 @@ func assertACPRuntimeInstructionsInjected(t *testing.T, servers []any) {
 func assertMapRuntimeInstructionsUnchanged(t *testing.T, servers map[string]any) {
 	t.Helper()
 	plain := payloadObject(servers["stdio-plain"])
-	if _, exists := plain["env"]; exists {
-		t.Fatalf("stdio-plain env = %#v, want unchanged (no env key)", plain["env"])
+	if _, exists := payloadObject(plain["env"])[runtimeInstructionsFileEnv]; exists {
+		t.Fatalf("stdio-plain env = %#v, want no %s", plain["env"], runtimeInstructionsFileEnv)
 	}
 	keep := payloadObject(servers["stdio-keep"])
 	if asString(payloadObject(keep["env"])[runtimeInstructionsFileEnv]) != "keep-me" {

@@ -294,6 +294,9 @@ import type {
   GetTuttiModeArchiveOperationResponses,
   GetWorkspaceAgentData,
   GetWorkspaceAgentErrors,
+  GetWorkspaceAgentMcpAppResourceData,
+  GetWorkspaceAgentMcpAppResourceErrors,
+  GetWorkspaceAgentMcpAppResourceResponses,
   GetWorkspaceAgentResponses,
   GetWorkspaceAgentSessionData,
   GetWorkspaceAgentSessionErrors,
@@ -3716,6 +3719,26 @@ export const readWorkspaceAgentSessionAttachment = <
   >({
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/attachments/{attachmentID}",
+    ...options
+  });
+
+/**
+ * Read one MCP App UI resource snapshot
+ *
+ * Returns the immutable HTML snapshot (and its _meta.ui rendering policy) that tuttid captured from an MCP server's resources/read when an agent tool call used it. History renders from the snapshot and never re-reads the server.
+ */
+export const getWorkspaceAgentMcpAppResource = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<GetWorkspaceAgentMcpAppResourceData, ThrowOnError>
+) =>
+  (options.client ?? client).get<
+    GetWorkspaceAgentMcpAppResourceResponses,
+    GetWorkspaceAgentMcpAppResourceErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-mcp-app-resources/{resourceSha256}",
     ...options
   });
 

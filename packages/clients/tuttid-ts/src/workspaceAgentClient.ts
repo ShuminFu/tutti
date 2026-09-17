@@ -16,6 +16,7 @@ import {
   getWorkspaceAgentSession,
   getAgentSessionRecording,
   getAgentSessionReplayTransportPlayback,
+  getWorkspaceAgentMcpAppResource,
   getWorkspaceAgentSessionGoal,
   goalControlWorkspaceAgentSession,
   importAgentSessionCassettes,
@@ -78,6 +79,7 @@ type WorkspaceAgentClient = Pick<
   | "getWorkspaceAgentSession"
   | "getAgentSessionRecording"
   | "getAgentSessionReplayTransportPlayback"
+  | "getWorkspaceAgentMcpAppResource"
   | "getWorkspaceAgentSessionGoal"
   | "goalControlWorkspaceAgentSession"
   | "importAgentSessionCassettes"
@@ -661,6 +663,16 @@ export function createWorkspaceAgentClient(
           path: { agentSessionID, attachmentID, workspaceID }
         }),
         "Read workspace agent session attachment failed."
+      );
+    },
+    // MCP App UI resource snapshot (tool_call payload.mcpApp.resourceSha256).
+    async getWorkspaceAgentMcpAppResource(workspaceID, resourceSha256) {
+      return unwrapData(
+        await getWorkspaceAgentMcpAppResource({
+          client,
+          path: { resourceSha256, workspaceID }
+        }),
+        "Read workspace agent MCP App resource failed."
       );
     },
     async listWorkspaceAgentSessionGitBranches(workspaceID, agentSessionID) {
