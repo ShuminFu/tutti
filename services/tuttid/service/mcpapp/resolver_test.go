@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -255,6 +256,34 @@ func TestResolverCrashIsNegativelyCachedAndExpires(t *testing.T) {
 	clock.Unlock()
 	if _, _, known := resolver.CachedToolUI(fakeServer(t, "crash"), "show_widget"); known {
 		t.Fatal("failure cache did not expire")
+	}
+}
+
+type failingSnapshotStore struct{}
+
+func (failingSnapshotStore) PutMCPAppResourceSnapshot(context.Context, storesqlite.PutMCPAppResourceSnapshotInput) (storesqlite.MCPAppResourceSnapshot, error) {
+	return storesqlite.MCPAppResourceSnapshot{}, errors.New("database is locked")
+}
+
+// A snapshot write failure is transient: the incomplete catalog must expire with
+// FailureTTL, not hide the widget for the full TTL.
+func TestResolverSnapshotWriteFailureUsesFailureTTL(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	var clock sync.Mutex
+	resolver := newTestResolver(t, failingSnapshotStore{})
+	resolver.TTL = time.Hour
+	resolver.FailureTTL = time.Minute
+	resolver.Now = func() time.Time { clock.Lock(); defer clock.Unlock(); return now }
+	server := fakeServer(t, "ui")
+	resolveAndWait(t, resolver, server, 5*time.Second)
+	if _, hasUI, known := resolver.CachedToolUI(server, "show_widget"); hasUI || !known {
+		t.Fatalf("hasUI=%v known=%v, want known without UI", hasUI, known)
+	}
+	clock.Lock()
+	now = now.Add(2 * time.Minute)
+	clock.Unlock()
+	if _, _, known := resolver.CachedToolUI(server, "show_widget"); known {
+		t.Fatal("catalog with a failed snapshot write was cached past FailureTTL")
 	}
 }
 

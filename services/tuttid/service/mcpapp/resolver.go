@@ -46,6 +46,10 @@ const (
 )
 
 // SnapshotStore persists content-addressed UI resource snapshots.
+// errSnapshotWrite marks a store failure while saving a resource snapshot. Unlike a
+// bad resource (wrong mime, empty html) it is transient, so the resolver retries soon.
+var errSnapshotWrite = errors.New("store MCP App resource snapshot")
+
 type SnapshotStore interface {
 	PutMCPAppResourceSnapshot(context.Context, storesqlite.PutMCPAppResourceSnapshotInput) (storesqlite.MCPAppResourceSnapshot, error)
 }
@@ -118,10 +122,16 @@ func (r *Resolver) run(server agentruntime.MCPAppServer) {
 	slots := r.concurrencySlots()
 	slots <- struct{}{}
 	started := r.now()
-	tools, err := r.resolve(server)
+	tools, retrySoon, err := r.resolve(server)
 	<-slots
 
 	ttl := r.ttl()
+	if retrySoon {
+		// A snapshot write failed (e.g. SQLite busy): the catalog is incomplete for a
+		// transient reason, so keep it only as long as a failure instead of hiding
+		// that widget for the full TTL.
+		ttl = r.failureTTL()
+	}
 	if err != nil {
 		ttl = r.failureTTL()
 		tools = nil
@@ -169,12 +179,12 @@ func (r *Resolver) run(server agentruntime.MCPAppServer) {
 	}
 }
 
-func (r *Resolver) resolve(server agentruntime.MCPAppServer) (tools map[string]agentruntime.MCPAppToolUI, err error) {
+func (r *Resolver) resolve(server agentruntime.MCPAppServer) (tools map[string]agentruntime.MCPAppToolUI, retrySoon bool, err error) {
 	if r.Transport == nil || r.Store == nil {
-		return nil, errors.New("MCP App resolver is not configured")
+		return nil, false, errors.New("MCP App resolver is not configured")
 	}
 	if strings.TrimSpace(server.Command) == "" {
-		return nil, errors.New("MCP App server command is empty")
+		return nil, false, errors.New("MCP App server command is empty")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout())
 	defer cancel()
@@ -187,7 +197,7 @@ func (r *Resolver) resolve(server agentruntime.MCPAppServer) (tools map[string]a
 		Env:      append([]string(nil), server.Env...),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("start MCP server: %w", err)
+		return nil, false, fmt.Errorf("start MCP server: %w", err)
 	}
 	defer func() {
 		// Never let process teardown delay the catalog: a well-behaved server
@@ -205,7 +215,7 @@ func (r *Resolver) resolve(server agentruntime.MCPAppServer) (tools map[string]a
 		ProcessName: server.Name + " MCP App resolver",
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if _, err := client.Call(ctx, "initialize", map[string]any{
@@ -217,15 +227,15 @@ func (r *Resolver) resolve(server agentruntime.MCPAppServer) (tools map[string]a
 		},
 		"clientInfo": map[string]any{"name": "tuttid-mcp-app-resolver", "version": "1"},
 	}); err != nil {
-		return nil, fmt.Errorf("initialize: %w", err)
+		return nil, false, fmt.Errorf("initialize: %w", err)
 	}
 	if err := client.Notify("notifications/initialized", map[string]any{}); err != nil {
-		return nil, fmt.Errorf("notifications/initialized: %w", err)
+		return nil, false, fmt.Errorf("notifications/initialized: %w", err)
 	}
 
 	toolResources, err := listUIToolResources(ctx, client)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	tools = make(map[string]agentruntime.MCPAppToolUI, len(toolResources))
 	snapshots := map[string]string{}
@@ -234,6 +244,9 @@ func (r *Resolver) resolve(server agentruntime.MCPAppServer) (tools map[string]a
 		if !read {
 			sha, err = r.snapshotResource(ctx, client, uri)
 			if err != nil {
+				if errors.Is(err, errSnapshotWrite) {
+					retrySoon = true
+				}
 				// One broken resource must not hide the server's other UI tools.
 				slog.Warn("mcp_app.resolve resource skipped",
 					"event", resolveLogEvent,
@@ -250,7 +263,7 @@ func (r *Resolver) resolve(server agentruntime.MCPAppServer) (tools map[string]a
 		}
 		tools[toolName] = agentruntime.MCPAppToolUI{ResourceURI: uri, ResourceSHA256: sha}
 	}
-	return tools, nil
+	return tools, retrySoon, nil
 }
 
 type toolsListResult struct {
@@ -360,7 +373,7 @@ func (r *Resolver) snapshotResource(ctx context.Context, client *runtimemcp.Stdi
 		Meta:     meta,
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", errSnapshotWrite, err)
 	}
 	return snapshot.SHA256, nil
 }

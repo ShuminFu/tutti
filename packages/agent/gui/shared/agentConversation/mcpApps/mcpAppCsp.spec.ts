@@ -127,13 +127,22 @@ describe("injectMcpAppContentSecurityPolicy", () => {
     );
     expect(fragment.head.firstElementChild).toBe(cspMeta(fragment));
 
+    // Leading comments are not skipped: the CSP goes before them.
     const commented = injectMcpAppContentSecurityPolicy(
       "<!-- shell v1 -->\n<!doctype html><html><head></head></html>",
       policy
     );
-    expect(commented.indexOf("<meta")).toBeGreaterThan(
-      commented.toLowerCase().indexOf("<!doctype html>")
-    );
-    expect(parse(commented).compatMode).toBe("CSS1Compat");
+    expect(commented.startsWith("<meta")).toBe(true);
   });
+
+  it.each(["<!-->", "<!--->", "<!-- x --!>"])(
+    "is not steered past a script by the %s comment ending",
+    (commentStart) => {
+      const html = `${commentStart}<script>window.evil = 1</script>--><p>x</p>`;
+      const injected = injectMcpAppContentSecurityPolicy(html, policy);
+      expect(injected.indexOf("<meta")).toBeLessThan(
+        injected.indexOf("<script>")
+      );
+    }
+  );
 });

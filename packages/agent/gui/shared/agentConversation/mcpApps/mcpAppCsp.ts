@@ -61,11 +61,12 @@ export function buildMcpAppContentSecurityPolicy(
   ].join("; ");
 }
 
-// Leading whitespace, comments and the doctype must stay in front of the
-// injected tag: anything other than those before `<!doctype>` would drop the
-// document into quirks mode.
-const DOCUMENT_PREAMBLE_PATTERN =
-  /^(?:\s|<!--[\s\S]*?-->)*(?:<!doctype[^>]*>)?/i;
+// Only leading whitespace and the doctype stay in front of the injected tag.
+// Comments are deliberately NOT skipped: HTML also ends comments with `<!-->`,
+// `<!--->` and `--!>`, so a regex that skips "comments" can be steered past a
+// real `<script>` and inject the CSP after it (found in review). A resource
+// that puts a comment before its doctype only loses standards mode.
+const DOCUMENT_PREAMBLE_PATTERN = /^\s*(?:<!doctype[^>]*>)?/i;
 
 /**
  * Places the CSP `<meta>` before any other markup of the resource.
