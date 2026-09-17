@@ -398,6 +398,32 @@ func TestReportActivityInputProjectsRuntimeMessagesToMessageUpdates(t *testing.T
 	}
 }
 
+func TestReportActivityInputCopiesAssistantUsageOntoMessagePayload(t *testing.T) {
+	t.Parallel()
+
+	session := reportTestSession()
+	assistantEvent := newTurnActivityEventWithID(session, "assistant-usage-1", EventMessage, "turn-1", messageStreamStateCompleted, RoleAssistant, "done", map[string]any{
+		"streamState": messageStreamStateCompleted,
+		"usage": map[string]any{
+			"input_tokens":                int64(100),
+			"output_tokens":               int64(20),
+			"cache_read_input_tokens":     int64(7),
+			"cache_creation_input_tokens": int64(3),
+		},
+	})
+	assistantEvent.OccurredAtUnixMS = 110
+
+	report := reportActivityInput(session, []activityshared.Event{assistantEvent})
+	if len(report.MessageUpdates) != 1 {
+		t.Fatalf("message updates = %#v, want one assistant update", report.MessageUpdates)
+	}
+	usage, _ := report.MessageUpdates[0].Payload["usage"].(map[string]any)
+	if usage["input_tokens"] != int64(100) || usage["output_tokens"] != int64(20) ||
+		usage["cache_read_input_tokens"] != int64(7) || usage["cache_creation_input_tokens"] != int64(3) {
+		t.Fatalf("payload=%#v, want Claude usage keys on the assistant message", report.MessageUpdates[0].Payload)
+	}
+}
+
 func TestReportActivityInputProjectsTuttiAgentRuntimeMessages(t *testing.T) {
 	t.Parallel()
 

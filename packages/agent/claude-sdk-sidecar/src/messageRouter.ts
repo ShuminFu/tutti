@@ -13,6 +13,7 @@ import {
 } from "./taskNotification.ts";
 import {
   readSDKAssistantMessageID,
+  readSDKAssistantUsage,
   readSDKAssistantUuid,
   readSDKMessageUuid,
   readSDKParentToolUseID,
@@ -482,10 +483,12 @@ export class SDKMessageRouter {
         ? undefined
         : recordValue(streamEvent.usage);
       if (usage) {
+        this.assistant.setPendingUsage(usage);
         this.emit({
           type: "usage_updated",
           payload: { turnId: this.turns.activeId, usage }
         });
+        this.assistant.flushCompletedAssistantUsage();
       }
       return;
     }
@@ -526,16 +529,25 @@ export class SDKMessageRouter {
       this.activeRootAssistantError = assistantError;
     }
     const messageId = readSDKAssistantMessageID(message);
+    const usage = readSDKAssistantUsage(message);
+    if (usage) {
+      this.assistant.setPendingUsage(usage);
+    }
     const blocks = contentBlocksFromMessage(message);
     const usedAssistantSegmentIds = new Set<string>();
-    for (const block of blocks) {
-      this.projection.handleAssistantContentBlock(
-        block,
-        parentToolUseID,
-        messageId,
-        usedAssistantSegmentIds,
-        Boolean(assistantError)
-      );
+    try {
+      for (const block of blocks) {
+        this.projection.handleAssistantContentBlock(
+          block,
+          parentToolUseID,
+          messageId,
+          usedAssistantSegmentIds,
+          Boolean(assistantError)
+        );
+      }
+      this.assistant.flushCompletedAssistantUsage();
+    } finally {
+      this.assistant.setPendingUsage(undefined);
     }
   }
 

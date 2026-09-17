@@ -9,6 +9,7 @@ type AssistantSegmentState = {
   readonly source: "live" | "fallback";
   snapshot: string;
   completed: boolean;
+  usageEmitted: boolean;
 };
 
 export class AssistantStreamProjector {
@@ -16,6 +17,7 @@ export class AssistantStreamProjector {
   private readonly emit: ClaudeSDKSidecarEventEmitter;
   private currentMessageBase = "";
   private sequence = 0;
+  private pendingUsage: Record<string, unknown> | undefined;
   private readonly segmentsByKey = new Map<string, AssistantSegmentState>();
   private readonly segmentKeyByIndex = new Map<string, string>();
 
@@ -27,8 +29,41 @@ export class AssistantStreamProjector {
   reset(): void {
     this.currentMessageBase = "";
     this.sequence = 0;
+    this.pendingUsage = undefined;
     this.segmentsByKey.clear();
     this.segmentKeyByIndex.clear();
+  }
+
+  setPendingUsage(usage: Record<string, unknown> | undefined): void {
+    this.pendingUsage = usage;
+  }
+
+  // Re-emit already-completed assistant rows when transcript usage arrives
+  // after content_block_stop, so payload.usage is not dropped.
+  flushCompletedAssistantUsage(): void {
+    if (!this.pendingUsage) {
+      return;
+    }
+    for (const segment of this.segmentsByKey.values()) {
+      if (
+        segment.kind !== "assistant" ||
+        !segment.completed ||
+        !segment.snapshot ||
+        segment.usageEmitted
+      ) {
+        continue;
+      }
+      this.emit({
+        type: "assistant_completed",
+        payload: {
+          turnId: this.activeTurnId(),
+          messageId: segment.messageId,
+          content: segment.snapshot,
+          usage: this.pendingUsage
+        }
+      });
+      segment.usageEmitted = true;
+    }
   }
 
   setMessageBase(messageId: string): void {
@@ -149,7 +184,8 @@ export class AssistantStreamProjector {
       kind,
       source,
       snapshot: "",
-      completed: false
+      completed: false,
+      usageEmitted: false
     };
     this.segmentsByKey.set(key, segment);
     if (typeof liveIndex === "number") {
@@ -200,6 +236,15 @@ export class AssistantStreamProjector {
     if (!segment.snapshot) {
       return;
     }
+    const payload: Record<string, unknown> = {
+      turnId: this.activeTurnId(),
+      messageId: segment.messageId,
+      content: segment.snapshot
+    };
+    if (segment.kind === "assistant" && this.pendingUsage) {
+      payload.usage = this.pendingUsage;
+      segment.usageEmitted = true;
+    }
     this.emit({
       type:
         segment.kind === "assistant"
@@ -207,11 +252,7 @@ export class AssistantStreamProjector {
             ? "assistant_failed"
             : "assistant_completed"
           : "thinking_completed",
-      payload: {
-        turnId: this.activeTurnId(),
-        messageId: segment.messageId,
-        content: segment.snapshot
-      }
+      payload
     });
   }
 

@@ -36,6 +36,25 @@ func (s *Store) upsertAgentSession(
 	if accepted {
 		mutations = append(mutations, transactionMutation(input.WorkspaceID, input.AgentSessionID, MutationEntitySession, input.AgentSessionID, "upsert", session.UpdatedAtUnixMS))
 	}
+	tokens := session.changedTokenUsage
+	if !tokens.HasReported() {
+		if unstamped, unstampedErr := unstampedSessionTokenUsage(
+			ctx, tx, input.WorkspaceID, input.AgentSessionID, session.Metadata.Usage,
+		); unstampedErr != nil {
+			return false, false, 0, Session{}, unstampedErr
+		} else {
+			tokens = unstamped
+		}
+	}
+	if attached, attachedOK, attachErr := attachTokenUsageToLatestAssistantMessageTx(
+		ctx, tx, input.WorkspaceID, input.AgentSessionID, tokens, now,
+	); attachErr != nil {
+		return false, false, 0, Session{}, attachErr
+	} else if attachedOK {
+		mutations = append(mutations, transactionMutation(
+			input.WorkspaceID, input.AgentSessionID, MutationEntityMessage, attached.MessageID, "upsert", int64(attached.Version),
+		))
+	}
 	goalMutations, err := sessionGoalMutationsTx(ctx, tx, input, goalBefore)
 	if err != nil {
 		return false, false, 0, Session{}, err
@@ -269,5 +288,12 @@ WHERE workspace_agent_sessions.deleted_at_unix_ms = 0
 	dto.RailSectionKind = railSection.Kind
 	dto.RailProjectPath = railSection.ProjectPath
 	dto.RailSectionKey = railSection.Key
+	if accepted {
+		var previous SessionMetadata
+		if hasExisting {
+			previous, _, _, _ = splitSessionRuntimeContext(existing.RuntimeContext)
+		}
+		dto.changedTokenUsage = changedSessionTokenUsage(previous, metadata)
+	}
 	return accepted, sessionStateReportApplied(input, projected.Session), projected.LastEventUnixMS, dto, nil
 }

@@ -864,7 +864,30 @@ subscriptions.
 Provider context-window and quota updates enter the daemon at the runtime
 adapter boundary, are split into typed durable session metadata, and reach
 Agent GUI through the protocol-v2 `usage` field. GUI projections must not read
-provider-private runtime context to render usage. Existing
+provider-private runtime context to render usage.
+Provider token counts (Claude `message.usage`, Codex
+`thread/tokenUsage/updated` `last`, or an equivalent `lastTurn.models`
+snapshot) are persisted when the source reports them. Sessionarchive lifts
+usage from SQLite, not from HTTP `runtimeContext.usage.lastTurn`, in this
+order:
+
+1. `workspace_agent_messages.payload_json.usage` on assistant messages
+2. the same Claude-compatible object or nested `message.usage` /
+   `usage.lastTurn.models` camelCase shapes in `semantics_json`
+3. that turn's `provider_turn_binding_json` / `completed_command_json`
+
+`session_metadata_json.usage.tokens` / `usage.lastTurn` is a latest-turn
+SQLite fallback only. Native Dock Claude transcripts under the managed
+`claude-config/projects/.../<provider_session_id>.jsonl` already carry
+`message.usage`; the daemon must copy that object onto the assistant
+message payload instead of dropping it.
+
+The object uses Claude keys (`input_tokens`, `output_tokens`,
+`cache_read_input_tokens`, `cache_creation_input_tokens`). Absent keys were
+not reported and must stay absent. Sessionarchive (or any archive writer)
+still has to copy the stored object onto each usage-bearing archive event's
+top-level `usage` field. Grok ACP does not yet emit persistable token
+counts; treat that as a follow-up once the provider reports them. Existing
 session control state is read from the daemon; pre-session edits remain in the
 engine-owned activation/draft record until the daemon confirms the session.
 `AgentHostWorkspaceAgent*` types may only appear in compatibility or projection
