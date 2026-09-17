@@ -53,21 +53,62 @@ func (s *Service) validateComposerModelForCreate(
 	if !ok || len(availableModels) == 0 {
 		return nil
 	}
-	// A 1M request is the catalog model wearing a context-window marker, so it
-	// is valid exactly when the bare id is: the catalogs these lists come from
-	// never enumerate the marker spelling.
-	base, _ := contextwindow.Split(model)
-	for _, candidate := range availableModels {
-		candidate = strings.TrimSpace(candidate)
-		if candidate == model || (base != model && candidate == base) {
-			return nil
-		}
+	if composerModelIDInCatalog(model, availableModels) {
+		return nil
 	}
 	return &InvalidModelError{
 		Provider:        provider,
 		Model:           model,
 		AvailableModels: availableModels,
 	}
+}
+
+// advertisedComposerModelValues returns picker ids that actually prove a model
+// can run. Requested rows are bootstrap echoes of the current selection and are
+// not catalog evidence — see ComposerConfigOptionValue.Requested.
+func advertisedComposerModelValues(options []ComposerConfigOptionValue) []string {
+	if len(options) == 0 {
+		return nil
+	}
+	values := make([]string, 0, len(options))
+	seen := make(map[string]struct{}, len(options))
+	for _, option := range options {
+		if option.Requested {
+			continue
+		}
+		value := strings.TrimSpace(option.Value)
+		if value == "" {
+			value = strings.TrimSpace(option.ID)
+		}
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		values = append(values, value)
+	}
+	return values
+}
+
+// composerModelIDInCatalog reports whether model is in available. A 1M request
+// is the catalog model wearing a context-window marker, so it is present
+// exactly when the bare id is: host overlay and CLI catalogs enumerate bare
+// ids, and the picker may spell either.
+func composerModelIDInCatalog(model string, available []string) bool {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return false
+	}
+	base, marked := contextwindow.Split(model)
+	for _, candidate := range available {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == model || (marked && candidate == base) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) availableComposerModelsForValidation(

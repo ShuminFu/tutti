@@ -202,6 +202,24 @@ func (s *Service) validateAgentComposerDefaultsField(
 			)
 			return composerDefaultsRejection(field, validateComposerDefaultOption(field, selected, observed, observedModels))
 		}
+		// Composer Options already applied the host overlay and 1M rows for
+		// this target — the catalog the picker shows when no workspace-scoped
+		// plan is in play. Validating the provider-native CLI list after that
+		// overlay is how Codex refused deepseek-flash[1m] as invalid_value
+		// while the menu offered it. Providers without a model picker keep the
+		// CLI/create clamp path.
+		if composerProfileFor(launch.Provider).ModelSelection {
+			if advertised := advertisedComposerModelValues(options.ModelConfig.Options); len(advertised) > 0 {
+				if composerModelIDInCatalog(selected, advertised) {
+					return AgentComposerDefaultsRejectedField{}, true
+				}
+				return composerDefaultsRejection(field, &InvalidModelError{
+					Provider:        launch.Provider,
+					Model:           selected,
+					AvailableModels: advertised,
+				})
+			}
+		}
 		return composerDefaultsRejection(field, s.validateComposerModelForCreate(ctx, launch.Provider, "", "", selected))
 	case preferencesbiz.AgentComposerDefaultsFieldPermissionModeID:
 		if !options.PermissionConfig.Configurable || !permissionModeConfigHasModeID(options.PermissionConfig, selected) {
