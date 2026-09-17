@@ -71,6 +71,34 @@ test("assistant SDK error replaces completion with a failed message", () => {
   );
 });
 
+test("flush copies late transcript usage onto an already completed assistant", () => {
+  const events: Array<Omit<ClaudeSDKSidecarEvent, "version">> = [];
+  const projector = new AssistantStreamProjector(
+    () => "turn-1",
+    (event) => events.push(event)
+  );
+
+  projector.setMessageBase("message-1");
+  projector.appendDelta(0, "assistant", "hello");
+  assert.equal(projector.completeIndex(0), true);
+  assert.equal(events[1]?.payload?.usage, undefined);
+
+  projector.setPendingUsage({
+    input_tokens: 64,
+    output_tokens: 8
+  });
+  projector.flushCompletedAssistantUsage();
+
+  const flushed = events.find(
+    (event) => event.type === "assistant_completed" && event.payload?.usage
+  );
+  assert.deepEqual(flushed?.payload?.usage, {
+    input_tokens: 64,
+    output_tokens: 8
+  });
+  assert.equal(flushed?.payload?.messageId, events[1]?.payload?.messageId);
+});
+
 test("assistant completion copies pending usage onto the completed payload", () => {
   const events: Array<Omit<ClaudeSDKSidecarEvent, "version">> = [];
   const projector = new AssistantStreamProjector(

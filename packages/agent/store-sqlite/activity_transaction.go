@@ -36,8 +36,18 @@ func (s *Store) upsertAgentSession(
 	if accepted {
 		mutations = append(mutations, transactionMutation(input.WorkspaceID, input.AgentSessionID, MutationEntitySession, input.AgentSessionID, "upsert", session.UpdatedAtUnixMS))
 	}
+	tokens := session.changedTokenUsage
+	if !tokens.HasReported() {
+		if unstamped, unstampedErr := unstampedSessionTokenUsage(
+			ctx, tx, input.WorkspaceID, input.AgentSessionID, session.Metadata.Usage,
+		); unstampedErr != nil {
+			return false, false, 0, Session{}, unstampedErr
+		} else {
+			tokens = unstamped
+		}
+	}
 	if attached, attachedOK, attachErr := attachTokenUsageToLatestAssistantMessageTx(
-		ctx, tx, input.WorkspaceID, input.AgentSessionID, session.changedTokenUsage, now,
+		ctx, tx, input.WorkspaceID, input.AgentSessionID, tokens, now,
 	); attachErr != nil {
 		return false, false, 0, Session{}, attachErr
 	} else if attachedOK {

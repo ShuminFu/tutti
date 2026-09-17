@@ -3,6 +3,7 @@ package storesqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -16,6 +17,68 @@ func changedSessionTokenUsage(previous SessionMetadata, next SessionMetadata) *P
 		return nil
 	}
 	return cloneProviderTokenUsage(nextTokens)
+}
+
+// unstampedSessionTokenUsage returns session tokens that have not yet been
+// copied onto any assistant payload. This covers usage arriving before the
+// assistant row exists, without restamping a later turn with an earlier
+// snapshot.
+func unstampedSessionTokenUsage(
+	ctx context.Context,
+	tx *sql.Tx,
+	workspaceID string,
+	agentSessionID string,
+	usage *SessionUsage,
+) (*ProviderTokenUsage, error) {
+	tokens := sessionUsageTokens(usage)
+	if !tokens.HasReported() {
+		return nil, nil
+	}
+	stamped, err := assistantAlreadyHasTokenUsageTx(ctx, tx, workspaceID, agentSessionID, tokens)
+	if err != nil || stamped {
+		return nil, err
+	}
+	return cloneProviderTokenUsage(tokens), nil
+}
+
+func assistantAlreadyHasTokenUsageTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	workspaceID string,
+	agentSessionID string,
+	usage *ProviderTokenUsage,
+) (bool, error) {
+	if !usage.HasReported() {
+		return false, nil
+	}
+	rows, err := tx.QueryContext(ctx, `
+SELECT message.payload_json
+FROM workspace_agent_messages AS message
+WHERE message.workspace_id = ?
+  AND message.agent_session_id = ?
+  AND message.deleted_at_unix_ms = 0
+  AND message.role = 'assistant'
+  AND message.kind = 'text'
+  AND json_extract(message.payload_json, '$.usage') IS NOT NULL
+`, workspaceID, agentSessionID)
+	if err != nil {
+		return false, fmt.Errorf("list assistant payload usage: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return false, fmt.Errorf("scan assistant payload usage: %w", err)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+			continue
+		}
+		if providerTokenUsageEqual(ParseProviderTokenUsage(payload["usage"]), usage) {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 func sessionUsageTokens(usage *SessionUsage) *ProviderTokenUsage {

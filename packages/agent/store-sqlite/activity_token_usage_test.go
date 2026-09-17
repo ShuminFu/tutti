@@ -146,6 +146,93 @@ func TestReportActivityStatePersistsCodexLastTurnOnSettledAssistantMessage(t *te
 	}
 }
 
+func TestReportSessionMessagesBackfillsUsageWhenTokensArrivedFirst(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t, testOptions(&staticProjectPaths{}))
+	ctx := context.Background()
+	if _, err := store.ReportSessionState(ctx, SessionStateReport{
+		WorkspaceID: "ws-order", AgentSessionID: "session-order", Origin: "runtime",
+		Provider: "claude-code", Status: "running", OccurredAtUnixMS: 10,
+		RuntimeContext: map[string]any{
+			"usage": map[string]any{
+				"contextWindow": map[string]any{"usedTokens": 120, "totalTokens": 200_000},
+				"lastTurn": map[string]any{
+					"models": map[string]any{
+						"default": map[string]any{
+							"inputTokens":              90,
+							"outputTokens":             18,
+							"cacheReadInputTokens":     2,
+							"cacheCreationInputTokens": 1,
+						},
+					},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, accepted, err := store.RecordTurnTransition(ctx, TurnTransition{
+		WorkspaceID: "ws-order", AgentSessionID: "session-order", TurnID: "turn-1",
+		Phase: TurnPhaseRunning, OccurredAtUnixMS: 11,
+	}); err != nil || !accepted {
+		t.Fatalf("RecordTurnTransition() accepted=%v error=%v", accepted, err)
+	}
+	if result, err := store.ReportSessionMessages(ctx, SessionMessageReport{
+		WorkspaceID: "ws-order", AgentSessionID: "session-order", Origin: "runtime", Provider: "claude-code",
+		Messages: []MessageUpdate{{
+			MessageID: "assistant-late", TurnID: "turn-1", Role: "assistant", Kind: "text",
+			Status: "completed", Payload: map[string]any{"text": "later"}, OccurredAtUnixMS: 12,
+		}},
+	}); err != nil || result.AcceptedCount != 1 {
+		t.Fatalf("ReportSessionMessages() result=%#v error=%v", result, err)
+	}
+
+	page, ok, err := store.ListSessionMessages(ctx, ListSessionMessagesInput{
+		WorkspaceID: "ws-order", AgentSessionID: "session-order", Limit: 10,
+	})
+	if err != nil || !ok || len(page.Messages) != 1 {
+		t.Fatalf("ListSessionMessages() page=%#v ok=%v error=%v", page, ok, err)
+	}
+	usage := ParseProviderTokenUsage(page.Messages[0].Payload["usage"])
+	if !usage.HasReported() ||
+		usage.InputTokens == nil || *usage.InputTokens != 90 ||
+		usage.OutputTokens == nil || *usage.OutputTokens != 18 {
+		t.Fatalf("payload=%#v, want backfilled usage after tokens arrived first", page.Messages[0].Payload)
+	}
+
+	if _, accepted, err := store.RecordTurnTransition(ctx, TurnTransition{
+		WorkspaceID: "ws-order", AgentSessionID: "session-order", TurnID: "turn-1",
+		Phase: TurnPhaseSettled, Outcome: TurnOutcomeCompleted, OccurredAtUnixMS: 19,
+	}); err != nil || !accepted {
+		t.Fatalf("settle turn-1 accepted=%v error=%v", accepted, err)
+	}
+	if _, accepted, err := store.RecordTurnTransition(ctx, TurnTransition{
+		WorkspaceID: "ws-order", AgentSessionID: "session-order", TurnID: "turn-2",
+		Phase: TurnPhaseRunning, OccurredAtUnixMS: 20,
+	}); err != nil || !accepted {
+		t.Fatalf("second RecordTurnTransition() accepted=%v error=%v", accepted, err)
+	}
+	if result, err := store.ReportSessionMessages(ctx, SessionMessageReport{
+		WorkspaceID: "ws-order", AgentSessionID: "session-order", Origin: "runtime", Provider: "claude-code",
+		Messages: []MessageUpdate{{
+			MessageID: "assistant-next", TurnID: "turn-2", Role: "assistant", Kind: "text",
+			Status: "completed", Payload: map[string]any{"text": "next"}, OccurredAtUnixMS: 21,
+		}},
+	}); err != nil || result.AcceptedCount != 1 {
+		t.Fatalf("second ReportSessionMessages() result=%#v error=%v", result, err)
+	}
+	page, ok, err = store.ListSessionMessages(ctx, ListSessionMessagesInput{
+		WorkspaceID: "ws-order", AgentSessionID: "session-order", Limit: 10, Order: MessageOrderAsc,
+	})
+	if err != nil || !ok || len(page.Messages) != 2 {
+		t.Fatalf("ListSessionMessages() later page=%#v ok=%v error=%v", page, ok, err)
+	}
+	if ParseProviderTokenUsage(page.Messages[1].Payload["usage"]).HasReported() {
+		t.Fatalf("next-turn payload=%#v, want no restamp of the earlier snapshot", page.Messages[1].Payload)
+	}
+}
+
 func TestReportSessionMessagesPersistsAssistantPayloadUsage(t *testing.T) {
 	t.Parallel()
 
