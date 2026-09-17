@@ -93,7 +93,7 @@ func TestControllerSubmitInteractiveSyncsClaudeCodePermissionModeSelection(t *te
 		{name: "bypass permissions", initial: "default", optionID: "bypassPermissions", wantMode: "bypassPermissions"},
 		{name: "default", initial: "acceptEdits", optionID: "default", wantMode: "default"},
 		{name: "legacy auto", initial: "default", optionID: "auto", wantMode: "acceptEdits"},
-		{name: "dont ask from payload", initial: "default", payload: map[string]any{"optionId": "dontAsk"}, resolved: "dontAsk", wantMode: "dontAsk"},
+		{name: "dont ask from payload remaps to default", initial: "acceptEdits", payload: map[string]any{"optionId": "dontAsk"}, resolved: "dontAsk", wantMode: "default"},
 	}
 
 	for _, tt := range tests {
@@ -184,7 +184,7 @@ func TestClaudeCodeModeFromID(t *testing.T) {
 		{modeID: "acceptEdits", wantPlan: false, wantPermission: "acceptEdits", wantOK: true},
 		{modeID: "bypassPermissions", wantPlan: false, wantPermission: "bypassPermissions", wantOK: true},
 		{modeID: "auto", wantPlan: false, wantPermission: "acceptEdits", wantOK: true},
-		{modeID: "dontAsk", wantPlan: false, wantPermission: "dontAsk", wantOK: true},
+		{modeID: "dontAsk", wantPlan: false, wantPermission: "default", wantOK: true},
 		{modeID: "allow_once", wantOK: false},
 		{modeID: "reject", wantOK: false},
 		{modeID: "", wantOK: false},

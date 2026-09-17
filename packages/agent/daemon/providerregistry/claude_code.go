@@ -110,7 +110,7 @@ func claudeCodeDescriptor() ProviderDescriptor {
 			PermissionModes: []PermissionModeDescriptor{
 				{ID: "default", Semantic: "ask-before-write"},
 				{ID: "acceptEdits", Semantic: "accept-edits"},
-				{ID: "dontAsk", Semantic: "locked-down"},
+				// Retired composer id dontAsk remaps to default.
 				// 完全放行 = 不再逐条问用户。Claude Code 的 ACP 目标只能从
 				// 这里拿到"自动裁决"：它的适配器不注册自动档位，于是每一条
 				// session/request_permission 都会落成用户审批——包括模型自己

@@ -575,6 +575,9 @@ export const enAgentGui = {
   agentTargetRequired:
     "Select an available agent target before starting a session.",
   sessionActivationFailed: "The agent session could not be started.",
+  promptSendFailed: "The message could not be sent.",
+  promptPermissionModeUnavailable:
+    "This permission mode is not available in this session. Choose another permission mode and send again.",
   goalControlFailed: "The goal change could not be applied.",
   sessionNoLongerAvailable:
     "The previous agent session is no longer available.",

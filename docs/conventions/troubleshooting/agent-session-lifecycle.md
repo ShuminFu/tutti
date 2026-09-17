@@ -757,6 +757,36 @@ be resent`). The app never opens.
   verify the HTTP boundary sees the activation, the activation revision is
   `active`, and the first Turn snapshot retains its source and intensity.
 
+### Existing-session send fails and the composer refills with no error
+
+- **Symptom:** Sending on an existing Session flashes, the draft returns to the
+  composer unchanged, and the conversation shows no error. Daemon logs have
+  `content_normalized` then `api.send.failed` with no process start and no
+  `session/load`. Typical reasons: `agent prompt image input is unsupported`
+  after the live runtime was reaped, or `Mode dontAsk is not available in this
+session`.
+- **Quick checks:** Filter `api.send.failed` for that Session. If the chain is
+  only `content_normalized` → `prompt_validated` → fail, Host never reached
+  `runtime.Exec`. Confirm whether the adapter still has a live process
+  (`skipped_not_live`) and which permission mode the composer stored.
+- **Root cause:** Host validates prompt content before Resume/Start. ACP image
+  preflight used to require a live adapter session even when the composer
+  profile already declared `imageInput`. Separately, Claude Code offered
+  `dontAsk` while claude-agent-acp does not, and `failOnSetModeError` aborted
+  the send. AgentGUI restored the draft on failed submit without rendering the
+  failure as conversation detail error.
+- **Fix:** Image preflight uses the same declared-capability source as
+  `promptImage` initialization. Claude Code no longer offers `dontAsk`; stored
+  values remap to `default`. Permission `set_mode` failures stay fatal. Failed
+  current-conversation submits restore the draft and set the detail error.
+- **Validation:** Adapter tests cover declared-image preflight with no live
+  session, retired `dontAsk` remapping, and unknown-mode rejection.
+  AgentGUI tests cover mapping those failures onto the detail error.
+- **References:**
+  [standard_acp_adapter.go](../../../packages/agent/daemon/runtime/standard_acp_adapter.go)
+  [claude_code.go](../../../packages/agent/daemon/providerregistry/claude_code.go)
+  [AgentGUIEngineSettlementController.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/AgentGUIEngineSettlementController.ts)
+
 ### A composer send with an unsettled image silently does nothing
 
 - **Symptom:** In an existing Session, sending a new reply that carries an image

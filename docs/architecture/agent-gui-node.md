@@ -1059,6 +1059,9 @@ while canonical Turn state remains authoritative once it exists.
   accepted/queued admission result. Desktop AgentGUI and Native Mobile clear a
   submitted draft only after that result confirms admission, and never
   construct raw `submit/requested` fields or rebuild admission from selectors.
+  If the send later fails, the surface restores that draft only while the
+  current draft is still empty and renders the failure as conversation detail
+  error. Restoring the draft is not itself a visible outcome.
   New-Session initial content continues to travel with activation.
   Provider acceptance protects provider-turn identity and fork safety, but it
   is not the prompt's durability boundary. If runtime delivery is explicitly

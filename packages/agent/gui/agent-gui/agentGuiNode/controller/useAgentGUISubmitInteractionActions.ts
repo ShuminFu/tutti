@@ -49,6 +49,7 @@ import {
   AGENT_RESUME_SESSION_NOT_LOCAL_ERROR,
   buildProviderSessionNotFoundActivationError,
   buildResumeSessionNotLocalActivationError,
+  formatPromptSendFailed,
   getAgentGUIErrorMessage,
   isNonRetryableResumeErrorCode
 } from "./agentGuiController.errors";
@@ -398,6 +399,15 @@ export function useAgentGUISubmitInteractionActions(
             : translate("agentHost.agentGui.goalControlFailed")
         );
       },
+      onPromptSendFailed: (submit) => {
+        setDetailError(
+          formatPromptSendFailed({
+            errorCode: submit.errorCode,
+            errorReason: submit.errorReason,
+            errorMessage: submit.errorMessage
+          })
+        );
+      },
       snapshots: submittedDraftSnapshotsRef.current
     });
     return controller.attach();
@@ -447,17 +457,22 @@ export function useAgentGUISubmitInteractionActions(
         );
         return null;
       }
-      return executePrompt(agentSessionId, normalizedContent, displayPromptText, {
-        capabilityRefs: options?.capabilityRefs,
-        requiredSettingsPatch: options?.requiredSettingsPatch,
-        targetTurnId: options?.targetTurnId,
-        sendNow: options?.sendNow === true,
-        sourceScopeKey: options?.sourceScopeKey,
-        ...(options?.submittedDraft
-          ? { submittedDraft: options.submittedDraft }
-          : {}),
-        trackDraft: options?.trackDraft === true
-      });
+      return executePrompt(
+        agentSessionId,
+        normalizedContent,
+        displayPromptText,
+        {
+          capabilityRefs: options?.capabilityRefs,
+          requiredSettingsPatch: options?.requiredSettingsPatch,
+          targetTurnId: options?.targetTurnId,
+          sendNow: options?.sendNow === true,
+          sourceScopeKey: options?.sourceScopeKey,
+          ...(options?.submittedDraft
+            ? { submittedDraft: options.submittedDraft }
+            : {}),
+          trackDraft: options?.trackDraft === true
+        }
+      );
     },
     [activation, executePrompt, isSessionMarkedNonResumable, workspaceId]
   );

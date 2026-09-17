@@ -2,6 +2,7 @@ package agentruntime
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -60,7 +61,7 @@ func TestClaudeCodeACPAutomaticPermissionDecision(t *testing.T) {
 		t.Fatalf("full-access decision = %q, want approved", got)
 	}
 	// Every other tier keeps today's behaviour: the user is asked.
-	for _, mode := range []string{"default", "acceptEdits", "dontAsk"} {
+	for _, mode := range []string{"default", "acceptEdits"} {
 		if got := decisionFor(t, mode, false); got != "" {
 			t.Fatalf("mode %q decision = %q, want prompt", mode, got)
 		}
@@ -131,5 +132,54 @@ func TestClaudeCodeACPPlanExitStaysInteractive(t *testing.T) {
 	}
 	if got := transport.conn.permissionOptionID(); got != "" {
 		t.Fatalf("auto-selected option %q for a plan-exit request", got)
+	}
+}
+
+func TestClaudeCodeACPRemapsRetiredDontAskAndRejectsUnknownModes(t *testing.T) {
+	t.Parallel()
+
+	adapter := newClaudeCodeACPAdapterFromProviderDescriptor(
+		claudeCodeTestDescriptor(t),
+		newStandardACPTransport("Claude Agent", "claude-permission-preflight"),
+		LegacyHostMetadata(),
+		nil,
+	)
+	if !adapter.config.failOnSetModeError {
+		t.Fatal("claude-agent-acp must fail closed when set_mode is rejected")
+	}
+	if got := adapter.config.permissionModeID("dontAsk"); got != "default" {
+		t.Fatalf("retired dontAsk maps to %q, want default", got)
+	}
+	session := standardTestSession(providerregistry.ClaudeCodeProviderID)
+	session.PermissionModeID = "mysteryMode"
+	if _, err := adapter.Start(context.Background(), session); !errors.Is(err, ErrPermissionModeUnavailable) {
+		t.Fatalf("Start mysteryMode = %v, want ErrPermissionModeUnavailable", err)
+	}
+	session.PermissionModeID = "default"
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	session.PermissionModeID = "mysteryMode"
+	if err := adapter.ApplyPermissionMode(context.Background(), session); !errors.Is(err, ErrPermissionModeUnavailable) {
+		t.Fatalf("ApplyPermissionMode mysteryMode = %v, want ErrPermissionModeUnavailable", err)
+	}
+}
+
+func TestClaudeCodeACPAllowsDeclaredImagePromptWithoutLiveSession(t *testing.T) {
+	t.Parallel()
+
+	adapter := newClaudeCodeACPAdapterFromProviderDescriptor(
+		claudeCodeTestDescriptor(t),
+		newStandardACPTransport("Claude Agent", "claude-image-preflight"),
+		LegacyHostMetadata(),
+		nil,
+	)
+	session := standardTestSession(providerregistry.ClaudeCodeProviderID)
+	if err := adapter.ValidatePromptContent(session, []PromptContentBlock{{
+		Type:     "image",
+		MimeType: "image/png",
+		Path:     "/managed/agent-prompt-assets/screen.png",
+	}}); err != nil {
+		t.Fatalf("ValidatePromptContent without live session = %v, want nil", err)
 	}
 }

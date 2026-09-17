@@ -5,6 +5,7 @@ import {
   selectSessionGoalControlSettlement,
   type AgentSessionEngine,
   type AgentSessionEngineState,
+  type PendingSubmitIntentRecord,
   type SessionGoalControlSettlement
 } from "@tutti-os/agent-activity-core";
 import type { AgentActivityGoalControlAction } from "@tutti-os/agent-activity-core";
@@ -32,6 +33,7 @@ interface AgentGUIEngineSettlementControllerInput {
   isCurrentConversation?(agentSessionId: string): boolean;
   onGoalControlCleared?(): void;
   onGoalControlFailed?(settlement: SessionGoalControlSettlement): void;
+  onPromptSendFailed?(submit: PendingSubmitIntentRecord): void;
   snapshots: Record<string, SubmittedDraftSnapshot>;
 }
 
@@ -51,6 +53,9 @@ export class AgentGUIEngineSettlementController {
   private readonly onGoalControlFailed: NonNullable<
     AgentGUIEngineSettlementControllerInput["onGoalControlFailed"]
   >;
+  private readonly onPromptSendFailed: NonNullable<
+    AgentGUIEngineSettlementControllerInput["onPromptSendFailed"]
+  >;
   private readonly snapshots: Record<string, SubmittedDraftSnapshot>;
   private unsubscribe: (() => void) | null = null;
 
@@ -61,6 +66,7 @@ export class AgentGUIEngineSettlementController {
     this.isCurrentConversation = input.isCurrentConversation ?? (() => false);
     this.onGoalControlCleared = input.onGoalControlCleared ?? (() => undefined);
     this.onGoalControlFailed = input.onGoalControlFailed ?? (() => undefined);
+    this.onPromptSendFailed = input.onPromptSendFailed ?? (() => undefined);
     this.snapshots = input.snapshots;
   }
 
@@ -140,6 +146,12 @@ export class AgentGUIEngineSettlementController {
             })
           : clearSubmittedDraftIfUnchanged({ drafts, snapshot })
       );
+      if (
+        submit.status === "failed" &&
+        this.isCurrentConversation(submit.agentSessionId)
+      ) {
+        this.onPromptSendFailed(submit);
+      }
       delete this.snapshots[clientSubmitId];
     }
     this.settleGoalControls(state);

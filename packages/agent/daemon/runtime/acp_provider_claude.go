@@ -32,7 +32,7 @@ func newClaudeCodeACPAdapterFromProviderDescriptor(
 			defaultTitleAliases: append([]string{descriptor.Identity.DisplayName, descriptor.Identity.ID}, descriptor.Identity.Aliases...),
 			authRequiredMessage: "Claude Agent ACP requires authentication in the runtime VM; sign in to the local Claude Code agent so its credentials can be synced, then retry this session.",
 			permissionModeID: func(mode string) string {
-				mode = strings.TrimSpace(mode)
+				mode = retiredClaudeCodePermissionModeID(mode)
 				if permissionModeIDAllowedForProvider(descriptor.Identity.ID, mode) {
 					return mode
 				}

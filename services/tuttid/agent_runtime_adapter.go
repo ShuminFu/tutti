@@ -710,6 +710,9 @@ func mapAgentRuntimeError(err error) error {
 	if errors.Is(err, agentruntime.ErrPromptImageUnsupported) {
 		return agentservice.ErrPromptImageUnsupported
 	}
+	if errors.Is(err, agentruntime.ErrPermissionModeUnavailable) {
+		return agentservice.ErrPermissionModeUnavailable
+	}
 	var appErr *agentruntime.AppError
 	if errors.As(err, &appErr) && appErr != nil {
 		return agenthost.NewProviderError(appErr.Code, appErr.Message, appErr.DebugMessage, appErr)

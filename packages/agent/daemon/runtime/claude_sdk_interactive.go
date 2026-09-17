@@ -290,8 +290,10 @@ func claudeCodeModeFromID(optionID string) (bool, string, bool) {
 	switch strings.TrimSpace(optionID) {
 	case "plan":
 		return true, "", true
-	case "default", "acceptEdits", "dontAsk", "bypassPermissions":
+	case "default", "acceptEdits", "bypassPermissions":
 		return false, strings.TrimSpace(optionID), true
+	case "dontAsk":
+		return false, "default", true
 	case "auto":
 		// Older sidecars used "auto" for the accept-edits exit-plan choice.
 		return false, "acceptEdits", true

@@ -272,11 +272,25 @@ func (a *standardACPAdapter) ValidatePromptContent(session Session, content []Pr
 	if err := validatePromptContentImagesForPreflight(content); err != nil {
 		return err
 	}
-	acpSession := a.getSession(session.AgentSessionID)
-	if acpSession != nil && acpSession.promptImage {
+	if a.promptImageCapability(session) {
 		return nil
 	}
 	return ErrPromptImageUnsupported
+}
+
+// promptImageCapability uses the same source as standardACPSession.promptImage
+// initialization: declared composer imageInput first, then the live
+// initialize result. Idle reaping must not invent a third "no live session
+// means images are unsupported" gate before Resume/Start.
+func (a *standardACPAdapter) promptImageCapability(session Session) bool {
+	if a == nil {
+		return false
+	}
+	if standardACPProviderPromptImageSupported(a.config.provider, nil) {
+		return true
+	}
+	acpSession := a.getSession(session.AgentSessionID)
+	return acpSession != nil && acpSession.promptImage
 }
 
 func standardACPPromptImageSupported(raw json.RawMessage) bool {

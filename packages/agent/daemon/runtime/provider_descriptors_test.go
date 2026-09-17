@@ -92,13 +92,19 @@ func TestMigratedClaudeCodeDescriptorOwnsPermissionModes(t *testing.T) {
 	if got := defaultPermissionModeIDForProvider(ProviderClaudeCode); got != "default" {
 		t.Fatalf("default permission mode = %q", got)
 	}
-	for _, mode := range []string{"default", "acceptEdits", "dontAsk", "bypassPermissions"} {
+	for _, mode := range []string{"default", "acceptEdits", "bypassPermissions"} {
 		if !permissionModeIDAllowedForProvider(ProviderClaudeCode, mode) {
 			t.Fatalf("permission mode %q rejected", mode)
 		}
 	}
+	if permissionModeIDAllowedForProvider(ProviderClaudeCode, "dontAsk") {
+		t.Fatal("retired permission mode dontAsk accepted")
+	}
 	if permissionModeIDAllowedForProvider(ProviderClaudeCode, "auto") {
 		t.Fatal("legacy permission mode auto accepted")
+	}
+	if got := normalizePermissionModeIDWithFallback(ProviderClaudeCode, "dontAsk", ""); got != "default" {
+		t.Fatalf("retired dontAsk = %q, want default", got)
 	}
 }
 

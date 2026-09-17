@@ -481,6 +481,14 @@ func sessionVisible(visible *bool) bool {
 	return visible == nil || *visible
 }
 
+func retiredClaudeCodePermissionModeID(mode string) string {
+	mode = strings.TrimSpace(mode)
+	if mode == "dontAsk" {
+		return "default"
+	}
+	return mode
+}
+
 func normalizePermissionModeIDWithFallback(provider string, mode string, fallback string) string {
 	mode = strings.TrimSpace(mode)
 	if permissionModeIDAllowedForProvider(provider, mode) {

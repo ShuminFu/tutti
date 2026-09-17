@@ -1525,7 +1525,10 @@ export const en = {
       invalid_workbench_snapshot:
         "That workbench state could not be saved because the snapshot is invalid.",
       agent: {
-        prompt_image_unsupported: "This agent does not support image input yet."
+        prompt_image_unsupported:
+          "This agent does not support image input yet.",
+        permission_mode_unavailable:
+          "This permission mode is not available in this session. Choose another permission mode and send again."
       },
       malformed_request: "We couldn't understand that request.",
       missing_workspace_id: "Choose a workspace before trying again.",

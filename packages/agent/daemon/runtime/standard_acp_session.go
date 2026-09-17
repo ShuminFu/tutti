@@ -40,6 +40,9 @@ func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]acti
 	}
 	unlockLifecycle := a.lockSessionLifecycle(session.AgentSessionID)
 	defer unlockLifecycle()
+	if err := a.rejectUnmappedPermissionMode(session); err != nil {
+		return nil, err
+	}
 	a.logStandardACPStartupDiagnostics("start.enter", map[string]any{
 		"room_id":            session.RoomID,
 		"agent_session_id":   session.AgentSessionID,
@@ -263,6 +266,9 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 	}
 	unlockLifecycle := a.lockSessionLifecycle(session.AgentSessionID)
 	defer unlockLifecycle()
+	if err := a.rejectUnmappedPermissionMode(session); err != nil {
+		return err
+	}
 	client, initializeResult, attachedCheckpoint, err := a.startClient(ctx, session, true)
 	if err != nil {
 		return err

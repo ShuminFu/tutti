@@ -13,6 +13,7 @@ var (
 	ErrActiveTurnTargetRequired         = agenthost.ErrActiveTurnTargetRequired
 	ErrActiveTurnTargetMismatch         = agenthost.ErrActiveTurnTargetMismatch
 	ErrPromptImageUnsupported           = errors.New("agent prompt image input is unsupported")
+	ErrPermissionModeUnavailable        = errors.New("agent session permission mode is not available")
 	ErrSessionNoActiveTurn              = errors.New("agent session has no active turn")
 	ErrSessionNotFound                  = agenthost.ErrSessionNotFound
 	ErrRuntimeSessionDisconnected       = agenthost.ErrRuntimeSessionDisconnected

@@ -530,8 +530,12 @@ func Classify(err error) *ProtocolError {
 		)
 	case errors.Is(err, agentservice.ErrInvalidArgument):
 		return InvalidRequest(ReasonMalformedRequest, WithCause(err))
-	case errors.Is(err, agentservice.ErrPromptImageUnsupported):
+	case errors.Is(err, agentservice.ErrPromptImageUnsupported),
+		errors.Is(err, agentruntime.ErrPromptImageUnsupported):
 		return InvalidRequest("agent.prompt_image_unsupported", WithCause(err))
+	case errors.Is(err, agentservice.ErrPermissionModeUnavailable),
+		errors.Is(err, agentruntime.ErrPermissionModeUnavailable):
+		return InvalidRequest("agent.permission_mode_unavailable", WithCause(err))
 	case errors.Is(err, agentservice.ErrSessionNoActiveTurn):
 		return InvalidRequest("agent.no_active_turn", WithCause(err))
 	case errors.Is(err, agentservice.ErrActiveTurnGuidanceUnsupported):

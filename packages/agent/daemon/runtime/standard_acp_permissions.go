@@ -2,9 +2,16 @@ package agentruntime
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 )
+
+// ErrPermissionModeUnavailable is returned when the session's selected
+// permission tier cannot be applied. Permission mismatch is fatal: continuing
+// would run a different tier than the user sees.
+var ErrPermissionModeUnavailable = errors.New("agent session permission mode is not available")
 
 // RNDMASTER_ACP_AUTO_PERMISSION is the managed DinTalDock source marker for
 // resolving session/request_permission from the RnDMaster runtime contract
@@ -29,10 +36,31 @@ func (a *standardACPAdapter) ApplyPermissionMode(ctx context.Context, session Se
 	// Track the live tier so automatic decisions (for example full-access
 	// approval or read-only denial) affect subsequent requests without respawn.
 	a.setSessionPermissionModeID(session.AgentSessionID, session.PermissionModeID)
-	if a.config.permissionModeID == nil || a.config.permissionModeID(session.PermissionModeID) == "" {
+	if err := a.rejectUnmappedPermissionMode(session); err != nil {
+		return err
+	}
+	if a.mappedPermissionModeID(session) == "" {
 		return nil
 	}
 	return a.applyACPMode(ctx, acpSession.client, session, a.effectiveModeID(session))
+}
+
+func (a *standardACPAdapter) mappedPermissionModeID(session Session) string {
+	if a == nil || a.config.permissionModeID == nil {
+		return ""
+	}
+	return strings.TrimSpace(a.config.permissionModeID(strings.TrimSpace(session.PermissionModeID)))
+}
+
+func (a *standardACPAdapter) rejectUnmappedPermissionMode(session Session) error {
+	if a == nil || !a.config.failOnSetModeError || a.config.permissionModeID == nil {
+		return nil
+	}
+	requested := strings.TrimSpace(session.PermissionModeID)
+	if requested == "" || a.mappedPermissionModeID(session) != "" {
+		return nil
+	}
+	return fmt.Errorf("%w: %s", ErrPermissionModeUnavailable, requested)
 }
 
 func (a *standardACPAdapter) effectiveWorkflowModeConfigOptionID() string {

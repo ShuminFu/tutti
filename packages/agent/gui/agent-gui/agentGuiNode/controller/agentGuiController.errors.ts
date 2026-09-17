@@ -19,6 +19,10 @@ export const AGENT_PROVIDER_SESSION_NOT_FOUND_FALLBACK_MESSAGE =
 export const AGENT_RESUME_SESSION_NOT_LOCAL_FALLBACK_MESSAGE =
   "The previous agent session is not available on this machine.";
 export const AGENT_GUI_CAUGHT_ERROR_STACK_LIMIT = 4000;
+export const AGENT_PROMPT_IMAGE_UNSUPPORTED_REASON =
+  "agent.prompt_image_unsupported";
+export const AGENT_PERMISSION_MODE_UNAVAILABLE_REASON =
+  "agent.permission_mode_unavailable";
 const SESSION_ACTIVATION_DETAIL_LIMIT = 180;
 
 export function formatSessionActivationFailed(detail?: string | null): string {
@@ -26,6 +30,58 @@ export function formatSessionActivationFailed(detail?: string | null): string {
   const oneLine = (detail ?? "").replace(/\s+/g, " ").trim();
   if (!oneLine || oneLine === base) return base;
   return `${base.replace(/[。.]$/, "")}. ${oneLine.slice(0, SESSION_ACTIVATION_DETAIL_LIMIT)}`;
+}
+
+export function formatPromptSendFailed(input: {
+  errorCode?: string | null;
+  errorReason?: string | null;
+  errorMessage?: string | null;
+}): string {
+  if (isPromptImageUnsupportedFailure(input)) {
+    return translate("agentHost.agentGui.promptImagesUnsupported");
+  }
+  if (isPermissionModeUnavailableFailure(input)) {
+    return translate("agentHost.agentGui.promptPermissionModeUnavailable");
+  }
+  const base = translate("agentHost.agentGui.promptSendFailed");
+  const oneLine = (input.errorMessage ?? "").replace(/\s+/g, " ").trim();
+  if (!oneLine || oneLine === base) return base;
+  return `${base.replace(/[。.]$/, "")}. ${oneLine.slice(0, SESSION_ACTIVATION_DETAIL_LIMIT)}`;
+}
+
+function normalizedFailureText(input: {
+  errorCode?: string | null;
+  errorReason?: string | null;
+  errorMessage?: string | null;
+}): string {
+  return `${input.errorReason ?? ""}\n${input.errorCode ?? ""}\n${input.errorMessage ?? ""}`
+    .trim()
+    .toLowerCase();
+}
+
+export function isPromptImageUnsupportedFailure(input: {
+  errorCode?: string | null;
+  errorReason?: string | null;
+  errorMessage?: string | null;
+}): boolean {
+  const text = normalizedFailureText(input);
+  return (
+    text.includes(AGENT_PROMPT_IMAGE_UNSUPPORTED_REASON) ||
+    text.includes("prompt image input is unsupported")
+  );
+}
+
+export function isPermissionModeUnavailableFailure(input: {
+  errorCode?: string | null;
+  errorReason?: string | null;
+  errorMessage?: string | null;
+}): boolean {
+  const text = normalizedFailureText(input);
+  return (
+    text.includes(AGENT_PERMISSION_MODE_UNAVAILABLE_REASON) ||
+    text.includes("agent session permission mode is not available") ||
+    /mode .+ is not available in this session/.test(text)
+  );
 }
 
 export function normalizeAgentGUIDiagnosticError(

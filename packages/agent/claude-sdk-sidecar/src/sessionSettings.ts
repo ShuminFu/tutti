@@ -88,9 +88,10 @@ export function permissionModeValue(value: string): PermissionMode | undefined {
     case "acceptEdits":
     case "bypassPermissions":
     case "plan":
-    case "dontAsk":
     case "auto":
       return value;
+    case "dontAsk":
+      return "default";
     default:
       return undefined;
   }

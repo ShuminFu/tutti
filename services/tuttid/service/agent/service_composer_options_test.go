@@ -480,28 +480,61 @@ func TestServiceGetsComposerOptionsLocalizesDisplayLabels(t *testing.T) {
 		Locale:   "zh-CN",
 		Provider: "claude-code",
 		Settings: ComposerSettings{
-			PermissionModeID: "dontAsk",
+			PermissionModeID: "acceptEdits",
 			ReasoningEffort:  "xhigh",
 		},
 	})
 	if err != nil {
 		t.Fatalf("GetComposerOptions returned error: %v", err)
 	}
-	if options.ReasoningConfig.Options[len(options.ReasoningConfig.Options)-1].Label != "超高" {
-		t.Fatalf("reasoningConfig = %#v, want zh-CN xhigh label", options.ReasoningConfig)
-	}
-	var dontAsk PermissionModeOption
-	for _, mode := range options.PermissionConfig.Modes {
-		if mode.ID == "dontAsk" {
-			dontAsk = mode
+	var xhigh ComposerConfigOptionValue
+	for _, option := range options.ReasoningConfig.Options {
+		if option.ID == "xhigh" || option.Value == "xhigh" {
+			xhigh = option
 		}
 	}
-	if dontAsk.Label != "不再询问" || dontAsk.Description == "" {
-		t.Fatalf("dontAsk = %#v, want localized label and description", dontAsk)
+	if xhigh.Label != "超高" {
+		t.Fatalf("reasoningConfig = %#v, want zh-CN xhigh label", options.ReasoningConfig)
+	}
+	if options.EffectiveSettings.PermissionModeID != "acceptEdits" {
+		t.Fatalf("permission current = %q, want acceptEdits", options.EffectiveSettings.PermissionModeID)
+	}
+	var acceptEdits PermissionModeOption
+	for _, mode := range options.PermissionConfig.Modes {
+		if mode.ID == "dontAsk" {
+			t.Fatalf("claude-code still offers retired dontAsk: %#v", options.PermissionConfig.Modes)
+		}
+		if mode.ID == "acceptEdits" {
+			acceptEdits = mode
+		}
+	}
+	if acceptEdits.Label != "接受编辑" || acceptEdits.Description == "" {
+		t.Fatalf("acceptEdits = %#v, want localized label and description", acceptEdits)
 	}
 	capabilities, ok := options.RuntimeContext["capabilities"].([]string)
 	if !ok || !slices.Contains(capabilities, "imageInput") {
 		t.Fatalf("capabilities = %#v, want imageInput", options.RuntimeContext["capabilities"])
+	}
+}
+
+func TestServiceGetsComposerOptionsRemapsRetiredClaudeDontAsk(t *testing.T) {
+	runtime := newFakeRuntime()
+	service := newIsolatedAgentService(runtime)
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		Provider: "claude-code",
+		Settings: ComposerSettings{PermissionModeID: "dontAsk"},
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if options.EffectiveSettings.PermissionModeID != "default" {
+		t.Fatalf("retired dontAsk = %q, want default", options.EffectiveSettings.PermissionModeID)
+	}
+	for _, mode := range options.PermissionConfig.Modes {
+		if mode.ID == "dontAsk" {
+			t.Fatalf("claude-code still offers retired dontAsk: %#v", options.PermissionConfig.Modes)
+		}
 	}
 }
 

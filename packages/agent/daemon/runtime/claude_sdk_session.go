@@ -518,7 +518,9 @@ func claudeSDKEffectivePermissionMode(session Session) string {
 
 func claudeSDKPermissionMode(mode string) string {
 	switch strings.TrimSpace(mode) {
-	case "default", "acceptEdits", "dontAsk", "bypassPermissions", "auto", "plan":
+	case "dontAsk":
+		return "default"
+	case "default", "acceptEdits", "bypassPermissions", "auto", "plan":
 		return strings.TrimSpace(mode)
 	default:
 		return ""

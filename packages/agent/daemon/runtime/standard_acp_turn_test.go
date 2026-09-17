@@ -330,6 +330,38 @@ func (standardACPFailingSendConnection) Close() error {
 	return nil
 }
 
+func TestStandardACPAdapterAllowsDeclaredImagePromptWithoutLiveSession(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("OpenCode", "opencode-session-preflight")
+	adapter := newOpenCodeTestAdapter(transport)
+	session := standardTestSession(ProviderOpenCode)
+	content := []PromptContentBlock{{
+		Type:     "image",
+		MimeType: "image/png",
+		Path:     "/managed/agent-prompt-assets/screen.png",
+	}}
+	if err := adapter.ValidatePromptContent(session, content); err != nil {
+		t.Fatalf("ValidatePromptContent without live session = %v, want nil", err)
+	}
+}
+
+func TestStandardACPAdapterRejectsUndeclaredImagePromptWithoutLiveSession(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Hermes Agent", "hermes-session-preflight")
+	adapter := newHermesExtensionTestAdapter(transport)
+	session := standardTestSession(hermesExtensionTestProvider)
+	content := []PromptContentBlock{{
+		Type:     "image",
+		MimeType: "image/png",
+		Path:     "/managed/agent-prompt-assets/screen.png",
+	}}
+	if err := adapter.ValidatePromptContent(session, content); !errors.Is(err, ErrPromptImageUnsupported) {
+		t.Fatalf("ValidatePromptContent without live session = %v, want ErrPromptImageUnsupported", err)
+	}
+}
+
 func TestOpenCodeAdapterAllowsImagePromptWithoutInitializeCapability(t *testing.T) {
 	t.Parallel()
 

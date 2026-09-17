@@ -180,6 +180,79 @@ describe("AgentGUIEngineSettlementController", () => {
     engine.dispose();
   });
 
+  it("surfaces a failed send on the current conversation", async () => {
+    const engine = createTestAgentSessionEngine("test-workspace", {
+      execute(command) {
+        return command.type === "queue/sendPrompt"
+          ? Promise.reject(
+              Object.assign(
+                new Error("This agent does not support image input yet."),
+                {
+                  code: "invalid_request",
+                  reason: "agent.prompt_image_unsupported"
+                }
+              )
+            )
+          : Promise.resolve({ ok: true });
+      }
+    });
+    engine.dispatch({
+      type: "session/upserted",
+      session: normalizeAgentActivitySession({
+        activeTurnId: null,
+        agentSessionId: "session-1",
+        createdAtUnixMs: Date.now(),
+        cwd: "/workspace/app",
+        latestTurnInteractions: [],
+        pendingInteractions: [],
+        provider: "claude-code",
+        title: "session",
+        workspaceId: "test-workspace"
+      })
+    });
+    const sourceScopeKey = "session:session-1";
+    const snapshots: Record<string, SubmittedDraftSnapshot> = {
+      "submit-1": {
+        content: [{ type: "text", text: "look at this" }],
+        sourceScopeKey
+      }
+    };
+    const onPromptSendFailed = vi.fn();
+    const controller = new AgentGUIEngineSettlementController({
+      applyDraftUpdate: () => undefined,
+      engine,
+      isCurrentConversation: (agentSessionId) => agentSessionId === "session-1",
+      onPromptSendFailed,
+      snapshots
+    });
+    const detach = controller.attach();
+
+    engine.dispatch({
+      type: "submit/requested",
+      agentSessionId: "session-1",
+      clientSubmitId: "submit-1",
+      content: [{ type: "text", text: "look at this" }],
+      expiresAtUnixMs: Date.now() + 60_000,
+      requestedAtUnixMs: Date.now(),
+      workspaceId: "test-workspace"
+    });
+
+    await vi.waitFor(() => {
+      expect(onPromptSendFailed).toHaveBeenCalledTimes(1);
+    });
+    expect(onPromptSendFailed.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        agentSessionId: "session-1",
+        errorCode: "invalid_request",
+        errorMessage: "This agent does not support image input yet.",
+        errorReason: "agent.prompt_image_unsupported",
+        status: "failed"
+      })
+    );
+    detach();
+    engine.dispose();
+  });
+
   it("does not duplicate a failed visible queued submit into the composer", async () => {
     const engine = createTestAgentSessionEngine("test-workspace", {
       execute(command) {

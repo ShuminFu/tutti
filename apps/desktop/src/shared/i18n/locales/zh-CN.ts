@@ -1423,7 +1423,9 @@ export const zhCN = {
       invalid_upload_source: "一个或多个上传来源无效或暂时不可用。",
       invalid_workbench_snapshot: "工作台状态无效，暂时无法保存。",
       agent: {
-        prompt_image_unsupported: "这个 Agent 暂时不支持图片输入。"
+        prompt_image_unsupported: "这个 Agent 暂时不支持图片输入。",
+        permission_mode_unavailable:
+          "当前会话不支持这个权限档位。请改选其他权限后再发送。"
       },
       malformed_request: "这个请求暂时无法识别。",
       missing_workspace_id: "请先选择一个工作区再重试。",
