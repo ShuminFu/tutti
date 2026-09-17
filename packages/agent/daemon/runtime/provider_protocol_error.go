@@ -84,8 +84,12 @@ const canonicalTurnErrorDetailEllipsis = "..."
 // single database row.
 //
 // It returns the effective code together with the raw detail that belongs to
-// it. Every other code returns its stored value with an empty detail, so
-// unrelated failures keep exactly the transport projection they had before.
+// it. An unclassified `provider_error` additionally carries the readable
+// upstream explanation (see ProviderErrorReadableDetail): no sign-in, detect,
+// or reinstall step explains such a failure, so that text is the only reason a
+// person or a host integration can show. Every other code returns its stored
+// value with an empty detail, so unrelated failures keep exactly the transport
+// projection they had before.
 func ProjectStoredTurnError(code string, message string) (string, string) {
 	trimmedCode := strings.TrimSpace(code)
 	if trimmedCode != "" && trimmedCode != "provider_error" && trimmedCode != "unknown" && trimmedCode != FailureCodeProviderProtocolIncompatible {
@@ -95,6 +99,9 @@ func ProjectStoredTurnError(code string, message string) (string, string) {
 	if !ProviderToolProtocolIncompatible(
 		strings.Join([]string{trimmedCode, trimmedMessage}, " "),
 	) {
+		if trimmedCode == "provider_error" {
+			return trimmedCode, ProviderErrorReadableDetail(trimmedMessage)
+		}
 		return trimmedCode, ""
 	}
 	return FailureCodeProviderProtocolIncompatible, limitCanonicalTurnErrorDetail(trimmedMessage)

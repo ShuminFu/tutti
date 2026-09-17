@@ -56,6 +56,7 @@ Provider discovery, installation, authentication, models, configuration, and run
 Turn state, loading, cancel, restore, rail projection, event updates, imports, and performance.
 
 - [AgentGUI turn actions return plain-text route 404s](./agent-session-lifecycle.md#agentgui-turn-actions-return-plain-text-route-404s)
+- [Upstream rejection shows only "request failed" and hosts report no reason](./agent-session-lifecycle.md#upstream-rejection-shows-only-request-failed-and-hosts-report-no-reason)
 - [One hung provider startup blocks unrelated Agent sessions](./agent-session-lifecycle.md#one-hung-provider-startup-blocks-unrelated-agent-sessions)
 - [Existing Session shows Tutti active but the Agent reports Default mode](./agent-session-lifecycle.md#existing-session-shows-tutti-active-but-the-agent-reports-default-mode)
 - [Many stopped Tutti Mode conversations start again when the app opens](./agent-session-lifecycle.md#many-stopped-tutti-mode-conversations-start-again-when-the-app-opens)

@@ -253,6 +253,36 @@ func TestGeneratedWorkspaceAgentTurnLeavesOtherStoredErrorsAlone(t *testing.T) {
 	}
 }
 
+// An unclassified upstream rejection keeps provider_error; the projection
+// exposes the readable upstream sentence as detail so DinTalDock's error card
+// and host task integrations can show why the turn failed.
+func TestGeneratedWorkspaceAgentTurnExposesReadableProviderErrorDetail(t *testing.T) {
+	t.Parallel()
+
+	const body = `{"error":{"code":"local_pool_unavailable","message":"本地账号池里的账号都已停用，请到 设置 → 本地凭证 启用至少一个。","type":"invalid_request_error"}}`
+	projected := GeneratedWorkspaceAgentTurn(agentactivitybiz.Turn{
+		AgentSessionID: "session-1",
+		TurnID:         "turn-1",
+		Phase:          agentactivitybiz.TurnPhaseSettled,
+		Outcome:        agentactivitybiz.TurnOutcomeFailed,
+		ErrorCode:      "provider_error",
+		ErrorMessage:   body,
+	})
+	if projected.Error == nil {
+		t.Fatal("projected turn error = nil, want the stored failure")
+	}
+	if got := derefString(projected.Error.Code); got != "provider_error" {
+		t.Fatalf("projected code = %q, want provider_error", got)
+	}
+	if projected.Error.Message != body {
+		t.Fatalf("projected message = %q, want the stored raw text", projected.Error.Message)
+	}
+	want := "本地账号池里的账号都已停用，请到 设置 → 本地凭证 启用至少一个。 (local_pool_unavailable)"
+	if got := derefString(projected.Error.Detail); got != want {
+		t.Fatalf("projected detail = %q, want %q", got, want)
+	}
+}
+
 const storedProtocolIncompatibilityDetail = "Failed to deserialize the JSON body into the target type: " +
 	"tools[7].type: unknown variant `custom`, expected `function`"
 
