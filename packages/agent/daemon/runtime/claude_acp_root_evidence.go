@@ -77,7 +77,7 @@ func claudeACPRootTurnEvidenceFromTranscript(
 			sidechainAfterRoot = false
 		case "user":
 			// A later root user prompt is a new turn. Drop the previous root
-			// assistant so we cannot settle the current Tutti turn from it.
+			// assistant so we cannot settle the current DinTalDock turn from it.
 			lastRoot = nil
 			lastRootMessage = claudeACPTranscriptMessage{}
 			lastRootText = ""
