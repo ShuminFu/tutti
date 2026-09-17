@@ -445,14 +445,30 @@ func convertResponseInput(
 			if strings.TrimSpace(item.CallID) == "" {
 				return nil, invalidParam(fmt.Sprintf("input[%d].call_id", index), item.Type+" requires call_id")
 			}
-			output, err := functionOutputText(item.Output)
+			output, err := parseFunctionOutput(item.Output)
 			if err != nil {
 				return nil, withParam(err, fmt.Sprintf("input[%d].output", index))
 			}
 			flushAssistant()
 			messages = append(messages, map[string]any{
-				"role": "tool", "tool_call_id": item.CallID, "content": output,
+				"role": "tool", "tool_call_id": item.CallID, "content": output.Text,
 			})
+			if len(output.Images) > 0 {
+				// Chat Completions (and DeepSeek vision) accept image_url on user
+				// messages. Tool-role content is a string, so images follow the
+				// call_id-bearing tool message instead of being dropped or
+				// stringified as Base64 body text.
+				content := make([]map[string]any, 0, 1+len(output.Images))
+				content = append(content, map[string]any{
+					"type": "text",
+					"text": "Tool result image for " + item.CallID,
+				})
+				content = append(content, output.Images...)
+				messages = append(messages, map[string]any{
+					"role":    "user",
+					"content": content,
+				})
+			}
 		case "web_search_call", "computer_call", "file_search_call", "code_interpreter_call", "local_shell_call":
 			return nil, invalidParam(
 				fmt.Sprintf("input[%d].type", index),
@@ -586,11 +602,10 @@ func convertMessageContent(role string, encoded json.RawMessage) ([]map[string]a
 			if role != "user" {
 				return nil, invalidParam(fmt.Sprintf("[%d].type", index), "input_image is only valid for user messages")
 			}
-			image := map[string]any{"url": part.ImageURL}
-			if strings.TrimSpace(part.Detail) != "" {
-				image["detail"] = part.Detail
+			if strings.TrimSpace(part.ImageURL) == "" {
+				return nil, invalidParam(fmt.Sprintf("[%d].image_url", index), "input_image requires image_url")
 			}
-			result = append(result, map[string]any{"type": "image_url", "image_url": image})
+			result = append(result, chatImageURLPart(part.ImageURL, part.Detail))
 		default:
 			return nil, invalidParam(fmt.Sprintf("[%d].type", index), fmt.Sprintf("content part type %q is not supported", part.Type))
 		}
@@ -615,37 +630,64 @@ func reasoningItemText(item responseInputItem) string {
 	return result.String()
 }
 
-func functionOutputText(encoded json.RawMessage) (string, error) {
+type functionOutput struct {
+	Text   string
+	Images []map[string]any
+}
+
+func chatImageURLPart(imageURL, detail string) map[string]any {
+	image := map[string]any{"url": imageURL}
+	if strings.TrimSpace(detail) != "" {
+		image["detail"] = detail
+	}
+	return map[string]any{"type": "image_url", "image_url": image}
+}
+
+func parseFunctionOutput(encoded json.RawMessage) (functionOutput, error) {
 	var text string
 	if err := json.Unmarshal(encoded, &text); err == nil {
-		return text, nil
+		return functionOutput{Text: text}, nil
 	}
 	var parts []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
+		Type     string `json:"type"`
+		Text     string `json:"text"`
+		ImageURL string `json:"image_url"`
+		Detail   string `json:"detail"`
 	}
 	if err := json.Unmarshal(encoded, &parts); err == nil {
-		var result strings.Builder
+		var result functionOutput
+		var texts []string
 		for index, part := range parts {
 			switch part.Type {
 			case "input_text", "output_text":
-				result.WriteString(part.Text)
+				if part.Text != "" {
+					texts = append(texts, part.Text)
+				}
+			case "input_image":
+				if strings.TrimSpace(part.ImageURL) == "" {
+					return functionOutput{}, invalidParam(fmt.Sprintf("[%d].image_url", index), "input_image requires image_url")
+				}
+				result.Images = append(result.Images, chatImageURLPart(part.ImageURL, part.Detail))
 			default:
-				return "", invalidParam(fmt.Sprintf("[%d].type", index), fmt.Sprintf("function output content type %q is not supported", part.Type))
+				return functionOutput{}, invalidParam(
+					fmt.Sprintf("[%d].type", index),
+					fmt.Sprintf("function output content type %q is not supported", part.Type),
+				)
 			}
 		}
-		return result.String(), nil
+		result.Text = strings.Join(texts, "")
+		return result, nil
 	}
 	if len(bytes.TrimSpace(encoded)) == 0 || bytes.Equal(bytes.TrimSpace(encoded), []byte("null")) {
-		return "", nil
+		return functionOutput{}, nil
 	}
 	var value any
 	if err := json.Unmarshal(encoded, &value); err != nil {
-		return "", invalidParam("", "function output must be text or structured text content")
+		return functionOutput{}, invalidParam("", "function output must be text or structured text content")
 	}
 	normalized, err := json.Marshal(value)
 	if err != nil {
-		return "", invalidParam("", "function output cannot be encoded")
+		return functionOutput{}, invalidParam("", "function output cannot be encoded")
 	}
-	return string(normalized), nil
+	return functionOutput{Text: string(normalized)}, nil
 }

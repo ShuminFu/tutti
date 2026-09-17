@@ -186,6 +186,70 @@ func TestGatewayConvertsResponsesRequestAndChatJSON(t *testing.T) {
 	}
 }
 
+func TestGatewayReplaysImageToolOutputsOnFollowUp(t *testing.T) {
+	t.Parallel()
+
+	var upstreamRequest chatRequest
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if err := json.NewDecoder(request.Body).Decode(&upstreamRequest); err != nil {
+			http.Error(writer, "invalid request", http.StatusBadRequest)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(writer, `{
+			"id":"chatcmpl-image","object":"chat.completion","created":1,"model":"model-a",
+			"choices":[{"index":0,"message":{"role":"assistant","content":"red square"},"finish_reason":"stop"}]
+		}`)
+	}))
+	defer upstream.Close()
+
+	gateway := newTestGateway(t, Config{})
+	endpoint := registerTestRoute(t, gateway, upstream.URL, "secret", "model-a", "workspace", "session")
+	body := `{
+		"model":"model-a",
+		"input":[
+			{"type":"message","role":"user","content":[{"type":"input_text","text":"capture"}]},
+			{"type":"function_call","call_id":"call_shot","name":"screenshot","arguments":"{}"},
+			{"type":"function_call_output","call_id":"call_shot","output":[
+				{"type":"input_text","text":"viewport"},
+				{"type":"input_image","image_url":"data:image/png;base64,AA==","detail":"high"}
+			]},
+			{"type":"message","role":"user","content":[{"type":"input_text","text":"what color?"}]}
+		]
+	}`
+	response := postResponses(t, endpoint, body, nil)
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.StatusCode, readBody(t, response.Body))
+	}
+	if len(upstreamRequest.Messages) != 5 {
+		t.Fatalf("upstream messages = %#v", upstreamRequest.Messages)
+	}
+	tool := upstreamRequest.Messages[2]
+	if tool["role"] != "tool" || tool["tool_call_id"] != "call_shot" || tool["content"] != "viewport" {
+		t.Fatalf("tool output = %#v", tool)
+	}
+	images := upstreamRequest.Messages[3]
+	if images["role"] != "user" {
+		t.Fatalf("image follow-up = %#v", images)
+	}
+	parts, _ := images["content"].([]any)
+	if len(parts) != 2 {
+		t.Fatalf("image follow-up content = %#v", images["content"])
+	}
+	imagePart, _ := parts[1].(map[string]any)
+	image, _ := imagePart["image_url"].(map[string]any)
+	if imagePart["type"] != "image_url" || image["url"] != "data:image/png;base64,AA==" || image["detail"] != "high" {
+		t.Fatalf("projected image = %#v", imagePart)
+	}
+	if encoded, _ := json.Marshal(tool["content"]); strings.Contains(string(encoded), "data:image/png;base64") {
+		t.Fatalf("image was dumped onto tool text: %#v", tool["content"])
+	}
+	if upstreamRequest.Messages[4]["role"] != "user" {
+		t.Fatalf("follow-up user = %#v", upstreamRequest.Messages[4])
+	}
+}
+
 func TestGatewayConvertsResponsesLiteAdditionalTools(t *testing.T) {
 	t.Parallel()
 
@@ -690,6 +754,17 @@ func TestGatewayFailsStreamThatNeverNamesAFinishReason(t *testing.T) {
 				}
 				if !strings.Contains(logs, `"output_text_bytes":23`) {
 					t.Fatalf("warning did not report streamed text progress: %s", logs)
+				}
+				for _, field := range []string{
+					`"workspace_id":"workspace"`,
+					fmt.Sprintf(`"agent_session_id":%q`, test.name),
+					`"response_id":`,
+					`"upstream_chat_id":"chat-1"`,
+					`"elapsed_ms":`,
+				} {
+					if !strings.Contains(logs, field) {
+						t.Fatalf("warning missing %s: %s", field, logs)
+					}
 				}
 			}
 		})

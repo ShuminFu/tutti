@@ -171,7 +171,13 @@ Rules:
 - The Responses-to-Chat gateway is bound to `127.0.0.1:0` on its own listener
   and serves only authenticated `POST /v1/responses`. It is not mounted on the
   public tuttid HTTP router, so no daemon OpenAPI change is involved.
-- Gateway v1 supports messages, text/image input, function calls and outputs,
+- Gateway v1 supports messages, text/image input, function calls and outputs
+  (including `function_call_output` / `custom_tool_call_output` content-part
+  arrays: text stays on the Chat `role:tool` message with the original call id;
+  `input_image` parts are forwarded as Chat `image_url` blocks on the following
+  user message, because Chat Completions and DeepSeek vision accept images on
+  user turns rather than as tool-role strings. History replay uses the same
+  conversion. Encrypted tool-output parts stay rejected.),
   function tools (including Codex namespace containers, with collision-safe
   Chat names restored on Responses output), reasoning effort/content
   extensions, Chat JSON/SSE, usage, cancellation, and bounded timeouts.

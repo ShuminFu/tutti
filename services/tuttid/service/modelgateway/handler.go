@@ -101,7 +101,7 @@ func (g *Gateway) handleResponses(writer http.ResponseWriter, request *http.Requ
 			writeSyntheticStream(writer, responsesInput, chatOutput, toolMap)
 			return
 		}
-		g.convertChatStream(writer, request, responsesInput, upstreamResponse, toolMap)
+		g.convertChatStream(writer, request, responsesInput, upstreamResponse, toolMap, route)
 		return
 	}
 	var chatOutput chatCompletionResponse

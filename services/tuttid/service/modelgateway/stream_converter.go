@@ -303,19 +303,20 @@ func classifyToolStreamName(name string, toolMap responseToolMap) (wrapped bool,
 }
 
 type chatStreamState struct {
-	request      responsesRequest
-	writer       *responsesSSEWriter
-	responseID   string
-	createdAt    int64
-	model        string
-	items        []streamItem
-	reasoning    *reasoningStreamItem
-	message      *messageStreamItem
-	tools        map[int]*toolStreamItem
-	usage        *chatUsage
-	finishReason *string
-	sawFinish    bool
-	toolMap      responseToolMap
+	request        responsesRequest
+	writer         *responsesSSEWriter
+	responseID     string
+	createdAt      int64
+	model          string
+	upstreamChatID string
+	items          []streamItem
+	reasoning      *reasoningStreamItem
+	message        *messageStreamItem
+	tools          map[int]*toolStreamItem
+	usage          *chatUsage
+	finishReason   *string
+	sawFinish      bool
+	toolMap        responseToolMap
 }
 
 func newChatStreamState(
@@ -346,6 +347,9 @@ func (s *chatStreamState) start() error {
 }
 
 func (s *chatStreamState) process(chunk chatStreamChunk) error {
+	if id := strings.TrimSpace(chunk.ID); id != "" {
+		s.upstreamChatID = id
+	}
 	if chunk.Created > 0 {
 		s.createdAt = chunk.Created
 	}
@@ -596,6 +600,7 @@ func (g *Gateway) convertChatStream(
 	request responsesRequest,
 	upstream *http.Response,
 	toolMap responseToolMap,
+	route Route,
 ) {
 	eventWriter, ok := newResponsesSSEWriter(writer)
 	if !ok {
@@ -606,6 +611,7 @@ func (g *Gateway) convertChatStream(
 	writer.Header().Set("Cache-Control", "no-cache, no-store")
 	writer.Header().Set("Connection", "keep-alive")
 	writer.Header().Set("X-Accel-Buffering", "no")
+	started := time.Now()
 	state := newChatStreamState(request, eventWriter, toolMap)
 	if err := state.start(); err != nil {
 		return
@@ -674,6 +680,11 @@ func (g *Gateway) convertChatStream(
 			clientRequest.Context(),
 			"upstream Chat stream ended without a finish reason",
 			"event", "model_gateway.stream.terminal_reason_missing",
+			"workspace_id", route.WorkspaceID,
+			"agent_session_id", route.AgentSessionID,
+			"response_id", state.responseID,
+			"upstream_chat_id", state.upstreamChatID,
+			"elapsed_ms", time.Since(started).Milliseconds(),
 			"model", strings.TrimSpace(state.model),
 			"chat_done_marker_seen", done,
 			"output_text_bytes", textBytes,
