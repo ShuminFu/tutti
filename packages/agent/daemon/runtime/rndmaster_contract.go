@@ -158,7 +158,39 @@ func rndmasterMCPServers(contract rndmasterRuntimeContract, sessionEnv []string)
 	}
 	servers := clonePayload(payloadObject(raw))
 	injectRuntimeInstructionsFileIntoStdioMCP(servers, sessionEnv)
+	injectMCPAppsCapabilityIntoStdioMCP(servers)
 	return servers, true
+}
+
+// mcpAppsEnv is DinTalDock's out-of-band MCP Apps capability negotiation.
+//
+// The MCP client that talks to these stdio servers is the provider CLI
+// (claude / codex / grok), which never advertises the
+// `io.modelcontextprotocol/ui` extension in `initialize`. tuttid is the real
+// UI host, so it tells the server through the environment instead; a server
+// only registers UI tools (e.g. show_widget) when it sees TUTTI_MCP_APPS=1.
+// Every provider path (claude SDK, codex app-server, standard ACP) builds its
+// server list through rndmasterMCPServers, so injecting here covers them all,
+// and the MCP App resolver launches the server with the very same env.
+const mcpAppsEnv = "TUTTI_MCP_APPS"
+
+func injectMCPAppsCapabilityIntoStdioMCP(servers map[string]any) {
+	for name, raw := range servers {
+		body := payloadObject(raw)
+		if body == nil || strings.TrimSpace(asString(body["command"])) == "" {
+			continue
+		}
+		env := payloadObject(body["env"])
+		if env == nil {
+			env = map[string]any{}
+		}
+		if _, exists := env[mcpAppsEnv]; exists {
+			continue
+		}
+		env[mcpAppsEnv] = "1"
+		body["env"] = env
+		servers[name] = body
+	}
 }
 
 func injectRuntimeInstructionsFileIntoStdioMCP(servers map[string]any, sessionEnv []string) {

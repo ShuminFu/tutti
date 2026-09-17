@@ -154,6 +154,7 @@ import type {
   WorkspaceAgentPlanDecisionResponse,
   WorkspaceAgentProvider,
   WorkspaceAgentSessionAttachmentResponse,
+  WorkspaceAgentMcpAppResourceResponse,
   WorkspaceAgentGeneratedFileListResponse,
   WorkspaceAgentSessionGitBranchesResponse,
   WorkspaceGitPatchSupportResponse,
@@ -995,6 +996,14 @@ export interface TuttidClient
     agentSessionID: string,
     attachmentID: string
   ): Promise<WorkspaceAgentSessionAttachmentResponse>;
+  /**
+   * Reads the immutable MCP App UI resource snapshot a tool_call payload's
+   * `mcpApp.resourceSha256` points at. Rejects (404) when no snapshot exists.
+   */
+  getWorkspaceAgentMcpAppResource(
+    workspaceID: string,
+    resourceSha256: string
+  ): Promise<WorkspaceAgentMcpAppResourceResponse>;
   listWorkspaceAgentSessionGitBranches(
     workspaceID: string,
     agentSessionID: string

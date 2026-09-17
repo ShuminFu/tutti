@@ -3527,6 +3527,35 @@ export type WorkspaceAgentSessionAttachmentResponse = {
   data: string;
 };
 
+export type WorkspaceAgentMcpAppResourceResponse = {
+  resourceSha256: string;
+  /**
+   * The ui:// resource URI the snapshot was read from.
+   */
+  uri: string;
+  /**
+   * Always text/html;profile=mcp-app.
+   */
+  mimeType: string;
+  html: string;
+  meta: WorkspaceAgentMcpAppResourceMeta;
+};
+
+/**
+ * Display-relevant subset of the resource's _meta.ui (MCP Apps spec 2026-01-26).
+ */
+export type WorkspaceAgentMcpAppResourceMeta = {
+  csp?: WorkspaceAgentMcpAppResourceCsp;
+  prefersBorder?: boolean;
+};
+
+export type WorkspaceAgentMcpAppResourceCsp = {
+  connectDomains?: Array<string>;
+  resourceDomains?: Array<string>;
+  frameDomains?: Array<string>;
+  baseUriDomains?: Array<string>;
+};
+
 export type WorkspaceAgentSessionGitBranchesResponse = {
   branches: Array<string>;
   currentBranch?: string;
@@ -12276,6 +12305,59 @@ export type ReadWorkspaceAgentSessionAttachmentResponses = {
 
 export type ReadWorkspaceAgentSessionAttachmentResponse =
   ReadWorkspaceAgentSessionAttachmentResponses[keyof ReadWorkspaceAgentSessionAttachmentResponses];
+
+export type GetWorkspaceAgentMcpAppResourceData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+    /**
+     * Content address of an MCP App UI resource snapshot, as carried by a tool_call message payload's mcpApp.resourceSha256.
+     */
+    resourceSha256: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agent-mcp-app-resources/{resourceSha256}";
+};
+
+export type GetWorkspaceAgentMcpAppResourceErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type GetWorkspaceAgentMcpAppResourceError =
+  GetWorkspaceAgentMcpAppResourceErrors[keyof GetWorkspaceAgentMcpAppResourceErrors];
+
+export type GetWorkspaceAgentMcpAppResourceResponses = {
+  /**
+   * MCP App UI resource snapshot
+   */
+  200: WorkspaceAgentMcpAppResourceResponse;
+};
+
+export type GetWorkspaceAgentMcpAppResourceResponse =
+  GetWorkspaceAgentMcpAppResourceResponses[keyof GetWorkspaceAgentMcpAppResourceResponses];
 
 export type ListWorkspaceGitBranchesData = {
   body?: never;

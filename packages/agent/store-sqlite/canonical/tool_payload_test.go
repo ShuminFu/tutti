@@ -614,3 +614,33 @@ func TestProjectMessageUpdateCompactsToolPayloadBeforePersistence(t *testing.T) 
 		t.Fatalf("output.toolResponse retained: %#v", output)
 	}
 }
+
+func TestCompactToolCallPayloadKeepsMCPAppBinding(t *testing.T) {
+	binding := map[string]any{
+		"serverName":       "workflow_report",
+		"toolName":         "show_widget",
+		"resourceUri":      "ui://workflow_report/widget",
+		"resourceSha256":   strings.Repeat("a", 64),
+		"argumentsPointer": "/input",
+	}
+	withExtra := map[string]any{"providerNoise": "dropped"}
+	for key, value := range binding {
+		withExtra[key] = value
+	}
+	payload := CompactToolCallPayload("completed", map[string]any{
+		"name":   "mcp__workflow_report__show_widget",
+		"input":  map[string]any{"title": "t", "widget_code": "<svg></svg>"},
+		"mcpApp": withExtra,
+	})
+	if !reflect.DeepEqual(payload["mcpApp"], binding) {
+		t.Fatalf("mcpApp = %#v, want %#v", payload["mcpApp"], binding)
+	}
+
+	incomplete := CompactToolCallPayload("completed", map[string]any{
+		"name":   "mcp__workflow_report__show_widget",
+		"mcpApp": map[string]any{"serverName": "workflow_report", "argumentsPointer": "/input"},
+	})
+	if _, exists := incomplete["mcpApp"]; exists {
+		t.Fatalf("incomplete mcpApp kept: %#v", incomplete["mcpApp"])
+	}
+}

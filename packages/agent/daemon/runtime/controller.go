@@ -30,6 +30,7 @@ type Controller struct {
 	streamObserverMu            sync.RWMutex
 	providerObservationMu       sync.RWMutex
 	goalControlObserverMu       sync.RWMutex
+	mcpAppResolverMu            sync.RWMutex
 	sessions                    map[string]Session
 	sessionAvailabilityWaiters  map[string]*sessionAvailabilityWaiter
 	adapters                    map[string]Adapter
@@ -52,6 +53,8 @@ type Controller struct {
 	streamObserver              RuntimeStreamEventObserver
 	providerObservationObserver ProviderObservationObserver
 	goalControlObserver         GoalControlLifecycleObserver
+	// mcpAppResolver annotates MCP App tool calls (see mcp_app.go); nil disables it.
+	mcpAppResolver MCPAppResolver
 }
 
 // RuntimeStreamEventObserver receives the ordered precommit stream projection

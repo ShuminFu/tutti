@@ -59,6 +59,7 @@ type DaemonAPI struct {
 	AppFactoryService             AppFactoryService
 	FileService                   workspaceapi.FileService
 	AgentSessionService           AgentSessionService
+	AgentMCPAppResources          AgentMCPAppResourceReader
 	AgentSessionRecordingService  AgentSessionRecordingService
 	AgentSessionReplayVerifier    AgentSessionReplayVerifier
 	AgentStatusService            AgentProviderStatusService

@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	agentdaemon "github.com/tutti-os/tutti/packages/agent/daemon"
 	agenthostadapter "github.com/tutti-os/tutti/packages/agent/daemon/hostadapter"
+	agentruntime "github.com/tutti-os/tutti/packages/agent/daemon/runtime"
 	agenthost "github.com/tutti-os/tutti/packages/agent/host"
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	agentstoresqlite "github.com/tutti-os/tutti/packages/agent/store-sqlite"
@@ -38,6 +39,7 @@ import (
 	eventstreamservice "github.com/tutti-os/tutti/services/tuttid/service/eventstream"
 	managedcredentialsservice "github.com/tutti-os/tutti/services/tuttid/service/managedcredentials"
 	managedruntime "github.com/tutti-os/tutti/services/tuttid/service/managedruntime"
+	mcpappservice "github.com/tutti-os/tutti/services/tuttid/service/mcpapp"
 	modelbindingservice "github.com/tutti-os/tutti/services/tuttid/service/modelbinding"
 	modelgatewayservice "github.com/tutti-os/tutti/services/tuttid/service/modelgateway"
 	modelplanservice "github.com/tutti-os/tutti/services/tuttid/service/modelplan"
@@ -342,6 +344,16 @@ func buildDaemonAPI(
 		return tuttiapi.DaemonAPI{}, nil, nil, nil, fmt.Errorf("canonical agent store is unavailable")
 	}
 	historicalStateStore := canonicalStoreProvider.AgentCanonicalStore()
+	if !replayComposition {
+		// MCP Apps: tuttid resolves `_meta.ui` resources of the RnDMaster
+		// contract's stdio MCP servers itself (the provider CLIs drop them),
+		// snapshots the HTML into the agent store, and annotates tool_call
+		// payloads with mcpApp. Replay never launches real MCP servers.
+		agentRuntime.Controller().SetMCPAppResolver(&mcpappservice.Resolver{
+			Transport: agentruntime.NewLocalProcessTransport(),
+			Store:     historicalStateStore,
+		})
+	}
 	canonicalHostStore := &agenthost.SQLiteWorkspaceStore{
 		StoreForWorkspace: func(string) *agentstoresqlite.Store {
 			return canonicalStoreProvider.AgentCanonicalStore()
@@ -821,6 +833,7 @@ func buildDaemonAPI(
 			Adapter: fileAdapter,
 		},
 		AgentSessionService:          agentSessionService,
+		AgentMCPAppResources:         historicalStateStore,
 		AgentSessionRecordingService: agentSessionRecordingService,
 		AgentSessionReplayVerifier:   agentSessionReplayVerifier,
 		AgentStatusService:           replayAgentProviderStatusAPI(replayComposition, &agentStatusService),

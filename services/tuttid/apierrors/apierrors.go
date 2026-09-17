@@ -88,6 +88,7 @@ const (
 	ReasonUnsupportedDesktopWindowSnappingShortcutPreset = "unsupported_desktop_window_snapping_shortcut_preset"
 	ReasonWorkspaceFileNotFound                          = "workspace_file_not_found"
 	ReasonWorkspaceFileServiceUnavailable                = "workspace_file_service_unavailable"
+	ReasonWorkspaceAgentMCPAppResourceNotFound           = "workspace_agent_mcp_app_resource_not_found"
 	ReasonWorkspaceAgentSessionNotFound                  = "workspace_agent_session_not_found"
 	ReasonWorkspaceAgentSessionNotRestorable             = "workspace_agent_session_not_restorable"
 	ReasonWorkspaceAgentSessionTitleTooLong              = "workspace_agent_session_title_too_long"

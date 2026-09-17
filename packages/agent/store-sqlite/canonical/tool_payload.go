@@ -22,6 +22,7 @@ var canonicalToolPayloadKeys = map[string]struct{}{
 	"filePath":        {},
 	"input":           {},
 	"locations":       {},
+	"mcpApp":          {},
 	"metadata":        {},
 	"name":            {},
 	"output":          {},
@@ -205,6 +206,12 @@ func CompactToolCallPayload(status string, payload map[string]any) map[string]an
 	if toolError != nil {
 		delete(toolError, "content")
 		toolError = TruncateToolOutputBody(selectToolKeys(toolError, canonicalToolBodyKeys))
+	}
+
+	if mcpApp := compactToolMCPApp(result["mcpApp"]); mcpApp != nil {
+		result["mcpApp"] = mcpApp
+	} else {
+		delete(result, "mcpApp")
 	}
 
 	delete(result, "content")
@@ -792,4 +799,36 @@ func isFailedToolStatus(status string) bool {
 	default:
 		return false
 	}
+}
+
+// canonicalToolMCPAppKeys is the MCP App (io.modelcontextprotocol/ui) binding
+// tuttid attaches to a tool_call: which contract server/tool produced it, the
+// content-addressed HTML snapshot to render, and the JSON Pointer at which the
+// tool arguments live in this very payload (the GUI never guesses the
+// provider-specific argument shape).
+var canonicalToolMCPAppKeys = []string{
+	"serverName",
+	"toolName",
+	"resourceUri",
+	"resourceSha256",
+	"argumentsPointer",
+}
+
+func compactToolMCPApp(value any) map[string]any {
+	raw := toolMap(value)
+	if raw == nil {
+		return nil
+	}
+	out := make(map[string]any, len(canonicalToolMCPAppKeys))
+	for _, key := range canonicalToolMCPAppKeys {
+		text := toolString(raw[key])
+		if text == "" {
+			return nil
+		}
+		out[key] = text
+	}
+	if !strings.HasPrefix(toolString(out["argumentsPointer"]), "/") {
+		return nil
+	}
+	return out
 }

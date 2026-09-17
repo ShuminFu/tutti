@@ -157,6 +157,14 @@ func registerWorkspaceAgentSessionRoutes(
 		wrapper.ListWorkspaceAgentGeneratedFiles(w, r)
 	})
 
+	mux.HandleFunc("/v1/workspaces/{workspaceID}/agent-mcp-app-resources/{resourceSha256}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			tuttitypes.WriteMethodNotAllowed(w)
+			return
+		}
+		wrapper.GetWorkspaceAgentMcpAppResource(w, r)
+	})
+
 	mux.HandleFunc("/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/attachments/{attachmentID}", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			tuttitypes.WriteMethodNotAllowed(w)

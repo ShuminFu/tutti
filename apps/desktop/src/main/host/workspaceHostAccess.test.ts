@@ -518,6 +518,9 @@ function createTransportClient(
     async readWorkspaceAgentSessionAttachment() {
       throw new Error("not used");
     },
+    async getWorkspaceAgentMcpAppResource() {
+      throw new Error("not used");
+    },
     async listWorkspaceAgentSessionGitBranches() {
       throw new Error("not used");
     },

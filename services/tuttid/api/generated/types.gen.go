@@ -8714,6 +8714,35 @@ type WorkspaceAgentInteractionKind string
 // WorkspaceAgentInteractionStatus defines model for WorkspaceAgentInteractionStatus.
 type WorkspaceAgentInteractionStatus string
 
+// WorkspaceAgentMcpAppResourceCsp defines model for WorkspaceAgentMcpAppResourceCsp.
+type WorkspaceAgentMcpAppResourceCsp struct {
+	BaseUriDomains  *[]string `json:"baseUriDomains,omitempty"`
+	ConnectDomains  *[]string `json:"connectDomains,omitempty"`
+	FrameDomains    *[]string `json:"frameDomains,omitempty"`
+	ResourceDomains *[]string `json:"resourceDomains,omitempty"`
+}
+
+// WorkspaceAgentMcpAppResourceMeta Display-relevant subset of the resource's _meta.ui (MCP Apps spec 2026-01-26).
+type WorkspaceAgentMcpAppResourceMeta struct {
+	Csp           *WorkspaceAgentMcpAppResourceCsp `json:"csp,omitempty"`
+	PrefersBorder *bool                            `json:"prefersBorder,omitempty"`
+}
+
+// WorkspaceAgentMcpAppResourceResponse defines model for WorkspaceAgentMcpAppResourceResponse.
+type WorkspaceAgentMcpAppResourceResponse struct {
+	Html string `json:"html"`
+
+	// Meta Display-relevant subset of the resource's _meta.ui (MCP Apps spec 2026-01-26).
+	Meta WorkspaceAgentMcpAppResourceMeta `json:"meta"`
+
+	// MimeType Always text/html;profile=mcp-app.
+	MimeType       string `json:"mimeType"`
+	ResourceSha256 string `json:"resourceSha256"`
+
+	// Uri The ui:// resource URI the snapshot was read from.
+	Uri string `json:"uri"`
+}
+
 // WorkspaceAgentMessageCursor Per-session durable message change cursor. The upper bound preserves exact integer representation in JavaScript clients.
 type WorkspaceAgentMessageCursor = int64
 
