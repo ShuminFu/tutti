@@ -3325,9 +3325,12 @@ inline data URL instead`. Claude or standard ACP may instead receive no
 - Root cause:
   Native Dock Claude transcripts already store `message.usage` on assistant
   rows, but the daemon previously copied only text/content into
-  `workspace_agent_messages`. Session metadata also kept only context-window
-  and quota fields, so `lastTurn` token counts were dropped. External import
-  skipped Claude `message.usage` when writing message payloads.
+  `workspace_agent_messages`. Live usage also often arrives as `usage_updated`
+  before the assistant row exists, or after `content_block_stop`, so a
+  change-only attach never writes `payload.usage`. Session metadata also kept
+  only context-window and quota fields, so `lastTurn` token counts were
+  dropped. External import skipped Claude `message.usage` when writing
+  message payloads.
 - Fix:
   Persist reported counts on assistant `payload_json.usage`. Keep
   `session_metadata_json.usage.tokens` / `lastTurn` as a latest-turn fallback.
