@@ -177,6 +177,15 @@ func (s *Store) ReportActivityState(
 			result.Messages.Messages = append(result.Messages.Messages, acceptedMessage)
 		}
 	}
+	if !changedTokens.HasReported() {
+		if unstamped, unstampedErr := unstampedSessionTokenUsage(
+			ctx, tx, workspaceID, agentSessionID, session.Metadata.Usage,
+		); unstampedErr != nil {
+			return ActivityStateReportResult{}, unstampedErr
+		} else {
+			changedTokens = unstamped
+		}
+	}
 	attached, attachedOK, attachErr := attachTokenUsageToLatestAssistantMessageTx(
 		ctx, tx, workspaceID, agentSessionID, changedTokens, now,
 	)
@@ -336,7 +345,7 @@ func (s *Store) ReportSessionMessages(
 	if err != nil {
 		return MessageReportResult{}, err
 	}
-	accepted, _, _, _, err := s.upsertAgentSessionTx(ctx, tx, SessionStateReport{
+	accepted, _, _, session, err := s.upsertAgentSessionTx(ctx, tx, SessionStateReport{
 		WorkspaceID:    workspaceID,
 		AgentSessionID: agentSessionID,
 		Origin:         input.Origin,
@@ -399,7 +408,17 @@ func (s *Store) ReportSessionMessages(
 			return MessageReportResult{}, err
 		}
 	}
-	mutations := make([]TransactionMutation, 0, len(historicalTurns)+len(result.Messages))
+	unstamped, err := unstampedSessionTokenUsage(ctx, tx, workspaceID, agentSessionID, session.Metadata.Usage)
+	if err != nil {
+		return MessageReportResult{}, err
+	}
+	attached, attachedOK, err := attachTokenUsageToLatestAssistantMessageTx(
+		ctx, tx, workspaceID, agentSessionID, unstamped, now,
+	)
+	if err != nil {
+		return MessageReportResult{}, err
+	}
+	mutations := make([]TransactionMutation, 0, len(historicalTurns)+len(result.Messages)+1)
 	for _, turn := range historicalTurns {
 		mutations = append(mutations, transactionMutation(
 			workspaceID, agentSessionID, MutationEntityTurn, turn.TurnID, "upsert", turn.UpdatedAtUnixMS,
@@ -407,6 +426,14 @@ func (s *Store) ReportSessionMessages(
 	}
 	for _, message := range result.Messages {
 		mutations = append(mutations, transactionMutation(workspaceID, agentSessionID, MutationEntityMessage, message.MessageID, "upsert", int64(message.Version)))
+	}
+	if attachedOK {
+		if attached.Version > result.LatestVersion {
+			result.LatestVersion = attached.Version
+		}
+		mutations = append(mutations, transactionMutation(
+			workspaceID, agentSessionID, MutationEntityMessage, attached.MessageID, "upsert", int64(attached.Version),
+		))
 	}
 	delta, err := s.commitTransaction(ctx, tx, workspaceID, mutations)
 	if err != nil {

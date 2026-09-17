@@ -483,10 +483,12 @@ export class SDKMessageRouter {
         ? undefined
         : recordValue(streamEvent.usage);
       if (usage) {
+        this.assistant.setPendingUsage(usage);
         this.emit({
           type: "usage_updated",
           payload: { turnId: this.turns.activeId, usage }
         });
+        this.assistant.flushCompletedAssistantUsage();
       }
       return;
     }
@@ -543,6 +545,7 @@ export class SDKMessageRouter {
           Boolean(assistantError)
         );
       }
+      this.assistant.flushCompletedAssistantUsage();
     } finally {
       this.assistant.setPendingUsage(undefined);
     }
