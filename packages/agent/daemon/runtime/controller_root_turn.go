@@ -1,6 +1,7 @@
 package agentruntime
 
 import (
+	"log/slog"
 	"strings"
 
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
@@ -17,6 +18,10 @@ type RootTurnSettlement struct {
 // ReconcileRootTurnSettlement applies daemon-owned durable root completion to
 // the runtime view. It does not report the event back to the daemon: the
 // caller invokes it only after the atomic durable transition committed.
+//
+// The settlement is fenced to the exact live turn. A late commit for an older
+// turn must not clear a newer active turn, overwrite that turn's session
+// status, or publish an expired terminal projection.
 func (c *Controller) ReconcileRootTurnSettlement(settlement RootTurnSettlement) {
 	if c == nil {
 		return
@@ -34,7 +39,28 @@ func (c *Controller) ReconcileRootTurnSettlement(settlement RootTurnSettlement) 
 		c.mu.Unlock()
 		return
 	}
-	if active, exists := c.turns[key]; exists && strings.TrimSpace(active.turnID) == turnID {
+	active, hasActive := c.turns[key]
+	activeTurnID := ""
+	if hasActive {
+		activeTurnID = strings.TrimSpace(active.turnID)
+	}
+	liveTurnID := runtimeTurnLifecycleActiveTurnID(session.TurnLifecycle)
+	if hasActive && activeTurnID != turnID {
+		c.mu.Unlock()
+		logIgnoredRootTurnSettlement(roomID, agentSessionID, turnID, activeTurnID, liveTurnID, "active_turn_mismatch")
+		return
+	}
+	if !hasActive && sessionHasDifferentLiveTurn(session, turnID) {
+		c.mu.Unlock()
+		logIgnoredRootTurnSettlement(roomID, agentSessionID, turnID, activeTurnID, liveTurnID, "live_turn_mismatch")
+		return
+	}
+	if !hasActive && !sessionHasLiveTurnLifecycle(session) {
+		c.mu.Unlock()
+		logIgnoredRootTurnSettlement(roomID, agentSessionID, turnID, activeTurnID, liveTurnID, "session_not_live")
+		return
+	}
+	if hasActive {
 		delete(c.turns, key)
 	}
 	outcome := strings.TrimSpace(settlement.Outcome)
@@ -86,4 +112,23 @@ func stringPointer(value string) *string {
 		return nil
 	}
 	return &value
+}
+
+func logIgnoredRootTurnSettlement(
+	roomID string,
+	agentSessionID string,
+	settlementTurnID string,
+	activeTurnID string,
+	liveTurnID string,
+	reason string,
+) {
+	slog.Info("agent session ignored stale root turn settlement",
+		"event", "agent_session.root_turn.settlement_ignored",
+		"room_id", roomID,
+		"agent_session_id", agentSessionID,
+		"settlement_turn_id", settlementTurnID,
+		"active_turn_id", activeTurnID,
+		"live_turn_id", liveTurnID,
+		"reason", reason,
+	)
 }

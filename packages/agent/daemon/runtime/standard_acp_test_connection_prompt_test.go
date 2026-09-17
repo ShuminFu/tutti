@@ -19,6 +19,9 @@ func (c *standardACPConnection) streamSelectedPromptResult(promptID json.RawMess
 			},
 		})
 	}
+	if c.holdPromptResult {
+		return true
+	}
 	c.sendJSON(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      promptID,
@@ -106,6 +109,9 @@ func (c *standardACPConnection) streamPromptResult(promptID json.RawMessage) {
 			},
 		},
 	})
+	if c.holdPromptResult {
+		return
+	}
 	if c.pauseBeforePromptResult != nil {
 		<-c.pauseBeforePromptResult
 	}

@@ -288,6 +288,13 @@ func (n *acpTurnNormalizer) SeenToolCallCount() int {
 	return len(n.toolCallsSeen)
 }
 
+func (n *acpTurnNormalizer) PendingToolCallCount() int {
+	if n == nil {
+		return 0
+	}
+	return len(n.pendingToolCalls)
+}
+
 // HasObservableOutput reports whether the current provider turn produced
 // anything the user can observe. Thinking and system notices are valid
 // assistant output even when the provider emits no final assistant text.

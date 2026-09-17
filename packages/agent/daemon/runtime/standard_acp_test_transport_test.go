@@ -141,7 +141,10 @@ type standardACPConnection struct {
 	promptResultStopReason string
 	// promptResultUpdates replaces the normal prompt stream with only these
 	// session updates followed by end_turn.
-	promptResultUpdates      []map[string]any
+	promptResultUpdates []map[string]any
+	// holdPromptResult streams the prompt updates but never returns the
+	// session/prompt JSON-RPC result, reproducing a hung ACP bridge.
+	holdPromptResult bool
 	setConfigOptionSnapshots []map[string]any
 	setModelSnapshots        []map[string]any
 	configOptions            []map[string]any

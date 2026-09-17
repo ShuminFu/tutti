@@ -1069,6 +1069,45 @@ catalog revision mismatch`, fully restart `dev:desktop`; renderer HMR cannot
   [workspaceAgentTimelineCanonical.ts](../../../packages/agent/gui/shared/workspaceAgentTimelineCanonical.ts)
   [agent-gui-node.md](../../architecture/agent-gui-node.md)
 
+### Claude ACP turn stays running after the answer has finished
+
+- Symptom:
+  The last assistant message already matches the Claude transcript, including a
+  root `stop_reason=end_turn`, but Tutti still shows `phase=running`, the
+  message stays `streaming`, and the composer keeps the stop button. Process
+  CPU can be idle. RnDMaster currently forces `TUTTI_CLAUDE_CODE_RUNTIME=acp`,
+  so this path is `claude-agent-acp`, not the SDK sidecar.
+- Quick checks:
+  Correlate `sessionId`, canonical `turnId`, provider session id, and ACP
+  request id. Look for `agent_session.acp.exec.call_completed` versus
+  `agent_session.acp.exec.prompt_result_missing` / `prompt_result_recovered`.
+  Confirm there is no pending permission, in-flight tool, or later sidechain
+  transcript after the root `end_turn`. A single transcript `end_turn` with
+  live tools, approvals, or background agents is not completion.
+- Root cause:
+  Text chunks arrive over `session/update`. Canonical settlement still waits
+  for the `session/prompt` JSON-RPC result and then for Host to persist
+  `root_provider_turn.completed`. If the ACP bridge never returns that result,
+  Tutti leaves the turn running. Separately, a late durable settlement for an
+  older turn must not idle a newer live turn.
+- Fix:
+  Keep Host as the settlement authority. The Claude ACP adapter may recover a
+  missing prompt result only from the current turn's root transcript evidence
+  after silence, and only when approvals, tools, and background continuation
+  are absent. `ReconcileRootTurnSettlement` ignores settlements whose turn id
+  does not match the live/active turn, including the
+  persist-then-new-turn-then-late-reconcile race.
+- Validation:
+  Cover a matching live settlement, a duplicate settlement after settle, a
+  stale settlement after a newer turn started, transcript `end_turn` recovery,
+  and the counterexamples: `tool_use`, `pause_turn`, later user prompt, text
+  mismatch, and sidechain activity after the root `end_turn`.
+- References:
+  [controller_root_turn.go](../../../packages/agent/daemon/runtime/controller_root_turn.go)
+  [standard_acp_prompt_recovery.go](../../../packages/agent/daemon/runtime/standard_acp_prompt_recovery.go)
+  [claude_acp_root_evidence.go](../../../packages/agent/daemon/runtime/claude_acp_root_evidence.go)
+  [standard_acp_turn.go](../../../packages/agent/daemon/runtime/standard_acp_turn.go)
+
 ### Mid-turn provider failure renders a generic "request failed" card
 
 - Symptom:

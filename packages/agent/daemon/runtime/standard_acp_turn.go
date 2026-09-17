@@ -139,10 +139,7 @@ func (a *standardACPAdapter) Exec(
 	autoContinueAttempts := 0
 execLoop:
 	for {
-		result, err := acpSession.client.Call(ctx, acpMethodPrompt, map[string]any{
-			"sessionId": acpSession.providerSessionID,
-			"prompt":    promptParams,
-		}, func(ctx context.Context, message acpMessage) error {
+		result, err := a.callSessionPrompt(ctx, acpSession, session, turnID, promptParams, normalizer, func(ctx context.Context, message acpMessage) error {
 			endInputUnit := a.inputUnits.begin(ctx, session.AgentSessionID)
 			defer endInputUnit()
 			slog.Debug("agent session ACP exec received message",
