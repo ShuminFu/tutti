@@ -38,6 +38,11 @@ export function approvalOptionDisplayLabel(
   ) {
     return translate("agentHost.agentGui.approvalOptions.allowOnce");
   }
+  if (isAllowAllEditsForSessionLabel(label)) {
+    return translate(
+      "agentHost.agentGui.approvalOptions.allowAllEditsForSession"
+    );
+  }
   if (isGenericAllowForSessionLabel(label)) {
     return translate("agentHost.agentGui.approvalOptions.allowForSession");
   }
@@ -110,6 +115,9 @@ function approvalOptionSpecificTranslationKey(
         ? "agentHost.agentGui.approvalOptions.allowOnce"
         : null;
     case "approvedforsession":
+      if (isAllowAllEditsForSessionLabel(label)) {
+        return "agentHost.agentGui.approvalOptions.allowAllEditsForSession";
+      }
       return isGenericAllowForSessionLabel(label)
         ? "agentHost.agentGui.approvalOptions.allowForSession"
         : null;
@@ -207,5 +215,15 @@ function isGenericAllowForSessionLabel(label: string): boolean {
     token === "allowforthissession" ||
     token === "allowforsession" ||
     token === "approveforsession"
+  );
+}
+
+function isAllowAllEditsForSessionLabel(label: string): boolean {
+  const token = normalizeApprovalOptionToken(label);
+  return (
+    token === "yesallowalleditsduringthissession" ||
+    token === "allowalleditsduringthissession" ||
+    token === "yesallowalleditsforthissession" ||
+    token === "allowalleditsforthissession"
   );
 }

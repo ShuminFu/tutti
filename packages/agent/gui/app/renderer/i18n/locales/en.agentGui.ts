@@ -524,6 +524,7 @@ export const enAgentGui = {
   approvalOptions: {
     allowOnce: "Yes, proceed",
     allowForSession: "Yes, for this session",
+    allowAllEditsForSession: "Yes, allow all edits during this session",
     allowAlways: "Yes, and don't ask again",
     allowAlwaysForCommandPrefix:
       "Yes, and don't ask again for commands that start with `{{command}}`",

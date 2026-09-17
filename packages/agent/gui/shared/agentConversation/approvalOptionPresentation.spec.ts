@@ -27,6 +27,23 @@ describe("approvalOptionDisplayLabel", () => {
     ).toBe("允许，并手动确认编辑");
   });
 
+  it("localizes Claude Code session-wide file-edit approval labels", () => {
+    expect(
+      approvalOptionDisplayLabel({
+        id: "allow_always",
+        kind: "allow_always",
+        label: "Yes, allow all edits during this session"
+      })
+    ).toBe("本次会话允许所有编辑");
+    expect(
+      approvalOptionDisplayLabel({
+        id: "approved-for-session",
+        kind: "allow_always",
+        label: "Allow all edits during this session"
+      })
+    ).toBe("本次会话允许所有编辑");
+  });
+
   it("localizes Codex ACP permission option labels", () => {
     expect(
       approvalOptionDisplayLabel({

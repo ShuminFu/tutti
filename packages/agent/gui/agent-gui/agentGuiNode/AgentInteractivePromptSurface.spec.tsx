@@ -1144,6 +1144,11 @@ describe("AgentInteractivePromptSurface", () => {
               kind: "allow_always"
             },
             {
+              id: "allow_all_edits_for_session",
+              label: "Yes, allow all edits during this session",
+              kind: "allow_always"
+            },
+            {
               id: "allow_always",
               label:
                 "Yes, and don't ask again for commands that start with `curl -I https://example.com`",
@@ -1201,6 +1206,9 @@ describe("AgentInteractivePromptSurface", () => {
 
     expect(screen.getByRole("button", { name: "允许执行" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "本次会话允许" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "本次会话允许所有编辑" })
+    ).toBeTruthy();
     expect(
       screen.getByRole("button", {
         name: "允许，并且不再询问以 `curl -I https://example.com` 开头的命令"

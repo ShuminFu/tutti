@@ -547,6 +547,7 @@ export const zhCNAgentGui = {
   approvalOptions: {
     allowOnce: "允许执行",
     allowForSession: "本次会话允许",
+    allowAllEditsForSession: "本次会话允许所有编辑",
     allowAlways: "允许，并且不再询问",
     allowAlwaysForCommandPrefix:
       "允许，并且不再询问以 `{{command}}` 开头的命令",
