@@ -96,15 +96,19 @@ func appServerTurnStartParams(
 		}
 	}
 	// codex never puts MCP initialize instructions into the prompt, so the
-	// contract servers' own guidance rides the same per-turn developer channel.
+	// contract servers' own guidance rides the per-turn developer channel,
+	// after the contract systemPrompt. Only there: the fallback below pastes
+	// host context into the user's input, and a server manual does not belong
+	// in every user message.
+	developerHostContext := strings.TrimSpace(tuttiModeHostContext)
 	if instructions := strings.TrimSpace(mcpServerInstructions); instructions != "" {
-		if tuttiModeHostContext = strings.TrimSpace(tuttiModeHostContext); tuttiModeHostContext != "" {
-			tuttiModeHostContext += "\n\n" + instructions
+		if developerHostContext != "" {
+			developerHostContext += "\n\n" + instructions
 		} else {
-			tuttiModeHostContext = instructions
+			developerHostContext = instructions
 		}
 	}
-	if collaborationMode := appServerCollaborationMode(settings, planModeMask, defaultModeMask, defaultModel, tuttiModeHostContext); collaborationMode != nil {
+	if collaborationMode := appServerCollaborationMode(settings, planModeMask, defaultModeMask, defaultModel, developerHostContext); collaborationMode != nil {
 		params["collaborationMode"] = collaborationMode
 	} else if hostContext := strings.TrimSpace(tuttiModeHostContext); hostContext != "" {
 		// collaborationMode/list is an experimental capability and can be absent

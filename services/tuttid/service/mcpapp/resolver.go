@@ -72,12 +72,13 @@ type Resolver struct {
 	FailureTTL time.Duration
 	Now        func() time.Time
 
-	mu           sync.Mutex
-	cache        map[string]catalogEntry
-	instructions map[string]instructionsEntry
-	inflight     map[string][]func()
-	slots        chan struct{}
-	slotOnce     sync.Once
+	mu                   sync.Mutex
+	cache                map[string]catalogEntry
+	instructions         map[string]instructionsEntry
+	instructionsInflight map[string]*instructionsCall
+	inflight             map[string][]func()
+	slots                chan struct{}
+	slotOnce             sync.Once
 }
 
 type catalogEntry struct {
@@ -190,7 +191,7 @@ func (r *Resolver) resolve(server agentruntime.MCPAppServer) (tools map[string]a
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout())
 	defer cancel()
 
-	client, closeClient, _, err := openInitializedClient(ctx, r.Transport, server)
+	client, closeClient, _, err := openInitializedClient(ctx, r.Transport, server, catalogClientRole)
 	if err != nil {
 		return nil, false, err
 	}
@@ -229,34 +230,45 @@ func (r *Resolver) resolve(server agentruntime.MCPAppServer) (tools map[string]a
 	return tools, retrySoon, nil
 }
 
-type initializeResult struct {
-	Instructions string `json:"instructions"`
+// clientRole names one kind of short-lived client so process logs and stderr
+// tails say which question tuttid was asking the server.
+type clientRole struct {
+	processName string // ProcessSpec.Provider
+	label       string // StdioClient process name suffix
 }
 
+var (
+	catalogClientRole      = clientRole{processName: resolverProcessName, label: "MCP App resolver"}
+	instructionsClientRole = clientRole{processName: instructionsProcessName, label: "MCP instructions probe"}
+)
+
 // openInitializedClient launches the server exactly as configured and runs the
-// initialize handshake. The returned closer never delays the caller: a
+// initialize handshake, returning the raw initialize result undecoded: each
+// caller reads only what it needs, so a malformed field one caller cares about
+// cannot fail the other's work. The returned closer never delays the caller: a
 // well-behaved server exits on stdin EOF, but Close's grace periods would
 // otherwise stall callbacks for seconds; kill=true kills a failed/hung server.
 func openInitializedClient(
 	ctx context.Context,
 	transport agentruntime.ProcessTransport,
 	server agentruntime.MCPAppServer,
-) (*runtimemcp.StdioClient, func(kill bool), initializeResult, error) {
+	role clientRole,
+) (*runtimemcp.StdioClient, func(kill bool), json.RawMessage, error) {
 	if transport == nil {
-		return nil, nil, initializeResult{}, errors.New("MCP client transport is not configured")
+		return nil, nil, nil, errors.New("MCP client transport is not configured")
 	}
 	if strings.TrimSpace(server.Command) == "" {
-		return nil, nil, initializeResult{}, errors.New("MCP server command is empty")
+		return nil, nil, nil, errors.New("MCP server command is empty")
 	}
 	command := append([]string{server.Command}, server.Args...)
 	conn, err := transport.Start(ctx, agentruntime.ProcessSpec{
-		Provider: resolverProcessName,
+		Provider: role.processName,
 		CWD:      server.CWD,
 		Command:  command,
 		Env:      append([]string(nil), server.Env...),
 	})
 	if err != nil {
-		return nil, nil, initializeResult{}, fmt.Errorf("start MCP server: %w", err)
+		return nil, nil, nil, fmt.Errorf("start MCP server: %w", err)
 	}
 	closeConn := func(kill bool) {
 		if kill {
@@ -268,11 +280,11 @@ func openInitializedClient(
 	}
 	client, err := runtimemcp.NewStdioClient(runtimemcp.StdioClientConfig{
 		Connection:  conn,
-		ProcessName: server.Name + " MCP App resolver",
+		ProcessName: server.Name + " " + role.label,
 	})
 	if err != nil {
 		closeConn(true)
-		return nil, nil, initializeResult{}, err
+		return nil, nil, nil, err
 	}
 	raw, err := client.Call(ctx, "initialize", map[string]any{
 		"protocolVersion": protocolVersion,
@@ -281,24 +293,17 @@ func openInitializedClient(
 				ExtensionID: map[string]any{"mimeTypes": []string{ResourceMIMEType}},
 			},
 		},
-		"clientInfo": map[string]any{"name": "tuttid-mcp-app-resolver", "version": "1"},
+		"clientInfo": map[string]any{"name": "tuttid-" + role.processName, "version": "1"},
 	})
 	if err != nil {
 		closeConn(true)
-		return nil, nil, initializeResult{}, fmt.Errorf("initialize: %w", err)
-	}
-	var result initializeResult
-	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &result); err != nil {
-			closeConn(true)
-			return nil, nil, initializeResult{}, fmt.Errorf("decode initialize: %w", err)
-		}
+		return nil, nil, nil, fmt.Errorf("initialize: %w", err)
 	}
 	if err := client.Notify("notifications/initialized", map[string]any{}); err != nil {
 		closeConn(true)
-		return nil, nil, initializeResult{}, fmt.Errorf("notifications/initialized: %w", err)
+		return nil, nil, nil, fmt.Errorf("notifications/initialized: %w", err)
 	}
-	return client, closeConn, result, nil
+	return client, closeConn, raw, nil
 }
 
 type toolsListResult struct {

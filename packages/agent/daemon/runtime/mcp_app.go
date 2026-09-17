@@ -191,6 +191,26 @@ func mcpAppPayload(call mcpAppToolCall, ui MCPAppToolUI) map[string]any {
 // provider CLI sees (TUTTI_MCP_APPS and the runtime instructions file are
 // already injected by rndmasterMCPServers). HTTP servers are out of scope.
 func mcpAppContractServers(session Session) map[string]MCPAppServer {
+	specs := contractStdioServerSpecs(session)
+	if len(specs) == 0 {
+		return nil
+	}
+	out := make(map[string]MCPAppServer, len(specs))
+	for name, spec := range specs {
+		out[name] = spec.server
+	}
+	return out
+}
+
+// contractStdioServerSpec keeps the server's own env entries (sorted
+// KEY=value, excluding the session env) next to the launch spec, so a caller
+// that alters that env can recompute a fingerprint on the same basis.
+type contractStdioServerSpec struct {
+	server MCPAppServer
+	ownEnv []string
+}
+
+func contractStdioServerSpecs(session Session) map[string]contractStdioServerSpec {
 	contract, err := rndmasterContractFromSession(session)
 	if err != nil {
 		return nil
@@ -199,7 +219,7 @@ func mcpAppContractServers(session Session) map[string]MCPAppServer {
 	if !configured {
 		return nil
 	}
-	out := make(map[string]MCPAppServer, len(raw))
+	out := make(map[string]contractStdioServerSpec, len(raw))
 	for name, value := range raw {
 		body := payloadObject(value)
 		command := strings.TrimSpace(asString(body["command"]))
@@ -223,13 +243,16 @@ func mcpAppContractServers(session Session) map[string]MCPAppServer {
 			env = append(env, entry)
 			fingerprintEnv = append(fingerprintEnv, entry)
 		}
-		out[name] = MCPAppServer{
-			Name:        name,
-			Command:     command,
-			Args:        args,
-			Env:         env,
-			CWD:         strings.TrimSpace(session.CWD),
-			Fingerprint: mcpAppServerFingerprint(name, command, args, fingerprintEnv),
+		out[name] = contractStdioServerSpec{
+			server: MCPAppServer{
+				Name:        name,
+				Command:     command,
+				Args:        args,
+				Env:         env,
+				CWD:         strings.TrimSpace(session.CWD),
+				Fingerprint: mcpAppServerFingerprint(name, command, args, fingerprintEnv),
+			},
+			ownEnv: fingerprintEnv,
 		}
 	}
 	return out

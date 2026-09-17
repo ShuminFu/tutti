@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 )
 
 // MCP server instructions for providers that do not surface them.
@@ -52,6 +54,10 @@ const mcpServerInstructionsTimeout = 2 * time.Second
 // unreasonably large instead of flooding every turn's developer message.
 const mcpServerInstructionsMaxBytes = 64 << 10
 
+// mcpServerInstructionsTotalMaxBytes caps the rendered block across servers;
+// sections past the cap are dropped whole (in server-name order).
+const mcpServerInstructionsTotalMaxBytes = 128 << 10
+
 // contractMCPServerInstructions is the Controller's MCPServerInstructionsSource.
 func (c *Controller) contractMCPServerInstructions(ctx context.Context, session Session) string {
 	resolver, ok := c.currentMCPAppResolver().(MCPServerInstructionsResolver)
@@ -76,9 +82,28 @@ func (c *Controller) contractMCPServerInstructions(ctx context.Context, session 
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	// Probe every server in parallel: each gets the whole window instead of
+	// queueing behind a slow neighbour.
+	type answer struct {
+		text string
+		err  error
+	}
+	answers := make([]answer, len(names))
+	var wg sync.WaitGroup
+	for index, name := range names {
+		wg.Add(1)
+		go func(index int, server MCPAppServer) {
+			defer wg.Done()
+			text, err := resolver.ServerInstructions(ctx, server)
+			answers[index] = answer{text: text, err: err}
+		}(index, servers[name])
+	}
+	wg.Wait()
+
 	sections := make([]mcpServerInstructionsSection, 0, len(names))
-	for _, name := range names {
-		text, err := resolver.ServerInstructions(ctx, servers[name])
+	total := 0
+	for index, name := range names {
+		text, err := strings.TrimSpace(answers[index].text), answers[index].err
 		if err != nil {
 			// Fail-open: the turn proceeds without this server's guidance.
 			slog.Warn("mcp_server_instructions unavailable",
@@ -88,18 +113,19 @@ func (c *Controller) contractMCPServerInstructions(ctx context.Context, session 
 			)
 			continue
 		}
-		text = strings.TrimSpace(text)
 		if text == "" {
 			continue
 		}
-		if len(text) > mcpServerInstructionsMaxBytes {
+		if len(text) > mcpServerInstructionsMaxBytes || total+len(text) > mcpServerInstructionsTotalMaxBytes {
 			slog.Warn("mcp_server_instructions skipped: too large",
 				"agent_session_id", session.AgentSessionID,
 				"server", name,
 				"bytes", len(text),
+				"total_bytes", total,
 			)
 			continue
 		}
+		total += len(text)
 		sections = append(sections, mcpServerInstructionsSection{server: name, text: text})
 	}
 	return renderMCPServerInstructions(sections)
@@ -119,11 +145,26 @@ func renderMCPServerInstructions(sections []mcpServerInstructionsSection) string
 	b.WriteString("The following MCP servers provided instructions for how to use their tools.")
 	for _, section := range sections {
 		b.WriteString("\n\n## ")
-		b.WriteString(section.server)
+		b.WriteString(mcpServerInstructionsHeading(section.server))
 		b.WriteString("\n\n")
 		b.WriteString(section.text)
 	}
 	return b.String()
+}
+
+// mcpServerInstructionsHeading keeps a contract-supplied server name on its
+// one heading line: control characters (newlines included) become spaces.
+func mcpServerInstructionsHeading(name string) string {
+	heading := strings.Join(strings.Fields(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, name)), " ")
+	if heading == "" {
+		return "(unnamed server)"
+	}
+	return heading
 }
 
 // mcpInstructionsProbeServers is mcpAppContractServers with tuttid's own runtime
@@ -136,37 +177,42 @@ func renderMCPServerInstructions(sections []mcpServerInstructionsSection) string
 // the file would deliver the policy twice. Asking without it yields exactly the
 // server-owned part. A server-declared value that is not the session's file is
 // left alone.
+//
+// The fingerprint is recomputed from the server's own env without that
+// per-session path, so sessions whose servers are otherwise identical share one
+// cached answer.
 func mcpInstructionsProbeServers(session Session) map[string]MCPAppServer {
-	servers := mcpAppContractServers(session)
-	if len(servers) == 0 {
+	specs := contractStdioServerSpecs(session)
+	if len(specs) == 0 {
 		return nil
 	}
 	sessionFile := strings.TrimSpace(envValueFromList(session.Env, runtimeInstructionsFileEnv))
-	if sessionFile == "" {
-		return servers
-	}
-	out := make(map[string]MCPAppServer, len(servers))
-	for name, server := range servers {
-		if strings.TrimSpace(envValueFromList(server.Env, runtimeInstructionsFileEnv)) != sessionFile {
-			out[name] = server
-			continue
-		}
-		env := make([]string, 0, len(server.Env)+1)
-		for _, entry := range server.Env {
-			if key, _, _ := strings.Cut(entry, "="); strings.EqualFold(key, runtimeInstructionsFileEnv) {
+	out := make(map[string]MCPAppServer, len(specs))
+	for name, spec := range specs {
+		server := spec.server
+		strip := sessionFile != "" && strings.TrimSpace(envValueFromList(server.Env, runtimeInstructionsFileEnv)) == sessionFile
+		ownEnv := make([]string, 0, len(spec.ownEnv)+1)
+		for _, entry := range spec.ownEnv {
+			if key, _, _ := strings.Cut(entry, "="); strip && strings.EqualFold(key, runtimeInstructionsFileEnv) {
 				continue
 			}
-			env = append(env, entry)
+			ownEnv = append(ownEnv, entry)
 		}
-		// An explicit empty value, so an inherited process env cannot leak it back.
-		env = append(env, runtimeInstructionsFileEnv+"=")
-		server.Env = env
-		// A distinct cache identity from the MCP App catalog probe of the same
-		// server, still derived from the full server configuration.
-		server.Fingerprint = mcpAppServerFingerprint(name, server.Command, server.Args, []string{
-			"catalog=" + server.Fingerprint,
-			"probe=instructions-without-runtime-file",
-		})
+		if strip {
+			env := make([]string, 0, len(server.Env)+1)
+			for _, entry := range server.Env {
+				if key, _, _ := strings.Cut(entry, "="); strings.EqualFold(key, runtimeInstructionsFileEnv) {
+					continue
+				}
+				env = append(env, entry)
+			}
+			// An explicit empty value, so an inherited process env cannot leak it back.
+			env = append(env, runtimeInstructionsFileEnv+"=")
+			server.Env = env
+		}
+		// Distinct from the MCP App catalog cache identity of the same server.
+		server.Fingerprint = mcpAppServerFingerprint(name, server.Command, server.Args,
+			append(ownEnv, "probe=instructions"))
 		out[name] = server
 	}
 	return out

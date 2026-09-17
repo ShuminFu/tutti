@@ -2,7 +2,9 @@ package mcpapp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -17,7 +19,18 @@ import (
 // mcp_server_instructions.go). Only initialize runs here: no tools/list, no
 // resources/read, never tools/call.
 
-const instructionsLogEvent = "mcp_server_instructions.resolve"
+const (
+	instructionsLogEvent    = "mcp_server_instructions.resolve"
+	instructionsProcessName = "mcp-instructions-probe"
+	// instructionsDeadlineMargin is kept back from the caller's deadline so the
+	// probe's own timeout fires first and the failure is attributed to (and
+	// negatively cached for) the server, not silently dropped as "caller gave up".
+	instructionsDeadlineMargin = 100 * time.Millisecond
+	// instructionsMinProbe is the shortest probe ever launched. A caller with
+	// less time left than this still gets its answer later from the cache: the
+	// probe outlives the caller that started it.
+	instructionsMinProbe = 500 * time.Millisecond
+)
 
 var _ agentruntime.MCPServerInstructionsResolver = (*Resolver)(nil)
 
@@ -27,10 +40,19 @@ type instructionsEntry struct {
 	expiresAt time.Time
 }
 
-// ServerInstructions returns the server's initialize instructions. Results
-// (including failures, for FailureTTL) are cached per fingerprint, so a turn
-// only pays for a process launch when the cache is cold. It blocks for at most
-// ctx's deadline or the resolver timeout, whichever is sooner.
+// instructionsCall is one in-flight probe shared by every caller of the same
+// fingerprint (singleflight).
+type instructionsCall struct {
+	done chan struct{}
+	text string
+	err  error
+}
+
+// ServerInstructions returns the server's initialize instructions. Every probe
+// outcome — success, or failure including the probe's own timeout — is cached
+// per fingerprint (TTL / FailureTTL), so a hung or slow server costs at most one
+// launch per FailureTTL rather than one per turn. Concurrent callers of the same
+// fingerprint share one probe. The caller blocks for at most its ctx.
 func (r *Resolver) ServerInstructions(ctx context.Context, server agentruntime.MCPAppServer) (string, error) {
 	if r == nil {
 		return "", errors.New("MCP server instructions resolver is not configured")
@@ -44,23 +66,50 @@ func (r *Resolver) ServerInstructions(ctx context.Context, server agentruntime.M
 		r.mu.Unlock()
 		return entry.text, entry.err
 	}
+	if r.instructionsInflight == nil {
+		r.instructionsInflight = make(map[string]*instructionsCall)
+	}
+	call, running := r.instructionsInflight[key]
+	if !running {
+		call = &instructionsCall{done: make(chan struct{})}
+		r.instructionsInflight[key] = call
+	}
 	r.mu.Unlock()
 
-	slots := r.concurrencySlots()
+	if !running {
+		// Detached from ctx: the probe's outcome is cached even if this caller
+		// stops waiting, which is what keeps the next turn from paying again.
+		go r.runInstructionsProbe(server, call, r.instructionsProbeTimeout(ctx))
+	}
 	select {
-	case slots <- struct{}{}:
+	case <-call.done:
+		return call.text, call.err
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
-	started := r.now()
-	text, err := r.fetchInstructions(ctx, server)
-	<-slots
+}
 
-	if err != nil && ctx.Err() != nil {
-		// The caller gave up (turn deadline); that says nothing about the server,
-		// so do not negatively cache it.
-		return "", err
+// instructionsProbeTimeout = min(resolver timeout, caller's remaining time −
+// margin), floored at instructionsMinProbe.
+func (r *Resolver) instructionsProbeTimeout(ctx context.Context) time.Duration {
+	timeout := r.timeout()
+	if deadline, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(deadline) - instructionsDeadlineMargin; remaining < timeout {
+			timeout = remaining
+		}
 	}
+	if timeout < instructionsMinProbe {
+		timeout = instructionsMinProbe
+	}
+	return timeout
+}
+
+func (r *Resolver) runInstructionsProbe(server agentruntime.MCPAppServer, call *instructionsCall, timeout time.Duration) {
+	started := r.now()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	text, err := r.fetchInstructions(ctx, server)
+
 	ttl := r.ttl()
 	if err != nil {
 		ttl = r.failureTTL()
@@ -68,6 +117,7 @@ func (r *Resolver) ServerInstructions(ctx context.Context, server agentruntime.M
 			"event", instructionsLogEvent,
 			"server", server.Name,
 			"command", server.Command,
+			"timeout_ms", timeout.Milliseconds(),
 			"duration_ms", r.now().Sub(started).Milliseconds(),
 			"error", err,
 		)
@@ -79,6 +129,7 @@ func (r *Resolver) ServerInstructions(ctx context.Context, server agentruntime.M
 			"duration_ms", r.now().Sub(started).Milliseconds(),
 		)
 	}
+
 	r.mu.Lock()
 	if r.instructions == nil {
 		r.instructions = make(map[string]instructionsEntry)
@@ -97,18 +148,34 @@ func (r *Resolver) ServerInstructions(ctx context.Context, server agentruntime.M
 			}
 		}
 	}
-	r.instructions[key] = instructionsEntry{text: text, err: err, expiresAt: now.Add(ttl)}
+	r.instructions[server.Fingerprint] = instructionsEntry{text: text, err: err, expiresAt: now.Add(ttl)}
+	delete(r.instructionsInflight, server.Fingerprint)
+	call.text, call.err = text, err
 	r.mu.Unlock()
-	return text, err
+	close(call.done)
 }
 
-func (r *Resolver) fetchInstructions(ctx context.Context, server agentruntime.MCPAppServer) (text string, err error) {
-	ctx, cancel := context.WithTimeout(ctx, r.timeout())
-	defer cancel()
-	_, closeClient, result, err := openInitializedClient(ctx, r.Transport, server)
+func (r *Resolver) fetchInstructions(ctx context.Context, server agentruntime.MCPAppServer) (string, error) {
+	slots := r.concurrencySlots()
+	select {
+	case slots <- struct{}{}:
+	case <-ctx.Done():
+		return "", fmt.Errorf("wait for probe slot: %w", ctx.Err())
+	}
+	defer func() { <-slots }()
+
+	_, closeClient, raw, err := openInitializedClient(ctx, r.Transport, server, instructionsClientRole)
 	if err != nil {
 		return "", err
 	}
 	closeClient(false)
+	var result struct {
+		Instructions string `json:"instructions"`
+	}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &result); err != nil {
+			return "", fmt.Errorf("decode initialize: %w", err)
+		}
+	}
 	return result.Instructions, nil
 }

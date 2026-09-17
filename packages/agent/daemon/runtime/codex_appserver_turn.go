@@ -522,6 +522,9 @@ func (a *CodexAppServerAdapter) execBlocking(
 		recordNotDispatched()
 		return snapshotEvents(), err
 	}
+	// Provider-boundary preparation, like the images above: may block (bounded,
+	// fail-open) before the settle path takes over terminal events.
+	mcpServerInstructions := a.contractMCPServerInstructions(ctx, session)
 
 	// From here on the settle path (notification loop) owns terminal event
 	// production; the blocking shell below only waits and returns.
@@ -537,7 +540,7 @@ func (a *CodexAppServerAdapter) execBlocking(
 		appSession.defaultModeMask,
 		execState.defaultModel,
 		renderTuttiModeHostContext(tuttiModeTurnSnapshotFromContext(ctx)),
-		a.contractMCPServerInstructions(ctx, session),
+		mcpServerInstructions,
 		a.config.commandNetworkAccess,
 	)
 	if clientUserMessageID := metadataString(execMetadata, "clientSubmitId"); clientUserMessageID != "" {

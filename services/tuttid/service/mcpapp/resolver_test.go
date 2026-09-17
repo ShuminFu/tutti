@@ -73,6 +73,9 @@ func runFakeMCPServer(mode string) int {
 			if instructions := os.Getenv("MCPAPP_FAKE_SERVER_INSTRUCTIONS"); instructions != "" {
 				result["instructions"] = instructions
 			}
+			if os.Getenv("MCPAPP_FAKE_SERVER_BAD_INSTRUCTIONS") == "1" {
+				result["instructions"] = 42
+			}
 			reply(result)
 		case "tools/list":
 			reply(map[string]any{"tools": fakeTools(mode)})
