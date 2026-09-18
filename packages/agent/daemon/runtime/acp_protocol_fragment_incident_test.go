@@ -50,6 +50,11 @@ func TestIsAssistantProtocolFragmentCoversTheRecordedSpellings(t *testing.T) {
 		{name: "comparison is not a tag", text: "use a < b when sorting", want: false},
 		{name: "html mention is not DSML", text: "Wrap the label in a <div> please.", want: false},
 		{
+			name: "prose that names the sentinel without a tag is prose",
+			text: "这是 " + incidentDSMLBar + "DSML" + incidentDSMLBar + " 标记的说明",
+			want: false,
+		},
+		{
 			name: "an answer that quotes the protocol stays an answer",
 			text: "引擎用 " + "<" + incidentDSMLBar + "DSML" + incidentDSMLBar + "tool_calls>" + " 作为工具调用标记，下面是格式说明。",
 			want: false,
@@ -80,12 +85,7 @@ func TestAppendAssistantChunkWithholdsStreamedProtocolFragment(t *testing.T) {
 	session := testSession()
 	normalizer := newACPTurnNormalizer()
 
-	chunks := []string{
-		"</",
-		incidentDSMLBar + incidentDSMLBar + "DSML" + incidentDSMLBar,
-		incidentDSMLBar + " parameter>",
-		"\n" + incidentClosingTag("invoke") + "\n" + incidentClosingTag("calls"),
-	}
+	chunks := incidentFragmentChunks()
 	var events []activityshared.Event
 	for _, chunk := range chunks {
 		events = append(events, normalizer.AppendAssistantChunk(session, "turn-1", chunk)...)
@@ -182,5 +182,98 @@ func TestAppServerTurnTerminalEventsFailsTurnWhoseAnswerWasWithheld(t *testing.T
 	}
 	if !completed {
 		t.Fatalf("an ordinary completed turn was reported as %#v", answerEvents)
+	}
+}
+
+// Whitespace streams before real text in every provider. Counting it as a
+// published answer let the fragment turn complete anyway, which made the whole
+// guard bypassable by one leading newline.
+func TestWhitespaceBeforeProtocolFragmentStillFailsTheTurn(t *testing.T) {
+	t.Parallel()
+
+	session := testSession()
+	normalizer := newACPTurnNormalizer()
+
+	var events []activityshared.Event
+	events = append(events, normalizer.AppendAssistantChunk(session, "turn-1", "\n")...)
+	for _, chunk := range incidentFragmentChunks() {
+		events = append(events, normalizer.AppendAssistantChunk(session, "turn-1", chunk)...)
+	}
+	terminal := appServerTurnTerminalEvents(session, "turn-1", map[string]any{
+		"id": "provider-turn-1", "status": "completed",
+	}, normalizer)
+
+	if normalizer.AssistantAnswerWithheldAsProtocolFragment() != true {
+		t.Fatalf("a leading whitespace chunk cleared the withheld verdict")
+	}
+	failed := false
+	for _, event := range terminal {
+		if event.Type == activityshared.EventRootProviderTurnCompleted {
+			if event.Payload.TurnOutcome == string(activityshared.TurnOutcomeCompleted) {
+				t.Fatalf("turn completed on whitespace plus a fragment: %#v", event.Payload)
+			}
+			failed = event.Payload.TurnOutcome == string(activityshared.TurnOutcomeFailed)
+		}
+	}
+	if !failed {
+		t.Fatalf("no failed terminal event in %#v", terminal)
+	}
+}
+
+// The app-server commonly replays the whole answer in its terminal payload. A
+// fragment that only ever streamed is superseded by that authoritative text,
+// and the turn must not be failed for an answer the user can read.
+func TestAuthoritativeFinalAnswerSupersedesWithheldFragment(t *testing.T) {
+	t.Parallel()
+
+	const answer = "已经检查完仓库里的相关文件，结论见上。"
+	session := testSession()
+	normalizer := newACPTurnNormalizer()
+
+	var events []activityshared.Event
+	for _, chunk := range incidentFragmentChunks() {
+		events = append(events, normalizer.AppendAssistantChunk(session, "turn-1", chunk)...)
+	}
+	if !normalizer.AssistantAnswerWithheldAsProtocolFragment() {
+		t.Fatal("precondition: the streamed fragment should be withheld")
+	}
+	normalizer.ApplyAssistantFinalText(answer)
+	if normalizer.AssistantAnswerWithheldAsProtocolFragment() {
+		t.Fatal("the authoritative answer did not clear the withheld verdict")
+	}
+
+	terminal := appServerTurnTerminalEvents(session, "turn-1", map[string]any{
+		"id": "provider-turn-1", "status": "completed",
+	}, normalizer)
+	completed := false
+	for _, event := range terminal {
+		if event.Type != activityshared.EventRootProviderTurnCompleted {
+			continue
+		}
+		if event.Payload.TurnOutcome == string(activityshared.TurnOutcomeFailed) {
+			t.Fatalf("a turn with a real answer was failed: %#v", event.Payload)
+		}
+		completed = event.Payload.TurnOutcome == string(activityshared.TurnOutcomeCompleted)
+	}
+	if !completed {
+		t.Fatalf("no completed terminal event in %#v", terminal)
+	}
+	content, ok := assertCompletedAssistantContent(t, terminal)
+	if !ok {
+		t.Fatal("the authoritative answer was never published as a completed message")
+	}
+	if content != answer {
+		t.Fatalf("assistant content = %q, want %q", content, answer)
+	}
+}
+
+// incidentFragmentChunks is the recorded residue as a provider would stream it,
+// split so that no single chunk carries a complete tag.
+func incidentFragmentChunks() []string {
+	return []string{
+		"</",
+		incidentDSMLBar + incidentDSMLBar + "DSML" + incidentDSMLBar,
+		incidentDSMLBar + " parameter>",
+		"\n" + incidentClosingTag("invoke") + "\n" + incidentClosingTag("calls"),
 	}
 }

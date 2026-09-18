@@ -128,11 +128,19 @@ func (i *messageStreamItem) finish(writer *responsesSSEWriter) (map[string]any, 
 	if err := i.flushRemaining(writer); err != nil {
 		return nil, err
 	}
+	text := i.text.String()
+	if assistantTextIsProtocolResidue(text) {
+		// The streamed deltas were withheld, so the authoritative done/item
+		// events must not contradict them by carrying the residue. The response
+		// still completes when the upstream also spelled a structured call, and
+		// then this text item is simply empty.
+		text = ""
+	}
 	part := map[string]any{
-		"type": "output_text", "text": i.text.String(), "annotations": []any{},
+		"type": "output_text", "text": text, "annotations": []any{},
 	}
 	if err := writer.Event("response.output_text.done", map[string]any{
-		"item_id": i.id, "output_index": i.index, "content_index": 0, "text": i.text.String(),
+		"item_id": i.id, "output_index": i.index, "content_index": 0, "text": text,
 	}); err != nil {
 		return nil, err
 	}

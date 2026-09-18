@@ -44,7 +44,10 @@ func isAssistantProtocolFragment(text string) bool {
 	}
 	if looksLikeDSML(trimmed) {
 		if !strings.Contains(trimmed, ">") {
-			return true
+			// An unterminated tag is a fragment only if a tag actually started.
+			// A sentence that merely names the sentinel - "这是 ｜DSML｜ 标记的说明"
+			// - has no angle bracket at all and is ordinary prose.
+			return strings.Contains(trimmed, "<")
 		}
 		return !hasVisibleProse(stripProtocolMarkup(trimmed))
 	}

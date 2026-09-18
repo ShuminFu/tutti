@@ -90,6 +90,14 @@ func appServerTurnFinalAssistantText(turn map[string]any) string {
 	return ""
 }
 
+// providerProtocolFragmentFailure is the failure a turn reports when its whole
+// assistant answer was withheld as provider protocol markup. The leading marker
+// keeps it inside the existing failure vocabulary, so the card the user sees is
+// the "no response, try again" one that already offers a retry; the trailing
+// sentence carries the real cause into the turn's error detail. Shared so the
+// root and child turn paths cannot drift apart.
+const providerProtocolFragmentFailure = "provider_empty_response: the model returned only tool protocol markup instead of an answer"
+
 func appServerTurnTerminalEvents(
 	session Session,
 	turnID string,
@@ -132,14 +140,9 @@ func appServerTurnTerminalEvents(
 		// no assistant output is already reported elsewhere, so the failure is
 		// visible and retryable instead of silently successful.
 		if normalizer != nil && normalizer.AssistantAnswerWithheldAsProtocolFragment() {
-			// The leading marker keeps this in the existing failure vocabulary, so
-			// the card the user sees is the "no response, try again" one that
-			// already offers a retry; the trailing sentence carries the real cause
-			// into the turn's error detail.
-			const protocolFragmentError = "provider_empty_response: the model returned only tool protocol markup instead of an answer"
 			events := normalizer.FinishFailed(session, turnID)
 			terminal := appServerRootProviderTurnCompletedEvent(session, turnID, providerTurnID, activityshared.TurnOutcomeFailed, map[string]any{
-				"error":      protocolFragmentError,
+				"error":      providerProtocolFragmentFailure,
 				"stopReason": "failed",
 			})
 			return append(events, terminal)

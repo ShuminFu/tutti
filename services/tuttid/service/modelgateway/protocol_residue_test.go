@@ -279,6 +279,13 @@ func TestGatewayKeepsStructuredToolCallsBesideMarkupContent(t *testing.T) {
 	if types := sseEventTypes(events); !containsString(types, "response.completed") {
 		t.Fatalf("missing response.completed in %v", types)
 	}
+	for _, event := range events {
+		// The deltas were withheld, so the authoritative done/item events must
+		// not contradict them by carrying the residue.
+		if strings.Contains(string(event.Data), "DSML") || strings.Contains(string(event.Data), dsmlBar) {
+			t.Fatalf("protocol residue leaked through %s: %s", event.Event, event.Data)
+		}
+	}
 	foundCall := false
 	for _, event := range events {
 		if event.Event != "response.output_item.done" {

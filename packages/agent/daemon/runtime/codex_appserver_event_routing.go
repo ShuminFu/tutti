@@ -459,6 +459,15 @@ func appServerChildSettledEvents(
 		}
 		return append(events, terminal)
 	default:
+		// A child turn whose only assistant output was withheld protocol markup
+		// has no answer either, and must not settle as completed just because it
+		// is not the root turn.
+		if child.normalizer.AssistantAnswerWithheldAsProtocolFragment() {
+			events = child.normalizer.FinishFailed(session, child.turnID)
+			terminal := activityshared.NewTurnFailed(ctx, child.turnID)
+			terminal.Payload.Metadata = map[string]any{"error": providerProtocolFragmentFailure}
+			return append(events, terminal)
+		}
 		events = child.normalizer.FinishCompleted(session, child.turnID)
 		return append(events, activityshared.NewTurnCompleted(ctx, child.turnID, activityshared.TurnOutcomeCompleted))
 	}

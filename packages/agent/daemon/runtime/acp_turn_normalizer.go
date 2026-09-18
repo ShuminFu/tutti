@@ -200,7 +200,9 @@ func (n *acpTurnNormalizer) AppendAssistantChunk(session Session, turnID string,
 		n.assistantFragmentWithheld = true
 		return reasoningEvents
 	}
-	n.assistantAnswerPublished = true
+	if hasVisibleAnswerText(n.assistantContent.String()) {
+		n.assistantAnswerPublished = true
+	}
 	event := n.assistantSnapshotEvent(session, turnID, messageStreamStateStreaming)
 	attachTextLiveOperation(&event, liveOperation, RoleAssistant, "text")
 	return append(reasoningEvents, event)
@@ -551,24 +553,41 @@ func (n *acpTurnNormalizer) Finish(session Session, turnID string, streamState s
 	}
 	if n.assistantMessageID != "" && n.assistantContent.Len() > 0 && !n.assistantSegmentCompleted {
 		events = append(events, n.assistantSnapshotEvent(session, turnID, streamState))
-		n.assistantAnswerPublished = true
+		if hasVisibleAnswerText(n.assistantContent.String()) {
+			n.assistantAnswerPublished = true
+		}
 		n.assistantSegmentCompleted = true
 	}
 	return events
+}
+
+// hasVisibleAnswerText reports whether text carries anything a reader would see.
+// Whitespace-only content streams before real text in every provider, and
+// counting it as an answer is what let a turn whose only real output was a
+// protocol fragment still settle as completed.
+func hasVisibleAnswerText(text string) bool {
+	return strings.TrimSpace(text) != ""
 }
 
 // AssistantAnswerWithheldAsProtocolFragment reports that this turn's assistant
 // answer was nothing but provider protocol markup, so no answer reached the
 // user. A turn in that state must not settle as completed: that combination is
 // what presented a leaked DSML fragment (or a response cut off mid-thought) as a
-// successful empty reply. An answer published earlier in the same turn keeps
-// the turn valid, because the withheld text was then trailing noise rather than
-// the reply.
+// successful empty reply.
+//
+// The verdict is taken against the text the turn would publish right now, not
+// only against what streamed earlier: the app-server commonly replays the whole
+// answer in its terminal payload, and a fragment that only ever streamed is
+// superseded by that authoritative text arriving after it.
 func (n *acpTurnNormalizer) AssistantAnswerWithheldAsProtocolFragment() bool {
-	if n == nil {
+	if n == nil || !n.assistantFragmentWithheld || n.assistantAnswerPublished {
 		return false
 	}
-	return n.assistantFragmentWithheld && !n.assistantAnswerPublished
+	current := strings.TrimSpace(n.assistantContent.String())
+	if current == "" {
+		return true
+	}
+	return isAssistantProtocolFragment(current)
 }
 
 // settleInlineReasoning drains the inline-reasoning splitter at a turn, tool, or
