@@ -663,7 +663,11 @@ export function AgentGUINodeView({
             aria-hidden={conversationRailCollapsed ? "true" : undefined}
             inert={conversationRailCollapsed ? true : undefined}
           >
-            <AgentConversationClockProvider isVisible={isVisible}>
+            {/* 折叠时停掉会话栏的分钟时钟：看不见的行不该每分钟重绘
+                （WebKit 会把这些重绘画漏到对话流上）。展开时重新订阅会取当前时间。 */}
+            <AgentConversationClockProvider
+              isVisible={isVisible && !conversationRailCollapsed}
+            >
               {/* Activity is an all-provider rail snapshot. Selecting a row
                   changes the active provider/target, but must not rebuild it. */}
               <AgentGUIConversationRailController

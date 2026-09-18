@@ -5846,6 +5846,12 @@ aside.workspace-agents-status-panel
 .agent-gui-node__rail-panel--collapsed {
   overflow: hidden;
   pointer-events: none;
+  /* 折叠后整块不画。只靠「宽 0 + overflow + 子项 opacity/filter」时，WebKit
+     会把折叠期间重绘的会话行（相对时间每分钟一跳）画到错误的合成层上，
+     行文字漏出来压在对话流上。visibility 会继承，画错层也没东西可画。
+     延迟到淡出（120ms + 40ms）之后再生效；展开时基础规则没有这条过渡，立即可见。 */
+  visibility: hidden;
+  transition: visibility 0s linear 160ms;
 }
 
 .agent-gui-node__rail-resize-handle {
