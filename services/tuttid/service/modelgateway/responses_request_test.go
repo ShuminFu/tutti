@@ -6,6 +6,11 @@ import (
 	"testing"
 )
 
+// testReasoningScope is the agent session the converter tests seal reasoning
+// envelopes to. Envelopes are session-bound, so a test that seals and re-opens
+// one has to name the same session on both sides.
+var testReasoningScope = newReasoningScope("session-a")
+
 func TestConvertResponseInputProjectsImageToolOutputs(t *testing.T) {
 	t.Parallel()
 
@@ -75,7 +80,7 @@ func TestConvertResponseInputProjectsImageToolOutputs(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			messages, err := convertResponseInput(nil, json.RawMessage(test.input), nil)
+			messages, _, err := convertResponseInput(nil, json.RawMessage(test.input), nil, testReasoningScope)
 			if err != nil {
 				t.Fatalf("convertResponseInput() error = %v", err)
 			}
@@ -127,11 +132,11 @@ func TestConvertResponseInputProjectsImageToolOutputs(t *testing.T) {
 func TestConvertResponseInputRejectsEncryptedFunctionOutput(t *testing.T) {
 	t.Parallel()
 
-	_, err := convertResponseInput(nil, json.RawMessage(`[
+	_, _, err := convertResponseInput(nil, json.RawMessage(`[
 		{"type":"function_call_output","call_id":"call_x","output":[
 			{"type":"encrypted_content","data":"abc"}
 		]}
-	]`), nil)
+	 ]`), nil, testReasoningScope)
 	if err == nil {
 		t.Fatal("expected encrypted function output to be rejected")
 	}
@@ -167,7 +172,7 @@ func TestReasoningEncryptedContentRoundTrip(t *testing.T) {
 	upstream.Choices[0].Message.ToolCalls[0].Function.Name = "exec_command"
 	upstream.Choices[0].Message.ToolCalls[0].Function.Arguments = json.RawMessage(`"{}"`)
 
-	converted, err := convertChatResponse(request, upstream, nil)
+	converted, err := convertChatResponse(request, upstream, nil, testReasoningScope)
 	if err != nil {
 		t.Fatalf("convertChatResponse() error = %v", err)
 	}
@@ -183,9 +188,9 @@ func TestReasoningEncryptedContentRoundTrip(t *testing.T) {
 	if !ok || encrypted == "" {
 		t.Fatalf("encrypted_content = %#v", reasoningItem["encrypted_content"])
 	}
-	decoded, handled, err := decodeReasoningEncryptedContent(encrypted)
+	decoded, handled, err := testReasoningScope.open(encrypted)
 	if err != nil || !handled || decoded != "hidden reasoning" {
-		t.Fatalf("decodeReasoningEncryptedContent() = %q, %v, %v", decoded, handled, err)
+		t.Fatalf("reasoning scope open() = %q, %v, %v", decoded, handled, err)
 	}
 
 	replayedInput, err := json.Marshal([]map[string]any{
@@ -209,7 +214,7 @@ func TestReasoningEncryptedContentRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal replay input: %v", err)
 	}
-	messages, err := convertResponseInput(nil, replayedInput, nil)
+	messages, _, err := convertResponseInput(nil, replayedInput, nil, testReasoningScope)
 	if err != nil {
 		t.Fatalf("convertResponseInput() error = %v", err)
 	}
@@ -243,6 +248,7 @@ func TestReasoningEncryptedContentIsOmittedUnlessRequested(t *testing.T) {
 			}},
 		},
 		nil,
+		testReasoningScope,
 	)
 	if err != nil {
 		t.Fatalf("convertChatResponse() error = %v", err)
@@ -256,9 +262,9 @@ func TestReasoningEncryptedContentIsOmittedUnlessRequested(t *testing.T) {
 func TestConvertResponseInputRejectsMalformedGatewayReasoningReplay(t *testing.T) {
 	t.Parallel()
 
-	_, err := convertResponseInput(nil, json.RawMessage(`[
+	_, _, err := convertResponseInput(nil, json.RawMessage(`[
 		{"type":"reasoning","summary":[],"encrypted_content":"tutti.reasoning.v1:not-base64!"}
-	]`), nil)
+	]`), nil, testReasoningScope)
 	if err == nil {
 		t.Fatal("expected malformed gateway reasoning replay to be rejected")
 	}
@@ -289,7 +295,7 @@ func TestConvertResponsesRequestDropsOversizedChatMetadataValues(t *testing.T) {
 		},
 	}
 
-	converted, _, err := convertResponsesRequest(request)
+	converted, _, err := convertResponsesRequest(request, testReasoningScope)
 	if err != nil {
 		t.Fatalf("convertResponsesRequest() error = %v", err)
 	}

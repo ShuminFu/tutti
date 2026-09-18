@@ -164,6 +164,7 @@ type reasoningStreamItem struct {
 	id               string
 	text             streamedText
 	includeEncrypted bool
+	scope            reasoningScope
 }
 
 func (i *reasoningStreamItem) outputIndex() int { return i.index }
@@ -177,7 +178,7 @@ func (i *reasoningStreamItem) finish(writer *responsesSSEWriter) (map[string]any
 	}
 	var encryptedContent any
 	if i.includeEncrypted {
-		encryptedContent = encodeReasoningEncryptedContent(i.text.String())
+		encryptedContent = i.scope.seal(i.text.String())
 	}
 	item := map[string]any{
 		"id":                i.id,
@@ -483,12 +484,14 @@ type chatStreamState struct {
 	finishReason   *string
 	sawFinish      bool
 	toolMap        responseToolMap
+	scope          reasoningScope
 }
 
 func newChatStreamState(
 	request responsesRequest,
 	writer *responsesSSEWriter,
 	toolMap responseToolMap,
+	scope reasoningScope,
 ) *chatStreamState {
 	return &chatStreamState{
 		request:    request,
@@ -498,6 +501,7 @@ func newChatStreamState(
 		model:      request.Model,
 		tools:      make(map[int]*toolStreamItem),
 		toolMap:    toolMap,
+		scope:      scope,
 	}
 }
 
@@ -599,6 +603,7 @@ func (s *chatStreamState) addReasoning(delta string) error {
 			index:            s.nextOutputIndex(),
 			id:               newResponseID("rs"),
 			includeEncrypted: requestIncludesReasoningEncryptedContent(s.request),
+			scope:            s.scope,
 		}
 		s.items = append(s.items, s.reasoning)
 		item := map[string]any{
@@ -789,7 +794,7 @@ func (g *Gateway) convertChatStream(
 	writer.Header().Set("Connection", "keep-alive")
 	writer.Header().Set("X-Accel-Buffering", "no")
 	started := time.Now()
-	state := newChatStreamState(request, eventWriter, toolMap)
+	state := newChatStreamState(request, eventWriter, toolMap, newReasoningScope(route.AgentSessionID))
 	if err := state.start(); err != nil {
 		return
 	}
@@ -880,6 +885,7 @@ func writeSyntheticStream(
 	request responsesRequest,
 	upstream chatCompletionResponse,
 	toolMap responseToolMap,
+	scope reasoningScope,
 ) {
 	eventWriter, ok := newResponsesSSEWriter(writer)
 	if !ok {
@@ -889,7 +895,7 @@ func writeSyntheticStream(
 	writer.Header().Set("Content-Type", "text/event-stream")
 	writer.Header().Set("Cache-Control", "no-cache, no-store")
 	writer.Header().Set("X-Accel-Buffering", "no")
-	state := newChatStreamState(request, eventWriter, toolMap)
+	state := newChatStreamState(request, eventWriter, toolMap, scope)
 	if strings.TrimSpace(upstream.ID) != "" && strings.HasPrefix(upstream.ID, "resp_") {
 		state.responseID = upstream.ID
 	}

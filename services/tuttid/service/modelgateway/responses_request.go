@@ -154,6 +154,8 @@ type chatRequest struct {
 	Metadata          map[string]string `json:"metadata,omitempty"`
 	User              string            `json:"user,omitempty"`
 	filteredToolTypes []string
+
+	reasoningReplay reasoningReplayStats
 }
 
 type responseToolIdentity struct {
@@ -171,7 +173,7 @@ type responseToolIdentity struct {
 
 type responseToolMap map[string]responseToolIdentity
 
-func convertResponsesRequest(request responsesRequest) (chatRequest, responseToolMap, error) {
+func convertResponsesRequest(request responsesRequest, scope reasoningScope) (chatRequest, responseToolMap, error) {
 	request, err := normalizeResponsesLiteRequest(request)
 	if err != nil {
 		return chatRequest{}, nil, err
@@ -180,7 +182,7 @@ func convertResponsesRequest(request responsesRequest) (chatRequest, responseToo
 	if err != nil {
 		return chatRequest{}, nil, err
 	}
-	messages, err := convertResponseInput(request.Instructions, request.Input, toolNamespaces)
+	messages, reasoningReplay, err := convertResponseInput(request.Instructions, request.Input, toolNamespaces, scope)
 	if err != nil {
 		return chatRequest{}, nil, err
 	}
@@ -212,6 +214,7 @@ func convertResponsesRequest(request responsesRequest) (chatRequest, responseToo
 		Metadata:          metadata,
 		User:              strings.TrimSpace(request.User),
 		filteredToolTypes: filteredToolTypes,
+		reasoningReplay:   reasoningReplay,
 	}
 	if len(tools) == 0 {
 		result.ToolChoice = nil
@@ -330,25 +333,27 @@ func convertResponseInput(
 	instructions json.RawMessage,
 	input json.RawMessage,
 	toolMap responseToolMap,
-) ([]map[string]any, error) {
+	scope reasoningScope,
+) ([]map[string]any, reasoningReplayStats, error) {
+	stats := reasoningReplayStats{}
 	messages := make([]map[string]any, 0)
 	if len(bytes.TrimSpace(instructions)) > 0 && !bytes.Equal(bytes.TrimSpace(instructions), []byte("null")) {
 		instructionMessages, err := convertInstructions(instructions)
 		if err != nil {
-			return nil, err
+			return nil, stats, err
 		}
 		messages = append(messages, instructionMessages...)
 	}
 	if len(bytes.TrimSpace(input)) == 0 || bytes.Equal(bytes.TrimSpace(input), []byte("null")) {
-		return messages, nil
+		return messages, stats, nil
 	}
 	var text string
 	if err := json.Unmarshal(input, &text); err == nil {
-		return append(messages, map[string]any{"role": "user", "content": text}), nil
+		return append(messages, map[string]any{"role": "user", "content": text}), stats, nil
 	}
 	var items []json.RawMessage
 	if err := json.Unmarshal(input, &items); err != nil {
-		return nil, invalidParam("input", "input must be a string or an array of Responses input items")
+		return nil, stats, invalidParam("input", "input must be a string or an array of Responses input items")
 	}
 	var assistant *pendingAssistantMessage
 	flushAssistant := func() {
@@ -379,7 +384,7 @@ func convertResponseInput(
 	for index, encoded := range items {
 		var item responseInputItem
 		if err := json.Unmarshal(encoded, &item); err != nil {
-			return nil, invalidParam(fmt.Sprintf("input[%d]", index), "invalid Responses input item")
+			return nil, stats, invalidParam(fmt.Sprintf("input[%d]", index), "invalid Responses input item")
 		}
 		item.Type = strings.TrimSpace(item.Type)
 		if item.Type == "" && strings.TrimSpace(item.Role) != "" {
@@ -391,7 +396,7 @@ func convertResponseInput(
 			chatRole := chatRoleForResponseMessage(role)
 			content, err := convertMessageContent(chatRole, item.Content)
 			if err != nil {
-				return nil, withParam(err, fmt.Sprintf("input[%d].content", index))
+				return nil, stats, withParam(err, fmt.Sprintf("input[%d].content", index))
 			}
 			if chatRole == "assistant" {
 				current := ensureAssistant()
@@ -404,26 +409,41 @@ func convertResponseInput(
 			messages = append(messages, message)
 		case "reasoning":
 			readable := reasoningItemText(item)
-			if readable == "" && strings.TrimSpace(item.EncryptedContent) != "" {
-				decoded, handled, err := decodeReasoningEncryptedContent(item.EncryptedContent)
+			stats.items++
+			switch {
+			case readable != "":
+				stats.plain++
+			case strings.TrimSpace(item.EncryptedContent) != "":
+				decoded, handled, err := scope.open(item.EncryptedContent)
 				if err != nil {
-					return nil, invalidParam(
+					return nil, stats, invalidParam(
 						fmt.Sprintf("input[%d].encrypted_content", index),
 						"gateway reasoning replay is invalid",
 					)
 				}
 				if !handled {
-					return nil, invalidParam(
+					return nil, stats, invalidParam(
 						fmt.Sprintf("input[%d].encrypted_content", index),
 						"encrypted reasoning cannot be translated to Chat Completions",
 					)
 				}
 				readable = decoded
+				stats.sealed++
+			default:
+				// The client replayed a reasoning item that carries neither text
+				// nor a gateway envelope: the turn is known to have had reasoning
+				// and this request cannot reproduce it. Failing the whole request
+				// here would be wrong — the upstream accepts an assistant turn
+				// without reasoning_content in the common case, and the observed
+				// failures are a minority — so the loss is counted and reported on
+				// the failure path instead of turning a working request into a
+				// hard error.
+				stats.empty++
 			}
 			ensureAssistant().reasoningContent.WriteString(readable)
 		case "function_call":
 			if strings.TrimSpace(item.CallID) == "" || strings.TrimSpace(item.Name) == "" {
-				return nil, invalidParam(fmt.Sprintf("input[%d]", index), "function_call requires call_id and name")
+				return nil, stats, invalidParam(fmt.Sprintf("input[%d]", index), "function_call requires call_id and name")
 			}
 			current := ensureAssistant()
 			current.toolCalls = append(current.toolCalls, map[string]any{
@@ -436,11 +456,11 @@ func convertResponseInput(
 			})
 		case "custom_tool_call":
 			if strings.TrimSpace(item.CallID) == "" || strings.TrimSpace(item.Name) == "" {
-				return nil, invalidParam(fmt.Sprintf("input[%d]", index), "custom_tool_call requires call_id and name")
+				return nil, stats, invalidParam(fmt.Sprintf("input[%d]", index), "custom_tool_call requires call_id and name")
 			}
 			arguments, err := customToolArguments(item.Input)
 			if err != nil {
-				return nil, withParam(err, fmt.Sprintf("input[%d].input", index))
+				return nil, stats, withParam(err, fmt.Sprintf("input[%d].input", index))
 			}
 			current := ensureAssistant()
 			current.toolCalls = append(current.toolCalls, map[string]any{
@@ -453,11 +473,11 @@ func convertResponseInput(
 			})
 		case "function_call_output", "custom_tool_call_output":
 			if strings.TrimSpace(item.CallID) == "" {
-				return nil, invalidParam(fmt.Sprintf("input[%d].call_id", index), item.Type+" requires call_id")
+				return nil, stats, invalidParam(fmt.Sprintf("input[%d].call_id", index), item.Type+" requires call_id")
 			}
 			output, err := parseFunctionOutput(item.Output)
 			if err != nil {
-				return nil, withParam(err, fmt.Sprintf("input[%d].output", index))
+				return nil, stats, withParam(err, fmt.Sprintf("input[%d].output", index))
 			}
 			flushAssistant()
 			messages = append(messages, map[string]any{
@@ -480,19 +500,19 @@ func convertResponseInput(
 				})
 			}
 		case "web_search_call", "computer_call", "file_search_call", "code_interpreter_call", "local_shell_call":
-			return nil, invalidParam(
+			return nil, stats, invalidParam(
 				fmt.Sprintf("input[%d].type", index),
 				fmt.Sprintf("Responses input item type %q is not supported", item.Type),
 			)
 		default:
-			return nil, invalidParam(
+			return nil, stats, invalidParam(
 				fmt.Sprintf("input[%d].type", index),
 				fmt.Sprintf("Responses input item type %q is not supported", item.Type),
 			)
 		}
 	}
 	flushAssistant()
-	return messages, nil
+	return messages, stats, nil
 }
 
 func convertInstructions(encoded json.RawMessage) ([]map[string]any, error) {

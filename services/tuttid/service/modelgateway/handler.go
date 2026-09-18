@@ -13,6 +13,7 @@ import (
 )
 
 func (g *Gateway) handleResponses(writer http.ResponseWriter, request *http.Request, route Route) {
+	scope := newReasoningScope(route.AgentSessionID)
 	responsesInput, err := decodeResponsesRequest(request.Body, g.maxRequestBytes)
 	if err != nil {
 		writeInvalidRequest(writer, err)
@@ -29,11 +30,12 @@ func (g *Gateway) handleResponses(writer http.ResponseWriter, request *http.Requ
 		)
 		return
 	}
-	chatInput, toolMap, err := convertResponsesRequest(responsesInput)
+	chatInput, toolMap, err := convertResponsesRequest(responsesInput, scope)
 	if err != nil {
 		writeInvalidRequest(writer, err)
 		return
 	}
+	g.logReasoningReplay(request.Context(), route, responsesInput, chatInput.reasoningReplay)
 	if len(chatInput.filteredToolTypes) > 0 {
 		g.logger.DebugContext(
 			request.Context(),
@@ -87,6 +89,7 @@ func (g *Gateway) handleResponses(writer http.ResponseWriter, request *http.Requ
 	}
 	defer upstreamResponse.Body.Close()
 	if upstreamResponse.StatusCode < 200 || upstreamResponse.StatusCode >= 300 {
+		g.logUpstreamRejection(request.Context(), route, responsesInput, chatInput, upstreamResponse.StatusCode)
 		writeUpstreamHTTPError(writer, upstreamResponse, route.UpstreamAPIKey)
 		return
 	}
@@ -98,7 +101,7 @@ func (g *Gateway) handleResponses(writer http.ResponseWriter, request *http.Requ
 				writeResponsesError(writer, http.StatusBadGateway, "server_error", "upstream_error", "", "Upstream returned invalid Chat JSON")
 				return
 			}
-			writeSyntheticStream(writer, responsesInput, chatOutput, toolMap)
+			writeSyntheticStream(writer, responsesInput, chatOutput, toolMap, scope)
 			return
 		}
 		g.convertChatStream(writer, request, responsesInput, upstreamResponse, toolMap, route)
@@ -110,7 +113,7 @@ func (g *Gateway) handleResponses(writer http.ResponseWriter, request *http.Requ
 		writeResponsesError(writer, http.StatusBadGateway, "server_error", "upstream_error", "", "Upstream returned invalid Chat JSON")
 		return
 	}
-	response, err := convertChatResponse(responsesInput, chatOutput, toolMap)
+	response, err := convertChatResponse(responsesInput, chatOutput, toolMap, scope)
 	if err != nil {
 		code := "upstream_error"
 		if errors.Is(err, errModelProtocolResidue) {
@@ -134,6 +137,69 @@ func routeAllowsModel(route Route, model string) bool {
 		}
 	}
 	return false
+}
+
+// logReasoningReplay reports how much upstream reasoning one request could
+// reconstruct. Nothing else can see this: the client only holds whatever the
+// gateway handed it, and the upstream rejection this leads to arrives attached
+// to a turn, minutes after the request that caused it.
+func (g *Gateway) logReasoningReplay(ctx context.Context, route Route, input responsesRequest, stats reasoningReplayStats) {
+	if stats.items == 0 {
+		return
+	}
+	attrs := append([]any{
+		"event", "model_gateway.reasoning.replay",
+		"workspace_id", route.WorkspaceID,
+		"agent_session_id", route.AgentSessionID,
+		"model", input.Model,
+		"stream", input.Stream,
+	}, stats.fields()...)
+	if stats.lost() {
+		g.logger.WarnContext(ctx, "upstream reasoning is not reconstructable from the client replay", attrs...)
+		return
+	}
+	g.logger.DebugContext(ctx, "upstream reasoning replayed", attrs...)
+}
+
+// logUpstreamRejection pairs a refusal with the request shape that produced it.
+// The upstream error text already reaches the client; what was missing was the
+// gateway's side — how many assistant turns carried tool calls, and how much
+// reasoning came back — which is what separates a quota failure from a
+// replay failure.
+func (g *Gateway) logUpstreamRejection(ctx context.Context, route Route, input responsesRequest, chatInput chatRequest, status int) {
+	assistantMessages, assistantToolMessages := chatMessageShape(chatInput.Messages)
+	attrs := append([]any{
+		"event", "model_gateway.upstream.rejected",
+		"workspace_id", route.WorkspaceID,
+		"agent_session_id", route.AgentSessionID,
+		"model", input.Model,
+		"stream", input.Stream,
+		"upstream_status", status,
+		"message_count", len(chatInput.Messages),
+		"assistant_message_count", assistantMessages,
+		"assistant_tool_call_message_count", assistantToolMessages,
+	}, chatInput.reasoningReplay.fields()...)
+	g.logger.WarnContext(ctx, "upstream rejected the model request", attrs...)
+}
+
+func chatMessageShape(messages []map[string]any) (assistant int, withToolCalls int) {
+	for _, message := range messages {
+		if role, _ := message["role"].(string); role != "assistant" {
+			continue
+		}
+		assistant++
+		switch calls := message["tool_calls"].(type) {
+		case []map[string]any:
+			if len(calls) > 0 {
+				withToolCalls++
+			}
+		case []any:
+			if len(calls) > 0 {
+				withToolCalls++
+			}
+		}
+	}
+	return assistant, withToolCalls
 }
 
 func writeInvalidRequest(writer http.ResponseWriter, err error) {

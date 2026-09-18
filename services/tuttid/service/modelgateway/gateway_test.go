@@ -181,7 +181,7 @@ func TestGatewayConvertsResponsesRequestAndChatJSON(t *testing.T) {
 	if !ok {
 		t.Fatalf("non-streaming reasoning encrypted_content = %#v", output[0])
 	}
-	if decoded, handled, err := decodeReasoningEncryptedContent(reasoningEncrypted); err != nil ||
+	if decoded, handled, err := newReasoningScope("session").open(reasoningEncrypted); err != nil ||
 		!handled || decoded != "分析" {
 		t.Fatalf("decode non-streaming reasoning = %q, %v, %v", decoded, handled, err)
 	}
@@ -642,7 +642,7 @@ func TestGatewayStreamsInterleavedToolCallsReasoningAndUTF8WithoutDone(t *testin
 	if !ok {
 		t.Fatalf("streaming reasoning encrypted_content = %#v", reasoningEncrypted)
 	}
-	if decoded, handled, err := decodeReasoningEncryptedContent(encrypted); err != nil ||
+	if decoded, handled, err := newReasoningScope("session").open(encrypted); err != nil ||
 		!handled || decoded != "思考" {
 		t.Fatalf("decode streaming reasoning = %q, %v, %v", decoded, handled, err)
 	}

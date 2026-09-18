@@ -63,6 +63,7 @@ func convertChatResponse(
 	request responsesRequest,
 	upstream chatCompletionResponse,
 	toolMap responseToolMap,
+	scope reasoningScope,
 ) (map[string]any, error) {
 	if len(bytes.TrimSpace(upstream.Error)) > 0 && !bytes.Equal(bytes.TrimSpace(upstream.Error), []byte("null")) {
 		return nil, fmt.Errorf("upstream returned an error payload")
@@ -83,7 +84,7 @@ func convertChatResponse(
 		}
 	}
 	if reasoning != "" {
-		output = append(output, completedReasoningItem(request, reasoning))
+		output = append(output, completedReasoningItem(request, reasoning, scope))
 	}
 	text, err := chatText(choice.Message.Content)
 	if err != nil {
@@ -157,10 +158,10 @@ func chatText(encoded json.RawMessage) (string, error) {
 	return result.String(), nil
 }
 
-func completedReasoningItem(request responsesRequest, text string) map[string]any {
+func completedReasoningItem(request responsesRequest, text string, scope reasoningScope) map[string]any {
 	var encryptedContent any
 	if requestIncludesReasoningEncryptedContent(request) {
-		encryptedContent = encodeReasoningEncryptedContent(text)
+		encryptedContent = scope.seal(text)
 	}
 	return map[string]any{
 		"id":                newResponseID("rs"),
