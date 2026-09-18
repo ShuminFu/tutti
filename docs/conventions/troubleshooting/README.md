@@ -16,8 +16,8 @@ Use the focused runtime index or open one area directly:
 
 - [Agent Providers And Setup](./agent-provider-setup.md): Provider discovery, installation, authentication, models, configuration, and runtime reachability.
   Includes Codex Model Plan Responses-to-Chat routing, oversized request
-  metadata compatibility, and extension command/Skill palette hydration
-  failures.
+  metadata compatibility, cumulative Chat deltas that duplicate short
+  reasoning, and extension command/Skill palette hydration failures.
   Also covers uv-managed Extension installs that accidentally select an
   incompatible system Python, and first extension launches that reject
   reasoning because a host model catalog skipped ACP capability discovery.

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -47,10 +48,121 @@ type streamItem interface {
 	finish(*responsesSSEWriter) (map[string]any, error)
 }
 
+type streamedTextMode uint8
+
+const (
+	streamedTextModeUnknown streamedTextMode = iota
+	streamedTextModeDelta
+	streamedTextModeSnapshot
+)
+
+// streamedText keeps the mode unknown until a chunk proves whether an upstream
+// sends incremental tokens or cumulative snapshots.
+type streamedText struct {
+	text strings.Builder
+	base string
+	mode streamedTextMode
+}
+
+func (s *streamedText) String() string {
+	return s.text.String()
+}
+
+func (s *streamedText) append(next string) string {
+	if next == "" {
+		return ""
+	}
+	previous := s.text.String()
+	if previous == "" {
+		_, _ = s.text.WriteString(next)
+		s.base = next
+		return next
+	}
+
+	switch s.mode {
+	case streamedTextModeDelta:
+		return s.appendDelta(next)
+	case streamedTextModeSnapshot:
+		return s.appendSnapshot(next)
+	}
+
+	if strings.TrimSpace(next) == "" {
+		_, _ = s.text.WriteString(next)
+		return next
+	}
+	suffix, extends := streamedTextSuffix(s.base, next)
+	if extends && strings.TrimSpace(suffix) != "" {
+		s.mode = streamedTextModeSnapshot
+		s.base = next
+		return s.appendDelta(suffix)
+	}
+	if !extends {
+		if _, retreats := streamedTextSuffix(next, s.base); retreats {
+			return ""
+		}
+	}
+	if extends {
+		s.base = next
+		return ""
+	}
+	s.mode = streamedTextModeDelta
+	return s.appendDelta(next)
+}
+
+func (s *streamedText) appendSnapshot(next string) string {
+	if strings.TrimSpace(next) == "" {
+		return s.appendDelta(next)
+	}
+	suffix, extends := streamedTextSuffix(s.base, next)
+	if extends && strings.TrimSpace(suffix) != "" {
+		s.base = next
+		return s.appendDelta(suffix)
+	}
+	if !extends {
+		if _, retreats := streamedTextSuffix(next, s.base); retreats {
+			return ""
+		}
+	}
+	if extends {
+		s.base = next
+		return ""
+	}
+	s.mode = streamedTextModeDelta
+	s.base = next
+	return s.appendDelta(next)
+}
+
+func streamedTextSuffix(base string, next string) (string, bool) {
+	baseRunes := []rune(base)
+	nextRunes := []rune(next)
+	baseIndex := 0
+	nextIndex := 0
+	for baseIndex < len(baseRunes) {
+		if unicode.IsSpace(baseRunes[baseIndex]) {
+			baseIndex++
+			continue
+		}
+		for nextIndex < len(nextRunes) && unicode.IsSpace(nextRunes[nextIndex]) {
+			nextIndex++
+		}
+		if nextIndex == len(nextRunes) || nextRunes[nextIndex] != baseRunes[baseIndex] {
+			return "", false
+		}
+		baseIndex++
+		nextIndex++
+	}
+	return string(nextRunes[nextIndex:]), true
+}
+
+func (s *streamedText) appendDelta(next string) string {
+	_, _ = s.text.WriteString(next)
+	return next
+}
+
 type reasoningStreamItem struct {
 	index int
 	id    string
-	text  strings.Builder
+	text  streamedText
 }
 
 func (i *reasoningStreamItem) outputIndex() int { return i.index }
@@ -81,7 +193,7 @@ func (i *reasoningStreamItem) finish(writer *responsesSSEWriter) (map[string]any
 type messageStreamItem struct {
 	index int
 	id    string
-	text  strings.Builder
+	text  streamedText
 }
 
 func (i *messageStreamItem) outputIndex() int { return i.index }
@@ -449,7 +561,10 @@ func (s *chatStreamState) addReasoning(delta string) error {
 			return err
 		}
 	}
-	s.reasoning.text.WriteString(delta)
+	delta = s.reasoning.text.append(delta)
+	if delta == "" {
+		return nil
+	}
 	return s.writer.Event("response.reasoning_text.delta", map[string]any{
 		"item_id": s.reasoning.id, "output_index": s.reasoning.index, "content_index": 0,
 		"delta": delta,
@@ -478,7 +593,10 @@ func (s *chatStreamState) addText(delta string) error {
 			return err
 		}
 	}
-	s.message.text.WriteString(delta)
+	delta = s.message.text.append(delta)
+	if delta == "" {
+		return nil
+	}
 	return s.writer.Event("response.output_text.delta", map[string]any{
 		"item_id": s.message.id, "output_index": s.message.index, "content_index": 0,
 		"delta": delta,
