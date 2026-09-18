@@ -394,6 +394,14 @@ func cloneAgentModelOptions(models []AgentModelOption) []AgentModelOption {
 	return result
 }
 
+// applyConfiguredDefaultModel promotes the CLI-configured model to the catalog's
+// default, or appends it when the catalog did not list it.
+//
+// The configured model is only ever read from a codex home this daemon owns
+// (readCodexConfiguredDefaultModel), which is what keeps the host user's
+// personal ~/.codex/config.toml out of a managed session's default. When there
+// is no owned home the caller passes "" and the catalog is returned untouched,
+// so the runtime's own answer stands.
 func applyConfiguredDefaultModel(models []AgentModelOption, configuredDefaultModel string, missingDescription string) []AgentModelOption {
 	if configuredDefaultModel == "" {
 		return cloneAgentModelOptions(models)

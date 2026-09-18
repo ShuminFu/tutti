@@ -11,18 +11,28 @@ const (
 	codexConfigFileName = "config.toml"
 )
 
+// readCodexConfiguredDefaultModel reports the model the Codex installation the
+// daemon owns is configured with.
+//
+// It only answers when CODEX_HOME names that installation. DinTalDock provisions
+// one codex home per agent session under its own data directory and hands it to
+// the runtime per session, so the fallback — ~/.codex/config.toml, the *host
+// user's personal* Codex CLI config — describes an installation this daemon does
+// not run. Reading it anyway is how a gateway-bound session acquired a model
+// nobody chose: this machine's file says `gpt-6-astra`, that value rode the model
+// catalog as its default, and new codex sessions were created on it. A daemon
+// with no codex home of its own has no configured default to report; callers
+// fall back to what the runtime advertises.
 func readCodexConfiguredDefaultModel() string {
 	return readCodexTopLevelConfigString("model")
 }
 
+// readCodexTopLevelConfigString reads one top-level key from the owned codex
+// home; see readCodexConfiguredDefaultModel for why there is no fallback.
 func readCodexTopLevelConfigString(key string) string {
 	codexHome := strings.TrimSpace(os.Getenv("CODEX_HOME"))
 	if codexHome == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		codexHome = filepath.Join(home, ".codex")
+		return ""
 	}
 	return readTopLevelTomlString(filepath.Join(codexHome, codexConfigFileName), key)
 }

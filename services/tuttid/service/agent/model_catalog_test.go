@@ -729,3 +729,42 @@ func installFakeTuttiAgentModelListBinary(t *testing.T) {
 	}
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
+
+func TestApplyConfiguredDefaultModelPromotesListedConfiguredModel(t *testing.T) {
+	t.Parallel()
+
+	result := applyConfiguredDefaultModel(
+		[]AgentModelOption{{ID: "deepseek-flash"}, {ID: "gpt-6-astra"}},
+		"gpt-6-astra",
+		"configured",
+	)
+	if len(result) != 2 || result[0].IsDefault || !result[1].IsDefault {
+		t.Fatalf("configured model was not promoted: %#v", result)
+	}
+}
+
+func TestApplyConfiguredDefaultModelAppendsMissingConfiguredModel(t *testing.T) {
+	t.Parallel()
+
+	result := applyConfiguredDefaultModel(
+		[]AgentModelOption{{ID: "deepseek-flash"}},
+		"gpt-6-astra",
+		"configured",
+	)
+	if len(result) != 2 {
+		t.Fatalf("catalog = %#v", result)
+	}
+	appended := result[1]
+	if appended.ID != "gpt-6-astra" || !appended.IsDefault || appended.Description != "configured" {
+		t.Fatalf("appended model = %#v", appended)
+	}
+}
+
+func TestApplyConfiguredDefaultModelWithoutConfiguredModel(t *testing.T) {
+	t.Parallel()
+
+	result := applyConfiguredDefaultModel([]AgentModelOption{{ID: "deepseek-flash"}}, "", "configured")
+	if len(result) != 1 || result[0].IsDefault {
+		t.Fatalf("catalog = %#v", result)
+	}
+}
