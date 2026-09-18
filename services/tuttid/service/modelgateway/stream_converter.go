@@ -82,11 +82,52 @@ type messageStreamItem struct {
 	index int
 	id    string
 	text  strings.Builder
+	// emitted counts the bytes of text already sent as output_text deltas.
+	// Anything after it is held back while it could still turn out to be tool
+	// protocol markup, so a leaked tool-call fragment never reaches the client
+	// as an answer.
+	emitted int
 }
 
 func (i *messageStreamItem) outputIndex() int { return i.index }
 
+// flushText sends the part of the accumulated text that can no longer become
+// protocol markup. Responses has no replacement event for streamed text, so
+// held-back bytes must be released in order and only once.
+func (i *messageStreamItem) flushText(writer *responsesSSEWriter) error {
+	text := i.text.String()
+	safe := streamingHoldbackStart(text)
+	if safe <= i.emitted {
+		return nil
+	}
+	delta := text[i.emitted:safe]
+	i.emitted = safe
+	return writer.Event("response.output_text.delta", map[string]any{
+		"item_id": i.id, "output_index": i.index, "content_index": 0,
+		"delta": delta,
+	})
+}
+
+// flushRemaining releases the held-back tail once the finished text is known
+// not to be protocol residue. Residue is never released: the completion path
+// fails the response instead of shipping it as the answer.
+func (i *messageStreamItem) flushRemaining(writer *responsesSSEWriter) error {
+	text := i.text.String()
+	if i.emitted >= len(text) || assistantTextIsProtocolResidue(text) {
+		return nil
+	}
+	delta := text[i.emitted:]
+	i.emitted = len(text)
+	return writer.Event("response.output_text.delta", map[string]any{
+		"item_id": i.id, "output_index": i.index, "content_index": 0,
+		"delta": delta,
+	})
+}
+
 func (i *messageStreamItem) finish(writer *responsesSSEWriter) (map[string]any, error) {
+	if err := i.flushRemaining(writer); err != nil {
+		return nil, err
+	}
 	part := map[string]any{
 		"type": "output_text", "text": i.text.String(), "annotations": []any{},
 	}
@@ -479,10 +520,9 @@ func (s *chatStreamState) addText(delta string) error {
 		}
 	}
 	s.message.text.WriteString(delta)
-	return s.writer.Event("response.output_text.delta", map[string]any{
-		"item_id": s.message.id, "output_index": s.message.index, "content_index": 0,
-		"delta": delta,
-	})
+	// Forwarded through the holdback rather than verbatim: a trailing run that
+	// could still become tool protocol markup waits until it proves to be prose.
+	return s.message.flushText(s.writer)
 }
 
 // messageTextProgress reports how much assistant text has already been sent and
@@ -552,6 +592,13 @@ func mergeStreamedName(current string, delta string) string {
 }
 
 func (s *chatStreamState) complete() error {
+	if s.message != nil && len(s.tools) == 0 && assistantTextIsProtocolResidue(s.message.text.String()) {
+		// The upstream spelled no call and no answer - only tool protocol
+		// markup, typically closing-only tags whose opening half never arrived.
+		// There is nothing to promote and nothing to show, so fail closed
+		// instead of emitting an answer made of protocol residue.
+		return s.fail("model_protocol_error", "upstream returned tool protocol markup in place of an answer")
+	}
 	sort.SliceStable(s.items, func(left int, right int) bool {
 		return s.items[left].outputIndex() < s.items[right].outputIndex()
 	})

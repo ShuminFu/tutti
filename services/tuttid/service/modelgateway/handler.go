@@ -112,7 +112,11 @@ func (g *Gateway) handleResponses(writer http.ResponseWriter, request *http.Requ
 	}
 	response, err := convertChatResponse(responsesInput, chatOutput, toolMap)
 	if err != nil {
-		writeResponsesError(writer, http.StatusBadGateway, "server_error", "upstream_error", "", err.Error())
+		code := "upstream_error"
+		if errors.Is(err, errModelProtocolResidue) {
+			code = "model_protocol_error"
+		}
+		writeResponsesError(writer, http.StatusBadGateway, "server_error", code, "", err.Error())
 		return
 	}
 	writer.Header().Set("Content-Type", "application/json")

@@ -123,6 +123,27 @@ func appServerTurnTerminalEvents(
 		terminal := appServerRootProviderTurnCompletedEvent(session, turnID, providerTurnID, activityshared.TurnOutcomeFailed, metadata)
 		return append(events, terminal)
 	default:
+		// The provider app-server reports "completed" for any turn it did not
+		// itself fail or interrupt, which includes a turn whose entire assistant
+		// answer was withheld as provider protocol markup. Settling that as a
+		// completed turn is what showed the 2026-09-18 session an empty reply
+		// with no error and no retry: the provider did end its turn, but no
+		// answer ever reached the user. Report it the way a turn that produced
+		// no assistant output is already reported elsewhere, so the failure is
+		// visible and retryable instead of silently successful.
+		if normalizer != nil && normalizer.AssistantAnswerWithheldAsProtocolFragment() {
+			// The leading marker keeps this in the existing failure vocabulary, so
+			// the card the user sees is the "no response, try again" one that
+			// already offers a retry; the trailing sentence carries the real cause
+			// into the turn's error detail.
+			const protocolFragmentError = "provider_empty_response: the model returned only tool protocol markup instead of an answer"
+			events := normalizer.FinishFailed(session, turnID)
+			terminal := appServerRootProviderTurnCompletedEvent(session, turnID, providerTurnID, activityshared.TurnOutcomeFailed, map[string]any{
+				"error":      protocolFragmentError,
+				"stopReason": "failed",
+			})
+			return append(events, terminal)
+		}
 		events := normalizer.FinishCompleted(session, turnID)
 		terminal := appServerRootProviderTurnCompletedEvent(session, turnID, providerTurnID, activityshared.TurnOutcomeCompleted, map[string]any{"stopReason": "end_turn"})
 		return append(events, terminal)

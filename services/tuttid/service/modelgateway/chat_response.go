@@ -89,6 +89,12 @@ func convertChatResponse(
 	if err != nil {
 		return nil, fmt.Errorf("decode upstream message content: %w", err)
 	}
+	// The non-streaming path must reach the same verdict as the streaming one,
+	// or a request routed without streaming silently ships protocol residue as
+	// an answer.
+	if len(choice.Message.ToolCalls) == 0 && choice.Message.FunctionCall == nil && assistantTextIsProtocolResidue(text) {
+		return nil, errModelProtocolResidue
+	}
 	if text != "" || (len(choice.Message.ToolCalls) == 0 && choice.Message.FunctionCall == nil) {
 		output = append(output, completedMessageItem(text))
 	}

@@ -50,6 +50,16 @@ type acpTurnNormalizer struct {
 	// The splitter sees raw provider text before the stream-shape heuristics
 	// run, so snapshot prefix-diffing keeps comparing unstripped text.
 	inlineReasoning inlineReasoningSplitter
+	// assistantFragmentWithheld records that assistant text was dropped because
+	// it was nothing but provider protocol markup - leaked DSML tool tags, or a
+	// fragment whose opening half never arrived. That text never becomes the
+	// reply, so a turn whose ONLY assistant output was withheld has no answer:
+	// reporting it as completed is what let the 2026-09-18 session settle as a
+	// successful empty reply. assistantAnswerPublished keeps the record honest
+	// for the ordinary case of a real answer followed by trailing markup, which
+	// must stay completed.
+	assistantFragmentWithheld bool
+	assistantAnswerPublished  bool
 }
 
 type acpAssistantStreamKind int
@@ -180,6 +190,17 @@ func (n *acpTurnNormalizer) AppendAssistantChunk(session Session, turnID string,
 		// the stream projection as full precommit message_update snapshots.
 		return reasoningEvents
 	}
+	if isAssistantProtocolFragment(n.assistantContent.String()) {
+		// The assistant message is published as a snapshot keyed by messageId,
+		// so withholding the snapshot is what keeps a leaked protocol fragment
+		// out of the bubble while it streams. The text stays accumulated: a
+		// later chunk carrying real prose republishes the whole snapshot, which
+		// is the "answer that quotes the protocol" case that must stay visible.
+		// The turn-level consequence is decided at the terminal event.
+		n.assistantFragmentWithheld = true
+		return reasoningEvents
+	}
+	n.assistantAnswerPublished = true
 	event := n.assistantSnapshotEvent(session, turnID, messageStreamStateStreaming)
 	attachTextLiveOperation(&event, liveOperation, RoleAssistant, "text")
 	return append(reasoningEvents, event)
@@ -341,11 +362,15 @@ func (n *acpTurnNormalizer) applyAssistantFinalText(finalText string) {
 	n.replaceInlineReasoning(reasoning)
 	n.inlineReasoning.Reset()
 	finalText = strings.TrimSpace(assistant)
-	if finalText == "" || unterminated || isAssistantProtocolFragment(finalText) {
+	fragment := isAssistantProtocolFragment(finalText)
+	if finalText == "" || unterminated || fragment {
 		// The whole final text was reasoning or a protocol fragment (unterminated
 		// think, leaked DSML tool markup). Any assistant text already accumulated
 		// for the segment was that same leftover; drop it rather than publishing
 		// it as the reply.
+		if fragment {
+			n.assistantFragmentWithheld = true
+		}
 		n.assistantContent.Reset()
 		n.assistantMessageID = ""
 		return
@@ -515,6 +540,7 @@ func (n *acpTurnNormalizer) Finish(session Session, turnID string, streamState s
 	}
 	n.settleInlineReasoning()
 	if isAssistantProtocolFragment(n.assistantContent.String()) {
+		n.assistantFragmentWithheld = true
 		n.assistantContent.Reset()
 		n.assistantMessageID = ""
 	}
@@ -525,9 +551,24 @@ func (n *acpTurnNormalizer) Finish(session Session, turnID string, streamState s
 	}
 	if n.assistantMessageID != "" && n.assistantContent.Len() > 0 && !n.assistantSegmentCompleted {
 		events = append(events, n.assistantSnapshotEvent(session, turnID, streamState))
+		n.assistantAnswerPublished = true
 		n.assistantSegmentCompleted = true
 	}
 	return events
+}
+
+// AssistantAnswerWithheldAsProtocolFragment reports that this turn's assistant
+// answer was nothing but provider protocol markup, so no answer reached the
+// user. A turn in that state must not settle as completed: that combination is
+// what presented a leaked DSML fragment (or a response cut off mid-thought) as a
+// successful empty reply. An answer published earlier in the same turn keeps
+// the turn valid, because the withheld text was then trailing noise rather than
+// the reply.
+func (n *acpTurnNormalizer) AssistantAnswerWithheldAsProtocolFragment() bool {
+	if n == nil {
+		return false
+	}
+	return n.assistantFragmentWithheld && !n.assistantAnswerPublished
 }
 
 // settleInlineReasoning drains the inline-reasoning splitter at a turn, tool, or
