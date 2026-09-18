@@ -1051,6 +1051,10 @@ file or directory`. A failed `codex app-server` probe is diagnostic evidence,
   equivalent text but different message ids in one turn. The composer should
   preserve the models and `supportedReasoningEfforts` returned by app-server
   regardless of whether the active `model_provider` is OpenAI or custom.
+  For repeated short reasoning or assistant text, inspect the raw Chat stream:
+  if `delta.reasoning_content` or `delta.content` repeats the cumulative text
+  instead of carrying only the next token, the Responses-to-Chat bridge may be
+  appending full snapshots.
 - Root cause:
   A Tutti post-processing rule treated any non-default `model_provider` as
   proof that Codex's discovered catalog was unrelated and collapsed it to the
@@ -1060,6 +1064,12 @@ file or directory`. A failed `codex app-server` probe is diagnostic evidence,
   whitespace polish; treating each report as a new segment creates duplicate
   bubbles. The model-metadata warning is runtime diagnostic noise rather than
   an actionable user error.
+  A second duplicate path exists in the Model Gateway bridge when a
+  Chat-compatible upstream puts cumulative snapshots in `delta` fields. The
+  bridge originally treated every value as an incremental token. Short
+  reasoning exposed this more often because its stream may re-send the complete
+  short snapshot, while longer streams usually contain enough non-prefix deltas
+  to look incremental.
 - Fix:
   Treat Codex app-server `model/list` as the authoritative catalog regardless
   of `model_provider`. Preserve the full returned list and reasoning metadata;
@@ -1069,11 +1079,28 @@ file or directory`. A failed `codex app-server` probe is diagnostic evidence,
   after an assistant segment has already completed. Filter the metadata
   fallback warning through the same AgentGUI diagnostic-notice projection used
   for skills-context-budget warnings.
+  In the Model Gateway, track snapshot-versus-delta mode independently for
+  reasoning and assistant text. Keep the mode unknown through duplicate,
+  stale, and whitespace-equivalent snapshots; emit only the suffix once
+  trimmed-prefix growth proves snapshot mode; and latch delta mode only after a
+  non-prefix chunk. Responses streaming has no replacement event, so a proven
+  snapshot rewrite after already emitted deltas falls back to append and keeps
+  the concatenated deltas equal to the final item text. Before the mode is
+  locked, prefix-shaped chunks are treated as duplicates; whitespace already
+  emitted cannot be retracted, so later snapshot whitespace may differ from the
+  upstream snapshot text. Classification uses the latest raw snapshot as its
+  base, not the accumulated item text, and compares snapshot content with
+  whitespace ignored. Edge or internal whitespace polish therefore cannot make
+  a later growing snapshot look like an unrelated rewrite.
 - Validation:
   Run
   `go test ./packages/agent/daemon/runtime -run 'TestApplyAssistantFinalText|TestApplyAssistantTurnFinalText|TestCodexAppServerAdapterExecStreamsTurn'`,
   `cd services/tuttid && go test ./service/agent -run TestAgentModelCatalog`,
-  and the focused AgentGUI projection test.
+  the focused AgentGUI projection test, and
+  `go test ./services/tuttid/service/modelgateway`.
+- References:
+  [stream_converter.go](../../../services/tuttid/service/modelgateway/stream_converter.go)
+  [stream_converter_test.go](../../../services/tuttid/service/modelgateway/stream_converter_test.go)
 
 ### Claude SDK Grep or Glob unavailable despite Claude Code preset
 
