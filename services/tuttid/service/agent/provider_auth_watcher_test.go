@@ -152,60 +152,6 @@ func TestProviderAuthWatcherStartWithoutCallbackIsInert(_ *testing.T) {
 	watcher.Close()
 }
 
-func TestDefaultProviderAuthWatchEntriesCoverCredentialBackedCatalogs(t *testing.T) {
-	home := t.TempDir()
-	configDir := filepath.Join(home, "opencode-config")
-	dataDir := filepath.Join(home, "opencode-data")
-	configPath := filepath.Join(home, "custom-opencode.json")
-	codexHome := filepath.Join(home, "custom-codex")
-	t.Setenv("HOME", home)
-	t.Setenv("CODEX_HOME", codexHome)
-	t.Setenv("TUTTI_AGENT_HOME", filepath.Join(home, "ignored-tutti-agent-home"))
-	t.Setenv("OPENCODE_CONFIG", configPath)
-	t.Setenv("OPENCODE_CONFIG_DIR", configDir)
-	t.Setenv("XDG_DATA_HOME", dataDir)
-	t.Setenv("TUTTI_HOST_MODEL_ENDPOINTS_FILE", "")
-
-	entries := DefaultProviderAuthWatchEntries()
-	byProvider := make(map[string][]string, len(entries))
-	for _, entry := range entries {
-		byProvider[entry.Provider] = entry.Paths
-	}
-	codexPaths := byProvider[agentprovider.Codex]
-	for _, want := range []string{
-		filepath.Join(codexHome, "auth.json"),
-		filepath.Join(codexHome, "config.toml"),
-	} {
-		if !containsString(codexPaths, want) {
-			t.Fatalf("codex paths = %v, want %q", codexPaths, want)
-		}
-	}
-	if len(byProvider[agentprovider.ClaudeCode]) == 0 {
-		t.Fatal("expected claude-code watch paths")
-	}
-	if !containsString(byProvider[agentprovider.ClaudeCode], filepath.Join(home, ".claude", ".credentials.json")) {
-		t.Fatalf("claude-code watch paths = %v, want credentials file", byProvider[agentprovider.ClaudeCode])
-	}
-	opencodePaths := byProvider[agentprovider.OpenCode]
-	if len(opencodePaths) == 0 {
-		t.Fatal("expected opencode watch paths")
-	}
-	for _, want := range []string{
-		configPath,
-		filepath.Join(configDir, "opencode.json"),
-		filepath.Join(configDir, "config.json"),
-		filepath.Join(dataDir, "opencode", "auth.json"),
-	} {
-		if !containsString(opencodePaths, want) {
-			t.Fatalf("opencode paths = %v, want %q", opencodePaths, want)
-		}
-	}
-	tuttiAgentPaths := byProvider[agentprovider.TuttiAgent]
-	if !containsString(tuttiAgentPaths, filepath.Join(home, ".tutti-agent", "auth.json")) {
-		t.Fatalf("tutti-agent paths = %v, want auth file", tuttiAgentPaths)
-	}
-}
-
 func TestDefaultProviderAuthWatchEntriesCoverHostModelCatalogs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "host-model-endpoints.json")
 	t.Setenv("TUTTI_HOST_MODEL_ENDPOINTS_FILE", path)

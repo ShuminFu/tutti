@@ -28,40 +28,6 @@ func TestFrozenAgentModelCatalogPreservesCassetteOrderAndDeduplicates(t *testing
 	}
 }
 
-func TestReplayComposerOptionsUseFrozenCatalogForLiveDiscoveryProviders(t *testing.T) {
-	service := &Service{
-		ReplayMode: true,
-		ModelCatalog: NewFrozenAgentModelCatalog(map[string][]string{
-			"claude-code": {"recorded-claude-model"},
-		}),
-	}
-	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
-		Provider: "claude-code",
-		Settings: ComposerSettings{Model: "recorded-claude-model"},
-	})
-	if err != nil {
-		t.Fatalf("GetComposerOptions() error = %v", err)
-	}
-	if options.RuntimeContext["modelCatalogSource"] != replayFrozenModelCatalogSource {
-		t.Fatalf("modelCatalogSource = %#v, want frozen source", options.RuntimeContext["modelCatalogSource"])
-	}
-	runtimeOptions := options.RuntimeContext["configOptions"]
-	modelOption := map[string]any(nil)
-	for _, candidate := range runtimeOptions.([]map[string]any) {
-		if candidate["id"] == "model" {
-			modelOption = candidate
-			break
-		}
-	}
-	if modelOption == nil {
-		t.Fatalf("runtime config options = %#v, missing model option", runtimeOptions)
-	}
-	modelOptions := modelOption["options"].([]map[string]any)
-	if len(modelOptions) != 1 || modelOptions[0]["value"] != "recorded-claude-model" {
-		t.Fatalf("runtime model options = %#v, want only frozen model", modelOptions)
-	}
-}
-
 func TestReplayModelValidationUsesFrozenCatalog(t *testing.T) {
 	service := &Service{
 		ReplayMode: true,

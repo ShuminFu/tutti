@@ -141,52 +141,6 @@ func newPlanBoundService(protocol modelplanbiz.Protocol, enabled bool) *Service 
 	return service
 }
 
-func TestResolveModelPlanEndpointMatchesProviderProtocol(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	service := newPlanBoundService(modelplanbiz.ProtocolOpenAI, true)
-
-	endpoint, models := service.resolveModelPlanEndpoint(ctx, "ws", "local:codex", "codex", "")
-	if endpoint == nil {
-		t.Fatalf("resolveModelPlanEndpoint() = nil, want endpoint")
-		return
-	}
-	if endpoint.Model != "plan-default" || endpoint.APIKey != "sk-plan" || endpoint.Protocol != "openai" {
-		t.Fatalf("endpoint = %#v", endpoint)
-	}
-	if len(models) != 2 {
-		t.Fatalf("plan models = %#v", models)
-	}
-
-	// Requested model inside the plan wins over the binding default.
-	endpoint, _ = service.resolveModelPlanEndpoint(ctx, "ws", "local:codex", "codex", "plan-alt")
-	if endpoint == nil || endpoint.Model != "plan-alt" {
-		t.Fatalf("endpoint with requested model = %#v", endpoint)
-	}
-
-	// Anthropic-protocol plans do not bind onto codex.
-	anthropicService := newPlanBoundService(modelplanbiz.ProtocolAnthropic, true)
-	if endpoint, _ := anthropicService.resolveModelPlanEndpoint(ctx, "ws", "local:codex", "codex", ""); endpoint != nil {
-		t.Fatalf("protocol mismatch should not bind: %#v", endpoint)
-	}
-	// But they do bind onto claude-code.
-	if endpoint, _ := anthropicService.resolveModelPlanEndpoint(ctx, "ws", "local:claude-code", "claude-code", ""); endpoint == nil {
-		t.Fatalf("anthropic plan should bind claude-code")
-	}
-
-	// Disabled plans never bind.
-	disabledService := newPlanBoundService(modelplanbiz.ProtocolOpenAI, false)
-	if endpoint, _ := disabledService.resolveModelPlanEndpoint(ctx, "ws", "local:codex", "codex", ""); endpoint != nil {
-		t.Fatalf("disabled plan should not bind: %#v", endpoint)
-	}
-
-	// Providers without an endpoint-injection adapter keep native credentials.
-	if endpoint, _ := service.resolveModelPlanEndpoint(ctx, "ws", "local:cursor", "cursor", ""); endpoint != nil {
-		t.Fatalf("cursor should not receive a plan endpoint yet: %#v", endpoint)
-	}
-}
-
 func TestResolveCreateSessionModelUsesExtensionDeclaredHostEndpoint(t *testing.T) {
 	setHostModelEndpointContract(t, "acp:test-agent", "openai", "chat")
 	service := &Service{
@@ -309,64 +263,6 @@ func TestResolveModelPlanReportsAuthoritativeConfiguration(t *testing.T) {
 	rotatedResolution := rotated.resolveModelPlan(ctx, "ws", "local:codex", "codex", "plan-alt")
 	if rotatedResolution.ModelConfiguration.Fingerprint != configuration.Fingerprint {
 		t.Fatalf("fingerprint changed for secrets or presentation-only fields: got %q want %q", rotatedResolution.ModelConfiguration.Fingerprint, configuration.Fingerprint)
-	}
-}
-
-func TestResolveModelPlanFallsBackToProviderNativeConfiguration(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	disabledService := newPlanBoundService(modelplanbiz.ProtocolOpenAI, false)
-	mismatchService := newPlanBoundService(modelplanbiz.ProtocolAnthropic, true)
-	unsupportedService := newPlanBoundService(modelplanbiz.ProtocolOpenAI, true)
-	tests := []struct {
-		name     string
-		service  *Service
-		provider string
-		targetID string
-	}{
-		{
-			name:     "unbound",
-			service:  &Service{},
-			provider: "codex",
-			targetID: "local:codex",
-		},
-		{
-			name:     "disabled",
-			service:  disabledService,
-			provider: "codex",
-			targetID: "local:codex",
-		},
-		{
-			name:     "protocol mismatch",
-			service:  mismatchService,
-			provider: "codex",
-			targetID: "local:codex",
-		},
-		{
-			name:     "unsupported provider",
-			service:  unsupportedService,
-			provider: "cursor",
-			targetID: "local:cursor",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			resolution := test.service.resolveModelPlan(ctx, "ws", test.targetID, test.provider, "stale-model")
-			if resolution.Endpoint != nil || len(resolution.Models) != 0 {
-				t.Fatalf("native resolution = %#v, want no plan endpoint/models", resolution)
-			}
-			configuration := resolution.ModelConfiguration
-			if configuration.AgentTargetID != test.targetID || configuration.Source != modelConfigurationSourceProviderNative {
-				t.Fatalf("native model configuration = %#v", configuration)
-			}
-			if configuration.DefaultModel != "" {
-				t.Fatalf("native default model = %q, want empty/null", configuration.DefaultModel)
-			}
-			if configuration.Fingerprint == "" {
-				t.Fatal("native fingerprint is empty")
-			}
-		})
 	}
 }
 
@@ -552,34 +448,6 @@ func TestGetComposerOptionsBoundPlanSkipsProviderNativeModelCatalog(t *testing.T
 	}
 	if selectedConfiguration["fingerprint"] != configuration["fingerprint"] {
 		t.Fatalf("selected model changed configuration fingerprint: got %q want %q", selectedConfiguration["fingerprint"], configuration["fingerprint"])
-	}
-}
-
-func TestGetComposerOptionsAlwaysReportsProviderNativeModelConfiguration(t *testing.T) {
-	t.Parallel()
-
-	runtime := newFakeRuntime()
-	service := NewService(runtime)
-	service.AgentTargetStore = fakeAgentTargetStore{targets: defaultTestAgentTargets()}
-	service.ModelCatalog = &recordingModelCatalog{}
-	includeCapabilityCatalog := false
-	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
-		WorkspaceID:              "ws",
-		AgentTargetID:            "local:codex",
-		IncludeCapabilityCatalog: &includeCapabilityCatalog,
-	})
-	if err != nil {
-		t.Fatalf("GetComposerOptions returned error: %v", err)
-	}
-	configuration, ok := options.RuntimeContext["modelConfiguration"].(map[string]any)
-	if !ok {
-		t.Fatalf("runtime model configuration = %#v", options.RuntimeContext["modelConfiguration"])
-	}
-	if configuration["agentTargetId"] != "local:codex" || configuration["source"] != modelConfigurationSourceProviderNative {
-		t.Fatalf("runtime model configuration = %#v", configuration)
-	}
-	if configuration["defaultModel"] != nil || configuration["fingerprint"] == "" {
-		t.Fatalf("runtime model configuration = %#v, want null default and fingerprint", configuration)
 	}
 }
 

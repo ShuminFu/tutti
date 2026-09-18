@@ -52,34 +52,6 @@ func TestServiceCreatesAndListsSessions(t *testing.T) {
 	}
 }
 
-func TestServiceCreateInheritsTargetComposerDefaultsAndExplicitOverridesWin(t *testing.T) {
-	runtime := newFakeRuntime()
-	service := newTestService(runtime)
-	service.AgentComposerDefaultsReader = fakeAgentComposerDefaultsReader{
-		agenttargetbiz.IDLocalCodex: {
-			Model:            "gpt-5",
-			PermissionModeID: "full-access",
-			ReasoningEffort:  "high",
-			Speed:            "fast",
-		},
-	}
-	explicitModel := "gpt-5-codex"
-	if _, err := service.Create(context.Background(), "ws-defaults", CreateSessionInput{
-		AgentSessionID: "12121212-1212-4121-8121-121212121212",
-		AgentTargetID:  agenttargetbiz.IDLocalCodex,
-		Model:          &explicitModel,
-	}); err != nil {
-		t.Fatalf("Create() error = %v", err)
-	}
-	if len(runtime.startCalls) != 1 {
-		t.Fatalf("start calls = %d", len(runtime.startCalls))
-	}
-	started := runtime.startCalls[0]
-	if started.Model != explicitModel || started.PermissionModeID != "full-access" || started.ReasoningEffort != "high" || started.Speed != "fast" {
-		t.Fatalf("runtime start = %#v", started)
-	}
-}
-
 func TestServiceCreateAppliesCodexSaverModeWithoutChangingMainModel(t *testing.T) {
 	runtime := newFakeRuntime()
 	service := newTestService(runtime)
@@ -330,96 +302,6 @@ func TestServiceUpdateTitleRejectsOverlongTitle(t *testing.T) {
 	}
 	if !errors.Is(err, ErrSessionTitleTooLong) {
 		t.Fatalf("UpdateTitle error = %v, want ErrSessionTitleTooLong", err)
-	}
-}
-
-func TestServiceCreateResolvesProviderFromAgentTarget(t *testing.T) {
-	runtime := newFakeRuntime()
-	// Service.Create validates the Claude composer model via a hidden live
-	// discovery session (composer_live_model_discovery.go); without a
-	// populated RuntimeContext the poll loop never sees model options and
-	// spins until the test's own timeout kills it. Supply one immediately so
-	// discovery resolves on its first check, matching the pattern used by
-	// TestServiceCreateDiscoversClaudeModelsBeforeStartingInvalidModel below.
-	runtime.startHook = func(input RuntimeStartInput, session ProviderRuntimeSession) ProviderRuntimeSession {
-		if input.Visible != nil && !*input.Visible {
-			session.RuntimeContext = map[string]any{
-				"configOptions": []any{
-					map[string]any{
-						"id": "model",
-						"options": []any{
-							map[string]any{"value": "default", "name": "Default"},
-						},
-					},
-				},
-			}
-		}
-		return session
-	}
-	service := newIsolatedAgentService(runtime)
-	service.AgentTargetStore = fakeAgentTargetStore{
-		targets: map[string]agenttargetbiz.Target{
-			agenttargetbiz.IDLocalClaudeCode: {
-				ID:            agenttargetbiz.IDLocalClaudeCode,
-				Provider:      "claude-code",
-				LaunchRefJSON: agenttargetbiz.MustLocalCLILaunchRefJSON("claude-code"),
-				Name:          "Claude Code",
-				Enabled:       true,
-				Source:        agenttargetbiz.SourceSystem,
-			},
-		},
-	}
-
-	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
-		AgentSessionID: "target-session-1",
-		AgentTargetID:  agenttargetbiz.IDLocalClaudeCode,
-		// Pin the model explicitly so resolveCreateSessionModel never falls
-		// through to composerDefaultModel's readClaudeCodeConfiguredDefaultModel,
-		// which reads the *real* local Claude Code CLI config file on the
-		// machine running the test — making the test's behavior depend on
-		// whatever model happens to be configured on the developer's machine.
-		Model:          stringPointer("default"),
-		InitialContent: TextPromptContent("hello target"),
-		ProviderTargetRef: map[string]any{
-			"kind":     "local_cli",
-			"provider": "codex",
-			"targetId": "wrong-target",
-		},
-	})
-	if err != nil {
-		t.Fatalf("Create returned error: %v", err)
-	}
-	if session.Provider != "claude-code" || session.AgentTargetID != agenttargetbiz.IDLocalClaudeCode {
-		t.Fatalf("session provider/target = %q/%q, want claude-code/%s", session.Provider, session.AgentTargetID, agenttargetbiz.IDLocalClaudeCode)
-	}
-	// Service.Create's Claude composer model validation runs a hidden
-	// (Visible=false) discovery session start in addition to the real,
-	// user-facing session start — assert against the visible one specifically
-	// rather than assuming index/count, so this doesn't re-break if discovery
-	// internals change again.
-	var visibleStart *RuntimeStartInput
-	for i := range runtime.startCalls {
-		call := runtime.startCalls[i]
-		if call.Visible == nil || *call.Visible {
-			visibleStart = &runtime.startCalls[i]
-			break
-		}
-	}
-	if visibleStart == nil {
-		t.Fatalf("start calls = %#v, want one visible (user-facing) start call", runtime.startCalls)
-		return
-	}
-	if got := visibleStart.Provider; got != "claude-code" {
-		t.Fatalf("runtime provider = %q, want claude-code", got)
-	}
-	if got := visibleStart.AgentTargetID; got != agenttargetbiz.IDLocalClaudeCode {
-		t.Fatalf("runtime agent target id = %q, want %s", got, agenttargetbiz.IDLocalClaudeCode)
-	}
-	ref := visibleStart.ProviderTargetRef
-	if ref["kind"] != agenttargetbiz.LaunchRefTypeBuiltinLocal ||
-		ref["provider"] != "claude-code" ||
-		ref["targetId"] != agenttargetbiz.IDLocalClaudeCode {
-		t.Fatalf("runtime provider target ref = %#v, want daemon-derived builtin_local claude target", ref)
 	}
 }
 

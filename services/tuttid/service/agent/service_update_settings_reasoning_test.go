@@ -35,8 +35,8 @@ func TestServiceUpdateSettingsKeepsAdvertisedReasoningForUnprofiledProvider(t *t
 					"ws-1:session-1": {
 						ID: "session-1", WorkspaceID: "ws-1", Provider: tc.provider,
 						ProviderSessionID: "provider-session-1", Cwd: "/workspace",
-						RailSectionKey:    "conversations",
-						Settings: settings, CreatedAtUnixMS: 100, UpdatedAtUnixMS: 200,
+						RailSectionKey: "conversations",
+						Settings:       settings, CreatedAtUnixMS: 100, UpdatedAtUnixMS: 200,
 						LastEventUnixMS: 200,
 					},
 				}},
