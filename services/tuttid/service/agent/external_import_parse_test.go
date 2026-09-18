@@ -771,6 +771,85 @@ func TestTruncateExternalTitleKeepsMultibyteRunesIntact(t *testing.T) {
 	}
 }
 
+func TestParseCodexJSONLPreservesAssistantMessagePhase(t *testing.T) {
+	cwd := t.TempDir()
+	session, ok, err := parseCodexJSONL(
+		filepath.Join(cwd, "rollout.jsonl"),
+		strings.NewReader(testAgentJSONL(t,
+			map[string]any{
+				"timestamp": "2026-06-18T00:00:00Z",
+				"type":      "session_meta",
+				"payload":   map[string]any{"id": "codex-phase", "cwd": cwd},
+			},
+			map[string]any{
+				"timestamp": "2026-06-18T00:00:01Z",
+				"type":      "response_item",
+				"payload": map[string]any{
+					"type":    "message",
+					"id":      "user-1",
+					"role":    "user",
+					"content": []any{map[string]any{"type": "input_text", "text": "Inspect the repo"}},
+				},
+			},
+			map[string]any{
+				"timestamp": "2026-06-18T00:00:02Z",
+				"type":      "response_item",
+				"payload": map[string]any{
+					"type":    "message",
+					"id":      "assistant-commentary",
+					"role":    "assistant",
+					"phase":   "commentary",
+					"content": []any{map[string]any{"type": "output_text", "text": "Looking through files."}},
+				},
+			},
+			map[string]any{
+				"timestamp": "2026-06-18T00:00:03Z",
+				"type":      "response_item",
+				"payload": map[string]any{
+					"type":    "message",
+					"id":      "assistant-final",
+					"role":    "assistant",
+					"phase":   "final_answer",
+					"content": []any{map[string]any{"type": "output_text", "text": "The repo looks healthy."}},
+				},
+			},
+			map[string]any{
+				"timestamp": "2026-06-18T00:00:04Z",
+				"type":      "response_item",
+				"payload": map[string]any{
+					"type":    "message",
+					"id":      "assistant-plain",
+					"role":    "assistant",
+					"content": []any{map[string]any{"type": "output_text", "text": "Historical unmarked reply."}},
+				},
+			},
+		)),
+	)
+	if err != nil || !ok {
+		t.Fatalf("parseCodexJSONL ok=%v err=%v", ok, err)
+	}
+	kinds := map[string]string{}
+	for _, message := range session.Messages {
+		if message.Role != "assistant" {
+			continue
+		}
+		kind := ""
+		if message.Payload != nil {
+			kind, _ = message.Payload["messageKind"].(string)
+		}
+		kinds[message.RawID] = kind
+	}
+	if kinds["assistant-commentary"] != "assistant-commentary" {
+		t.Fatalf("commentary payload = %#v, want assistant-commentary", kinds)
+	}
+	if kinds["assistant-final"] != "assistant-final" {
+		t.Fatalf("final payload = %#v, want assistant-final", kinds)
+	}
+	if kinds["assistant-plain"] != "" {
+		t.Fatalf("unmarked payload = %#v, want no guessed kind", kinds)
+	}
+}
+
 func testAgentJSONL(t *testing.T, items ...map[string]any) string {
 	t.Helper()
 	var builder strings.Builder

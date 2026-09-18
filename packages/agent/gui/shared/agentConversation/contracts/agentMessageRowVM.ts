@@ -21,6 +21,8 @@ export interface AgentMessageContentVM {
     | "tutti-checkpoint-wake"
     | "tutti-plan-issue-link";
   isTurnFinalText?: true;
+  /** Provider-authored terminal answer for this Turn; presentation stays content. */
+  isExplicitAssistantFinal?: true;
   /** Typed payload for `contentKind: "collaboration"` rows. */
   collaboration?: AgentCollaborationVM | null;
   /**

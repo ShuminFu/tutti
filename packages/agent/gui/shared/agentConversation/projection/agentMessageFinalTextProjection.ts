@@ -111,12 +111,39 @@ function isLatestTranscriptTurnSettled(
 // to an earlier process line while the real reply collapsed into the work
 // section — the "important output is never hidden" failure that
 // docs/architecture/agent-gui-node.md forbids.
+// Explicit provider-final items win over the last-visible-text fallback so a
+// late process line cannot steal the copy target. Commentary is never treated
+// as the answer. The stamp does not hide other ordinary replies.
 function findLatestAssistantFinalTextTargetKeys(
   rows: readonly AgentTranscriptRowVM[],
   eligibleTurnIds: ReadonlySet<string>
 ): ReadonlySet<string> {
   const targetKeys = new Set<string>();
   const coveredTurnIds = new Set<string>();
+  collectAssistantFinalTextTargets(
+    rows,
+    eligibleTurnIds,
+    targetKeys,
+    coveredTurnIds,
+    (message) => Boolean(message.isExplicitAssistantFinal) && isCopyableAssistantText(message)
+  );
+  collectAssistantFinalTextTargets(
+    rows,
+    eligibleTurnIds,
+    targetKeys,
+    coveredTurnIds,
+    isFallbackFinalTextMessage
+  );
+  return targetKeys;
+}
+
+function collectAssistantFinalTextTargets(
+  rows: readonly AgentTranscriptRowVM[],
+  eligibleTurnIds: ReadonlySet<string>,
+  targetKeys: Set<string>,
+  coveredTurnIds: Set<string>,
+  isCandidate: (message: AgentMessageContentVM) => boolean
+): void {
   for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex -= 1) {
     const row = rows[rowIndex];
     if (
@@ -133,14 +160,13 @@ function findLatestAssistantFinalTextTargetKeys(
       messageIndex -= 1
     ) {
       const message = row.messages[messageIndex];
-      if (message && isVisibleTextMessage(message)) {
+      if (message && isCandidate(message)) {
         targetKeys.add(messagePresentationTargetKey(row, message));
         coveredTurnIds.add(row.turnId);
         break;
       }
     }
   }
-  return targetKeys;
 }
 
 function messagePresentationTargetKey(
@@ -158,10 +184,24 @@ function copyTextForUserMessage(message: AgentMessageContentVM): string | null {
 }
 
 function isVisibleTextMessage(message: AgentMessageContentVM): boolean {
+  return isCopyableAssistantText(message);
+}
+
+function isFallbackFinalTextMessage(message: AgentMessageContentVM): boolean {
+  return (
+    isCopyableAssistantText(message) &&
+    message.presentationKind === "content" &&
+    message.contentKind !== "plan"
+  );
+}
+
+function isCopyableAssistantText(message: AgentMessageContentVM): boolean {
   return (
     message.body.trim() !== "" &&
     message.contentKind !== "image-grid" &&
     message.contentKind !== "collaboration" &&
+    message.contentKind !== "tutti-checkpoint-wake" &&
+    message.contentKind !== "tutti-plan-issue-link" &&
     !message.visibleError &&
     !message.systemNotice
   );

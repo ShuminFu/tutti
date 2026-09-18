@@ -78,9 +78,10 @@ func codexMessageFromPayload(payload map[string]any, index int, timestamp int64)
 	rawID := firstNonEmptyString(stringField(payload, "id"), strconv.Itoa(index))
 	switch itemType {
 	case "message":
-		return externalImportedMessage{
+		role := normalizeExternalMessageRole(stringField(payload, "role"))
+		message := externalImportedMessage{
 			RawID:             rawID,
-			Role:              normalizeExternalMessageRole(stringField(payload, "role")),
+			Role:              role,
 			Kind:              "text",
 			Status:            "completed",
 			Text:              externalContentText(payload["content"]),
@@ -88,6 +89,12 @@ func codexMessageFromPayload(payload map[string]any, index int, timestamp int64)
 			StartedAtUnixMS:   timestamp,
 			CompletedAtUnixMS: timestamp,
 		}
+		if role == "assistant" {
+			if kind := importedAssistantMessageKind(stringField(payload, "phase")); kind != "" {
+				message.Payload = map[string]any{"messageKind": kind}
+			}
+		}
+		return message
 	case "function_call":
 		return codexFunctionCallMessage(payload, rawID, timestamp)
 	case "function_call_output":
@@ -442,6 +449,17 @@ func isExternalImportScratchCwd(home string, cwd string, relativeRoot string) bo
 	scratchRoot := filepath.Join(home, filepath.FromSlash(root))
 	return agentactivitybiz.IsProjectPathWithin(scratchRoot, cwd) &&
 		!agentactivitybiz.AreProjectPathsEqual(scratchRoot, cwd)
+}
+
+func importedAssistantMessageKind(phase string) string {
+	switch strings.TrimSpace(phase) {
+	case "commentary":
+		return "assistant-commentary"
+	case "final_answer":
+		return "assistant-final"
+	default:
+		return ""
+	}
 }
 
 func externalImportedMessageHasContent(message externalImportedMessage) bool {

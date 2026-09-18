@@ -71,11 +71,12 @@ func (*CodexAppServerAdapter) appServerItemEvents(
 	}
 	switch itemType {
 	case "agentMessage":
+		itemID := asString(item["id"])
+		phase := asString(item["phase"])
 		if !completed {
-			return nil
+			return normalizer.BindAssistantItem(session, turnID, itemID, phase)
 		}
-		normalizer.ApplyAssistantFinalText(asStringRaw(item["text"]))
-		return normalizer.Finish(session, turnID, messageStreamStateCompleted)
+		return normalizer.FinishAssistantItem(session, turnID, itemID, asStringRaw(item["text"]), phase)
 	case "plan":
 		if !completed {
 			return nil

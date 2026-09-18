@@ -19,23 +19,32 @@ type acpTurnNormalizer struct {
 	assistantMessageID        string
 	assistantContent          strings.Builder
 	assistantSegmentCompleted bool
-	thinkingMessageID         string
-	thinkingContent           strings.Builder
-	thinkingSegmentCompleted  bool
-	thinkingMessageKind       string
-	toolItemIDs               map[string]string
-	toolCallsSeen             map[string]bool
-	pendingToolCalls          map[string]pendingToolCallSnapshot
-	toolOutputText            map[string]string
-	toolOutputTruncated       map[string]bool
-	earlyToolOutput           map[string]earlyToolOutputSnapshot
-	earlyToolOutputBytes      int
-	fileChanges               map[string]any
-	compactionMu              sync.Mutex
-	compactionMessageID       string
-	compactionTerminalStatus  string
-	suppressAssistantOutput   bool
-	systemNoticeOutputSeen    bool
+	// assistantItemID is the provider item that owns the current assistant
+	// segment. Codex agentMessage items carry commentary/final_answer here;
+	// ACP providers that do not name items leave it empty.
+	assistantItemID string
+	// assistantMessageKind is the purpose tag of the current assistant
+	// segment (assistant-commentary / assistant-final). Empty means unknown.
+	assistantMessageKind     string
+	assistantItemMessageIDs  map[string]string
+	assistantItemKinds       map[string]string
+	thinkingMessageID        string
+	thinkingContent          strings.Builder
+	thinkingSegmentCompleted bool
+	thinkingMessageKind      string
+	toolItemIDs              map[string]string
+	toolCallsSeen            map[string]bool
+	pendingToolCalls         map[string]pendingToolCallSnapshot
+	toolOutputText           map[string]string
+	toolOutputTruncated      map[string]bool
+	earlyToolOutput          map[string]earlyToolOutputSnapshot
+	earlyToolOutputBytes     int
+	fileChanges              map[string]any
+	compactionMu             sync.Mutex
+	compactionMessageID      string
+	compactionTerminalStatus string
+	suppressAssistantOutput  bool
+	systemNoticeOutputSeen   bool
 	// assistantStreamKind records how this provider delivers assistant text.
 	// ACP's agent_message_chunk is a delta by spec, but several providers ship
 	// cumulative snapshots instead, so the shape is only known once a second
@@ -157,12 +166,14 @@ func (n *acpTurnNormalizer) SuppressAssistantOutput() {
 
 func newACPTurnNormalizer() *acpTurnNormalizer {
 	return &acpTurnNormalizer{
-		toolItemIDs:         make(map[string]string),
-		toolCallsSeen:       make(map[string]bool),
-		pendingToolCalls:    make(map[string]pendingToolCallSnapshot),
-		toolOutputText:      make(map[string]string),
-		toolOutputTruncated: make(map[string]bool),
-		earlyToolOutput:     make(map[string]earlyToolOutputSnapshot),
+		assistantItemMessageIDs: make(map[string]string),
+		assistantItemKinds:      make(map[string]string),
+		toolItemIDs:             make(map[string]string),
+		toolCallsSeen:           make(map[string]bool),
+		pendingToolCalls:        make(map[string]pendingToolCallSnapshot),
+		toolOutputText:          make(map[string]string),
+		toolOutputTruncated:     make(map[string]bool),
+		earlyToolOutput:         make(map[string]earlyToolOutputSnapshot),
 	}
 }
 
@@ -178,10 +189,7 @@ func (n *acpTurnNormalizer) AppendAssistantChunk(session Session, turnID string,
 		return reasoningEvents
 	}
 	if n.assistantMessageID == "" || n.assistantSegmentCompleted {
-		n.assistantMessageID = newID()
-		n.assistantContent.Reset()
-		n.assistantSegmentCompleted = false
-		n.assistantStreamKind = acpAssistantStreamUnknown
+		n.ensureAssistantSegment(n.assistantItemID)
 	}
 	liveOperation := n.mergeAssistantText(chunk)
 	if liveOperation == nil {
@@ -339,7 +347,10 @@ func (n *acpTurnNormalizer) MarkSystemNoticeOutput() {
 }
 
 func (n *acpTurnNormalizer) ApplyAssistantFinalText(finalText string) {
-	n.applyAssistantFinalText(finalText)
+	// Turn-level and ACP callers are not item-scoped. Passing an empty item id
+	// keeps the historical "same completed segment" reuse rules so a later
+	// turn snapshot cannot rewrite a finished Codex item in place.
+	n.applyAssistantFinalText(finalText, "")
 }
 
 // applyAssistantFinalText splits inline <think> markup out of the authoritative
@@ -347,13 +358,14 @@ func (n *acpTurnNormalizer) ApplyAssistantFinalText(finalText string) {
 // mid-thought arrives here as a bare, unterminated "<think>…" with no closing
 // tag; publishing that verbatim would show the user a truncated monologue in
 // place of the answer.
-func (n *acpTurnNormalizer) applyAssistantFinalText(finalText string) {
+func (n *acpTurnNormalizer) applyAssistantFinalText(finalText string, itemID string) {
 	if n == nil {
 		return
 	}
 	if n.suppressAssistantOutput {
 		return
 	}
+	itemID = strings.TrimSpace(itemID)
 	finalText = strings.TrimSpace(finalText)
 	if finalText == "" {
 		return
@@ -380,23 +392,21 @@ func (n *acpTurnNormalizer) applyAssistantFinalText(finalText string) {
 	// Codex may close a streamed assistant segment before item/completed
 	// redelivers the same answer with whitespace polish. Preserve the message id
 	// for equivalent text so the replay updates one bubble instead of opening a
-	// duplicate.
+	// duplicate. A different provider item with the same text is a new bubble.
 	if n.assistantSegmentCompleted && n.assistantMessageID != "" {
 		previous := strings.TrimSpace(n.assistantContent.String())
-		if previous == finalText {
+		sameItem := itemID == "" || n.assistantItemID == "" || itemID == n.assistantItemID
+		if sameItem && previous == finalText {
 			return
 		}
-		if assistantTextEquivalent(previous, finalText) {
+		if sameItem && assistantTextEquivalent(previous, finalText) {
 			n.assistantContent.Reset()
 			_, _ = n.assistantContent.WriteString(finalText)
 			n.assistantSegmentCompleted = false
 			return
 		}
 	}
-	if n.assistantMessageID == "" || n.assistantSegmentCompleted {
-		n.assistantMessageID = newID()
-		n.assistantSegmentCompleted = false
-	}
+	n.ensureAssistantSegment(itemID)
 	n.assistantContent.Reset()
 	_, _ = n.assistantContent.WriteString(finalText)
 }
@@ -1068,11 +1078,8 @@ func (n *acpTurnNormalizer) assistantSnapshotEvent(session Session, turnID strin
 	case messageStreamStateFailed:
 		status = messageStreamStateFailed
 	}
-	event := newTurnActivityEventWithID(session, n.assistantMessageID, EventMessage, turnID, status, RoleAssistant, n.assistantContent.String(), map[string]any{
-		"messageId":   n.assistantMessageID,
-		"contentMode": messageContentModeSnapshot,
-		"streamState": status,
-	})
+	event := newTurnActivityEventWithID(session, n.assistantMessageID, EventMessage, turnID, status, RoleAssistant, n.assistantContent.String(), n.assistantSnapshotMetadata(status))
+	n.recordAssistantItemMessage(n.assistantItemID, n.assistantMessageID)
 	return event
 }
 

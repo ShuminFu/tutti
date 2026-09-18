@@ -516,10 +516,15 @@ function isSpecialAssistantMessage(message: {
   visibleError?: unknown;
   systemNotice?: unknown;
   contentKind?: string;
+  presentationKind?: string;
+  isExplicitAssistantFinal?: true;
 }): boolean {
   return Boolean(
     message.visibleError ||
     message.systemNotice ||
+    message.isExplicitAssistantFinal ||
+    message.presentationKind === "specific-progress" ||
+    message.presentationKind === "turn-boundary" ||
     message.contentKind === "plan" ||
     message.contentKind === "collaboration" ||
     message.contentKind === "tutti-plan-issue-link"

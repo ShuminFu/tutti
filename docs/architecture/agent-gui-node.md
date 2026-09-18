@@ -1552,12 +1552,15 @@ timestamp.
 
 Completed Turn disclosure collapses only process-oriented rows such as thinking,
 tool groups, progress, turn-boundary messages, and transient processing.
-Ordinary assistant content, user messages, and the response-tail file summary
-remain visible. Locally created and imported sessions use the same
+Marked Codex `assistant-commentary` rows are progress; an `assistant-final`
+answer stays ordinary content and remains visible after collapse. Ordinary
+assistant content without a purpose tag, user messages, and the response-tail
+file summary remain visible. Locally created and imported sessions use the same
 classification: earlier ordinary replies stay in the visible transcript, and
-the last final-text stamp is not used to hide them. The file summary owns the
-diff panel and stays at the end of its canonical Turn after the final assistant
-reply.
+the last final-text stamp is not used to hide them. Missing purpose tags are
+left unknown; the GUI does not infer commentary from position or wording. The
+file summary owns the diff panel and stays at the end of its canonical Turn
+after the final assistant reply.
 
 High-frequency transcript updates must not pair DOM mutation with unconditional synchronous reads of the timeline's full scroll geometry. Conversation switches, explicit submit-to-bottom requests, skeleton transitions, and older-page prepend restoration may perform pre-paint scroll correction.
 

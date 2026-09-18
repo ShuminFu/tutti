@@ -16,6 +16,18 @@ describe("resolveAgentTranscriptPresentationKind", () => {
     ).toBe(expected);
   });
 
+  it("maps assistant commentary to specific progress without provider branching", () => {
+    expect(
+      resolveAgentTranscriptPresentationKind(null, "assistant-commentary")
+    ).toBe("specific-progress");
+    expect(
+      resolveAgentTranscriptPresentationKind(null, "assistant-final")
+    ).toBe("content");
+    expect(resolveAgentTranscriptPresentationKind(null, "plan")).toBe(
+      "content"
+    );
+  });
+
   it("fails open for unrelated or incomplete notice semantics", () => {
     expect(
       resolveAgentTranscriptPresentationKind({

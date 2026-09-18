@@ -4,21 +4,27 @@ import type { AgentTranscriptRowVM } from "../contracts/agentTranscriptRowVM";
 
 type AgentSystemNoticeVM = NonNullable<AgentMessageContentVM["systemNotice"]>;
 
+export const ASSISTANT_MESSAGE_KIND_COMMENTARY = "assistant-commentary";
+export const ASSISTANT_MESSAGE_KIND_FINAL = "assistant-final";
+
 export function resolveAgentTranscriptPresentationKind(
-  notice: Pick<AgentSystemNoticeVM, "command" | "commandStatus"> | null
+  notice: Pick<AgentSystemNoticeVM, "command" | "commandStatus"> | null,
+  messageKind?: string | null
 ): AgentTranscriptPresentationKind {
-  if (notice?.command !== "compact") {
-    return "content";
+  if (notice?.command === "compact") {
+    if (notice.commandStatus === "running") {
+      return "specific-progress";
+    }
+    if (
+      notice.commandStatus === "completed" ||
+      notice.commandStatus === "failed" ||
+      notice.commandStatus === "canceled"
+    ) {
+      return "turn-boundary";
+    }
   }
-  if (notice.commandStatus === "running") {
+  if (messageKind === ASSISTANT_MESSAGE_KIND_COMMENTARY) {
     return "specific-progress";
-  }
-  if (
-    notice.commandStatus === "completed" ||
-    notice.commandStatus === "failed" ||
-    notice.commandStatus === "canceled"
-  ) {
-    return "turn-boundary";
   }
   return "content";
 }

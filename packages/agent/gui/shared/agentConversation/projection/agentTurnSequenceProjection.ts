@@ -11,7 +11,10 @@ import type {
 } from "../contracts/agentMessageRowVM";
 import type { AgentToolCallVM } from "../contracts/agentToolCallVM";
 import { isApprovalToolCall } from "./agentToolRendererKind";
-import { resolveAgentTranscriptPresentationKind } from "./agentTranscriptPresentation";
+import {
+  ASSISTANT_MESSAGE_KIND_FINAL,
+  resolveAgentTranscriptPresentationKind
+} from "./agentTranscriptPresentation";
 import { projectAgentToolCall } from "./agentToolProjection";
 import {
   isCollaborationTimelineItem,
@@ -174,19 +177,24 @@ function projectMessage(
   message: WorkspaceAgentSessionDetailMessage,
   turnId: string
 ): AgentMessageContentVM {
+  const messageKind = assistantPurposeMessageKind(message);
   const projected: AgentMessageContentVM = {
     kind: "message-content",
     id: message.id,
     turnId: message.turnId ?? turnId,
     body: message.body,
     presentationKind: resolveAgentTranscriptPresentationKind(
-      message.systemNotice ?? null
+      message.systemNotice ?? null,
+      messageKind
     ),
     statusKind: message.statusKind ?? null,
     occurredAtUnixMs: message.occurredAtUnixMs ?? null,
     visibleError: message.visibleError ?? null,
     systemNotice: message.systemNotice ?? null
   };
+  if (messageKind === ASSISTANT_MESSAGE_KIND_FINAL) {
+    projected.isExplicitAssistantFinal = true;
+  }
   if (message.sourceTimelineItems) {
     projected.sourceTimelineItems = message.sourceTimelineItems;
     if (
@@ -216,6 +224,18 @@ function projectMessage(
     projected.planIssueLink = planIssueLink;
   }
   return projected;
+}
+
+function assistantPurposeMessageKind(
+  message: WorkspaceAgentSessionDetailMessage
+): string {
+  for (const item of message.sourceTimelineItems ?? []) {
+    const kind = item.payload?.messageKind;
+    if (typeof kind === "string" && kind.trim()) {
+      return kind.trim();
+    }
+  }
+  return "";
 }
 
 function projectThinking(

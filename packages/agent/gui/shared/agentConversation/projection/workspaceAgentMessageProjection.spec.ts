@@ -1493,6 +1493,71 @@ describe("projectWorkspaceAgentMessagesToConversationVM", () => {
     );
   });
 
+  it("projects persisted assistant commentary as specific progress", () => {
+    const conversation = projectWorkspaceAgentMessagesToConversationVM({
+      activity: activity(),
+      session: session(),
+      workspaceRoot: "/workspace/demo",
+      messages: [
+        message({
+          messageId: "user-1",
+          id: 1,
+          role: "user",
+          kind: "text",
+          payload: { text: "Inspect the repo" }
+        }),
+        message({
+          messageId: "item-a",
+          id: 2,
+          version: 2,
+          payload: {
+            text: "Checking files.",
+            messageKind: "assistant-commentary"
+          }
+        }),
+        message({
+          messageId: "item-b",
+          id: 3,
+          version: 3,
+          payload: {
+            text: "The repo looks healthy.",
+            messageKind: "assistant-final"
+          }
+        })
+      ]
+    });
+
+    const assistantMessages = conversation.rows
+      .filter(
+        (
+          row
+        ): row is Extract<
+          (typeof conversation.rows)[number],
+          { kind: "message" }
+        > => row.kind === "message" && row.speaker === "assistant"
+      )
+      .flatMap((row) => row.messages);
+
+    expect(
+      assistantMessages.map((item) => ({
+        id: item.id,
+        presentationKind: item.presentationKind,
+        isExplicitAssistantFinal: item.isExplicitAssistantFinal === true
+      }))
+    ).toEqual([
+      {
+        id: "item-a",
+        presentationKind: "specific-progress",
+        isExplicitAssistantFinal: false
+      },
+      {
+        id: "item-b",
+        presentationKind: "content",
+        isExplicitAssistantFinal: true
+      }
+    ]);
+  });
+
   it("renders displayPrompt instead of rich content text while preserving prompt images", () => {
     const conversation = projectWorkspaceAgentMessagesToConversationVM({
       activity: activity(),

@@ -1991,6 +1991,280 @@ describe("projectAgentConversationVM", () => {
     ]);
   });
 
+  it("folds Codex commentary and keeps the explicit final reply visible", () => {
+    const commentary = {
+      id: "assistant-commentary",
+      body: "Checking files.",
+      turnId: "turn-1",
+      sourceTimelineItems: [
+        {
+          id: 2,
+          agentSessionId: "session-1",
+          eventId: "item-a",
+          actorType: "agent",
+          actorId: "session-1",
+          itemType: "message",
+          role: "assistant",
+          payload: { text: "Checking files.", messageKind: "assistant-commentary" }
+        }
+      ]
+    };
+    const finalReply = {
+      id: "assistant-final",
+      body: "The repo looks healthy.",
+      turnId: "turn-1",
+      sourceTimelineItems: [
+        {
+          id: 3,
+          agentSessionId: "session-1",
+          eventId: "item-b",
+          actorType: "agent",
+          actorId: "session-1",
+          itemType: "message",
+          role: "assistant",
+          payload: {
+            text: "The repo looks healthy.",
+            messageKind: "assistant-final"
+          }
+        }
+      ]
+    };
+    const conversation = projectAgentConversationVM(
+      detailViewModel({
+        turns: [
+          {
+            id: "turn-1",
+            userMessage: { id: "user-1", body: "Inspect the repo" },
+            userMessages: [{ id: "user-1", body: "Inspect the repo" }],
+            agentMessages: [commentary, finalReply],
+            toolCalls: [],
+            toolCallCount: 0,
+            hasFailedToolCall: false,
+            agentItems: [
+              { kind: "message", message: commentary },
+              { kind: "message", message: finalReply }
+            ]
+          }
+        ],
+        showProcessingIndicator: false
+      })
+    );
+
+    const assistantMessages = conversation.rows
+      .filter(
+        (
+          row
+        ): row is Extract<
+          (typeof conversation.rows)[number],
+          { kind: "message" }
+        > => row.kind === "message" && row.speaker === "assistant"
+      )
+      .flatMap((row) => row.messages);
+
+    expect(
+      assistantMessages.map((message) => ({
+        id: message.id,
+        presentationKind: message.presentationKind,
+        isTurnFinalText: message.isTurnFinalText === true,
+        isExplicitAssistantFinal: message.isExplicitAssistantFinal === true,
+        copyText: message.copyText ?? null
+      }))
+    ).toEqual([
+      {
+        id: "assistant-commentary",
+        presentationKind: "specific-progress",
+        isTurnFinalText: false,
+        isExplicitAssistantFinal: false,
+        copyText: null
+      },
+      {
+        id: "assistant-final",
+        presentationKind: "content",
+        isTurnFinalText: true,
+        isExplicitAssistantFinal: true,
+        copyText: "The repo looks healthy."
+      }
+    ]);
+
+    const rowKeys = conversation.rows.map((row) => transcriptRowKey(row));
+    const turnGroups = buildAgentTranscriptTurnGroups(
+      conversation.rows,
+      rowKeys
+    );
+    const model = buildAgentTurnWorkSectionModel(
+      turnGroups[0]!,
+      conversation.sourceDetail.sessionTurns?.[0] ?? null,
+      false
+    );
+    expect(model?.collapseEligible).toBe(true);
+    expect(
+      model?.sections.map((section) => ({
+        kind: section.kind,
+        ids: section.rows.flatMap((entry) =>
+          entry.row.kind === "message"
+            ? entry.row.messages.map((message) => message.id)
+            : []
+        )
+      }))
+    ).toEqual([
+      { kind: "work", ids: ["assistant-commentary"] },
+      { kind: "visible", ids: ["assistant-final"] }
+    ]);
+  });
+
+  it("does not treat commentary as the final reply when no explicit answer exists", () => {
+    const commentary = {
+      id: "assistant-commentary",
+      body: "Still looking.",
+      turnId: "turn-1",
+      sourceTimelineItems: [
+        {
+          id: 2,
+          agentSessionId: "session-1",
+          eventId: "item-a",
+          actorType: "agent",
+          actorId: "session-1",
+          itemType: "message",
+          role: "assistant",
+          payload: { text: "Still looking.", messageKind: "assistant-commentary" }
+        }
+      ]
+    };
+    const conversation = projectAgentConversationVM(
+      detailViewModel({
+        turns: [
+          {
+            id: "turn-1",
+            userMessage: { id: "user-1", body: "Inspect the repo" },
+            userMessages: [{ id: "user-1", body: "Inspect the repo" }],
+            agentMessages: [commentary],
+            toolCalls: [],
+            toolCallCount: 0,
+            hasFailedToolCall: false,
+            agentItems: [{ kind: "message", message: commentary }]
+          }
+        ],
+        showProcessingIndicator: false
+      })
+    );
+
+    const assistantMessage = conversation.rows
+      .filter(
+        (
+          row
+        ): row is Extract<
+          (typeof conversation.rows)[number],
+          { kind: "message" }
+        > => row.kind === "message" && row.speaker === "assistant"
+      )
+      .flatMap((row) => row.messages)[0];
+    expect(assistantMessage?.isTurnFinalText).toBeUndefined();
+    expect(assistantMessage?.copyText ?? null).toBeNull();
+    expect(assistantMessage?.presentationKind).toBe("specific-progress");
+
+    const rowKeys = conversation.rows.map((row) => transcriptRowKey(row));
+    const turnGroups = buildAgentTranscriptTurnGroups(
+      conversation.rows,
+      rowKeys
+    );
+    const model = buildAgentTurnWorkSectionModel(
+      turnGroups[0]!,
+      conversation.sourceDetail.sessionTurns?.[0] ?? null,
+      false
+    );
+    expect(model?.collapseEligible).toBe(false);
+  });
+
+  it("prefers an earlier explicit final over a later unmarked supplement", () => {
+    const finalReply = {
+      id: "assistant-final",
+      body: "Root cause is the adapter.",
+      turnId: "turn-1",
+      sourceTimelineItems: [
+        {
+          id: 2,
+          agentSessionId: "session-1",
+          eventId: "item-final",
+          actorType: "agent",
+          actorId: "session-1",
+          itemType: "message",
+          role: "assistant",
+          payload: {
+            text: "Root cause is the adapter.",
+            messageKind: "assistant-final"
+          }
+        }
+      ]
+    };
+    const supplement = {
+      id: "assistant-supplement",
+      body: "Also see the log.",
+      turnId: "turn-1",
+      sourceTimelineItems: [
+        {
+          id: 3,
+          agentSessionId: "session-1",
+          eventId: "item-extra",
+          actorType: "agent",
+          actorId: "session-1",
+          itemType: "message",
+          role: "assistant",
+          payload: { text: "Also see the log." }
+        }
+      ]
+    };
+    const conversation = projectAgentConversationVM(
+      detailViewModel({
+        turns: [
+          {
+            id: "turn-1",
+            userMessage: { id: "user-1", body: "Why did it fail?" },
+            userMessages: [{ id: "user-1", body: "Why did it fail?" }],
+            agentMessages: [finalReply, supplement],
+            toolCalls: [],
+            toolCallCount: 0,
+            hasFailedToolCall: false,
+            agentItems: [
+              { kind: "message", message: finalReply },
+              { kind: "message", message: supplement }
+            ]
+          }
+        ],
+        showProcessingIndicator: false
+      })
+    );
+
+    const assistantMessages = conversation.rows
+      .filter(
+        (
+          row
+        ): row is Extract<
+          (typeof conversation.rows)[number],
+          { kind: "message" }
+        > => row.kind === "message" && row.speaker === "assistant"
+      )
+      .flatMap((row) => row.messages);
+
+    expect(
+      assistantMessages.map((message) => ({
+        id: message.id,
+        isTurnFinalText: message.isTurnFinalText === true,
+        copyText: message.copyText ?? null
+      }))
+    ).toEqual([
+      {
+        id: "assistant-final",
+        isTurnFinalText: true,
+        copyText: "Root cause is the adapter."
+      },
+      {
+        id: "assistant-supplement",
+        isTurnFinalText: false,
+        copyText: null
+      }
+    ]);
+  });
+
   it("marks prior turn assistant replies copyable while the latest turn is still working", () => {
     const conversation = projectAgentConversationVM(
       detailViewModel({

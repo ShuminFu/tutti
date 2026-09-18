@@ -481,6 +481,27 @@ func TestReportActivityInputForwardsMessageKindToPayload(t *testing.T) {
 	}
 }
 
+func TestReportActivityInputForwardsAssistantCommentaryMessageKind(t *testing.T) {
+	t.Parallel()
+
+	session := reportTestSession()
+	event := newTurnActivityEventWithID(session, "item-a", EventMessage, "turn-1", messageStreamStateCompleted, RoleAssistant, "Checking files.", map[string]any{
+		"messageId":   "item-a",
+		"streamState": messageStreamStateCompleted,
+		"messageKind": assistantMessageKindCommentary,
+	})
+	event.OccurredAtUnixMS = 120
+
+	report := reportActivityInput(session, []activityshared.Event{event})
+	if len(report.MessageUpdates) != 1 {
+		t.Fatalf("message updates = %#v, want one commentary update", report.MessageUpdates)
+	}
+	update := report.MessageUpdates[0]
+	if update.Payload["messageKind"] != assistantMessageKindCommentary {
+		t.Fatalf("payload = %#v, want messageKind forwarded", update.Payload)
+	}
+}
+
 func TestReportActivityInputDoesNotProjectLegacySubAgentMarkers(t *testing.T) {
 	t.Parallel()
 

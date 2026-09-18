@@ -188,7 +188,11 @@ func (r codexAppServerReducer) reduceNotification(
 		if normalizer == nil {
 			return codexAppServerReduction{}
 		}
-		return emit(normalizer.AppendAssistantChunk(session, turnID, asStringRaw(params["delta"])))
+		delta := asStringRaw(params["delta"])
+		if itemID := asString(params["itemId"]); itemID != "" {
+			return emit(normalizer.AppendAssistantChunkForItem(session, turnID, itemID, delta))
+		}
+		return emit(normalizer.AppendAssistantChunk(session, turnID, delta))
 	case appServerNotifyCommandOutputDelta:
 		if normalizer == nil {
 			return codexAppServerReduction{}

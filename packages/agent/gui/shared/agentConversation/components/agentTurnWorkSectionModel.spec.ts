@@ -293,6 +293,75 @@ describe("agentTurnWorkSectionModel", () => {
     expect(model.collapseEligible).toBe(true);
   });
 
+  it("folds marked commentary while keeping the explicit final reply visible", () => {
+    const model = buildAgentTurnWorkSectionModel(
+      turnGroup([
+        userRow(),
+        assistantRow({
+          id: "assistant-commentary",
+          messages: [
+            {
+              ...message("Checking files.", null),
+              presentationKind: "specific-progress"
+            }
+          ]
+        }),
+        assistantRow({
+          id: "assistant-final",
+          messages: [
+            {
+              ...message("The repo looks healthy.", "The repo looks healthy.", true),
+              isExplicitAssistantFinal: true
+            }
+          ]
+        })
+      ]),
+      canonicalTurn({
+        phase: "settled",
+        outcome: "completed",
+        settledAtUnixMs: 15_000
+      })
+    );
+
+    expect(
+      model.sections.map((section) => ({
+        kind: section.kind,
+        bodies: section.rows.flatMap(({ row }) =>
+          row.kind === "message" ? row.messages.map((item) => item.body) : []
+        )
+      }))
+    ).toEqual([
+      { kind: "work", bodies: ["Checking files."] },
+      { kind: "visible", bodies: ["The repo looks healthy."] }
+    ]);
+    expect(model.collapseEligible).toBe(true);
+  });
+
+  it("does not auto-collapse when only commentary exists", () => {
+    const model = buildAgentTurnWorkSectionModel(
+      turnGroup([
+        userRow(),
+        assistantRow({
+          id: "assistant-commentary",
+          messages: [
+            {
+              ...message("Still working.", null),
+              presentationKind: "specific-progress"
+            }
+          ]
+        })
+      ]),
+      canonicalTurn({
+        phase: "settled",
+        outcome: "completed",
+        settledAtUnixMs: 15_000
+      })
+    );
+
+    expect(model.collapseEligible).toBe(false);
+    expect(model.sections.map((section) => section.kind)).toEqual(["work"]);
+  });
+
   it("keeps the main reply and later supplement visible around tool work", () => {
     const model = buildAgentTurnWorkSectionModel(
       turnGroup([
