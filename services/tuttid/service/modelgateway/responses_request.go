@@ -405,10 +405,20 @@ func convertResponseInput(
 		case "reasoning":
 			readable := reasoningItemText(item)
 			if readable == "" && strings.TrimSpace(item.EncryptedContent) != "" {
-				return nil, invalidParam(
-					fmt.Sprintf("input[%d].encrypted_content", index),
-					"encrypted reasoning cannot be translated to Chat Completions",
-				)
+				decoded, handled, err := decodeReasoningEncryptedContent(item.EncryptedContent)
+				if err != nil {
+					return nil, invalidParam(
+						fmt.Sprintf("input[%d].encrypted_content", index),
+						"gateway reasoning replay is invalid",
+					)
+				}
+				if !handled {
+					return nil, invalidParam(
+						fmt.Sprintf("input[%d].encrypted_content", index),
+						"encrypted reasoning cannot be translated to Chat Completions",
+					)
+				}
+				readable = decoded
 			}
 			ensureAssistant().reasoningContent.WriteString(readable)
 		case "function_call":

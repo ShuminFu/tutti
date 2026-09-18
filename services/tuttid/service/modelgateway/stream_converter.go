@@ -160,9 +160,10 @@ func (s *streamedText) appendDelta(next string) string {
 }
 
 type reasoningStreamItem struct {
-	index int
-	id    string
-	text  streamedText
+	index            int
+	id               string
+	text             streamedText
+	includeEncrypted bool
 }
 
 func (i *reasoningStreamItem) outputIndex() int { return i.index }
@@ -174,12 +175,16 @@ func (i *reasoningStreamItem) finish(writer *responsesSSEWriter) (map[string]any
 	}); err != nil {
 		return nil, err
 	}
+	var encryptedContent any
+	if i.includeEncrypted {
+		encryptedContent = encodeReasoningEncryptedContent(i.text.String())
+	}
 	item := map[string]any{
 		"id":                i.id,
 		"type":              "reasoning",
 		"summary":           []any{},
 		"content":           []any{part},
-		"encrypted_content": nil,
+		"encrypted_content": encryptedContent,
 		"status":            "completed",
 	}
 	if err := writer.Event("response.output_item.done", map[string]any{
@@ -591,7 +596,9 @@ func (s *chatStreamState) nextOutputIndex() int {
 func (s *chatStreamState) addReasoning(delta string) error {
 	if s.reasoning == nil {
 		s.reasoning = &reasoningStreamItem{
-			index: s.nextOutputIndex(), id: newResponseID("rs"),
+			index:            s.nextOutputIndex(),
+			id:               newResponseID("rs"),
+			includeEncrypted: requestIncludesReasoningEncryptedContent(s.request),
 		}
 		s.items = append(s.items, s.reasoning)
 		item := map[string]any{

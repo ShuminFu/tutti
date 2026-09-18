@@ -177,6 +177,14 @@ func TestGatewayConvertsResponsesRequestAndChatJSON(t *testing.T) {
 		output[2].(map[string]any)["type"] != "function_call" {
 		t.Fatalf("output order = %#v", output)
 	}
+	reasoningEncrypted, ok := output[0].(map[string]any)["encrypted_content"].(string)
+	if !ok {
+		t.Fatalf("non-streaming reasoning encrypted_content = %#v", output[0])
+	}
+	if decoded, handled, err := decodeReasoningEncryptedContent(reasoningEncrypted); err != nil ||
+		!handled || decoded != "分析" {
+		t.Fatalf("decode non-streaming reasoning = %q, %v, %v", decoded, handled, err)
+	}
 	if output[2].(map[string]any)["namespace"] != "workspace" {
 		t.Fatalf("namespaced function call = %#v", output[2])
 	}
@@ -582,6 +590,7 @@ func TestGatewayStreamsInterleavedToolCallsReasoningAndUTF8WithoutDone(t *testin
 		],
 		"tool_choice":"auto",
 		"parallel_tool_calls":true,
+		"include":["reasoning.encrypted_content"],
 		"stream":true
 	}`, nil)
 	defer response.Body.Close()
@@ -592,6 +601,7 @@ func TestGatewayStreamsInterleavedToolCallsReasoningAndUTF8WithoutDone(t *testin
 	types := make([]string, 0, len(events))
 	var completed map[string]any
 	var toolDone []map[string]any
+	var reasoningEncrypted any
 	for _, event := range events {
 		types = append(types, event.Event)
 		var payload map[string]any
@@ -600,6 +610,9 @@ func TestGatewayStreamsInterleavedToolCallsReasoningAndUTF8WithoutDone(t *testin
 		}
 		if event.Event == "response.output_item.done" {
 			item, _ := payload["item"].(map[string]any)
+			if item["type"] == "reasoning" {
+				reasoningEncrypted = item["encrypted_content"]
+			}
 			if item["type"] == "function_call" {
 				toolDone = append(toolDone, item)
 			}
@@ -624,6 +637,14 @@ func TestGatewayStreamsInterleavedToolCallsReasoningAndUTF8WithoutDone(t *testin
 	}
 	if len(toolDone) != 2 {
 		t.Fatalf("tool calls = %#v", toolDone)
+	}
+	encrypted, ok := reasoningEncrypted.(string)
+	if !ok {
+		t.Fatalf("streaming reasoning encrypted_content = %#v", reasoningEncrypted)
+	}
+	if decoded, handled, err := decodeReasoningEncryptedContent(encrypted); err != nil ||
+		!handled || decoded != "思考" {
+		t.Fatalf("decode streaming reasoning = %q, %v, %v", decoded, handled, err)
 	}
 	argumentsByName := map[string]string{}
 	for _, item := range toolDone {

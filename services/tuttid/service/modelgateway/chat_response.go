@@ -83,7 +83,7 @@ func convertChatResponse(
 		}
 	}
 	if reasoning != "" {
-		output = append(output, completedReasoningItem(reasoning))
+		output = append(output, completedReasoningItem(request, reasoning))
 	}
 	text, err := chatText(choice.Message.Content)
 	if err != nil {
@@ -157,13 +157,17 @@ func chatText(encoded json.RawMessage) (string, error) {
 	return result.String(), nil
 }
 
-func completedReasoningItem(text string) map[string]any {
+func completedReasoningItem(request responsesRequest, text string) map[string]any {
+	var encryptedContent any
+	if requestIncludesReasoningEncryptedContent(request) {
+		encryptedContent = encodeReasoningEncryptedContent(text)
+	}
 	return map[string]any{
 		"id":                newResponseID("rs"),
 		"type":              "reasoning",
 		"summary":           []any{},
 		"content":           []any{map[string]any{"type": "reasoning_text", "text": text}},
-		"encrypted_content": nil,
+		"encrypted_content": encryptedContent,
 		"status":            "completed",
 	}
 }

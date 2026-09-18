@@ -140,6 +140,133 @@ func TestConvertResponseInputRejectsEncryptedFunctionOutput(t *testing.T) {
 	}
 }
 
+func TestReasoningEncryptedContentRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	finishReason := "tool_calls"
+	request := responsesRequest{
+		Model:   "model-a",
+		Input:   json.RawMessage(`"inspect"`),
+		Include: []string{"reasoning.encrypted_content"},
+	}
+	upstream := chatCompletionResponse{
+		ID:    "chat-round-trip",
+		Model: "model-a",
+		Choices: []chatCompletionChoice{{
+			Message: chatResponseMessage{
+				Role:             "assistant",
+				ReasoningContent: json.RawMessage(`"hidden reasoning"`),
+				ToolCalls: []chatToolCall{{
+					ID:   "call-1",
+					Type: "function",
+				}},
+			},
+			FinishReason: &finishReason,
+		}},
+	}
+	upstream.Choices[0].Message.ToolCalls[0].Function.Name = "exec_command"
+	upstream.Choices[0].Message.ToolCalls[0].Function.Arguments = json.RawMessage(`"{}"`)
+
+	converted, err := convertChatResponse(request, upstream, nil)
+	if err != nil {
+		t.Fatalf("convertChatResponse() error = %v", err)
+	}
+	output, ok := converted["output"].([]any)
+	if !ok || len(output) == 0 {
+		t.Fatalf("converted output = %#v", converted["output"])
+	}
+	reasoningItem, ok := output[0].(map[string]any)
+	if !ok || reasoningItem["type"] != "reasoning" {
+		t.Fatalf("reasoning item = %#v", output[0])
+	}
+	encrypted, ok := reasoningItem["encrypted_content"].(string)
+	if !ok || encrypted == "" {
+		t.Fatalf("encrypted_content = %#v", reasoningItem["encrypted_content"])
+	}
+	decoded, handled, err := decodeReasoningEncryptedContent(encrypted)
+	if err != nil || !handled || decoded != "hidden reasoning" {
+		t.Fatalf("decodeReasoningEncryptedContent() = %q, %v, %v", decoded, handled, err)
+	}
+
+	replayedInput, err := json.Marshal([]map[string]any{
+		{
+			"type":              "reasoning",
+			"summary":           []any{},
+			"encrypted_content": encrypted,
+		},
+		{
+			"type":      "function_call",
+			"call_id":   "call-1",
+			"name":      "exec_command",
+			"arguments": "{}",
+		},
+		{
+			"type":    "function_call_output",
+			"call_id": "call-1",
+			"output":  "ok",
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal replay input: %v", err)
+	}
+	messages, err := convertResponseInput(nil, replayedInput, nil)
+	if err != nil {
+		t.Fatalf("convertResponseInput() error = %v", err)
+	}
+	if len(messages) != 2 {
+		t.Fatalf("replay messages = %#v", messages)
+	}
+	if messages[0]["reasoning_content"] != "hidden reasoning" {
+		t.Fatalf("replayed assistant = %#v", messages[0])
+	}
+	if _, ok := messages[0]["tool_calls"]; !ok {
+		t.Fatalf("replayed assistant lost tool calls: %#v", messages[0])
+	}
+}
+
+func TestReasoningEncryptedContentIsOmittedUnlessRequested(t *testing.T) {
+	t.Parallel()
+
+	finishReason := "stop"
+	converted, err := convertChatResponse(
+		responsesRequest{Model: "model-a", Input: json.RawMessage(`"hello"`)},
+		chatCompletionResponse{
+			ID:    "chat-no-encrypted",
+			Model: "model-a",
+			Choices: []chatCompletionChoice{{
+				Message: chatResponseMessage{
+					Role:             "assistant",
+					ReasoningContent: json.RawMessage(`"hidden reasoning"`),
+					Content:          json.RawMessage(`"answer"`),
+				},
+				FinishReason: &finishReason,
+			}},
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("convertChatResponse() error = %v", err)
+	}
+	output := converted["output"].([]any)
+	if got := output[0].(map[string]any)["encrypted_content"]; got != nil {
+		t.Fatalf("encrypted_content = %#v, want nil", got)
+	}
+}
+
+func TestConvertResponseInputRejectsMalformedGatewayReasoningReplay(t *testing.T) {
+	t.Parallel()
+
+	_, err := convertResponseInput(nil, json.RawMessage(`[
+		{"type":"reasoning","summary":[],"encrypted_content":"tutti.reasoning.v1:not-base64!"}
+	]`), nil)
+	if err == nil {
+		t.Fatal("expected malformed gateway reasoning replay to be rejected")
+	}
+	if !strings.Contains(err.Error(), "gateway reasoning replay") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestConvertResponsesRequestDropsOversizedChatMetadataValues(t *testing.T) {
 	t.Parallel()
 

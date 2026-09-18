@@ -40,6 +40,7 @@ func TestCodexModelPlanGatewayCLISmoke(t *testing.T) {
 	var mu sync.Mutex
 	requestCount := 0
 	sawToolOutput := false
+	sawReasoningReplay := false
 	sawDeveloperRole := false
 	sawSystemPastHead := false
 	var paths []string
@@ -51,12 +52,20 @@ func TestCodexModelPlanGatewayCLISmoke(t *testing.T) {
 		}
 		messages, _ := chat["messages"].([]any)
 		requestSawToolOutput := false
+		requestSawReasoningReplay := false
 		requestSawDeveloperRole := false
 		requestSawSystemPastHead := false
 		for index, encoded := range messages {
 			message, _ := encoded.(map[string]any)
 			if message["role"] == "tool" {
 				requestSawToolOutput = true
+			}
+			if message["role"] == "assistant" {
+				reasoning, _ := message["reasoning_content"].(string)
+				toolCalls, _ := message["tool_calls"].([]any)
+				if strings.TrimSpace(reasoning) != "" && len(toolCalls) > 0 {
+					requestSawReasoningReplay = true
+				}
 			}
 			if message["role"] == "developer" {
 				requestSawDeveloperRole = true
@@ -68,6 +77,9 @@ func TestCodexModelPlanGatewayCLISmoke(t *testing.T) {
 		mu.Lock()
 		if requestSawToolOutput {
 			sawToolOutput = true
+		}
+		if requestSawReasoningReplay {
+			sawReasoningReplay = true
 		}
 		if requestSawDeveloperRole {
 			sawDeveloperRole = true
@@ -88,6 +100,7 @@ func TestCodexModelPlanGatewayCLISmoke(t *testing.T) {
 		}
 		switch current {
 		case 1:
+			writeChunk(`{"id":"chat-smoke-1","model":"smoke-model","choices":[{"index":0,"delta":{"reasoning_content":"smoke hidden reasoning"}}]}`)
 			writeChunk(`{"id":"chat-smoke-1","model":"smoke-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_smoke","type":"function","function":{"name":"exec_command","arguments":"{\"cmd\":\"printf codex-gateway-tool-ok\"}"}}]}}]}`)
 			writeChunk(`{"id":"chat-smoke-1","model":"smoke-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`)
 		case 2:
@@ -207,11 +220,12 @@ func TestCodexModelPlanGatewayCLISmoke(t *testing.T) {
 	}
 
 	mu.Lock()
-	if requestCount < 3 || !sawToolOutput || sawDeveloperRole || sawSystemPastHead {
+	if requestCount < 3 || !sawToolOutput || !sawReasoningReplay || sawDeveloperRole || sawSystemPastHead {
 		t.Fatalf(
-			"upstream requests = %d, saw tool output = %v, saw developer role = %v, saw system past head = %v",
+			"upstream requests = %d, saw tool output = %v, saw reasoning replay = %v, saw developer role = %v, saw system past head = %v",
 			requestCount,
 			sawToolOutput,
+			sawReasoningReplay,
 			sawDeveloperRole,
 			sawSystemPastHead,
 		)
