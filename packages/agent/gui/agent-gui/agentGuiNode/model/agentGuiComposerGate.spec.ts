@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  composerSettingsUpdatePending,
   projectAgentGUIComposerGateControls,
   resolveAgentGUIComposerGate,
   type ResolveAgentGUIComposerGateInput
@@ -166,5 +167,31 @@ describe("resolveAgentGUIComposerGate", () => {
       editor: { status: "editable", reason: null },
       submission: { status: "queue", reason: "conversation_busy" }
     });
+  });
+});
+
+describe("composerSettingsUpdatePending", () => {
+  it("holds the composer only while the update is genuinely outstanding", () => {
+    expect(composerSettingsUpdatePending("inFlight")).toBe(true);
+    expect(composerSettingsUpdatePending("waitingForRuntime")).toBe(true);
+  });
+
+  it("releases the composer once the update settled", () => {
+    // A failed model switch used to disable send for the rest of the
+    // conversation: nothing clears `failed`/`unknown` except another settings
+    // action, so the gate never reopened.
+    expect(composerSettingsUpdatePending("failed")).toBe(false);
+    expect(composerSettingsUpdatePending("unknown")).toBe(false);
+    expect(composerSettingsUpdatePending("idle")).toBe(false);
+    expect(composerSettingsUpdatePending("waitingForPromptSend")).toBe(false);
+    expect(composerSettingsUpdatePending(undefined)).toBe(false);
+  });
+
+  it("keeps a failed update from blocking submission through the gate", () => {
+    const gate = resolveAgentGUIComposerGate({
+      ...readyInput,
+      settingsUpdatePending: composerSettingsUpdatePending("failed")
+    });
+    expect(gate.submission.status).toBe("ready");
   });
 });

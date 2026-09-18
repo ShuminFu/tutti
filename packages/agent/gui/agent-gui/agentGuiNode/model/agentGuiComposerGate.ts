@@ -6,6 +6,35 @@ import type {
   AgentGUIRuntimeBlockedReason
 } from "./agentGuiNodeTypes";
 
+/**
+ * Whether a settings update is still unsettled enough to hold the composer.
+ *
+ * Only the states where the request is genuinely outstanding count. The two
+ * terminal ones do not, even though the daemon's durable settings may still
+ * disagree with the composer:
+ *
+ * - `failed` is an explicit rejection. The request is over.
+ * - `unknown` is a timeout or an invalid command result. The client already
+ *   waited out its own `timeoutMs` for an answer and none came.
+ *
+ * Counting either as pending is what left the send button dead after a model
+ * switch failed: nothing clears those statuses except another settings action,
+ * so `canSubmit` stayed false for the rest of the conversation. The optimistic
+ * value is already rolled back for both (see
+ * SESSION_SETTINGS_STATUS_SHOWS_OPTIMISTIC_VALUE), so the composer shows the
+ * durable settings and sending again is safe — a retry that races the daemon's
+ * settings lock is serialized on the daemon side, not by disabling the user.
+ *
+ * The status is typed loosely because the two callers see it through different
+ * shapes. An unrecognized status is treated as settled: holding the composer on
+ * a value this function does not know is the failure mode being fixed here.
+ */
+export function composerSettingsUpdatePending(
+  status: string | undefined
+): boolean {
+  return status === "inFlight" || status === "waitingForRuntime";
+}
+
 export interface ResolveAgentGUIComposerGateInput {
   activeConversationBusy: boolean;
   activeConversationId: string | null;

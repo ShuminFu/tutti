@@ -35,6 +35,7 @@ import type {
   AgentGUIInteractivePrompt
 } from "../model/agentGuiConversationModel";
 import {
+  composerSettingsUpdatePending,
   isDifferentKnownConversationOwner,
   resolveAgentGUIComposerGate
 } from "../model/agentGuiComposerGate";
@@ -542,10 +543,7 @@ export function useAgentGUISessionPresentation(
   const hasPendingInteractivePrompt = pendingInteractivePrompt !== null;
   const settingsUpdateStatus = input.activeEngineSettingsUpdate?.status;
   const settingsUpdatePending =
-    settingsUpdateStatus === "inFlight" ||
-    settingsUpdateStatus === "waitingForRuntime" ||
-    settingsUpdateStatus === "unknown" ||
-    settingsUpdateStatus === "failed";
+    composerSettingsUpdatePending(settingsUpdateStatus);
   const composerGate = useMemo(
     () =>
       resolveAgentGUIComposerGate({
