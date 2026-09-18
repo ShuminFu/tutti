@@ -45,6 +45,29 @@ type ExternalImportScanResult struct {
 	ScannedMessages int
 	SkippedSessions int
 	Errors          []ExternalImportError
+	// ScannedAtUnixMS and CutoffUnixMS are the daemon's coverage metadata so
+	// clients can reuse a completed scan for a narrower window without
+	// guessing from the request's relative day count.
+	ScannedAtUnixMS int64
+	CutoffUnixMS    int64
+	Complete        bool
+	Diagnostics     ExternalImportScanDiagnostics
+}
+
+// ExternalImportScanDiagnostics records scan cost. It is not a substitute for
+// ScannedSessions/ScannedMessages, which remain business counts.
+type ExternalImportScanDiagnostics struct {
+	DiscoveredFiles  int
+	StatFiles        int
+	CatalogHits      int
+	ParsedFiles      int
+	ParsedBytes      int64
+	FilteredSessions int
+	TitleQueries     int
+	DiscoverMS       int64
+	ParseMS          int64
+	TitleMS          int64
+	TotalMS          int64
 }
 
 type ExternalImportProvider struct {
@@ -97,6 +120,10 @@ type externalImportedSession struct {
 	Provider          string
 	ProviderSessionID string
 	SourcePath        string
+	// RawCwd is the transcript cwd before worktree/project projection. Catalog
+	// stores this and re-projects on every request because .git and path
+	// existence can change without the JSONL changing.
+	RawCwd            string
 	Cwd               string
 	Title             string
 	// SummaryTitle holds an authoritative, provider-supplied conversation title
@@ -108,7 +135,12 @@ type externalImportedSession struct {
 	EventUserMessage externalImportedMessage
 	StartedAtUnixMS  int64
 	UpdatedAtUnixMS  int64
-	Messages         []externalImportedMessage
+	// TimeSource is "message" when timestamps came from transcript lines, or
+	// "now_fallback" when the parser used time.Now(). Fallback times are
+	// recomputed at query time and must not be frozen in the catalog.
+	TimeSource   string
+	MessageCount int
+	Messages     []externalImportedMessage
 	// Model and ReasoningEffort capture the provider-reported model/effort the
 	// local CLI was actually using (Codex `turn_context.model`/`effort`,
 	// Claude Code `message.model`) so imported sessions preserve the user's

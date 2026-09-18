@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   externalImportGroupsFromScan,
   externalImportRequestSource,
+  externalImportScanDecision,
   externalImportScanRequest,
   externalImportScanSource,
   externalImportScanStateReducer,
@@ -11,6 +12,7 @@ import {
   filterExternalImportGroups,
   isExternalImportArchiveMode,
   isExternalImportWizardBusy,
+  pruneExternalImportDeselections,
   shouldAllowExternalImportDialogOpenChange
 } from "./externalAgentSessionImportWizardModel.ts";
 
@@ -99,7 +101,7 @@ test("completed scan is usable only for its exact source identity", () => {
     source
   });
 
-  assert.equal(externalImportUsableScan(state, source), response);
+  assert.deepEqual(externalImportUsableScan(state, source)?.sessions, []);
   assert.equal(
     externalImportUsableScan(
       state,
@@ -139,7 +141,7 @@ test("completed scan is usable only for its exact source identity", () => {
   );
 });
 
-test("starting, failing, or changing source clears the completed scan", () => {
+test("starting or failing a scan keeps the completed snapshot; changing source clears it", () => {
   const response = {
     errors: [],
     projects: [],
@@ -162,16 +164,108 @@ test("starting, failing, or changing source clears the completed scan", () => {
   });
 
   assert.equal(
-    externalImportScanStateReducer(completed, { type: "scan-started" }),
-    null
+    externalImportScanStateReducer(completed, { type: "scan-started" })
+      ?.snapshot,
+    completed?.snapshot
   );
   assert.equal(
-    externalImportScanStateReducer(completed, { type: "scan-failed" }),
-    null
+    externalImportScanStateReducer(completed, { type: "scan-failed" })
+      ?.snapshot,
+    completed?.snapshot
   );
   assert.equal(
     externalImportScanStateReducer(completed, { type: "source-changed" }),
     null
+  );
+});
+
+test("a 30-day snapshot covers a 7-day window without another request", () => {
+  const now = 1_800_000_000_000;
+  const source30 = externalImportScanSource({
+    archiveKind: "claude",
+    archivePath: null,
+    days: 30,
+    providers: ["codex"]
+  });
+  const oldSession = {
+    id: "old",
+    lastUpdatedAtUnixMs: now - 20 * 24 * 60 * 60 * 1000,
+    messageCount: 2,
+    projectPath: "/tmp/p",
+    provider: "codex" as const,
+    sourcePath: "/tmp/old.jsonl",
+    title: "old"
+  };
+  const newSession = {
+    id: "new",
+    lastUpdatedAtUnixMs: now - 2 * 24 * 60 * 60 * 1000,
+    messageCount: 1,
+    projectPath: "/tmp/p",
+    provider: "codex" as const,
+    sourcePath: "/tmp/new.jsonl",
+    title: "new"
+  };
+  const state = externalImportScanStateReducer(null, {
+    type: "scan-succeeded",
+    response: {
+      complete: true,
+      cutoffUnixMs: now - 30 * 24 * 60 * 60 * 1000,
+      scannedAtUnixMs: now,
+      errors: [],
+      projects: [],
+      providers: [
+        {
+          available: true,
+          messageCount: 3,
+          provider: "codex",
+          root: "/tmp",
+          sessionCount: 2
+        }
+      ],
+      scannedMessages: 3,
+      scannedSessions: 2,
+      sessions: [oldSession, newSession],
+      skippedSessions: 1
+    },
+    source: source30
+  });
+  const source7 = externalImportScanSource({
+    archiveKind: "claude",
+    archivePath: null,
+    days: 7,
+    providers: ["codex"]
+  });
+  assert.equal(
+    externalImportScanDecision(state, source7, now).type,
+    "reuse"
+  );
+  const projected = externalImportUsableScan(state, source7, now);
+  assert.deepEqual(
+    projected?.sessions.map((session) => session.id),
+    ["new"]
+  );
+  assert.equal(projected?.scannedSessions, 1);
+  assert.equal(projected?.skippedSessions, 1);
+  assert.equal(
+    externalImportScanDecision(state, source30, now).type,
+    "reuse"
+  );
+  const source90 = externalImportScanSource({
+    archiveKind: "claude",
+    archivePath: null,
+    days: 90,
+    providers: ["codex"]
+  });
+  assert.equal(
+    externalImportScanDecision(state, source90, now).type,
+    "request"
+  );
+  assert.deepEqual(
+    pruneExternalImportDeselections(new Set(["old", "gone"]), [
+      "old",
+      "new"
+    ]),
+    new Set(["old"])
   );
 });
 

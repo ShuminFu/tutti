@@ -29,14 +29,17 @@ import { useTranslation } from "@renderer/i18n";
 import {
   externalImportGroupsFromScan,
   externalImportRequestSource,
+  externalImportScanDecision,
   externalImportScanRequest,
   externalImportScanSource,
   externalImportScanStateReducer,
+  type ExternalImportScanSource,
   externalImportSelectionProjects,
   externalImportUsableScan,
   filterExternalImportGroups,
   isExternalImportArchiveMode,
   isExternalImportWizardBusy,
+  pruneExternalImportDeselections,
   shouldAllowExternalImportDialogOpenChange,
   type ExternalImportProjectGroup
 } from "./externalAgentSessionImportWizardModel";
@@ -156,7 +159,11 @@ export function ExternalAgentSessionImportWizard({
     days,
     providers: selectedProviderList
   });
-  const scan = externalImportUsableScan(scanState, currentScanSource);
+  const scan = externalImportUsableScan(
+    scanState,
+    currentScanSource,
+    Date.now()
+  );
   const archiveMode = isExternalImportArchiveMode(archivePath);
   const groups = useMemo(
     () =>
@@ -218,17 +225,10 @@ export function ExternalAgentSessionImportWizard({
   };
 
   const runScan = async (
-    nextDays: number,
-    nextArchivePath: string | null,
-    nextArchiveKind: ExternalAgentImportArchiveKind = archiveKind
+    source: ExternalImportScanSource,
+    mergeProviders = false
   ) => {
     const generation = ++scanGeneration.current;
-    const source = externalImportScanSource({
-      archiveKind: nextArchiveKind,
-      archivePath: nextArchivePath,
-      days: nextDays,
-      providers: selectedProviderList
-    });
     dispatchScanState({ type: "scan-started" });
     setLoading(true);
     setError(null);
@@ -244,19 +244,18 @@ export function ExternalAgentSessionImportWizard({
       dispatchScanState({
         type: "scan-succeeded",
         response: nextScan,
-        source
+        source,
+        mergeProviders
       });
-      // Drop deselections for sessions that no longer exist in the new scan.
-      const nextIds = new Set(nextScan.sessions.map((session) => session.id));
-      setDeselectedSessionIds((current) => {
-        const next = new Set<string>();
-        for (const id of current) {
-          if (nextIds.has(id)) {
-            next.add(id);
-          }
-        }
-        return next;
-      });
+      const knownIds = new Set(
+        (mergeProviders
+          ? [...(scanState?.snapshot?.response.sessions ?? []), ...nextScan.sessions]
+          : nextScan.sessions
+        ).map((session) => session.id)
+      );
+      setDeselectedSessionIds((current) =>
+        pruneExternalImportDeselections(current, knownIds)
+      );
       setStep("select");
     } catch {
       if (generation !== scanGeneration.current) {
@@ -265,9 +264,9 @@ export function ExternalAgentSessionImportWizard({
       dispatchScanState({ type: "scan-failed" });
       setError(
         t(
-          nextArchivePath
+          source.kind === "archive"
             ? externalImportArchiveCopyKey(
-                nextArchiveKind,
+                source.archiveKind,
                 "workspace.externalImport.archiveScanFailed",
                 "workspace.externalImport.chatgptScanFailed"
               )
@@ -287,7 +286,14 @@ export function ExternalAgentSessionImportWizard({
       return;
     }
     setArchivePath(null);
-    await runScan(days, null);
+    await runScan(
+      externalImportScanSource({
+        archiveKind,
+        archivePath: null,
+        days,
+        providers: selectedProviderList
+      })
+    );
   };
 
   const handleSelectArchive = async (
@@ -310,7 +316,14 @@ export function ExternalAgentSessionImportWizard({
       setArchivePath(nextArchivePath);
       setArchiveKind(nextArchiveKind);
       setDays(-1);
-      await runScan(-1, nextArchivePath, nextArchiveKind);
+      await runScan(
+        externalImportScanSource({
+          archiveKind: nextArchiveKind,
+          archivePath: nextArchivePath,
+          days: -1,
+          providers: selectedProviderList
+        })
+      );
     } catch {
       if (generation !== scanGeneration.current) {
         return;
@@ -331,15 +344,32 @@ export function ExternalAgentSessionImportWizard({
   };
 
   const handleSelectRange = async (nextDays: number) => {
-    if (nextDays === days || loading || importing) {
+    if (loading || importing) {
       return;
     }
+    const nextSource = externalImportScanSource({
+      archiveKind,
+      archivePath,
+      days: nextDays,
+      providers: selectedProviderList
+    });
+    const forceRefresh = nextDays === days;
+    const decision = externalImportScanDecision(
+      scanState,
+      nextSource,
+      Date.now(),
+      forceRefresh
+    );
     setDays(nextDays);
-    await runScan(nextDays, archivePath);
+    setError(null);
+    if (decision.type === "reuse") {
+      return;
+    }
+    await runScan(decision.source, decision.mergeProviders);
   };
 
   const handleImport = async () => {
-    if (!canImport || !scan || !scanState) {
+    if (!canImport || !scan || !scanState?.snapshot) {
       return;
     }
     setImporting(true);
@@ -354,11 +384,11 @@ export function ExternalAgentSessionImportWizard({
           workspace.id,
           {
             ...externalImportRequestSource(
-              scanState.source.kind === "archive"
-                ? scanState.source.archivePath
+              scanState.snapshot.identity.kind === "archive"
+                ? scanState.snapshot.identity.archivePath
                 : null,
-              scanState.source.kind === "archive"
-                ? scanState.source.archiveKind
+              scanState.snapshot.identity.kind === "archive"
+                ? scanState.snapshot.identity.archiveKind
                 : null,
               registerProjects
             ),
@@ -539,6 +569,7 @@ export function ExternalAgentSessionImportWizard({
                     setArchivePath(null);
                     setArchiveKind("claude");
                     setDays(externalImportDefaultDays);
+                    setDeselectedSessionIds(new Set());
                     return;
                   }
                   onOpenChange(false);

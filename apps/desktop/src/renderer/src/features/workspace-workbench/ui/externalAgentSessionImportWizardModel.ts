@@ -17,23 +17,33 @@ export type ExternalImportProjectGroup = {
   sessions: ExternalAgentImportSession[];
 };
 
-export type ExternalImportScanSource =
+export type ExternalImportScanIdentity =
   | {
       kind: "archive";
       archivePath: string;
       archiveKind: ExternalAgentImportArchiveKind;
-      days: number;
     }
   | {
       kind: "local";
-      days: number;
       providers: WorkspaceAgentProvider[];
     };
 
-export type ExternalImportScanState = {
+export type ExternalImportScanSource = ExternalImportScanIdentity & {
+  days: number;
+};
+
+export type ExternalImportScanSnapshot = {
   response: ExternalAgentImportScanResponse;
-  source: ExternalImportScanSource;
-} | null;
+  identity: ExternalImportScanIdentity;
+  days: number;
+  cutoffUnixMs: number | null;
+  scannedAtUnixMs: number | null;
+  complete: boolean;
+};
+
+export type ExternalImportScanState = {
+  snapshot: ExternalImportScanSnapshot | null;
+};
 
 export type ExternalImportScanStateAction =
   | { type: "scan-started" }
@@ -43,6 +53,15 @@ export type ExternalImportScanStateAction =
       type: "scan-succeeded";
       response: ExternalAgentImportScanResponse;
       source: ExternalImportScanSource;
+      mergeProviders?: boolean;
+    };
+
+export type ExternalImportScanDecision =
+  | { type: "reuse"; response: ExternalAgentImportScanResponse }
+  | {
+      type: "request";
+      source: ExternalImportScanSource;
+      mergeProviders: boolean;
     };
 
 export function isExternalImportArchiveMode(
@@ -78,6 +97,18 @@ export function externalImportScanSource({
   };
 }
 
+export function externalImportScanIdentity(
+  source: ExternalImportScanSource
+): ExternalImportScanIdentity {
+  return source.kind === "archive"
+    ? {
+        kind: "archive",
+        archivePath: source.archivePath,
+        archiveKind: source.archiveKind
+      }
+    : { kind: "local", providers: [...source.providers] };
+}
+
 export function externalImportScanRequest(
   source: ExternalImportScanSource
 ): ExternalAgentImportScanRequest {
@@ -91,44 +122,298 @@ export function externalImportScanRequest(
 }
 
 export function externalImportScanStateReducer(
-  _current: ExternalImportScanState,
+  current: ExternalImportScanState | null,
   action: ExternalImportScanStateAction
-): ExternalImportScanState {
-  if (action.type === "scan-succeeded") {
-    return { response: action.response, source: action.source };
+): ExternalImportScanState | null {
+  const snapshot = current?.snapshot ?? null;
+  switch (action.type) {
+    case "scan-started":
+    case "scan-failed":
+      return snapshot ? { snapshot } : current;
+    case "source-changed":
+      return null;
+    case "scan-succeeded": {
+      const nextSnapshot = snapshotFromScanResponse(
+        action.response,
+        action.source
+      );
+      if (action.mergeProviders && snapshot) {
+        return {
+          snapshot: mergeLocalScanSnapshots(snapshot, nextSnapshot)
+        };
+      }
+      return { snapshot: nextSnapshot };
+    }
+    default:
+      return current;
   }
-  return null;
+}
+
+export function externalImportScanDecision(
+  state: ExternalImportScanState | null,
+  source: ExternalImportScanSource,
+  nowMs: number,
+  forceRefresh = false
+): ExternalImportScanDecision {
+  if (forceRefresh) {
+    return { type: "request", source, mergeProviders: false };
+  }
+  const projected = externalImportUsableScan(state, source, nowMs);
+  if (projected) {
+    return { type: "reuse", response: projected };
+  }
+  const missing = missingLocalProviders(state?.snapshot ?? null, source);
+  if (missing) {
+    return {
+      type: "request",
+      source: { ...source, providers: missing },
+      mergeProviders: true
+    };
+  }
+  return { type: "request", source, mergeProviders: false };
 }
 
 export function externalImportUsableScan(
-  state: ExternalImportScanState,
-  source: ExternalImportScanSource
+  state: ExternalImportScanState | null,
+  source: ExternalImportScanSource,
+  nowMs = Date.now()
 ): ExternalAgentImportScanResponse | null {
-  return state && externalImportScanSourcesEqual(state.source, source)
-    ? state.response
+  const snapshot = state?.snapshot;
+  if (!snapshot || !snapshot.complete) {
+    return null;
+  }
+  if (!identitiesCompatible(snapshot.identity, externalImportScanIdentity(source))) {
+    return null;
+  }
+  if (!snapshotCoversCutoff(snapshot, source.days, nowMs)) {
+    return null;
+  }
+  return projectScanSnapshot(snapshot, source, nowMs);
+}
+
+export function shouldRetainExternalImportDeselections(
+  action: ExternalImportScanStateAction
+): boolean {
+  return action.type !== "source-changed";
+}
+
+export function pruneExternalImportDeselections(
+  current: Set<string>,
+  knownIds: Iterable<string>
+): Set<string> {
+  const live = new Set(knownIds);
+  const next = new Set<string>();
+  for (const id of current) {
+    if (live.has(id)) {
+      next.add(id);
+    }
+  }
+  return next;
+}
+
+function snapshotFromScanResponse(
+  response: ExternalAgentImportScanResponse,
+  source: ExternalImportScanSource
+): ExternalImportScanSnapshot {
+  return {
+    response,
+    identity: externalImportScanIdentity(source),
+    days: source.days,
+    cutoffUnixMs:
+      typeof response.cutoffUnixMs === "number" ? response.cutoffUnixMs : null,
+    scannedAtUnixMs:
+      typeof response.scannedAtUnixMs === "number"
+        ? response.scannedAtUnixMs
+        : null,
+    complete: response.complete !== false
+  };
+}
+
+function identitiesCompatible(
+  snapshot: ExternalImportScanIdentity,
+  target: ExternalImportScanIdentity
+): boolean {
+  if (snapshot.kind !== target.kind) {
+    return false;
+  }
+  if (snapshot.kind === "archive" && target.kind === "archive") {
+    return (
+      snapshot.archivePath === target.archivePath &&
+      snapshot.archiveKind === target.archiveKind
+    );
+  }
+  return snapshot.kind === "local" && target.kind === "local";
+}
+
+function snapshotCoversCutoff(
+  snapshot: ExternalImportScanSnapshot,
+  days: number,
+  nowMs: number
+): boolean {
+  if (snapshot.cutoffUnixMs == null) {
+    return snapshot.days === days;
+  }
+  const targetCutoff = cutoffFromDays(days, nowMs);
+  if (snapshot.cutoffUnixMs === 0) {
+    return true;
+  }
+  if (targetCutoff === 0) {
+    return false;
+  }
+  return snapshot.cutoffUnixMs <= targetCutoff;
+}
+
+function missingLocalProviders(
+  snapshot: ExternalImportScanSnapshot | null,
+  source: ExternalImportScanSource
+): WorkspaceAgentProvider[] | null {
+  if (!snapshot || source.kind !== "local" || snapshot.identity.kind !== "local") {
+    return null;
+  }
+  if (!snapshotCoversCutoff(snapshot, source.days, Date.now())) {
+    return null;
+  }
+  const covered = new Set(snapshot.identity.providers);
+  const missing = source.providers.filter((provider) => !covered.has(provider));
+  return missing.length > 0 && missing.length < source.providers.length
+    ? missing
     : null;
 }
 
-function externalImportScanSourcesEqual(
-  left: ExternalImportScanSource,
-  right: ExternalImportScanSource
-): boolean {
-  if (left.kind !== right.kind || left.days !== right.days) {
-    return false;
+function cutoffFromDays(days: number, nowMs: number): number {
+  if (days < 0) {
+    return 0;
   }
-  if (left.kind === "archive" && right.kind === "archive") {
-    return (
-      left.archivePath === right.archivePath &&
-      left.archiveKind === right.archiveKind
-    );
+  const windowDays = days === 0 ? 30 : days;
+  return nowMs - windowDays * 24 * 60 * 60 * 1000;
+}
+
+function projectScanSnapshot(
+  snapshot: ExternalImportScanSnapshot,
+  source: ExternalImportScanSource,
+  nowMs: number
+): ExternalAgentImportScanResponse {
+  const cutoff = cutoffFromDays(source.days, nowMs);
+  const allowedProviders =
+    source.kind === "local" ? new Set(source.providers) : null;
+  const sessions = snapshot.response.sessions.filter((session) => {
+    if (allowedProviders && !allowedProviders.has(session.provider)) {
+      return false;
+    }
+    if (cutoff === 0) {
+      return true;
+    }
+    const updated = session.lastUpdatedAtUnixMs ?? 0;
+    return updated === 0 || updated >= cutoff;
+  });
+  const projects = externalImportGroupsFromScan(
+    { ...snapshot.response, sessions },
+    (path) => path
+  ).map((group) => ({
+    path: group.path,
+    label: group.label,
+    providers: group.providers,
+    sessionCount: group.sessions.length,
+    messageCount: group.sessions.reduce(
+      (total, session) => total + session.messageCount,
+      0
+    ),
+    lastUpdatedAtUnixMs: group.sessions.reduce(
+      (latest, session) => Math.max(latest, session.lastUpdatedAtUnixMs ?? 0),
+      0
+    )
+  }));
+  const providers = snapshot.response.providers
+    .filter((provider) =>
+      allowedProviders ? allowedProviders.has(provider.provider) : true
+    )
+    .map((provider) => {
+      const providerSessions = sessions.filter(
+        (session) => session.provider === provider.provider
+      );
+      return {
+        ...provider,
+        sessionCount: providerSessions.length,
+        messageCount: providerSessions.reduce(
+          (total, session) => total + session.messageCount,
+          0
+        )
+      };
+    });
+  return {
+    ...snapshot.response,
+    sessions,
+    projects,
+    providers,
+    scannedSessions: sessions.length,
+    scannedMessages: sessions.reduce(
+      (total, session) => total + session.messageCount,
+      0
+    )
+  };
+}
+
+function mergeLocalScanSnapshots(
+  current: ExternalImportScanSnapshot,
+  incoming: ExternalImportScanSnapshot
+): ExternalImportScanSnapshot {
+  if (current.identity.kind !== "local" || incoming.identity.kind !== "local") {
+    return incoming;
   }
-  if (left.kind === "local" && right.kind === "local") {
-    return (
-      left.providers.length === right.providers.length &&
-      left.providers.every((provider) => right.providers.includes(provider))
-    );
+  const sessionsById = new Map(
+    current.response.sessions.map((session) => [session.id, session])
+  );
+  for (const session of incoming.response.sessions) {
+    sessionsById.set(session.id, session);
   }
-  return false;
+  const providers = [
+    ...current.identity.providers,
+    ...incoming.identity.providers.filter(
+      (provider) => !current.identity.providers.includes(provider)
+    )
+  ];
+  const mergedResponse: ExternalAgentImportScanResponse = {
+    ...incoming.response,
+    sessions: [...sessionsById.values()],
+    errors: [...current.response.errors, ...incoming.response.errors],
+    providers: [
+      ...current.response.providers.filter(
+        (provider) =>
+          !incoming.response.providers.some(
+            (next) => next.provider === provider.provider
+          )
+      ),
+      ...incoming.response.providers
+    ]
+  };
+  const mergedSource: ExternalImportScanSource = {
+    kind: "local",
+    providers,
+    days:
+      current.days < 0 || incoming.days < 0
+        ? -1
+        : Math.max(current.days, incoming.days)
+  };
+  const projectedIdentity: ExternalImportScanIdentity = {
+    kind: "local",
+    providers
+  };
+  const cutoffUnixMs =
+    current.cutoffUnixMs === 0 || incoming.cutoffUnixMs === 0
+      ? 0
+      : current.cutoffUnixMs == null || incoming.cutoffUnixMs == null
+        ? null
+        : Math.min(current.cutoffUnixMs, incoming.cutoffUnixMs);
+  const snapshot: ExternalImportScanSnapshot = {
+    response: mergedResponse,
+    identity: projectedIdentity,
+    days: mergedSource.days,
+    cutoffUnixMs,
+    scannedAtUnixMs: incoming.scannedAtUnixMs ?? current.scannedAtUnixMs,
+    complete: current.complete && incoming.complete
+  };
+  snapshot.response = projectScanSnapshot(snapshot, mergedSource, Date.now());
+  return snapshot;
 }
 
 export function externalImportRequestSource(

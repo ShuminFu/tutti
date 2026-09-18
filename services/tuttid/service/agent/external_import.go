@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -16,10 +15,18 @@ import (
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	agentactivitybiz "github.com/tutti-os/tutti/packages/agent/store-sqlite"
 	agentproviderbiz "github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
+	"github.com/tutti-os/tutti/services/tuttid/data/externalimportcatalog"
 )
 
-func (*Service) ScanExternalImports(ctx context.Context, input ExternalImportScanInput) (ExternalImportScanResult, error) {
-	data, err := scanExternalAgentSessions(ctx, normalizeExternalImportProviders(input.Providers), input.Days, input.ArchivePath, input.ArchiveKind)
+func (s *Service) ScanExternalImports(ctx context.Context, input ExternalImportScanInput) (ExternalImportScanResult, error) {
+	data, err := s.scanExternalAgentSessions(
+		ctx,
+		normalizeExternalImportProviders(input.Providers),
+		input.Days,
+		input.ArchivePath,
+		input.ArchiveKind,
+		externalScanOptions{},
+	)
 	if err != nil {
 		return ExternalImportScanResult{}, err
 	}
@@ -38,15 +45,19 @@ func (s *Service) ImportExternalSessions(ctx context.Context, workspaceID string
 	if len(selections) == 0 {
 		return ExternalImportResult{}, ErrInvalidArgument
 	}
-	// Scan all available history when importing: the request already filters by
-	// explicit project paths and session ids, and the picker may surface
-	// conversations older than the default 30-day window.
-	data, err := scanExternalAgentSessions(
+	sessionIDs, allHaveIDs := externalImportSelectionSessionIDs(selections)
+	opts := externalScanOptions{}
+	if strings.TrimSpace(input.ArchivePath) != "" && allHaveIDs {
+		opts.keepBodies = true
+		opts.sessionIDs = sessionIDs
+	}
+	data, err := s.scanExternalAgentSessions(
 		ctx,
 		providersFromExternalImportSelections(selections),
 		-1,
 		input.ArchivePath,
 		input.ArchiveKind,
+		opts,
 	)
 	if err != nil {
 		return ExternalImportResult{}, err
@@ -65,7 +76,20 @@ func (s *Service) ImportExternalSessions(ctx context.Context, workspaceID string
 		if !selected {
 			continue
 		}
-		importedMessages, imported, err := s.importExternalSession(ctx, workspaceID, session, projectPath)
+		body := session
+		if len(session.Messages) == 0 {
+			loaded, loadErr := s.loadExternalImportBody(ctx, session, input)
+			if loadErr != nil {
+				result.Errors = append(result.Errors, ExternalImportError{
+					Provider:   session.Provider,
+					SourcePath: session.SourcePath,
+					Message:    loadErr.Error(),
+				})
+				continue
+			}
+			body = loaded
+		}
+		importedMessages, imported, err := s.importExternalSession(ctx, workspaceID, body, projectPath)
 		if err != nil {
 			result.Errors = append(result.Errors, ExternalImportError{
 				Provider:   session.Provider,
@@ -226,77 +250,93 @@ func externalImportAgentTargetID(provider string) string {
 	return ""
 }
 
-func scanExternalAgentSessions(ctx context.Context, providers []string, days int, archivePath string, archiveKind string) (externalScanData, error) {
-	if strings.TrimSpace(archivePath) != "" {
-		archiveKind = normalizeExternalImportArchiveKind(archiveKind)
-		// The Claude archive scan still requires the claude-code provider to be
-		// selected (its historical gate); ChatGPT archives are a standalone
-		// import-only source and carry no such provider requirement.
-		if archiveKind == ExternalImportArchiveKindClaude &&
-			len(providers) > 0 && !providersIncludeArchiveImportParser(providers) {
-			return externalScanData{}, fmt.Errorf(
-				"%w: a Claude export archive scan requires the claude-code provider",
-				ErrInvalidArgument,
-			)
+func externalImportSelectionSessionIDs(selections []ExternalImportProjectSelection) (map[string]struct{}, bool) {
+	ids := map[string]struct{}{}
+	allHaveIDs := true
+	for _, selection := range selections {
+		if len(selection.SessionIDs) == 0 {
+			allHaveIDs = false
+			continue
 		}
-		// An export archive is a complete snapshot, so no implicit 30-day
-		// window applies; only an explicit positive day range narrows it.
-		cutoffUnixMS := int64(0)
-		if days > 0 {
-			cutoffUnixMS = externalScanCutoffUnixMS(days)
-		}
-		switch archiveKind {
-		case ExternalImportArchiveKindChatGPT:
-			return scanChatGPTExportArchive(ctx, archivePath, cutoffUnixMS)
-		default:
-			return scanClaudeExportArchive(ctx, archivePath, cutoffUnixMS)
+		for _, id := range selection.SessionIDs {
+			ids[id] = struct{}{}
 		}
 	}
-	data := externalScanData{}
-	projects := map[string]*ExternalImportProject{}
-	cutoffUnixMS := externalScanCutoffUnixMS(days)
-	for _, provider := range normalizeExternalImportProviders(providers) {
-		if ctx.Err() != nil {
-			break
+	return ids, allHaveIDs && len(ids) > 0
+}
+
+func (s *Service) loadExternalImportBody(
+	ctx context.Context,
+	summary externalImportedSession,
+	input ExternalImportInput,
+) (externalImportedSession, error) {
+	if strings.TrimSpace(input.ArchivePath) != "" {
+		data, err := s.scanExternalAgentSessions(
+			ctx,
+			[]string{summary.Provider},
+			-1,
+			input.ArchivePath,
+			input.ArchiveKind,
+			externalScanOptions{
+				keepBodies: true,
+				sessionIDs: map[string]struct{}{
+					externalImportedSessionID(summary.Provider, summary.ProviderSessionID): {},
+				},
+			},
+		)
+		if err != nil {
+			return externalImportedSession{}, err
 		}
-		sessions, summary, errors := scanExternalProviderSessions(provider, cutoffUnixMS)
-		data.result.Providers = append(data.result.Providers, summary)
-		data.result.Errors = append(data.result.Errors, errors...)
-		for _, session := range sessions {
-			project, ok := projectFromExternalSession(session)
-			if !ok {
-				data.result.SkippedSessions++
-				continue
+		for _, session := range data.sessions {
+			if session.Provider == summary.Provider && session.ProviderSessionID == summary.ProviderSessionID {
+				return session, nil
 			}
-			data.sessions = append(data.sessions, session)
-			data.result.ScannedSessions++
-			data.result.ScannedMessages += len(session.Messages)
-			data.result.Sessions = append(data.result.Sessions, externalImportSessionSummary(session, project.Path))
-			upsertExternalImportProject(projects, project, session.Provider)
 		}
+		return externalImportedSession{}, fmt.Errorf("selected session %s was not found in the archive", summary.ProviderSessionID)
 	}
-	for _, project := range projects {
-		sort.Strings(project.Providers)
-		data.result.Projects = append(data.result.Projects, *project)
-	}
-	sort.SliceStable(data.result.Projects, func(left, right int) bool {
-		if data.result.Projects[left].LastUpdatedAtUnixMS == data.result.Projects[right].LastUpdatedAtUnixMS {
-			return data.result.Projects[left].Path < data.result.Projects[right].Path
+	const attempts = 3
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return externalImportedSession{}, err
 		}
-		return data.result.Projects[left].LastUpdatedAtUnixMS > data.result.Projects[right].LastUpdatedAtUnixMS
-	})
-	sort.SliceStable(data.result.Sessions, func(left, right int) bool {
-		if data.result.Sessions[left].LastUpdatedAtUnixMS == data.result.Sessions[right].LastUpdatedAtUnixMS {
-			return data.result.Sessions[left].ID < data.result.Sessions[right].ID
+		before, err := inspectExternalImportSource(summary.SourcePath)
+		if err != nil {
+			return externalImportedSession{}, err
 		}
-		return data.result.Sessions[left].LastUpdatedAtUnixMS > data.result.Sessions[right].LastUpdatedAtUnixMS
-	})
-	// The provider loop breaks on cancellation, so surface it instead of
-	// letting a partial scan pass as a complete result.
-	if err := ctx.Err(); err != nil {
-		return externalScanData{}, err
+		descriptor, ok := providerregistry.Find(summary.Provider)
+		if !ok {
+			return externalImportedSession{}, fmt.Errorf("provider %q is not importable", summary.Provider)
+		}
+		session, parsed, err := parseExternalProviderJSONL(ctx, descriptor, summary.SourcePath)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		after, err := inspectExternalImportSource(summary.SourcePath)
+		if err != nil {
+			return externalImportedSession{}, err
+		}
+		if !externalimportcatalog.ContentSignaturesEqual(before, after) {
+			lastErr = fmt.Errorf("source file changed while reading")
+			continue
+		}
+		if !parsed {
+			return externalImportedSession{}, fmt.Errorf("selected session %s is empty", summary.ProviderSessionID)
+		}
+		if session.Provider != summary.Provider || session.ProviderSessionID != summary.ProviderSessionID {
+			return externalImportedSession{}, fmt.Errorf("source file identity changed for %s", summary.ProviderSessionID)
+		}
+		return session, nil
 	}
-	return data, nil
+	if lastErr == nil {
+		lastErr = fmt.Errorf("source file changed while reading")
+	}
+	return externalImportedSession{}, lastErr
+}
+
+func inspectExternalImportSource(path string) (externalimportcatalog.Signature, error) {
+	return externalimportcatalog.InspectPath(path)
 }
 
 // normalizeExternalImportArchiveKind resolves a request archive kind, defaulting
@@ -337,74 +377,6 @@ func externalScanCutoffUnixMS(days int) int64 {
 		days = 30
 	}
 	return time.Now().Add(-time.Duration(days) * 24 * time.Hour).UnixMilli()
-}
-
-func scanExternalProviderSessions(provider string, cutoffUnixMS int64) ([]externalImportedSession, ExternalImportProvider, []ExternalImportError) {
-	descriptor, ok := providerregistry.Find(provider)
-	if !ok || !descriptor.ExternalImport.Enabled {
-		return nil, ExternalImportProvider{Provider: provider}, nil
-	}
-	roots := externalProviderRoots(descriptor.ExternalImport)
-	summary := ExternalImportProvider{Provider: provider}
-	if len(roots) > 0 {
-		summary.Root = roots[0]
-	}
-	sessions := make([]externalImportedSession, 0, 8)
-	errors := make([]ExternalImportError, 0)
-	// The same provider session can sit under more than one root: a host that
-	// isolates its managed config dir and additionally declares the user's own
-	// CLI root ends up with the imported conversation in one and its continued
-	// copy in the other. Keep a single entry per provider session id — the most
-	// recently updated one — so nothing is counted or imported twice.
-	indexBySessionID := make(map[string]int)
-	for _, root := range roots {
-		if info, err := os.Stat(root); err != nil || !info.IsDir() {
-			continue
-		}
-		summary.Available = true
-		files, err := externalProviderJSONLFiles(descriptor.ExternalImport, root)
-		if err != nil {
-			summary.Error = err.Error()
-			errors = append(errors, ExternalImportError{Provider: provider, Message: err.Error()})
-			continue
-		}
-		// Codex stores the generated conversation title in its app-server SQLite
-		// state DB rather than in the rollout transcript, so resolve it up front and
-		// let it override the message-derived title.
-		var importedTitles map[string]string
-		if descriptor.ExternalImport.TitleCatalogKind == providerregistry.ExternalImportTitleCatalogKindCodexSQLite {
-			importedTitles = codexThreadTitles(root)
-		}
-		for _, file := range files {
-			session, ok, err := parseExternalProviderJSONL(descriptor, file)
-			if err != nil {
-				errors = append(errors, ExternalImportError{Provider: provider, SourcePath: file, Message: err.Error()})
-				continue
-			}
-			if !ok {
-				continue
-			}
-			if session.UpdatedAtUnixMS < cutoffUnixMS {
-				continue
-			}
-			if title := strings.TrimSpace(importedTitles[session.ProviderSessionID]); title != "" {
-				session.Title = truncateExternalTitle(title)
-			}
-			if index, exists := indexBySessionID[session.ProviderSessionID]; exists {
-				if session.UpdatedAtUnixMS > sessions[index].UpdatedAtUnixMS {
-					sessions[index] = session
-				}
-				continue
-			}
-			indexBySessionID[session.ProviderSessionID] = len(sessions)
-			sessions = append(sessions, session)
-		}
-	}
-	for _, session := range sessions {
-		summary.SessionCount++
-		summary.MessageCount += len(session.Messages)
-	}
-	return sessions, summary, errors
 }
 
 // externalProviderRoots returns the local transcript roots to scan, in priority
@@ -449,73 +421,6 @@ func externalProviderRoots(descriptor providerregistry.ExternalImportDescriptor)
 		}
 	}
 	return roots
-}
-
-func externalProviderJSONLFiles(descriptor providerregistry.ExternalImportDescriptor, root string) ([]string, error) {
-	roots := make([]string, 0, len(descriptor.ScanDirectories))
-	for _, directory := range descriptor.ScanDirectories {
-		roots = append(roots, filepath.Join(root, directory))
-	}
-	files := make([]string, 0)
-	for _, scanRoot := range roots {
-		if info, err := os.Stat(scanRoot); err != nil || !info.IsDir() {
-			continue
-		}
-		err := filepath.WalkDir(scanRoot, func(path string, entry os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if entry.IsDir() {
-				for _, prefix := range descriptor.SkipDirectoryPrefixes {
-					if strings.HasPrefix(entry.Name(), prefix) {
-						return filepath.SkipDir
-					}
-				}
-				return nil
-			}
-			if entry.Type()&os.ModeSymlink != 0 {
-				// A dangling link is not a session. Importers expose an imported
-				// transcript into the scan root as a link (see the claude/codex
-				// provider preparers); once the user's own copy is pruned or moved
-				// the link dangles, and reading it would surface an opaque error for
-				// a conversation that simply is not there any more. Skip it instead.
-				if _, statErr := os.Stat(path); statErr != nil {
-					return nil
-				}
-			}
-			if strings.EqualFold(filepath.Ext(path), ".jsonl") {
-				files = append(files, path)
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	sort.Strings(files)
-	return files, nil
-}
-
-func parseExternalProviderJSONL(descriptor providerregistry.ProviderDescriptor, path string) (externalImportedSession, bool, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return externalImportedSession{}, false, err
-	}
-	defer file.Close()
-	var session externalImportedSession
-	var ok bool
-	switch descriptor.ExternalImport.ParserKind {
-	case providerregistry.ExternalImportParserKindCodexJSONL:
-		session, ok, err = parseCodexJSONL(path, file)
-	case providerregistry.ExternalImportParserKindClaudeJSONL:
-		session, ok, err = parseClaudeCodeJSONL(path, file)
-	default:
-		return externalImportedSession{}, false, fmt.Errorf("external import parser %q is unsupported", descriptor.ExternalImport.ParserKind)
-	}
-	if ok {
-		session.Provider = descriptor.Identity.ID
-	}
-	return session, ok, err
 }
 
 func (s *Service) importExternalSession(

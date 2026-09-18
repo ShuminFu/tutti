@@ -3082,6 +3082,18 @@ export type ExternalAgentImportScanResponse = {
   scannedMessages: number;
   skippedSessions: number;
   errors: Array<ExternalAgentImportError>;
+  /**
+   * Daemon clock when this scan completed. Clients use it with cutoffUnixMs to reuse the snapshot for a narrower window.
+   */
+  scannedAtUnixMs?: number;
+  /**
+   * Absolute message-time cutoff used for this scan. 0 means all available history.
+   */
+  cutoffUnixMs?: number;
+  /**
+   * True when the daemon finished a full enumeration. Partial or cancelled scans are not returned as success.
+   */
+  complete?: boolean;
 };
 
 export type ExternalAgentImportProjectSelection = {

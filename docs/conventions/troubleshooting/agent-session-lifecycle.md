@@ -2542,6 +2542,8 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   [external_import_parse.go](../../../services/tuttid/service/agent/external_import_parse.go)
   [external_import_projects.go](../../../services/tuttid/service/agent/external_import_projects.go)
   [external_import.go](../../../services/tuttid/service/agent/external_import.go)
+  [external_import_scan.go](../../../services/tuttid/service/agent/external_import_scan.go)
+  [store.go](../../../services/tuttid/data/externalimportcatalog/store.go)
   [rail.go](../../../packages/agent/store-sqlite/rail.go)
   [agentGuiConversationModel.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/model/agentGuiConversationModel.ts)
   [desktopWorkspaceUserProjectService.ts](../../../apps/desktop/src/renderer/src/features/workspace-user-project/services/internal/desktopWorkspaceUserProjectService.ts)

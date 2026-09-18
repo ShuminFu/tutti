@@ -14133,6 +14133,17 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ExternalAgentImportError"
+        scannedAtUnixMs:
+          type: integer
+          format: int64
+          description: Daemon clock when this scan completed. Clients use it with cutoffUnixMs to reuse the snapshot for a narrower window.
+        cutoffUnixMs:
+          type: integer
+          format: int64
+          description: Absolute message-time cutoff used for this scan. 0 means all available history.
+        complete:
+          type: boolean
+          description: True when the daemon finished a full enumeration. Partial or cancelled scans are not returned as success.
     ExternalAgentImportProjectSelection:
       type: object
       additionalProperties: false

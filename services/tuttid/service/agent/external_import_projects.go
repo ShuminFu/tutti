@@ -16,17 +16,18 @@ import (
 // anything. The register-only import path uses it to avoid surfacing empty
 // projects. Returned paths are canonical (see canonicalExistingDir), matching
 // ImportExternalSessions.ProjectPaths so callers can register them directly.
-func (*Service) ExternalImportValidProjectPaths(ctx context.Context, input ExternalImportInput) ([]string, error) {
+func (s *Service) ExternalImportValidProjectPaths(ctx context.Context, input ExternalImportInput) ([]string, error) {
 	selections := normalizeExternalImportSelections(input.Projects)
 	if len(selections) == 0 {
 		return nil, nil
 	}
-	data, err := scanExternalAgentSessions(
+	data, err := s.scanExternalAgentSessions(
 		ctx,
 		providersFromExternalImportSelections(selections),
 		-1,
 		input.ArchivePath,
 		input.ArchiveKind,
+		externalScanOptions{},
 	)
 	if err != nil {
 		return nil, err
@@ -58,7 +59,7 @@ func projectFromExternalSession(session externalImportedSession) (ExternalImport
 		Label:               filepath.Base(projectPath),
 		Providers:           []string{session.Provider},
 		SessionCount:        1,
-		MessageCount:        len(session.Messages),
+		MessageCount:        externalImportMessageCount(session),
 		LastUpdatedAtUnixMS: session.UpdatedAtUnixMS,
 	}, true
 }
@@ -231,7 +232,7 @@ func externalImportSessionSummary(session externalImportedSession, projectPath s
 		Provider:            session.Provider,
 		SourcePath:          session.SourcePath,
 		Title:               session.Title,
-		MessageCount:        len(session.Messages),
+		MessageCount:        externalImportMessageCount(session),
 		LastUpdatedAtUnixMS: session.UpdatedAtUnixMS,
 	}
 }

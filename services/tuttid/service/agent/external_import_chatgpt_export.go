@@ -94,7 +94,7 @@ type chatgptExportArchiveHandle struct {
 	keepAlive [][]byte
 }
 
-func scanChatGPTExportArchive(ctx context.Context, archivePath string, cutoffUnixMS int64) (externalScanData, error) {
+func scanChatGPTExportArchive(ctx context.Context, archivePath string, cutoffUnixMS int64, opts externalScanOptions) (externalScanData, error) {
 	handle, err := openChatGPTExportConversationEntries(archivePath)
 	if err != nil {
 		return externalScanData{}, err
@@ -182,15 +182,22 @@ func scanChatGPTExportArchive(ctx context.Context, archivePath string, cutoffUni
 				conversationIndex++
 				continue
 			}
+			if !externalScanSessionIDAllowed(opts.sessionIDs, session) {
+				conversationIndex++
+				continue
+			}
 			project, ok := projectFromExternalSession(session)
 			if !ok {
 				data.result.SkippedSessions++
 				conversationIndex++
 				continue
 			}
+			if !opts.keepBodies {
+				dropExternalSessionBodies(&session)
+			}
 			data.sessions = append(data.sessions, session)
 			data.result.ScannedSessions++
-			data.result.ScannedMessages += len(session.Messages)
+			data.result.ScannedMessages += externalImportMessageCount(session)
 			data.result.Sessions = append(data.result.Sessions, externalImportSessionSummary(session, project.Path))
 			upsertExternalImportProject(projects, project, session.Provider)
 			conversationIndex++

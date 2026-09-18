@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 func TestParseCodexJSONLUsesFirstUserEventAsTitle(t *testing.T) {
 	cwd := t.TempDir()
 	session, ok, err := parseCodexJSONL(
+		context.Background(),
 		filepath.Join(cwd, "rollout.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -52,6 +54,7 @@ func TestParseCodexJSONLUsesFirstUserEventAsTitle(t *testing.T) {
 func TestParseCodexJSONLCapturesLatestModelAndEffortFromTurnContext(t *testing.T) {
 	cwd := t.TempDir()
 	session, ok, err := parseCodexJSONL(
+		context.Background(),
 		filepath.Join(cwd, "rollout.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -108,6 +111,7 @@ func TestParseCodexJSONLCapturesLatestModelAndEffortFromTurnContext(t *testing.T
 func TestParseCodexJSONLPreservesToolCallStructure(t *testing.T) {
 	cwd := t.TempDir()
 	session, ok, err := parseCodexJSONL(
+		context.Background(),
 		filepath.Join(cwd, "rollout.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -189,6 +193,7 @@ func TestParseCodexJSONLExtractsPromptFromIDEContext(t *testing.T) {
 		"The user is in file foo.go\n\n" +
 		"## My request for Codex: Refactor the parser\n"
 	session, ok, err := parseCodexJSONL(
+		context.Background(),
 		filepath.Join(cwd, "rollout.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -221,6 +226,7 @@ func TestParseCodexJSONLExtractsPromptFromIDEContext(t *testing.T) {
 func TestParseCodexJSONLSkipsAgentsAndEnvironmentPreamble(t *testing.T) {
 	cwd := t.TempDir()
 	session, ok, err := parseCodexJSONL(
+		context.Background(),
 		filepath.Join(cwd, "rollout.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -270,6 +276,7 @@ func TestParseCodexJSONLHandlesCustomToolCallLifecycle(t *testing.T) {
 	// content — reported as "会话显示为空(实际上有很多对话)".
 	cwd := t.TempDir()
 	session, ok, err := parseCodexJSONL(
+		context.Background(),
 		filepath.Join(cwd, "rollout.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -357,6 +364,7 @@ func TestParseCodexJSONLRetainsSessionWhenCwdDirectoryNoLongerExists(t *testing.
 
 	sourcePath := filepath.Join(root, "rollout.jsonl")
 	session, ok, err := parseCodexJSONL(
+		context.Background(),
 		sourcePath,
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -404,6 +412,7 @@ func TestParseCodexJSONLMarksDocumentsCodexScratchCwdAsNoProject(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	session, ok, err := parseCodexJSONL(
+		context.Background(),
 		filepath.Join(cwd, "rollout.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -453,6 +462,7 @@ func TestParseCodexJSONLMarksLegacyDateSlugScratchCwdAsNoProject(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	session, ok, err := parseCodexJSONL(
+		context.Background(),
 		filepath.Join(cwd, "rollout.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -505,6 +515,7 @@ func TestParseClaudeCodeJSONLDoesNotUseCodexScratchCwdNoProjectRule(t *testing.T
 	t.Setenv("HOME", home)
 
 	session, ok, err := parseClaudeCodeJSONL(
+		context.Background(),
 		filepath.Join(cwd, "claude.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -529,6 +540,7 @@ func TestParseClaudeCodeJSONLPrefersAiTitleOverFirstUserMessage(t *testing.T) {
 	// the conversation title; ai-title is the name shown by `claude --resume`.
 	cwd := t.TempDir()
 	session, ok, err := parseClaudeCodeJSONL(
+		context.Background(),
 		filepath.Join(cwd, "claude.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -569,6 +581,7 @@ func TestParseClaudeCodeJSONLPrefersAiTitleOverFirstUserMessage(t *testing.T) {
 func TestParseClaudeCodeJSONLPrefersCustomTitleOverAiTitle(t *testing.T) {
 	cwd := t.TempDir()
 	session, ok, err := parseClaudeCodeJSONL(
+		context.Background(),
 		filepath.Join(cwd, "claude.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -601,6 +614,7 @@ func TestParseClaudeCodeJSONLPrefersCustomTitleOverAiTitle(t *testing.T) {
 func TestParseClaudeCodeJSONLPrefersCustomTitle(t *testing.T) {
 	cwd := t.TempDir()
 	session, ok, err := parseClaudeCodeJSONL(
+		context.Background(),
 		filepath.Join(cwd, "claude.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -628,6 +642,7 @@ func TestParseClaudeCodeJSONLPrefersCustomTitle(t *testing.T) {
 func TestParseClaudeCodeJSONLCapturesLatestAssistantModel(t *testing.T) {
 	cwd := t.TempDir()
 	session, ok, err := parseClaudeCodeJSONL(
+		context.Background(),
 		filepath.Join(cwd, "claude.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -681,6 +696,7 @@ func TestParseClaudeCodeJSONLSkipsIsMetaInjectedFileContent(t *testing.T) {
 	// (imported session detail showing injected file contents up front).
 	cwd := t.TempDir()
 	session, ok, err := parseClaudeCodeJSONL(
+		context.Background(),
 		filepath.Join(cwd, "claude.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
@@ -727,6 +743,7 @@ func TestParseClaudeCodeJSONLStripsTuttiMentionRoutingReminder(t *testing.T) {
 	cwd := t.TempDir()
 	prompt := "[@AI Canvas](mention://workspace-app/ai-media-canvas?workspaceId=ws-1) 帮我生成图片"
 	session, ok, err := parseClaudeCodeJSONL(
+		context.Background(),
 		filepath.Join(cwd, "claude.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{

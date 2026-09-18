@@ -89,7 +89,9 @@ type ServiceComposerConfig struct {
 }
 
 type ServiceExternalImportConfig struct {
-	Store agentactivitybiz.Repository
+	Store            agentactivitybiz.Repository
+	Catalog          ExternalImportCatalog
+	ParseConcurrency int
 }
 
 type ServiceResourceConfig struct {
@@ -125,6 +127,11 @@ func (s *Service) applyConfig(config ServiceConfig) {
 	s.UserProjectReader = config.Sessions.UserProjectReader
 	s.MessageReader = config.Sessions.MessageReader
 	s.ExternalImportStore = config.ExternalImport.Store
+	s.ExternalImportCatalog = config.ExternalImport.Catalog
+	s.externalImportParseConcurrency = config.ExternalImport.ParseConcurrency
+	if s.codexTitleCache == nil {
+		s.codexTitleCache = &codexTitleCache{conns: map[string]*codexTitleConn{}}
+	}
 	s.TurnStore = config.Sessions.TurnStore
 	s.TurnSummaryReader = config.Sessions.TurnSummaryReader
 	s.RuntimeOperationStore = config.Runtime.RuntimeOperationStore

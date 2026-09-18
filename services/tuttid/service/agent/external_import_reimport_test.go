@@ -327,7 +327,7 @@ func TestServiceReimportRepairsLegacyTurnlessExternalMessages(t *testing.T) {
 		t.Fatalf("open source transcript error = %v", err)
 	}
 	defer source.Close()
-	parsed, ok, err := parseCodexJSONL(sourcePath, source)
+	parsed, ok, err := parseCodexJSONL(context.Background(), sourcePath, source)
 	if err != nil || !ok {
 		t.Fatalf("parseCodexJSONL ok=%v error=%v", ok, err)
 	}

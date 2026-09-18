@@ -71,7 +71,7 @@ type parsedClaudeExportMessage struct {
 	SourceMessageIndex int
 }
 
-func scanClaudeExportArchive(ctx context.Context, archivePath string, cutoffUnixMS int64) (externalScanData, error) {
+func scanClaudeExportArchive(ctx context.Context, archivePath string, cutoffUnixMS int64, opts externalScanOptions) (externalScanData, error) {
 	archivePath, entry, closeArchive, err := openClaudeExportConversations(archivePath)
 	if err != nil {
 		return externalScanData{}, err
@@ -153,14 +153,20 @@ func scanClaudeExportArchive(ctx context.Context, archivePath string, cutoffUnix
 		if session.UpdatedAtUnixMS < cutoffUnixMS {
 			continue
 		}
+		if !externalScanSessionIDAllowed(opts.sessionIDs, session) {
+			continue
+		}
 		project, ok := projectFromExternalSession(session)
 		if !ok {
 			data.result.SkippedSessions++
 			continue
 		}
+		if !opts.keepBodies {
+			dropExternalSessionBodies(&session)
+		}
 		data.sessions = append(data.sessions, session)
 		data.result.ScannedSessions++
-		data.result.ScannedMessages += len(session.Messages)
+		data.result.ScannedMessages += externalImportMessageCount(session)
 		data.result.Sessions = append(data.result.Sessions, externalImportSessionSummary(session, project.Path))
 		upsertExternalImportProject(projects, project, session.Provider)
 	}

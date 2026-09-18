@@ -186,7 +186,7 @@ func (api DaemonAPI) registerExternalImportUserProjects(
 }
 
 func generatedExternalImportScanResult(result agentservice.ExternalImportScanResult) tuttigenerated.ExternalAgentImportScanResponse {
-	return tuttigenerated.ExternalAgentImportScanResponse{
+	generated := tuttigenerated.ExternalAgentImportScanResponse{
 		Errors:          generatedExternalImportErrors(result.Errors),
 		Projects:        generatedExternalImportProjects(result.Projects),
 		Providers:       generatedExternalImportProviders(result.Providers),
@@ -195,6 +195,19 @@ func generatedExternalImportScanResult(result agentservice.ExternalImportScanRes
 		ScannedSessions: result.ScannedSessions,
 		SkippedSessions: result.SkippedSessions,
 	}
+	if result.ScannedAtUnixMS > 0 {
+		scannedAt := result.ScannedAtUnixMS
+		generated.ScannedAtUnixMs = &scannedAt
+	}
+	if result.CutoffUnixMS > 0 || result.Complete {
+		cutoff := result.CutoffUnixMS
+		generated.CutoffUnixMs = &cutoff
+	}
+	if result.Complete {
+		complete := true
+		generated.Complete = &complete
+	}
+	return generated
 }
 
 func generatedExternalImportResult(result agentservice.ExternalImportResult) tuttigenerated.ExternalAgentImportResultResponse {

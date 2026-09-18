@@ -22,6 +22,7 @@ import (
 	tuttiapi "github.com/tutti-os/tutti/services/tuttid/api"
 	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
 	agentextensiondata "github.com/tutti-os/tutti/services/tuttid/data/agentextension"
+	"github.com/tutti-os/tutti/services/tuttid/data/externalimportcatalog"
 	workspacedata "github.com/tutti-os/tutti/services/tuttid/data/workspace"
 	accountservice "github.com/tutti-os/tutti/services/tuttid/service/account"
 	agentservice "github.com/tutti-os/tutti/services/tuttid/service/agent"
@@ -415,7 +416,9 @@ func buildDaemonAPI(
 			},
 		},
 		ExternalImport: agentservice.ServiceExternalImportConfig{
-			Store: agentActivityRepo,
+			Store:            agentActivityRepo,
+			Catalog:          openExternalImportCatalog(),
+			ParseConcurrency: 8,
 		},
 		Resources: agentservice.ServiceResourceConfig{
 			AgentSessionResourceReleaser: agentSessionResourceReleaser,
@@ -893,4 +896,13 @@ func (a agentComposerDefaultsValidatorAdapter) ValidateAgentComposerDefaultsPatc
 		Applied:  result.Applied,
 		Rejected: rejected,
 	}, nil
+}
+
+func openExternalImportCatalog() agentservice.ExternalImportCatalog {
+	store, err := externalimportcatalog.Open(externalimportcatalog.CatalogPath(tuttitypes.DefaultStateDir()))
+	if err != nil {
+		slog.Warn("external import catalog unavailable; using live scans", "error", err)
+		return nil
+	}
+	return store
 }

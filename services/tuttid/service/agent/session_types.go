@@ -41,6 +41,9 @@ type Service struct {
 	UserProjectReader              UserProjectReader
 	MessageReader                  MessageReader
 	ExternalImportStore            agentactivitybiz.Repository
+	ExternalImportCatalog          ExternalImportCatalog
+	externalImportParseConcurrency int
+	codexTitleCache                *codexTitleCache
 	TurnStore                      TurnStore
 	TurnSummaryReader              agentactivitybiz.SessionTurnSummaryReader
 	RuntimeOperationStore          RuntimeOperationStore

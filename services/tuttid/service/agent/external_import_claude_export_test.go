@@ -61,7 +61,7 @@ func TestScanClaudeExportArchiveUsesVisibleTextBlocksAndPreservesFileReferences(
 		claudeExportConversationFixture("conversation-empty", "Empty", nil),
 	})
 
-	data, err := scanClaudeExportArchive(context.Background(), archivePath, 0)
+	data, err := scanClaudeExportArchive(context.Background(), archivePath, 0, externalScanOptions{keepBodies: true})
 	if err != nil {
 		t.Fatalf("scanClaudeExportArchive error = %v", err)
 	}
@@ -123,7 +123,7 @@ func TestScanClaudeExportArchiveSelectsLatestLeafWithoutFlatteningBranches(t *te
 		),
 	})
 
-	data, err := scanClaudeExportArchive(context.Background(), archivePath, 0)
+	data, err := scanClaudeExportArchive(context.Background(), archivePath, 0, externalScanOptions{keepBodies: true})
 	if err != nil {
 		t.Fatalf("scanClaudeExportArchive error = %v", err)
 	}
@@ -422,7 +422,7 @@ func TestScanClaudeExportArchiveRejectsInvalidArchives(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := scanClaudeExportArchive(context.Background(), tc.path(t), 0)
+			_, err := scanClaudeExportArchive(context.Background(), tc.path(t), 0, externalScanOptions{keepBodies: true})
 			if !errors.Is(err, ErrInvalidArgument) {
 				t.Fatalf("error = %v, want ErrInvalidArgument", err)
 			}
@@ -478,7 +478,7 @@ func TestScanClaudeExportArchivePreflightsDirectoryLimits(t *testing.T) {
 			if err := os.WriteFile(archivePath, data, 0o600); err != nil {
 				t.Fatalf("rewrite archive: %v", err)
 			}
-			_, err = scanClaudeExportArchive(context.Background(), archivePath, 0)
+			_, err = scanClaudeExportArchive(context.Background(), archivePath, 0, externalScanOptions{keepBodies: true})
 			if !errors.Is(err, ErrInvalidArgument) {
 				t.Fatalf("error = %v, want ErrInvalidArgument", err)
 			}

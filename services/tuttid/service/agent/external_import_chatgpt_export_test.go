@@ -32,7 +32,7 @@ func TestScanChatGPTExportArchiveNormalizesRolesTextAndAssetPlaceholders(t *test
 		}),
 	})
 
-	data, err := scanChatGPTExportArchive(context.Background(), archivePath, 0)
+	data, err := scanChatGPTExportArchive(context.Background(), archivePath, 0, externalScanOptions{keepBodies: true})
 	if err != nil {
 		t.Fatalf("scanChatGPTExportArchive error = %v", err)
 	}
@@ -93,7 +93,7 @@ func TestScanChatGPTExportArchiveFollowsCurrentNodeAndDropsAbandonedBranch(t *te
 		}),
 	})
 
-	data, err := scanChatGPTExportArchive(context.Background(), archivePath, 0)
+	data, err := scanChatGPTExportArchive(context.Background(), archivePath, 0, externalScanOptions{keepBodies: true})
 	if err != nil {
 		t.Fatalf("scanChatGPTExportArchive error = %v", err)
 	}
@@ -133,11 +133,11 @@ func TestScanChatGPTExportArchiveIsIdempotentAndBranchScoped(t *testing.T) {
 	}
 
 	firstPath := buildLinear("n-assistant", false)
-	first, err := scanChatGPTExportArchive(context.Background(), firstPath, 0)
+	first, err := scanChatGPTExportArchive(context.Background(), firstPath, 0, externalScanOptions{keepBodies: true})
 	if err != nil {
 		t.Fatalf("first scan error = %v", err)
 	}
-	second, err := scanChatGPTExportArchive(context.Background(), firstPath, 0)
+	second, err := scanChatGPTExportArchive(context.Background(), firstPath, 0, externalScanOptions{keepBodies: true})
 	if err != nil {
 		t.Fatalf("second scan error = %v", err)
 	}
@@ -151,7 +151,7 @@ func TestScanChatGPTExportArchiveIsIdempotentAndBranchScoped(t *testing.T) {
 	}
 
 	extendedPath := buildLinear("n-follow", true)
-	extended, err := scanChatGPTExportArchive(context.Background(), extendedPath, 0)
+	extended, err := scanChatGPTExportArchive(context.Background(), extendedPath, 0, externalScanOptions{keepBodies: true})
 	if err != nil {
 		t.Fatalf("extended scan error = %v", err)
 	}
@@ -174,11 +174,11 @@ func TestScanChatGPTExportArchiveIsIdempotentAndBranchScoped(t *testing.T) {
 			"n-new":  chatgptExportNodeFixture("n-new", "n-user", []string{}, chatgptExportTextMessageFixture("m-new", "assistant", 1717200003, "New answer")),
 		}),
 	})
-	oldScan, err := scanChatGPTExportArchive(context.Background(), oldAnswerPath, 0)
+	oldScan, err := scanChatGPTExportArchive(context.Background(), oldAnswerPath, 0, externalScanOptions{keepBodies: true})
 	if err != nil {
 		t.Fatalf("old fork scan error = %v", err)
 	}
-	newScan, err := scanChatGPTExportArchive(context.Background(), newAnswerPath, 0)
+	newScan, err := scanChatGPTExportArchive(context.Background(), newAnswerPath, 0, externalScanOptions{keepBodies: true})
 	if err != nil {
 		t.Fatalf("new fork scan error = %v", err)
 	}
@@ -189,7 +189,7 @@ func TestScanChatGPTExportArchiveIsIdempotentAndBranchScoped(t *testing.T) {
 
 func TestScanChatGPTExportArchiveRejectsMissingConversationsWithoutLeakingPath(t *testing.T) {
 	archivePath := writeChatGPTExportZipEntries(t, map[string]string{"users.json": "[]"})
-	_, err := scanChatGPTExportArchive(context.Background(), archivePath, 0)
+	_, err := scanChatGPTExportArchive(context.Background(), archivePath, 0, externalScanOptions{keepBodies: true})
 	if !errors.Is(err, ErrInvalidArgument) || !strings.Contains(err.Error(), "supported ChatGPT conversations payload") {
 		t.Fatalf("error = %v, want missing payload rejection", err)
 	}
@@ -200,7 +200,7 @@ func TestScanChatGPTExportArchiveRejectsMissingConversationsWithoutLeakingPath(t
 
 func TestScanChatGPTExportArchiveRejectsNonArrayConversations(t *testing.T) {
 	archivePath := writeChatGPTExportZipEntries(t, map[string]string{"conversations.json": "{}"})
-	_, err := scanChatGPTExportArchive(context.Background(), archivePath, 0)
+	_, err := scanChatGPTExportArchive(context.Background(), archivePath, 0, externalScanOptions{keepBodies: true})
 	if !errors.Is(err, ErrInvalidArgument) || !strings.Contains(err.Error(), "must contain an array") {
 		t.Fatalf("error = %v, want array-shape rejection", err)
 	}
@@ -211,7 +211,7 @@ func TestScanChatGPTExportArchiveRejectsDuplicateConversationsEntry(t *testing.T
 		{Name: "conversations.json", Content: "[]"},
 		{Name: "conversations.json", Content: "[]"},
 	})
-	_, err := scanChatGPTExportArchive(context.Background(), archivePath, 0)
+	_, err := scanChatGPTExportArchive(context.Background(), archivePath, 0, externalScanOptions{keepBodies: true})
 	if !errors.Is(err, ErrInvalidArgument) || !strings.Contains(err.Error(), "duplicate conversations.json") {
 		t.Fatalf("error = %v, want duplicate-entry rejection", err)
 	}
@@ -345,7 +345,7 @@ func TestScanChatGPTExportArchiveReadsBundledOpenAIExport(t *testing.T) {
 		},
 	})
 
-	data, err := scanChatGPTExportArchive(context.Background(), archivePath, 0)
+	data, err := scanChatGPTExportArchive(context.Background(), archivePath, 0, externalScanOptions{keepBodies: true})
 	if err != nil {
 		t.Fatalf("scanChatGPTExportArchive error = %v", err)
 	}

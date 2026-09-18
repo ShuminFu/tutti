@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,15 +10,17 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	agentactivitybiz "github.com/tutti-os/tutti/packages/agent/store-sqlite"
 	agentproviderbiz "github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
+	"github.com/tutti-os/tutti/services/tuttid/data/externalimportcatalog"
 )
 
-func parseCodexJSONL(path string, reader io.Reader) (externalImportedSession, bool, error) {
+func parseCodexJSONL(ctx context.Context, path string, reader io.Reader) (externalImportedSession, bool, error) {
 	session := externalImportedSession{Provider: agentproviderbiz.Codex, SourcePath: path}
-	err := readJSONLLines(reader, func(index int, raw map[string]any) {
+	err := readJSONLLines(ctx, reader, func(index int, raw map[string]any) {
 		timestamp := unixMSFromAny(raw["timestamp"])
 		switch stringField(raw, "type") {
 		case "session_meta":
@@ -236,10 +239,10 @@ func codexFunctionCallArguments(value any) map[string]any {
 	}
 }
 
-func parseClaudeCodeJSONL(path string, reader io.Reader) (externalImportedSession, bool, error) {
+func parseClaudeCodeJSONL(ctx context.Context, path string, reader io.Reader) (externalImportedSession, bool, error) {
 	session := externalImportedSession{Provider: agentproviderbiz.ClaudeCode, SourcePath: path}
 	var customTitle, aiTitle, summaryTitle string
-	err := readJSONLLines(reader, func(index int, raw map[string]any) {
+	err := readJSONLLines(ctx, reader, func(index int, raw map[string]any) {
 		session.ProviderSessionID = firstNonEmptyString(session.ProviderSessionID, stringField(raw, "sessionId"), stringField(raw, "session_id"))
 		session.Cwd = firstNonEmptyString(session.Cwd, stringField(raw, "cwd"))
 		// Claude Code records conversation titles inline. Priority is applied
@@ -311,6 +314,7 @@ func normalizeExternalParsedSession(session externalImportedSession) (externalIm
 	if strings.TrimSpace(session.ProviderSessionID) == "" {
 		session.ProviderSessionID = externalStableHash(session.Provider + "\x00" + session.SourcePath)
 	}
+	session.RawCwd = strings.TrimSpace(session.Cwd)
 	cwd, ok := resolveExternalImportSessionCwd(session.Cwd)
 	if !ok {
 		return externalImportedSession{}, false, nil
@@ -356,10 +360,60 @@ func normalizeExternalParsedSession(session externalImportedSession) (externalIm
 		}
 	}
 	session.Messages = messages
-	session.StartedAtUnixMS = firstExternalMessageUnixMS(messages)
-	session.UpdatedAtUnixMS = lastExternalMessageUnixMS(messages)
+	session.MessageCount = len(messages)
+	assignExternalSessionTimes(&session, time.Now())
 	session.Title = resolveExternalSessionTitle(session.Provider, session.SummaryTitle, session.Title, messages)
 	return session, true, nil
+}
+
+func assignExternalSessionTimes(session *externalImportedSession, now time.Time) {
+	if session == nil {
+		return
+	}
+	if hasExternalMessageTimestamp(session.Messages) {
+		session.TimeSource = externalimportcatalog.TimeSourceMessage
+		session.StartedAtUnixMS = firstExternalMessageUnixMS(session.Messages)
+		session.UpdatedAtUnixMS = lastExternalMessageUnixMS(session.Messages)
+		return
+	}
+	session.TimeSource = externalimportcatalog.TimeSourceNowFallback
+	stamp := now.UnixMilli()
+	session.StartedAtUnixMS = stamp
+	session.UpdatedAtUnixMS = stamp
+}
+
+func hasExternalMessageTimestamp(messages []externalImportedMessage) bool {
+	for _, message := range messages {
+		if message.OccurredAtUnixMS > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func refreshExternalSessionFallbackTime(session *externalImportedSession, now time.Time) {
+	if session == nil || session.TimeSource != externalimportcatalog.TimeSourceNowFallback {
+		return
+	}
+	stamp := now.UnixMilli()
+	session.StartedAtUnixMS = stamp
+	session.UpdatedAtUnixMS = stamp
+}
+
+func dropExternalSessionBodies(session *externalImportedSession) {
+	if session == nil {
+		return
+	}
+	session.MessageCount = externalImportMessageCount(*session)
+	session.Messages = nil
+	session.EventUserMessage = externalImportedMessage{}
+}
+
+func externalImportMessageCount(session externalImportedSession) int {
+	if session.MessageCount > 0 {
+		return session.MessageCount
+	}
+	return len(session.Messages)
 }
 
 // resolveExternalImportSessionCwd resolves a session's recorded working
@@ -598,9 +652,15 @@ func codexRequestHeadingPayload(line string) (string, bool) {
 	return strings.TrimSpace(strings.TrimLeft(suffix, ":：-— \t")), true
 }
 
-func readJSONLLines(reader io.Reader, handle func(int, map[string]any)) error {
+func readJSONLLines(ctx context.Context, reader io.Reader, handle func(int, map[string]any)) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	buf := bufio.NewReader(reader)
 	for index := 0; ; index++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		line, err := buf.ReadString('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
 			return err

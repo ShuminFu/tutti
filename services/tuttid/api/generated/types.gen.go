@@ -7050,9 +7050,12 @@ type ExternalAgentImportScanRequest struct {
 
 // ExternalAgentImportScanResponse defines model for ExternalAgentImportScanResponse.
 type ExternalAgentImportScanResponse struct {
+	Complete        *bool                         `json:"complete,omitempty"`
+	CutoffUnixMs    *int64                        `json:"cutoffUnixMs,omitempty"`
 	Errors          []ExternalAgentImportError    `json:"errors"`
 	Projects        []ExternalAgentImportProject  `json:"projects"`
 	Providers       []ExternalAgentImportProvider `json:"providers"`
+	ScannedAtUnixMs *int64                        `json:"scannedAtUnixMs,omitempty"`
 	ScannedMessages int                           `json:"scannedMessages"`
 	ScannedSessions int                           `json:"scannedSessions"`
 	Sessions        []ExternalAgentImportSession  `json:"sessions"`
