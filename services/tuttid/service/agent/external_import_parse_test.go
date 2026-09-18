@@ -791,6 +791,7 @@ func TestTruncateExternalTitleKeepsMultibyteRunesIntact(t *testing.T) {
 func TestParseCodexJSONLPreservesAssistantMessagePhase(t *testing.T) {
 	cwd := t.TempDir()
 	session, ok, err := parseCodexJSONL(
+		context.Background(),
 		filepath.Join(cwd, "rollout.jsonl"),
 		strings.NewReader(testAgentJSONL(t,
 			map[string]any{
