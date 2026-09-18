@@ -113,7 +113,8 @@ function isLatestTranscriptTurnSettled(
 // docs/architecture/agent-gui-node.md forbids.
 // Explicit provider-final items win over the last-visible-text fallback so a
 // late process line cannot steal the copy target. Commentary is never treated
-// as the answer. The stamp does not hide other ordinary replies.
+// as the answer. The stamp identifies the visible final reply; completed-Turn
+// disclosure folds other ordinary assistant replies in assistantTurnDisclosure.
 function findLatestAssistantFinalTextTargetKeys(
   rows: readonly AgentTranscriptRowVM[],
   eligibleTurnIds: ReadonlySet<string>
@@ -125,7 +126,9 @@ function findLatestAssistantFinalTextTargetKeys(
     eligibleTurnIds,
     targetKeys,
     coveredTurnIds,
-    (message) => Boolean(message.isExplicitAssistantFinal) && isCopyableAssistantText(message)
+    (message) =>
+      Boolean(message.isExplicitAssistantFinal) &&
+      isCopyableAssistantText(message)
   );
   collectAssistantFinalTextTargets(
     rows,

@@ -1550,17 +1550,18 @@ by the canonical user-message payload, not at provider runtime start. Historical
 activity without that timestamp falls back to the leading user-message
 timestamp.
 
-Completed Turn disclosure collapses only process-oriented rows such as thinking,
-tool groups, progress, turn-boundary messages, and transient processing.
-Marked Codex `assistant-commentary` rows are progress; an `assistant-final`
-answer stays ordinary content and remains visible after collapse. Ordinary
-assistant content without a purpose tag, user messages, and the response-tail
-file summary remain visible. Locally created and imported sessions use the same
-classification: earlier ordinary replies stay in the visible transcript, and
-the last final-text stamp is not used to hide them. Missing purpose tags are
-left unknown; the GUI does not infer commentary from position or wording. The
-file summary owns the diff panel and stays at the end of its canonical Turn
-after the final assistant reply.
+Completed Turn disclosure is provider-neutral. Once a Turn is settled with
+outcome `completed` and a confirmed final assistant answer, the work section
+collapses thinking, tool groups, progress, turn-boundary messages, transient
+processing, and ordinary assistant replies that are not that final answer.
+The final answer, user messages, errors, plan/collaboration/image cards, and
+the response-tail file summary stay visible. Live Turns keep intermediate
+narration visible until that final-answer condition holds. Purpose tags such
+as Codex `assistant-commentary` / `assistant-final` still refine copy targeting
+and compact-progress mapping; they are not required for intermediate-reply
+folding, and the GUI does not branch on provider name. The file summary owns
+the diff panel and stays at the end of its canonical Turn after the final
+assistant reply.
 
 High-frequency transcript updates must not pair DOM mutation with unconditional synchronous reads of the timeline's full scroll geometry. Conversation switches, explicit submit-to-bottom requests, skeleton transitions, and older-page prepend restoration may perform pre-paint scroll correction.
 

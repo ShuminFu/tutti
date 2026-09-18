@@ -117,7 +117,7 @@ describe("agentTurnWorkSectionModel", () => {
     ).toBeNull();
   });
 
-  it("keeps ordinary assistant text visible and folds only thinking around it", () => {
+  it("folds unmarked intermediate text around the Turn's final answer", () => {
     const model = buildAgentTurnWorkSectionModel(
       turnGroup([
         userRow(),
@@ -149,33 +149,31 @@ describe("agentTurnWorkSectionModel", () => {
     ]);
     expect(model.collapseEligible).toBe(true);
 
-    const thinkingRow = model.sections[0]?.rows[0]?.row;
-    expect(thinkingRow?.kind).toBe("message");
-    if (thinkingRow?.kind === "message") {
-      expect(thinkingRow.thinking.map((item) => item.body)).toEqual([
-        "Inspecting files"
-      ]);
-      expect(thinkingRow.messages).toEqual([]);
-    }
-    expect(model.sections[0]?.rows[0]?.renderKey).toBe(
-      "assistant-row:turn-work-0"
-    );
+    expect(
+      model.sections[0]?.rows.flatMap(({ row }) =>
+        row.kind === "message"
+          ? [
+              ...row.thinking.map((item) => item.body),
+              ...row.messages.map((item) => item.body)
+            ]
+          : []
+      )
+    ).toEqual(["Inspecting files", "draft"]);
 
     const visibleRow = model.sections[1]?.rows[0]?.row;
     expect(visibleRow?.kind).toBe("message");
     if (visibleRow?.kind === "message") {
       expect(visibleRow.id).toBe("assistant-row");
-      expect(visibleRow.messages.map((item) => item.body)).toEqual([
-        "draft",
-        "final",
-        "epilogue"
-      ]);
+      expect(visibleRow.messages.map((item) => item.body)).toEqual(["final"]);
       expect(visibleRow.thinking).toEqual([]);
     }
-    expect(model.sections[1]?.rows[0]?.renderKey).toBe(
-      "assistant-row:turn-visible-1"
-    );
-    expect(model.sections[2]?.rows.map(({ row }) => row.id)).toEqual(["tools"]);
+    expect(
+      model.sections[2]?.rows.flatMap(({ row }) =>
+        row.kind === "message"
+          ? row.messages.map((item) => item.body)
+          : [row.id]
+      )
+    ).toEqual(["epilogue", "tools"]);
     expect(model.sections[3]?.rows.map(({ row }) => row.id)).toEqual([
       "summary"
     ]);
@@ -235,13 +233,14 @@ describe("agentTurnWorkSectionModel", () => {
         rowIds: section.rows.map(({ row }) => row.id)
       }))
     ).toEqual([
-      { kind: "visible", rowIds: ["assistant-1", "user-2"] },
+      { kind: "work", rowIds: ["assistant-1"] },
+      { kind: "visible", rowIds: ["user-2"] },
       { kind: "work", rowIds: ["tools"] },
       { kind: "visible", rowIds: ["assistant-2"] }
     ]);
   });
 
-  it("folds thinking and progress while keeping earlier ordinary replies visible", () => {
+  it("folds thinking, progress, and earlier ordinary replies around the final answer", () => {
     const model = buildAgentTurnWorkSectionModel(
       turnGroup([
         userRow(),
@@ -283,11 +282,11 @@ describe("agentTurnWorkSectionModel", () => {
     ).toEqual([
       {
         kind: "work",
-        bodies: ["Inspecting files", "Compacting context"]
+        bodies: ["Inspecting files", "Compacting context", "Earlier answer"]
       },
       {
         kind: "visible",
-        bodies: ["Earlier answer", "Final answer"]
+        bodies: ["Final answer"]
       }
     ]);
     expect(model.collapseEligible).toBe(true);
@@ -310,7 +309,11 @@ describe("agentTurnWorkSectionModel", () => {
           id: "assistant-final",
           messages: [
             {
-              ...message("The repo looks healthy.", "The repo looks healthy.", true),
+              ...message(
+                "The repo looks healthy.",
+                "The repo looks healthy.",
+                true
+              ),
               isExplicitAssistantFinal: true
             }
           ]
@@ -362,7 +365,7 @@ describe("agentTurnWorkSectionModel", () => {
     expect(model.sections.map((section) => section.kind)).toEqual(["work"]);
   });
 
-  it("keeps the main reply and later supplement visible around tool work", () => {
+  it("folds unmarked intermediate replies around tools without a provider tag", () => {
     const model = buildAgentTurnWorkSectionModel(
       turnGroup([
         userRow(),
@@ -391,11 +394,38 @@ describe("agentTurnWorkSectionModel", () => {
         )
       }))
     ).toEqual([
-      { kind: "visible", bodies: ["Main analysis and A/B/C options"] },
-      { kind: "work", bodies: [] },
+      { kind: "work", bodies: ["Main analysis and A/B/C options"] },
       { kind: "visible", bodies: ["Two extra notes"] }
     ]);
     expect(model.collapseEligible).toBe(true);
+  });
+
+  it("keeps unmarked intermediate replies visible while the turn is still live", () => {
+    const model = buildAgentTurnWorkSectionModel(
+      turnGroup([
+        userRow(),
+        assistantRow({
+          id: "assistant-mid",
+          messages: [message("Checking files.", null)]
+        }),
+        toolRow()
+      ]),
+      canonicalTurn({ phase: "running" }),
+      true
+    );
+
+    expect(model.collapseEligible).toBe(false);
+    expect(
+      model.sections.map((section) => ({
+        kind: section.kind,
+        bodies: section.rows.flatMap(({ row }) =>
+          row.kind === "message" ? row.messages.map((item) => item.body) : []
+        )
+      }))
+    ).toEqual([
+      { kind: "visible", bodies: ["Checking files."] },
+      { kind: "work", bodies: [] }
+    ]);
   });
 
   it("fails open when no visible final text is explicitly marked", () => {

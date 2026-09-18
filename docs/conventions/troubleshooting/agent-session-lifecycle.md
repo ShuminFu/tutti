@@ -3393,16 +3393,14 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   unterminated keeps the Mermaid placeholder: that content was truncated
   mid-stream, and `AgentMessageMarkdown` additionally consults a content-derived
   fence heuristic.
-  The Turn work section also must not hide ordinary assistant replies that
-  happen to precede that stamp. Thinking, tool groups, `specific-progress`, and
-  `turn-boundary` rows stay in the collapsible process block; locally created
-  and imported sessions share that classification. A later supplement after
-  tool work does not send the earlier analysis into the collapsed region.
-  Codex `commentary` / `final_answer` items persist as `assistant-commentary` /
-  `assistant-final` on `payload.messageKind`. Commentary is progress and folds
-  with the process block once the Turn has a confirmed final answer; the final
-  answer stays outside. History without those tags stays visible and is not
-  backfilled from wording or message order.
+  The Turn work section folds thinking, tool groups, `specific-progress`,
+  `turn-boundary` rows, and ordinary assistant replies that are not the Turn's
+  stamped final answer. Classification lives in `assistantTurnDisclosure.ts`
+  and does not branch on provider. Live Turns keep intermediate narration
+  visible. User messages, errors, special cards, and the file summary stay
+  outside the collapsed block. Codex `commentary` / `final_answer` items still
+  persist as `assistant-commentary` / `assistant-final` for copy targeting;
+  unmarked intermediate replies fold by the same completed-Turn rule.
 - Validation:
   `pnpm --dir packages/agent/gui exec vitest run shared/agentConversation/projection/agentConversationProjection.spec.ts`
   covers a settled Turn whose final reply never left `streaming`, and

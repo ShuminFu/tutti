@@ -1959,9 +1959,9 @@ describe("projectAgentConversationVM", () => {
       }
     ]);
 
-    // The reply is the Turn's final text, so collapse remains eligible. Ordinary
-    // assistant narration stays visible; only the tool group is process work
-    // (docs/architecture/agent-gui-node.md: important output is never hidden).
+    // The reply is the Turn's final text, so collapse remains eligible.
+    // Unmarked intermediate narration folds with tools; the final reply stays
+    // visible (docs/architecture/agent-gui-node.md).
     const rowKeys = conversation.rows.map((row) => transcriptRowKey(row));
     const turnGroups = buildAgentTranscriptTurnGroups(
       conversation.rows,
@@ -1980,15 +1980,11 @@ describe("projectAgentConversationVM", () => {
 
     expect(model?.collapseEligible).toBe(true);
     expect(model?.sections.map((section) => section.kind)).toEqual([
-      "visible",
       "work",
       "visible"
     ]);
-    expect(messageIdsBySectionKind("work")).toEqual([]);
-    expect(messageIdsBySectionKind("visible")).toEqual([
-      "assistant-process",
-      "assistant-reply"
-    ]);
+    expect(messageIdsBySectionKind("work")).toEqual(["assistant-process"]);
+    expect(messageIdsBySectionKind("visible")).toEqual(["assistant-reply"]);
   });
 
   it("folds Codex commentary and keeps the explicit final reply visible", () => {
@@ -2005,7 +2001,10 @@ describe("projectAgentConversationVM", () => {
           actorId: "session-1",
           itemType: "message",
           role: "assistant",
-          payload: { text: "Checking files.", messageKind: "assistant-commentary" }
+          payload: {
+            text: "Checking files.",
+            messageKind: "assistant-commentary"
+          }
         }
       ]
     };
@@ -2112,6 +2111,82 @@ describe("projectAgentConversationVM", () => {
     ]);
   });
 
+  it("folds unmarked intermediate replies for any provider once a final answer exists", () => {
+    const commentary = {
+      id: "assistant-mid",
+      body: "Checking files.",
+      turnId: "turn-1"
+    };
+    const finalReply = {
+      id: "assistant-final",
+      body: "The repo looks healthy.",
+      turnId: "turn-1"
+    };
+    const conversation = projectAgentConversationVM(
+      detailViewModel({
+        turns: [
+          {
+            id: "turn-1",
+            userMessage: { id: "user-1", body: "Inspect the repo" },
+            userMessages: [{ id: "user-1", body: "Inspect the repo" }],
+            agentMessages: [commentary, finalReply],
+            toolCalls: [],
+            toolCallCount: 0,
+            hasFailedToolCall: false,
+            agentItems: [
+              { kind: "message", message: commentary },
+              {
+                kind: "tool-calls",
+                id: "tools-1",
+                toolCalls: [
+                  {
+                    id: "call:1",
+                    name: "Read file",
+                    toolName: "read_file",
+                    callType: "tool",
+                    status: "Completed",
+                    statusKind: "completed",
+                    summary: "/workspace/demo/README.md",
+                    payload: null
+                  }
+                ],
+                toolCallCount: 1,
+                hasFailedToolCall: false
+              },
+              { kind: "message", message: finalReply }
+            ]
+          }
+        ],
+        showProcessingIndicator: false
+      })
+    );
+
+    const rowKeys = conversation.rows.map((row) => transcriptRowKey(row));
+    const turnGroups = buildAgentTranscriptTurnGroups(
+      conversation.rows,
+      rowKeys
+    );
+    const model = buildAgentTurnWorkSectionModel(
+      turnGroups[0]!,
+      conversation.sourceDetail.sessionTurns?.[0] ?? null,
+      false
+    );
+    expect(model?.collapseEligible).toBe(true);
+    expect(
+      model?.sections.map((section) => ({
+        kind: section.kind,
+        ids: section.rows.flatMap((entry) =>
+          entry.row.kind === "message"
+            ? entry.row.messages.map((message) => message.id)
+            : []
+        )
+      }))
+    ).toEqual([
+      { kind: "work", ids: ["assistant-mid"] },
+      { kind: "visible", ids: ["assistant-final"] }
+    ]);
+  });
+
   it("does not treat commentary as the final reply when no explicit answer exists", () => {
     const commentary = {
       id: "assistant-commentary",
@@ -2126,7 +2201,10 @@ describe("projectAgentConversationVM", () => {
           actorId: "session-1",
           itemType: "message",
           role: "assistant",
-          payload: { text: "Still looking.", messageKind: "assistant-commentary" }
+          payload: {
+            text: "Still looking.",
+            messageKind: "assistant-commentary"
+          }
         }
       ]
     };

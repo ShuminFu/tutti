@@ -5,6 +5,10 @@ import type {
   AgentMessageRowVM
 } from "../contracts/agentMessageRowVM";
 import type { AgentTranscriptTurnGroup } from "./agentTranscriptModel";
+import {
+  isAssistantWorkMessage,
+  type AssistantTurnDisclosurePolicy
+} from "./assistantTurnDisclosure";
 
 export type AgentTurnTiming =
   | {
@@ -190,7 +194,17 @@ export function buildAgentTurnWorkSectionModel(
   }
 
   const finalTarget = findFinalAssistantTextTarget(group.rows);
-  const sections = buildOrderedSections(group.rows, leadingRowCount);
+  const disclosurePolicy: AssistantTurnDisclosurePolicy = {
+    foldIntermediateReplies:
+      finalTarget !== null &&
+      turn?.phase === "settled" &&
+      turn.outcome === "completed"
+  };
+  const sections = buildOrderedSections(
+    group.rows,
+    leadingRowCount,
+    disclosurePolicy
+  );
   const hasHiddenWork = sections.some(
     (section) => section.kind === "work" && section.rows.length > 0
   );
@@ -283,14 +297,14 @@ function countLeadingUserRows(
 
 function buildOrderedSections(
   rows: readonly AgentTurnWorkSectionRow[],
-  startIndex: number
+  startIndex: number,
+  policy: AssistantTurnDisclosurePolicy
 ): AgentTurnWorkSectionSegment[] {
   const sections: AgentTurnWorkSectionSegment[] = [];
   for (let rowIndex = startIndex; rowIndex < rows.length; rowIndex += 1) {
     const entry = rows[rowIndex]!;
     if (entry.row.kind === "message" && entry.row.speaker === "assistant") {
-      // Ordinary replies stay visible; thinking/progress/turn-boundary fold.
-      appendAssistantMessageSections(sections, entry);
+      appendAssistantMessageSections(sections, entry, policy);
       continue;
     }
     appendSectionRow(
@@ -304,7 +318,8 @@ function buildOrderedSections(
 
 function appendAssistantMessageSections(
   sections: AgentTurnWorkSectionSegment[],
-  sourceEntry: AgentTurnWorkSectionRow
+  sourceEntry: AgentTurnWorkSectionRow,
+  policy: AssistantTurnDisclosurePolicy
 ): void {
   const sourceRow = sourceEntry.row as AgentMessageRowVM;
   const parts: Array<{
@@ -318,7 +333,7 @@ function appendAssistantMessageSections(
   }
 
   for (const message of sourceRow.messages) {
-    const kind = isExplicitWorkMessage(message) ? "work" : "visible";
+    const kind = isAssistantWorkMessage(message, policy) ? "work" : "visible";
     const previous = parts.at(-1);
     if (previous?.kind === kind && previous.thinking.length === 0) {
       previous.messages.push(message);
@@ -404,13 +419,6 @@ function groupContainsBlockingMessage(
 
 function isExplicitWorkRow(row: AgentTurnWorkSectionRow["row"]): boolean {
   return row.kind === "tool-group" || row.kind === "processing";
-}
-
-function isExplicitWorkMessage(message: AgentMessageContentVM): boolean {
-  return (
-    message.presentationKind === "specific-progress" ||
-    message.presentationKind === "turn-boundary"
-  );
 }
 
 function isUserMessageRow(
