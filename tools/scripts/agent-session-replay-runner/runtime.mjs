@@ -13,7 +13,10 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { buildDaemon, stopProcessTree } from "../run-agent-gui-performance.mjs";
+import {
+  buildDaemon,
+  stopProcessTree
+} from "../../../benchmarks/agent-gui/run-agent-gui-performance.mjs";
 
 const hostAccountAuthEnvironment =
   "TUTTI_AGENT_SESSION_REPLAY_HOST_ACCOUNT_AUTH";

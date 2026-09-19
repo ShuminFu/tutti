@@ -24,13 +24,13 @@ import {
   waitForActiveSession,
   waitForEvaluation,
   withTimeout
-} from "./agent-gui-performance-helpers.mjs";
+} from "../../benchmarks/agent-gui/agent-gui-performance-helpers.mjs";
 import {
   reservePort,
   startDesktop,
   stopProcessTree,
   waitForPageWebSocket
-} from "./run-agent-gui-performance.mjs";
+} from "../../benchmarks/agent-gui/run-agent-gui-performance.mjs";
 import {
   cassettePolicy,
   loadReplayTurnIdentityPlan,
