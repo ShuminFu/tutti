@@ -210,7 +210,34 @@ Release notes and Feishu notifications should point the primary macOS download a
 
 ## Auto Update
 
-The desktop app uses `electron-updater` and GitHub Releases as the update source.
+The desktop app uses `electron-updater` with the static CloudFront release feed
+as its single update-discovery source, not the GitHub Releases API or Atom feed.
+Every check resolves immutable metadata first and then configures the updater:
+
+```text
+channel stable -> <base>/latest.json            -> <base>/<tag>/latest-mac.yml
+channel rc     -> <base>/channels/rc/latest.json -> <base>/<tag>/rc-mac.yml
+```
+
+`apps/desktop/src/main/update/desktopReleaseFeed.ts` owns that resolver
+(`desktopReleaseFeedBaseUrl`, producer schema
+`tutti.desktop.release.latest.v1`), and `appUpdateService.ts` calls the driver's
+`setFeedUrl` with the resolved immutable tag directory before each
+`checkForUpdates`. Draft RC releases stay non-public and remain discoverable,
+which the GitHub feed could not provide.
+
+The resolver fails closed and never falls back to GitHub:
+
+- only HTTPS metadata whose normalized base URL equals the packaged CloudFront
+  release prefix is accepted;
+- the selected channel, tag, and semantic version must agree before any feed URL
+  is set;
+- a malformed pointer leaves the existing update error state and preserves the
+  single-flight promise clearing, without reusing a stale `available` result.
+
+The packaged `build.publish` provider stays aligned with that static base.
+`latest.json` is a locator only: download integrity and code-signing
+verification remain `electron-updater` responsibilities.
 
 Current updater behavior:
 

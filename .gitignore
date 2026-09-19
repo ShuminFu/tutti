@@ -13,10 +13,8 @@ coverage/
 .cache/
 .tmp/
 .worktrees/
-.superpowers/
 .claude/
 .agents/
-docs/superpowers/
 __pycache__/
 *.py[cod]
 
@@ -54,3 +52,7 @@ services/tuttid/builtin-apps/tutti-onboarding/build/
 
 /tuttid
 /tuttid.exe
+
+# Retired Superpowers skill and generated task artifacts (at any depth).
+.superpowers/
+superpowers/

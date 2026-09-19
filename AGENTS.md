@@ -193,6 +193,20 @@ Start from:
 - `docs/architecture/README.md`
 - nearest area `AGENTS.md`
 
+Finish every task by merging its durable outcome into the authoritative document
+(architecture for ownership/data flow/interaction, conventions for rules,
+troubleshooting for recurring symptoms, ADR for accepted cross-cutting
+decisions) and then deleting the execution artifacts: implementation plans,
+progress notes, acceptance or review reports, one-off investigation journals,
+and per-file change tables. Do not add a completion report, changelog, or
+"what I did" file to the repository, and do not keep a finished plan by moving
+it to an archive directory or by concatenating its summaries into a larger
+document. A durable document must help the next Agent or Harness change the
+system: state remaining decisions, constraints, and code entry points, never
+timestamps, machine-local paths, commit SHA lists, or test-run transcripts.
+Unfinished work that is still valid stays in `docs/specs` as a short record of
+open decisions, not as a step-by-step script.
+
 ## Logs
 
 dev (when the feature is not in remote): ~/.tutti-dev/tuttid.db

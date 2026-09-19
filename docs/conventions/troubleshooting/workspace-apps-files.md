@@ -312,7 +312,11 @@
   do not add them as projects or default locations, but allow FileManager to
   load the parent directory and apply normal local-file operations. Route
   `open-local-asset-preview` through `launchWorkspaceFiles` until a dedicated
-  preview surface exists.
+  preview surface exists. The Agent GUI file-mention and generated-file context
+  menu owns only two local actions — open with the system default application,
+  and reveal through `shell.showItemInFolder` — and must not require the path to
+  live inside the workspace root; when the item itself is gone, reveal its
+  containing directory and say so instead of failing silently.
 - Validation:
   Run the desktop Agent GUI link action test, the workspace files launch
   coordinator test, and `pnpm check:changed` for mixed desktop/Agent GUI

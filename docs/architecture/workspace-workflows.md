@@ -580,6 +580,25 @@ execution state; Tutti-owned scheduling, mutation, and completion authority
 comes from the source conversation rather than generic Issue mutation or
 automatic dispatch.
 
+Who advances the graph is a fixed rule, not an optimization: the source
+planning Agent session is the sole graph author, and the daemon never chooses or
+automatically dispatches a successor task for a Tutti-owned Issue. The daemon
+records facts, validates explicit commands, and recovers delivery; it only wakes
+the source session on durable events. Every task settlement already creates a
+checkpoint and wakes that session for review, so an execution can stall when the
+main Agent stops responding. `WatchdogInterval` (`5m`,
+`biz/tuttimodeexecution`) is that durable debounce fallback: an inactive
+execution gets one `watchdog` checkpoint with reason
+`fixed_inactivity_watchdog`, moves to `awaiting_main`, and wakes the source
+session once by its deterministic wake identity. It never schedules work on the
+Agent's behalf, and a further interval may not append a second active watchdog
+checkpoint.
+
+Tutti-owned Issues are read-only through generic Issue Manager mutation
+surfaces. Users change them by returning to the source conversation and
+describing the change, and an active source conversation cannot be deleted until
+its execution is explicitly stopped and archived.
+
 The embedded panel's task-level accept and rework controls are source-Agent
 prompt actions. They append a localized instruction with the exact Task mention
 to the source conversation draft, preserve existing draft content, and require

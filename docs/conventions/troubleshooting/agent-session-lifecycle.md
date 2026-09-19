@@ -4254,7 +4254,7 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   adopted continuation provenance, stale observation protection, and revision-
   guarded continuation nudges.
 - References:
-  [Agent Goal Control Design](../../specs/2026-07-15-agent-goal-control-design.md)
+  [Goal and operations](../../architecture/agent-gui-node.md#34-goal-and-operations)
   [controller_exec.go](../../../packages/agent/daemon/runtime/controller_exec.go)
   [goal_state.go](../../../packages/agent/store-sqlite/goal_state.go)
 
@@ -4512,7 +4512,7 @@ permanently ambiguous`. Provider status may already be `active` while the
   remain admissible.
 - References:
   [Agent Host contracts](../../../packages/agent/host/README.md)
-  [Agent Goal Control Design](../../specs/2026-07-15-agent-goal-control-design.md)
+  [Goal and operations](../../architecture/agent-gui-node.md#34-goal-and-operations)
   [goal_generation_fence.go](../../../packages/agent/host/goal_generation_fence.go)
 
 ### Initial Goal prompt disappears when the Agent starts responding

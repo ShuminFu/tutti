@@ -43,6 +43,16 @@ their parent task explicitly authorizes nested delegation and sets a total
 nested-worker and tool-call budget. The policy does not create an unbounded
 automatic retry loop.
 
+Saver mode itself stays a default-off developer switch (`codexSaverMode`, gated
+in Composer Options); provider support alone must not enable it. Its acceptance
+record deliberately claims only what was measured: cost-aware routing reduced
+whole-workflow API cost on independent read-only audits and on multi-problem
+coding tasks while quality evidence stayed comparable, and it did not claim
+equal quality scores, a fixed saving ratio, or faster completion — the measured
+complex task took substantially longer. Treating every complex task as "at
+least two workers" is explicitly rejected; delegation happens only when
+independent work replaces main-thread work.
+
 Deployment differences are expressed with `DeploymentProfile` and
 `CapabilityPack`. A pack resolves policy, skills, and environment together.
 Dynamic host skills use `SkillSource`; per-session skills use `ExtraSkills`.

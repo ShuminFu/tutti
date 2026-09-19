@@ -228,6 +228,18 @@ contract evidence for `planMode`, including agents that implement
 For the launch-restart strategy, the same evidence is combined with the closed
 spawn-permission declaration; the Plan runtime value must be distinct from all
 three permission values.
+
+Provider descriptors select how the Composer capability catalog is discovered
+through `CapabilityCatalog.Kind`. An empty kind means the provider advertises no
+catalog and AgentGUI sees no capabilities; `CapabilityCatalogKindCodexAppServer`
+both imports app-server skills and advertises the Codex command set; and
+`CapabilityCatalogKindAppServerSkills` requests `skills/list` only. The last one
+exists for Tutti Agent, which shares the Codex app-server protocol and needs its
+published skills in the `$` palette as `promptItem` options without inheriting
+Codex commands or model metadata — skills projected from the catalog, not from a
+separate session `skills` array. Clearing the kind restores an empty catalog and
+no data needs migrating.
+
 Duplicates are removed, and unknown
 extension-local capability keys remain package metadata rather than entering
 the Agent Activity capability contract.
@@ -600,6 +612,31 @@ discovery is not setup state and does not infer
 installation or authentication readiness. Extensions use either a compatible
 local runtime or an explicitly confirmed Target-managed runtime; `tuttid`
 never installs into a user project.
+
+## New Agent Onboarding Acceptance
+
+Every newly integrated Agent Target passes the same product-level scenario
+families before it counts as integrated; the required set is fixed, not
+per-provider taste:
+
+- models and multimodal input: every selectable text model completes a text
+  call, and every selectable vision model completes an image call;
+- core tool calls, including file and shell work, with results rendered as
+  canonical activity rather than provider-shaped rows;
+- permission settings: refusal has no side effect, and the exposed tiers match
+  what the provider actually accepts;
+- slash commands and capability palette hydration;
+- queueing, cancellation, and exact-Turn identity under concurrency;
+- Handoff and every `@`-reference kind, with no loss, duplication, or
+  cross-session bleed;
+- Goal/handoff continuation and provider-native child agents when the provider
+  exposes them.
+
+A capability may be recorded N/A only when the provider genuinely does not
+support it and the GUI does not expose it; the reason must be written down. Any
+P0 failure blocks integration, and a passing partial run is not an integration
+verdict. Capability discovery must come from signed descriptor/profile data —
+never from provider-name branches added to satisfy a checklist item.
 
 ## Declarative Grok Compatibility
 

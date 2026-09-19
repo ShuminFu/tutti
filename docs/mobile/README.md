@@ -45,6 +45,35 @@ Desktop + tsh-server + relay
 不要在移动端创建 `MobileSession`、简化版 Agent DTO 或第二套 Composer
 协议。移动端只用不同的 UI 展示同一份 canonical 数据。
 
+### 1.1 数据层与作用域（不要重造）
+
+移动端与桌面是**同级应用**：互不 import 对方源码，共享能力只能落在包里。
+
+- canonical session 状态、reducer、selector、命令语义在
+  `@tutti-os/agent-activity-core`；tuttid DTO 到 activity 的映射在窄包
+  `@tutti-os/agent-activity-tuttid-adapter`，两端共用。
+- Rail、conversation、composer 的 projection 走 AgentGUI 的 DOM-free
+  entry（`conversation-rail-projection` / `conversation-projection` /
+  `composer-projection`），移动端只替换渲染与交互，不复制合并、thinking、
+  tool activity、turn summary 等语义。
+- 应用 DI 封装拥有账号、DeviceLink、transport、日志、导航偏好、轮询/事件
+  接线与生命周期；`services/**` 是纯 `.ts`，不 import React 或 hooks；
+  React 绑定层用 `useSyncExternalStore` 读取快照，不把快照拷进页面 state。
+  `useEffect` 只用于 focus、键盘、滚动、动画、布局和重置组件内输入等表现层。
+- 作用域是互斥的子容器：未登录子树（LoginService）与已登录子树（账号会话、
+  DeviceService、一条 DeviceLink-backed TuttidClient、AgentDirectory、
+  WorkspaceCatalog，以及唯一 active workspace 子作用域）。只保留一个账号、
+  一个连接设备、一个 active workspace；账号变化替换整棵已登录子树，
+  workspace 变化先销毁旧子作用域再初始化并发布候选；子作用域是其服务唯一
+  的销毁 owner。
+- 前台更新走 workspace 级 DeviceLink `agent_live` 长流（`stream_ready` 关闭
+  两个轮询），断流期间才恢复单飞轮询：会话列表 2 秒、选中会话消息 1 秒。
+  Live lane 的 retry/overlay 生命周期属于专用 service，不混进 workspace
+  编排，也不占用通用 DeviceLink 请求 worker。
+- 后台化立即暂停配对、轮询、命令与运行时可用性；active workspace 子作用域与
+  DeviceLink 保留 15 秒宽限，宽限内回到前台则恢复并请求权威对账，过期则销毁
+  子作用域、关闭 DeviceLink 并回到设备选择。
+
 ## 2. 需要认识的 Android 名词
 
 - **Activity**：一个 Android 可显示入口。正式 App 通常只有少量 Activity，

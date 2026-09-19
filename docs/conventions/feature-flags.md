@@ -83,3 +83,16 @@ disabled means (reconcile and stop). New consumers should prefer registry
 constants and `IsLabFlagEnabled` over poking the raw map, while keeping their
 own off and graduation semantics in the owning feature, exactly as the Agent
 Extension manager does.
+
+Two UI-preference flags are worth copying as patterns:
+
+- `agent.quickPromptLibrary` gates a device-global composer feature. Off hides
+  the composer entry and the management surfaces; the prompts themselves stay
+  durable behind the optional `AgentHostApi.quickPrompts` host capability, so
+  turning the flag back on restores the user's library instead of an empty one.
+- `workspace.standaloneAgentMode` selects Agent mode or OS mode for new windows.
+  It is desktop-host state, never AgentGUI state: an absent value resolves to OS
+  mode, a manual selection is always durable in both directions, and Electron
+  main resolves it before window creation. It must not morph an already-created
+  OS window into an Agent window, and an explicit `view=agent` window stays a
+  standalone Agent window regardless of the flag.

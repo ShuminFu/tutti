@@ -2606,3 +2606,58 @@ the provider session ID or rebuild model context to repair this projection.
 
 Regression coverage exercises the real runtime-to-list chain, live list/detail
 queries, cold persisted target reconstruction and nested binding copy isolation.
+
+### Context window shrinks after a restart, resume, or model change
+
+- Symptom:
+  A session created against a 1M model shows a much smaller denominator after a
+  daemon restart or a resume, for example `383,367 / 128,000 (100%)`, and the
+  ratio can exceed 100% because the numerator is cumulative usage while the
+  denominator is the window. The same class of symptom affects the reasoning
+  selector: a gateway-backed model shows only its current effort.
+- Quick checks:
+  Read the session's runtime JSON and the persisted
+  `session_metadata_json.usage.contextWindow.totalTokens`. If the runtime config
+  carries no `contextWindow` for the selected model, the runtime falls back to
+  its own default (`deepseek-harness` uses 128,000), and the next `usage_update`
+  persists that smaller denominator. Then compare the effective model string
+  with the one the session was created with: the `[1m]` marker is the only
+  window source the resume path reads, and the composer scope usually echoes the
+  bare model id back, so a resume can silently drop the marker. For the reasoning
+  side, check whether the target is bound to a model plan or host endpoint (the
+  model-catalog probe is skipped on that path) and whether the log shows
+  `composer model catalog lookup failed`.
+- Root cause:
+  Context-window knowledge hangs on one fragile source: the `[1m]` suffix in the
+  model string. `contextwindow.Window` returns 1,000,000 only for that marker
+  and 0 otherwise, and `0` is dropped from the runtime config by `omitempty`, so
+  a bare model id resumes with no window at all. The immutable runtime snapshot
+  can still hold the marked value, but resume only backfills the model when the
+  caller sends none. The host's authoritative per-model window table and the
+  previously persisted window are never consulted. Separately, a model string
+  change intentionally removes the persisted `usage.contextWindow` because a
+  stale window would misreport the new model; that deletion is by design, so the
+  window must be reconstructible elsewhere rather than merely retained.
+- Fix / boundary:
+  `[1m]` is a window request that travels beside the model; the model id on the
+  wire stays bare. When adding a window source, keep the precedence explicit
+  (marker, then the host window table, then the last persisted window) and touch
+  only the resume branches — the create path intentionally records `0` for a
+  bare model. Do not widen reclamation by keeping the stale window readable, and
+  do not relax `mergeACPUsageState`/`mergeClaudeSDKUsageState`: they only fill a
+  missing window and never overwrite an existing one. Model-catalog providers
+  such as Codex may not declare static reasoning values, so a failed or skipped
+  catalog probe leaves the selector empty by construction; a degraded fallback
+  list is the only way to keep it usable.
+- Validation:
+  Reproduce with one session per path: native provider credentials, a host
+  endpoint binding, and a `[1m]` model. Confirm the runtime JSON carries the
+  window after resume, the GUI denominator matches the real window, and the
+  composer lists the full effort set. Cover the resume branch with a bare-model
+  plus known-world-window case instead of only the create path.
+- References:
+  [session_runtime_snapshot.go](../../../services/tuttid/service/agent/session_runtime_snapshot.go)
+  [service_resume_helpers.go](../../../services/tuttid/service/agent/service_resume_helpers.go)
+  [host_model_endpoint.go](../../../packages/agent/runtimeprep/host_model_endpoint.go)
+  [activity_update.go](../../../packages/agent/store-sqlite/activity_update.go)
+  [composer_options.go](../../../services/tuttid/service/agent/composer_options.go)

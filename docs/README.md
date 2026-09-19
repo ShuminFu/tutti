@@ -42,6 +42,10 @@ record has no status, treat its implementation state as unverified.
 - Put reusable failure symptoms, causes, and verification steps in
   [Troubleshooting](./conventions/troubleshooting/README.md). Git history is sufficient
   for one-off defect journals.
+- Do not add completion reports, execution logs, or review transcripts to any
+  directory. When dated work finishes, merge what still constrains future
+  changes into the owning durable document and delete the dated file; never
+  archive it or answer a future reader with its step-by-step script.
 
 When a plan lands, update the architecture or convention document that now
 owns the durable result. Do not make future readers reconstruct current

@@ -591,6 +591,28 @@ Provider-native subagents use child Sessions:
 - `parentToolCallId`: delegation card correlation
 - child messages, Turns, and Interactions retain the child owner
 
+Root and child Turns share one phase/outcome/message/interaction vocabulary and
+the same exact-Turn cancellation model; the delegation trigger source does not
+create a second Turn entity type, and there is no separate "subagent run"
+entity. Each child Session has exactly one immutable creator edge to one parent
+Session, parent Turn, and delegation tool call; it is never re-parented or
+reused by another parent Turn, and later guidance only adds Turns inside that
+same child Session. Child lifecycle must therefore not be duplicated into a
+second child-agent status field, and a child Session's parent relationship must
+not move child messages or Interactions under the root Turn.
+
+Root-Turn lifecycle is gated by its children:
+
+- The root Turn stays active while any provider-native child agent created under
+  it is still active; root completion waits for child completion.
+- User cancellation cancels the root Turn and every child agent owned by that
+  Turn.
+- A new user message submitted while the root Turn is active joins the same
+  in-flight work instead of creating a separate visible Turn.
+- Child progress is presented under the root Turn, never as a separate
+  conversation; ordinary Rail, lists, and search still return root Sessions
+  only, and a child is reached through its parent relationship or exact id.
+
 A provider adapter must normalize explicit spawn evidence into both the parent
 delegation call and the canonical child Session/Turn. AgentGUI attaches the
 child lane only through the immutable `parentToolCallId`; it must not parse
@@ -1448,15 +1470,35 @@ rail-filter, AgentGUI-node, and Engine identities fence the activation
 internally; the selected Session's provider and target do not. No Activity
 filter or additional host scope contract is introduced. Disabled hosts use an
 empty Activity selector and do not scan root Sessions. Activity rows omit the
-minute-clock subscription together with their hidden timestamp. The full
-product contract is recorded in
-`docs/specs/2026-08-05-agent-conversation-activity-view-prd.md`.
+minute-clock subscription together with their hidden timestamp.
 
 The full first-page query is the only Rail read that resolves a navigation
 scope and clears its pending state. Targeted section refresh and pagination may
 update only an already-resolved matching scope. A subordinate result must not
 cancel the full query, publish partial membership for an unresolved scope, or
 unlock Rail interactions.
+
+Ranking, membership, and row presentation are product rules with fixed bounds:
+
+- A root Session maps to one attention state and then to a presentation rank:
+  `0` waiting (root `needsUserAction`, including a descendant pending
+  Interaction), `1` unread, `2` active. A Session matching several conditions
+  takes the smallest rank, and ordinary idle never enters Priority.
+- Priority lists waiting first, then unread, then active; within one rank the
+  existing canonical recency orders rows, and equal recency keeps input order.
+  Rows are deduplicated by exact `agentSessionId`. Priority adds no nested
+  collapsible headers and no "show more" limit; unread reason is expressed by
+  the row's status icon, unread dot, and accessible label rather than by
+  splitting failure from success.
+- Below Priority, non-Priority Sessions in the last seven local calendar days
+  (today `00:00` minus six days, using the canonical conversation sort time) are
+  grouped by Today / Yesterday / weekday without an additional section header.
+  Imported Sessions may enter a date section but never gain unread from import.
+- A row carries the Session title plus its trailing status and hover actions on
+  the first line, and a project or source context on the second line. Activity
+  rows show no timestamp, and project attribution reads canonical
+  `railSectionKey` plus project directories only — it is never computed from
+  `cwd` — so the view needs no extra Turn, transcript, or summary reads.
 
 When Activity View has a non-null in-memory projection, that projection remains
 visible while the unrelated initial Rail membership query is pending; Rail
@@ -3015,7 +3057,8 @@ pnpm check:renderer-boundaries
 Any change to an owner, data flow, public contract, or recurring trap requires documentation impact:
 
 - durable architecture rules update this or an adjacent architecture document
-- implementation plans belong in `docs/specs` or `docs/plans`
+- unfinished designs and proposals belong in `docs/specs`, and are deleted once
+  their durable result is documented
 - symptoms and investigation steps belong in troubleshooting
 - historical migration records do not return to this document
 
