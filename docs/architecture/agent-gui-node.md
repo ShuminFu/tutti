@@ -2260,6 +2260,13 @@ read while preserving the timeline prepend scroll anchor. The history cursor
 is UI-local and resets when the draft Session scope changes; Home has no
 Session history.
 
+The Home (`hero`) editor uses one text line as its minimum height in
+`packages/agent/gui/app/renderer/agentactivity.css`. Empty drafts, inline file
+mentions and text with mentions share this rule; attachments do not reserve
+an extra blank line. Natural content growth and the existing viewport cap
+remain responsible for multiline drafts. Dock and host-assigned embedded
+heights keep their own layout contracts.
+
 The dock observes geometry through one coalesced animation-frame measurement
 entry point. Editor document updates, attachment membership or intrinsic
 attachment size changes, and changes to the stable input-shell width may

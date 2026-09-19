@@ -9546,6 +9546,12 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   -ms-overflow-style: auto;
 }
 
+.agent-gui-node__composer[data-layout="hero"]
+  .agent-gui-node__composer-textarea {
+  /* File mentions share the text line; do not reserve an empty second line. */
+  min-height: var(--agent-gui-composer-text-line-height);
+}
+
 .agent-gui-node__composer[data-layout="dock"]
   .agent-gui-node__composer-prompt-input-area
   textarea,
