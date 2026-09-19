@@ -1,17 +1,155 @@
-import { act, renderHook } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen
+} from "@testing-library/react";
 import type {
   AgentActivityMessage,
   AgentActivitySnapshot
 } from "@tutti-os/agent-activity-core";
-import type { PropsWithChildren } from "react";
+import {
+  Suspense,
+  useLayoutEffect,
+  useState,
+  type PropsWithChildren
+} from "react";
 import { describe, expect, it } from "vitest";
 import {
   AgentGUIRuntimeProvider,
   useAgentActivitySessionMessages,
+  useAgentActivitySnapshot,
   type AgentGUIRuntime
 } from "./agentActivityRuntime";
 
 describe("useAgentActivitySessionMessages", () => {
+  it("keeps typing and committed history available while a stream projection is pending", async () => {
+    const store = createRuntimeStore(
+      snapshot({ "session-a": [message("session-a", "before")] })
+    );
+    let release!: () => void;
+    let ready = false;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    function CanonicalObservation() {
+      const current = useAgentActivitySnapshot("workspace-1");
+      return (
+        <output data-testid="canonical-message">
+          {String(current.sessionMessagesById["session-a"]?.[0]?.payload.text)}
+        </output>
+      );
+    }
+    function Conversation() {
+      const messages = useAgentActivitySessionMessages("workspace-1", [
+        "session-a"
+      ]);
+      const [draft, setDraft] = useState("");
+      const body = messages["session-a"]?.[0]?.payload.text;
+      if (body === "after" && !ready) throw pending;
+      return (
+        <>
+          <input
+            aria-label="draft"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <p>{String(body)}</p>
+        </>
+      );
+    }
+    render(
+      <AgentGUIRuntimeProvider runtime={store.runtime}>
+        <CanonicalObservation />
+        <Suspense fallback={<p>loading</p>}>
+          <Conversation />
+        </Suspense>
+      </AgentGUIRuntimeProvider>
+    );
+    act(() =>
+      store.publish(snapshot({ "session-a": [message("session-a", "after")] }))
+    );
+    expect(screen.queryByText("loading")).toBeNull();
+    expect(screen.getByTestId("canonical-message")).toHaveTextContent("after");
+    expect(screen.getByText("before")).toBeVisible();
+    fireEvent.change(screen.getByRole("textbox", { name: "draft" }), {
+      target: { value: "kept while streaming" }
+    });
+    expect(screen.getByRole("textbox")).toHaveValue("kept while streaming");
+    await act(async () => {
+      ready = true;
+      release();
+      await pending;
+    });
+    expect(screen.getByText("after", { selector: "p" })).toBeVisible();
+    expect(screen.getByRole("textbox")).toHaveValue("kept while streaming");
+  });
+
+  it.each(["session", "workspace", "runtime"] as const)(
+    "never commits old history after a %s identity change",
+    (scope) => {
+      const store = createRuntimeStore(
+        snapshot({
+          "session-a": [message("session-a", "A")],
+          "session-b": [message("session-b", "B")]
+        })
+      );
+      const otherStore = createRuntimeStore(
+        snapshot({ "session-a": [message("session-a", "B")] })
+      );
+      const runtime = {
+        ...store.runtime,
+        getSnapshot: (workspace: string) =>
+          workspace === "workspace-2"
+            ? otherStore.runtime.getSnapshot(workspace)
+            : store.runtime.getSnapshot(workspace)
+      };
+      const committed: Array<{ expected: string; actual: unknown }> = [];
+      function Conversation({
+        workspace,
+        session,
+        expected
+      }: {
+        workspace: string;
+        session: string;
+        expected: string;
+      }) {
+        const messages = useAgentActivitySessionMessages(workspace, [session]);
+        useLayoutEffect(() => {
+          committed.push({
+            expected,
+            actual: messages[session]?.[0]?.payload.text
+          });
+        });
+        return null;
+      }
+      const rendered = render(
+        <AgentGUIRuntimeProvider runtime={runtime}>
+          <Conversation
+            workspace="workspace-1"
+            session="session-a"
+            expected="A"
+          />
+        </AgentGUIRuntimeProvider>
+      );
+      rendered.rerender(
+        <AgentGUIRuntimeProvider
+          runtime={scope === "runtime" ? otherStore.runtime : runtime}
+        >
+          <Conversation
+            workspace={scope === "workspace" ? "workspace-2" : "workspace-1"}
+            session={scope === "session" ? "session-b" : "session-a"}
+            expected="B"
+          />
+        </AgentGUIRuntimeProvider>
+      );
+      expect(committed.length).toBeGreaterThanOrEqual(2);
+      for (const commit of committed)
+        expect(commit.actual).toBe(commit.expected);
+    }
+  );
+
   it("delivers projected streaming text without rendering an unrelated Session", () => {
     const messagesA = [message("session-a", "partial")];
     const messagesB = [message("session-b", "settled")];

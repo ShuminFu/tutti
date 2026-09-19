@@ -670,64 +670,6 @@ describe("AgentTranscriptView virtual rendering", () => {
     ).toBe(false);
   });
 
-  it("ignores transient locator reversals but accepts a sustained direction change", async () => {
-    virtualizerMockState.centerIndex = 10;
-    virtualizerMockState.virtualIndexes = [10];
-    const timeline = document.createElement("div");
-    timeline.dataset.testid = "agent-gui-timeline";
-    timeline.style.overflow = "auto";
-    timeline.scrollTop = 1_000;
-    document.body.appendChild(timeline);
-    render(
-      <AgentTranscriptView
-        conversation={conversationWithMultiRowTurns(40)}
-        labels={TRANSCRIPT_LABELS_WITH_LOCATOR}
-      />,
-      { container: timeline }
-    );
-    const selectedIndex = () =>
-      [
-        ...timeline.querySelectorAll(".agent-gui-message-locator__tick")
-      ].findIndex((tick) => tick.getAttribute("data-selected") === "true");
-    await waitFor(() => expect(selectedIndex()).toBe(10));
-
-    virtualizerMockState.centerIndex = 5;
-    timeline.scrollTop = 500;
-    fireEvent.scroll(timeline);
-    await waitFor(() => expect(selectedIndex()).toBe(5));
-
-    virtualizerMockState.centerIndex = 6;
-    fireEvent.scroll(timeline);
-    await waitFor(() => expect(selectedIndex()).toBe(5));
-
-    virtualizerMockState.centerIndex = 4;
-    for (const scrollTop of [400, 300, 200]) {
-      timeline.scrollTop = scrollTop;
-      fireEvent.scroll(timeline);
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-    }
-    await waitFor(() => expect(selectedIndex()).toBe(4));
-
-    virtualizerMockState.centerIndex = 5;
-    for (const scrollTop of [300, 400]) {
-      timeline.scrollTop = scrollTop;
-      fireEvent.scroll(timeline);
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-    }
-    expect(selectedIndex()).toBe(4);
-    timeline.scrollTop = 500;
-    fireEvent.scroll(timeline);
-    await waitFor(() => expect(selectedIndex()).toBe(5));
-
-    fireEvent.wheel(timeline, { deltaY: -100 });
-    virtualizerMockState.centerIndex = 6;
-    timeline.scrollTop = 600;
-    fireEvent.scroll(timeline);
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    expect(selectedIndex()).toBe(5);
-    timeline.remove();
-  });
-
   it("follows an explicit downward wheel reversal immediately", async () => {
     virtualizerMockState.centerIndex = 10;
     virtualizerMockState.virtualIndexes = [10];

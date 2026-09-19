@@ -10,7 +10,6 @@ import {
   type WheelEvent
 } from "react";
 import type { AgentMessageLocatorItem } from "./agentTranscriptModel";
-import type { AgentConversationFollowEndMode } from "../agentConversationFollowEndController";
 import {
   findMessageLocatorScrollParent,
   useAgentMessageLocatorSelection,
@@ -32,14 +31,12 @@ interface AgentMessageLocatorVisibleFrame {
 }
 
 export function AgentMessageLocatorRail({
-  followEndMode,
   items,
   isVisible = true,
   label,
   onLocate,
   virtualSelectionSource
 }: {
-  followEndMode?: AgentConversationFollowEndMode;
   items: readonly AgentMessageLocatorItem[];
   isVisible?: boolean;
   label?: string;
@@ -53,7 +50,6 @@ export function AgentMessageLocatorRail({
   const [shouldRenderPanel, setShouldRenderPanel] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const { selectItem, selectedKey } = useAgentMessageLocatorSelection({
-    followEndMode,
     items,
     isVisible,
     locatorRef,

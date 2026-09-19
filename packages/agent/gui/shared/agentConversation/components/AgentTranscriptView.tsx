@@ -723,7 +723,6 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
     return (
       <>
         <AgentMessageLocatorRail
-          followEndMode={followEndMode}
           items={userMessageLocatorItems}
           isVisible={isVisible}
           label={labels.userMessageLocator}
@@ -776,7 +775,6 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
   return (
     <>
       <AgentMessageLocatorRail
-        followEndMode={followEndMode}
         items={userMessageLocatorItems}
         isVisible={isVisible}
         label={labels.userMessageLocator}

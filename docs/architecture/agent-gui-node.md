@@ -1651,6 +1651,17 @@ mode or trigger older-page loading without explicit user scroll-away intent. A
 settled timeline that is too short to fill its viewport may still request older
 pages.
 
+The selected message-map projection in
+`agentActivityRuntime.tsx#useAgentActivitySessionMessages` crosses a React
+`useDeferredValue` boundary before expensive historical presentation work.
+Canonical Engine ingestion and Turn/Interaction state remain synchronous;
+streaming transcript presentation may retain its last committed value while
+input and other urgent work commit. The deferred value includes the workspace
+store and exact Session-set identity: switching workspace, runtime, or Sessions
+must select the current map immediately, never render another scope's deferred
+history. This is a presentation scheduling boundary, not a timer, event dropper,
+or alternate lifecycle authority.
+
 Composer draft updates cross the view boundary through the stable `shell`,
 `rail`, `detail`, `composer`, `interaction`, `readiness`, and `operations`
 projections rather than one aggregate Detail prop. The active Timeline
@@ -1659,7 +1670,14 @@ TipTap treats a controlled value as a local acknowledgement only when its
 draft scope and local edit revision match; a scope change or other external
 replacement may rebuild the document.
 
-A virtualized transcript derives message-locator selection from the virtualizer's measured turn positions and explicit transcript identity. The currently mounted DOM window is rendering output, not a selection source; range changes must not make the locator temporarily select a neighboring message. Recent wheel and keyboard direction fences locator selection from reversing because of estimate-to-measurement scroll compensation or an item-list identity shift; the previous stable locator index is reconciled in a layout effect before paint. A genuine opposite input replaces that intent.
+A virtualized transcript derives message-locator selection from the virtualizer's
+measured turn positions and the actual viewport center. The currently mounted
+DOM window is rendering output, not a selection source. In
+`useAgentMessageLocatorSelection.ts`, selection converges on the next animation
+frame after a scroll or geometry change, including a single reverse scroll that
+then stops. Scroll direction and end-following intent do not veto the measured
+position or require subsequent events to confirm it; those inputs govern scroll
+behavior, not which message the viewport currently contains.
 
 Historical rich text renders from the canonical Tiptap document through a static schema renderer. Only interactive composer surfaces own a Tiptap Editor/ProseMirror EditorView; read-only transcript surfaces reuse the same mention/token presentation without mounting editor lifecycle. Settled transcript messages reuse a bounded cache of pure Markdown ASTs and Tiptap JSON documents keyed by message identity and exact parser input; rendered React elements are never cached, and streaming Markdown bypasses this cache. Conversation titles are a separate plain-text projection: Markdown mention links are normalized to their `@label` text and never render mention SVGs or interactive rich-text tokens.
 

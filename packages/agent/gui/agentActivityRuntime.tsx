@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useDeferredValue,
   useMemo,
   useSyncExternalStore,
   type JSX,
@@ -553,7 +554,19 @@ export function useAgentActivitySessionMessages(
     () => createSessionMessagesSelector(normalizedSessionIds),
     [normalizedSessionIds]
   );
-  return useEngineSelector(workspaceStore, selectMessages);
+  const messages = useEngineSelector(workspaceStore, selectMessages);
+  const selection = useMemo(
+    () => ({ messages, sessionIdsKey, workspaceStore }),
+    [messages, sessionIdsKey, workspaceStore]
+  );
+  // External-store notifications are synchronous. Defer only historical message
+  // presentation so a token burst cannot monopolize commits while typing.
+  // A scope change must never display another workspace/session's history.
+  const deferred = useDeferredValue(selection);
+  return deferred.workspaceStore === workspaceStore &&
+    deferred.sessionIdsKey === sessionIdsKey
+    ? deferred.messages
+    : messages;
 }
 
 export function resetAgentGUIRuntimeForTests(): void {
