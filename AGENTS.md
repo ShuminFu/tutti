@@ -108,6 +108,10 @@ a fresh review for every edit.
 
 ## Contribution Workflow
 
+The development branch for this repository is `dintal-dock`. Use
+`origin/dintal-dock` as the default base and push target when publishing is
+authorized, unless the user explicitly selects another branch.
+
 Before preparing commits or pull requests, read `CONTRIBUTING.md` and follow it
 for repository-wide contribution requirements, including Conventional Commits,
 DCO sign-off, PR workflow, review gates, and multilingual documentation updates.
