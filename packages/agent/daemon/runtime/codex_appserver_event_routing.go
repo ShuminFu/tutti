@@ -64,6 +64,15 @@ func (a *CodexAppServerAdapter) appServerNotificationRoute(
 		a.scheduleChildNicknameFetches(session, added)
 	}
 	if terminalEvents := appServerChildTerminalEvents(eventSession, child, method, params); len(terminalEvents) > 0 {
+		if method == appServerNotifyTurnCompleted || method == appServerNotifyError {
+			a.mu.Lock()
+			if appSession := a.sessions[session.AgentSessionID]; appSession != nil {
+				if stored := appSession.childThreads[eventThreadID]; stored != nil {
+					stored.terminalObserved = true
+				}
+			}
+			a.mu.Unlock()
+		}
 		terminalEvents = appServerEventsForChild(terminalEvents, child)
 		return appServerNotificationRoute{events: append(prefixEvents, terminalEvents...), drop: true}
 	}
@@ -300,6 +309,7 @@ func (a *CodexAppServerAdapter) appServerChildThread(agentSessionID string, chil
 		parentThreadID:            child.parentThreadID,
 		parentItemID:              child.parentItemID,
 		normalizer:                child.normalizer,
+		terminalObserved:          child.terminalObserved,
 		droppedBeforeRegistration: child.droppedBeforeRegistration,
 	}, true
 }

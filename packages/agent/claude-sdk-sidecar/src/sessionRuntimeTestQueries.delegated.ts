@@ -54,7 +54,6 @@ export function fakeRacedDelegatedTaskAliasQuery(
 export function fakeDelegatedTaskQuery(
   prompt: AsyncIterable<SDKUserMessage>,
   options: {
-    omitNotificationIds?: boolean;
     skipNotification?: boolean;
     continueAfterNotification?: boolean;
     progressAfterNotification?: boolean;
@@ -126,7 +125,7 @@ export function fakeDelegatedTaskQuery(
       yield {
         type: "system",
         subtype: "task_notification",
-        ...(options.omitNotificationIds ? {} : { task_id: "task-1" }),
+        task_id: "task-1",
         status: "completed",
         summary: "Found files"
       } as unknown as SDKMessage;

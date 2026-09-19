@@ -197,15 +197,24 @@ func projectCurrentPlanModeFromACPModeID(descriptor providerregistry.StandardACP
 	return false, false
 }
 
-func (c *Controller) syncCursorPlanModeFromEvents(session Session, events []activityshared.Event) {
+func (c *Controller) syncProviderModeFromEvents(session Session, events []activityshared.Event) {
 	for _, event := range events {
 		if event.Type != activityshared.EventSessionUpdated {
 			continue
 		}
-		if normalizedSessionUpdateKind(event.Payload.Metadata) != "current_mode_update" {
-			continue
+		switch normalizedSessionUpdateKind(event.Payload.Metadata) {
+		case "current_mode_update":
+			c.syncCursorPlanModeFromACPUpdate(session, asString(event.Payload.Metadata["acpModeId"]))
+		case "permission_mode_update":
+			if planMode, ok := event.Payload.Metadata["planMode"].(bool); ok {
+				current, found := c.Session(session.RoomID, session.AgentSessionID)
+				if found {
+					c.applyInteractiveSelectionState(current, InteractiveSelectionState{
+						PlanMode: planMode, PermissionMode: asString(event.Payload.Metadata["permissionModeId"]),
+					})
+				}
+			}
 		}
-		c.syncCursorPlanModeFromACPUpdate(session, asString(event.Payload.Metadata["acpModeId"]))
 	}
 }
 

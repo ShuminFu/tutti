@@ -563,15 +563,15 @@ func acpCurrentModeUpdatedEvent(session Session, modeID string) (activityshared.
 	return event, true
 }
 
-func hasACPCurrentModeUpdatedEvent(events []activityshared.Event) bool {
+func hasProviderModeUpdatedEvent(events []activityshared.Event) bool {
 	for _, event := range events {
 		if event.Type != activityshared.EventSessionUpdated {
 			continue
 		}
-		if normalizedSessionUpdateKind(event.Payload.Metadata) != "current_mode_update" {
-			continue
+		switch normalizedSessionUpdateKind(event.Payload.Metadata) {
+		case "current_mode_update", "permission_mode_update":
+			return true
 		}
-		return true
 	}
 	return false
 }

@@ -20,11 +20,6 @@ func (a *CodexAppServerAdapter) appServerServerRequest(
 	normalizer *acpTurnNormalizer,
 	emit EventSink,
 ) ([]activityshared.Event, error) {
-	if strings.TrimSpace(turnID) == "" || emit == nil {
-		err := errors.New("approval request outside active prompt turn is not supported")
-		_ = client.Respond(ctx, message.ID, nil, &acpError{Code: -32000, Message: err.Error()})
-		return nil, err
-	}
 	params := map[string]any{}
 	if len(message.Params) > 0 {
 		if err := json.Unmarshal(message.Params, &params); err != nil {
@@ -40,6 +35,15 @@ func (a *CodexAppServerAdapter) appServerServerRequest(
 	eventNormalizer := normalizer
 	if child != nil {
 		eventNormalizer = child.normalizer
+		// A child can outlive the root provider turn. Resolve its emitter at
+		// publication time, including the asynchronous approval response.
+		emit = func(events []activityshared.Event) {
+			a.emitAppServerChildInteractionEvents(session.AgentSessionID, child.rootTurnID, events)
+		}
+	} else if strings.TrimSpace(turnID) == "" || emit == nil {
+		err := errors.New("approval request outside active prompt turn is not supported")
+		_ = client.Respond(ctx, message.ID, nil, &acpError{Code: -32000, Message: err.Error()})
+		return nil, err
 	}
 	events, pending, err := a.appServerApprovalRequested(eventSession, eventTurnID, message.ID, message.Method, params, eventNormalizer)
 	if err != nil {
@@ -51,6 +55,9 @@ func (a *CodexAppServerAdapter) appServerServerRequest(
 		emit(events)
 	}
 	processingTurn := a.activeTurnForNormalizer(session.AgentSessionID, normalizer)
+	if child != nil && child.rootTurnID != turnID {
+		processingTurn = nil
+	}
 	go a.respondAppServerServerRequest(ctx, client, eventSession, eventTurnID, child, message, params, pending, processingTurn, emit)
 	return nil, nil
 }
@@ -68,6 +75,12 @@ func (a *CodexAppServerAdapter) appServerInteractiveRequestScope(
 	child, ok := a.appServerChildThread(root.AgentSessionID, requestThreadID)
 	if !ok {
 		return Session{}, "", nil, fmt.Errorf("interactive request references unknown child thread %q", requestThreadID)
+	}
+	if child.terminalObserved || a.canceledProviderThread(root.AgentSessionID, requestThreadID) {
+		return Session{}, "", nil, fmt.Errorf("interactive request references terminated child thread %q", requestThreadID)
+	}
+	if canceledTurnID, canceled := a.rootTurnCanceled(root.AgentSessionID); canceled && canceledTurnID == child.rootTurnID {
+		return Session{}, "", nil, fmt.Errorf("interactive request references canceled child turn %q", child.turnID)
 	}
 	return appServerChildSession(root, requestThreadID, child), child.turnID, child, nil
 }

@@ -308,9 +308,7 @@ export class ToolActivityProjector {
     taskID: string,
     hookInput: Record<string, unknown>
   ): void {
-    const task = this.resolveDelegatedTaskFromMessage(hookInput, {
-      allowRunningFallback: false
-    });
+    const task = this.resolveDelegatedTaskFromMessage(hookInput);
     if (!task || task.taskId) {
       return;
     }
@@ -376,10 +374,10 @@ export class ToolActivityProjector {
     parentToolUseID: string,
     message: Record<string, unknown>
   ): void {
-    const task = this.resolveDelegatedTaskFromMessage(
-      { ...message, parentToolUseId: parentToolUseID },
-      { allowRunningFallback: false }
-    );
+    const task = this.resolveDelegatedTaskFromMessage({
+      ...message,
+      parentToolUseId: parentToolUseID
+    });
     if (!task || task.status !== "running") {
       return;
     }
@@ -538,33 +536,61 @@ export class ToolActivityProjector {
       ? this.backgroundProcessesByParentToolUseID.get(knownParent)
       : undefined;
     if (!process && subtype === "task_started" && parentToolUseId && taskId) {
+      const turnId = this.activeTurnId() || this.lastTurnId();
+      if (!turnId || message.skip_transcript === true) return;
       process = {
         parentToolUseId,
         taskId,
+        turnId,
+        description: stringValue(message.description),
         status: "running"
       };
       this.backgroundProcessesByParentToolUseID.set(parentToolUseId, process);
       this.backgroundProcessParentByTaskID.set(taskId, parentToolUseId);
       this.tools.completeBackgroundLaunch(parentToolUseId, taskId);
+    }
+    if (!process) return;
+    if (isTerminalTaskStatus(message.status)) {
+      process.status = delegatedTaskStatus(message.status);
+    } else if (process.status !== "running") {
       return;
     }
-    if (
-      !process ||
-      (subtype !== "task_updated" && subtype !== "task_notification")
-    ) {
-      return;
+    const summary = delegatedTaskSummaryFromMessage(message);
+    const error = stringValue(message.error);
+    this.emit({
+      type: "background_process_updated",
+      payload: {
+        turnId: process.turnId,
+        toolCallId: `background:${process.taskId}`,
+        name: process.description || process.taskId,
+        callType: "command",
+        status: process.status,
+        input: { description: process.description, taskId: process.taskId },
+        output: {
+          status: process.status,
+          ...(summary ? { text: summary } : {}),
+          ...(error ? { stderr: error } : {}),
+          ...(stringValue(message.output_file)
+            ? { outputFile: message.output_file }
+            : {}),
+          ...(typeof message.exit_code === "number"
+            ? { exitCode: message.exit_code }
+            : {})
+        },
+        ...(process.status === "failed"
+          ? { error: { message: error || summary } }
+          : {})
+      }
+    });
+    // task_updated can precede the richer final notification.
+    if (subtype === "task_notification") {
+      this.backgroundProcessesByParentToolUseID.delete(process.parentToolUseId);
+      this.backgroundProcessParentByTaskID.delete(process.taskId);
     }
-    if (!isTerminalTaskStatus(message.status)) {
-      return;
-    }
-    process.status = delegatedTaskStatus(message.status);
-    this.backgroundProcessesByParentToolUseID.delete(process.parentToolUseId);
-    this.backgroundProcessParentByTaskID.delete(process.taskId);
   }
 
   private resolveDelegatedTaskFromMessage(
-    message: Record<string, unknown>,
-    options: { allowRunningFallback?: boolean } = {}
+    message: Record<string, unknown>
   ): DelegatedTaskState | undefined {
     const taskId = stringValue(message.task_id) || stringValue(message.taskId);
     const agentId =
@@ -584,28 +610,7 @@ export class ToolActivityProjector {
     if (parentToolUseId) {
       return this.delegatedTasksByParentToolUseID.get(parentToolUseId);
     }
-    if (options.allowRunningFallback === false) {
-      return undefined;
-    }
-    if ((taskId || agentId) && this.hasDelegatedTaskAliases()) {
-      // An unresolved task/agent id usually belongs to a delegated task whose
-      // launch has not been observed yet. Binding it to "the only running"
-      // task would poison the alias maps for concurrent launches, so drop the
-      // event and let a later resolvable event settle that task.
-      return undefined;
-    }
-    const activeTasks = [
-      ...this.delegatedTasksByParentToolUseID.values()
-    ].filter(
-      (task) => task.turnId === this.activeTurnId() && task.status === "running"
-    );
-    if (activeTasks.length === 1) {
-      return activeTasks[0];
-    }
-    const allRunningTasks = [
-      ...this.delegatedTasksByParentToolUseID.values()
-    ].filter((task) => task.status === "running");
-    return allRunningTasks.length === 1 ? allRunningTasks[0] : undefined;
+    return undefined;
   }
 
   private delegatedParentByAlias(taskId: string, agentId: string): string {
@@ -623,15 +628,6 @@ export class ToolActivityProjector {
       }
     }
     return "";
-  }
-
-  private hasDelegatedTaskAliases(): boolean {
-    for (const task of this.delegatedTasksByParentToolUseID.values()) {
-      if (task.agentId || task.taskId) {
-        return true;
-      }
-    }
-    return false;
   }
 
   private hasRunningChildDelegatedTasks(parentToolUseId: string): boolean {

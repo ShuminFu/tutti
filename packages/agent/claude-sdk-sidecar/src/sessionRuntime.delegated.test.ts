@@ -1184,53 +1184,6 @@ test("stopTask resolves the task id from the parent tool call id", async () => {
   }
 });
 
-test("late delegated task notification without ids resolves single running task", async () => {
-  const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-  const restoreSink = withSidecarEventSinkForTest((event) =>
-    events.push(event)
-  );
-  try {
-    const session = new SessionRuntime(
-      "provider-session-1",
-      "/repo",
-      {},
-      false,
-      false,
-      {
-        model: "",
-        permissionModeId: "default",
-        planMode: false,
-        effort: "",
-        speed: ""
-      },
-      sidecarClaudeOptionsFromPayload({}),
-      undefined,
-      ({ prompt }) =>
-        fakeDelegatedTaskQuery(prompt, { omitNotificationIds: true })
-    );
-
-    await session.start();
-    session.exec("turn-1", "delegate task");
-    await waitForEvent(events, "task_completed");
-
-    const taskCompleted = events.find(
-      (event) => event.type === "task_completed"
-    );
-    assert.equal(taskCompleted?.payload?.turnId, "turn-1");
-    assert.equal(taskCompleted?.payload?.parentToolUseId, "toolu-agent");
-
-    const parentToolCompleted = events.find(
-      (event) =>
-        event.type === "tool_completed" &&
-        event.payload?.toolCallId === "toolu-agent" &&
-        event.payload?.status === "completed"
-    );
-    assert.equal(parentToolCompleted?.payload?.turnId, "turn-1");
-  } finally {
-    restoreSink();
-  }
-});
-
 test("late delegated task completion hook clears single running task", async () => {
   const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
   const restoreSink = withSidecarEventSinkForTest((event) =>

@@ -198,12 +198,16 @@ func claudeSDKRuntimeContext(session Session, adapterSession *claudeSDKAdapterSe
 	reasoningEffort := claudeSDKSessionReasoningEffort(session, liveState)
 	speed := claudeSDKSessionSpeed(session, liveState)
 	permissionMode := claudeSDKSessionPermissionMode(session, liveState)
+	planMode := session.SettingsValue().PlanMode
+	if mode := claudeSDKPermissionMode(asString(liveState.configOptions["mode"])); mode != "" {
+		planMode = mode == "plan"
+	}
 	context := map[string]any{
 		"adapter":          claudeSDKSidecarAdapterName,
 		"configOptions":    claudeSDKConfigOptions(liveState, model, reasoningEffort, speed),
 		"model":            model,
 		"permissionModeId": permissionMode,
-		"planMode":         session.SettingsValue().PlanMode,
+		"planMode":         planMode,
 		"reasoningEffort":  reasoningEffort,
 		"speed":            speed,
 	}

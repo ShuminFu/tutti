@@ -188,6 +188,7 @@ export class MessageProjection {
       task_id: stringValue(message.task_id),
       tool_use_id: stringValue(message.tool_use_id),
       status: status === "killed" ? "stopped" : status,
+      error: stringValue(patch?.error),
       summary:
         stringValue(patch?.description) ||
         stringValue(message.summary) ||

@@ -80,7 +80,7 @@ func (a *standardACPAdapter) handleACPMessage(
 			)
 		}
 		if len(events) > 0 {
-			if emit == nil || hasACPCurrentModeUpdatedEvent(events) {
+			if emit == nil || hasProviderModeUpdatedEvent(events) {
 				a.emitSessionEvents(session.AgentSessionID, events)
 			}
 		}

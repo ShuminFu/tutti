@@ -647,3 +647,13 @@ func appServerEventsForActiveRootTurn(
 	}
 	return turnEvents, detachedChildEvents
 }
+
+// Child interaction resolution may arrive after its owning root emitter has
+// detached, or while a newer root turn is active on the same connection.
+func (a *CodexAppServerAdapter) emitAppServerChildInteractionEvents(rootAgentSessionID, rootTurnID string, events []activityshared.Event) {
+	if activeTurn := a.sessionActiveTurn(rootAgentSessionID); activeTurn != nil && activeTurn.turnID == rootTurnID && !activeTurn.settleFinalized.Load() && activeTurn.emit != nil {
+		activeTurn.emit(events)
+		return
+	}
+	a.emitSessionEvents(rootAgentSessionID, a.stampTurnLifecycleSnapshots(rootAgentSessionID, events))
+}

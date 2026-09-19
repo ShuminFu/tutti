@@ -179,6 +179,17 @@ export class SessionConfiguration {
     return true;
   }
 
+  observePermissionMode(value: string): boolean {
+    const mode = permissionModeValue(value);
+    if (!mode) return false;
+    const changed =
+      this.settings.planMode !== (mode === "plan") ||
+      (mode !== "plan" && this.settings.permissionModeId !== mode);
+    this.settings.planMode = mode === "plan";
+    if (mode !== "plan") this.settings.permissionModeId = mode;
+    return changed;
+  }
+
   sessionStatePayload(): Record<string, unknown> {
     return {
       ...(this.settings.model ? { model: this.settings.model } : {}),

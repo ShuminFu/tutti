@@ -20,6 +20,8 @@ export type DelegatedTaskState = {
 };
 
 export type BackgroundProcessState = {
+  turnId: string;
+  description: string;
   parentToolUseId: string;
   taskId: string;
   status: DelegatedTaskStatus;

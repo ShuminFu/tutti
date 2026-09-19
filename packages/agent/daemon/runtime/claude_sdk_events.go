@@ -125,6 +125,18 @@ func (a *ClaudeCodeSDKAdapter) sidecarTurnEvents(adapterSession *claudeSDKAdapte
 		)
 		event.Payload.RuntimeActivity = activityshared.RuntimeActivityState(state)
 		return []activityshared.Event{event}, false, nil
+	case "permission_mode_updated":
+		mode := payloadString(event.Payload, "permissionMode")
+		if !adapterSession.applyPermissionMode(mode) {
+			return nil, false, nil
+		}
+		updated := newSessionActivityEvent(session, EventSessionUpdated, firstNonEmpty(session.Status, SessionStatusReady), nil)
+		permissionMode := mode
+		if mode == "plan" {
+			permissionMode = ""
+		}
+		updated.Payload.Metadata = map[string]any{"sessionUpdateKind": "permission_mode_update", "permissionModeId": permissionMode, "planMode": mode == "plan"}
+		return []activityshared.Event{updated}, false, nil
 	case "session_state":
 		return []activityshared.Event{newSessionActivityEvent(session, EventSessionUpdated, firstNonEmpty(session.Status, SessionStatusReady), claudeSDKRuntimeContext(session, adapterSession))}, false, nil
 	case "provider_turn_identity_resolved":
@@ -365,6 +377,20 @@ func (a *ClaudeCodeSDKAdapter) sidecarTurnEvents(adapterSession *claudeSDKAdapte
 		events := adapterSession.claudeSDKToolEvents(session, rootTurnID, event.Payload, EventCallFailed, messageStreamStateFailed, event.Type)
 		events = a.projectClaudeSDKTurnCallEvents(adapterSession, events)
 		return events, false, nil
+	case "background_process_updated":
+		// Detached process output belongs to its launching turn even after a
+		// newer root turn starts. It cannot change either turn's lifecycle.
+		if eventTurnID == "" {
+			return nil, false, nil
+		}
+		status, eventType := messageStreamStateStreaming, EventCallStarted
+		switch payloadString(event.Payload, "status") {
+		case "completed":
+			status, eventType = messageStreamStateCompleted, EventCallCompleted
+		case "failed", "stopped":
+			status, eventType = messageStreamStateFailed, EventCallFailed
+		}
+		return []activityshared.Event{claudeSDKToolActivityEvent(session, eventTurnID, event.Payload, eventType, status)}, false, nil
 	case "task_result_updated":
 		return adapterSession.claudeSDKTaskResultUpdatedEvents(session, event.Payload), false, nil
 	case "task_started", "task_progress", "task_completed":

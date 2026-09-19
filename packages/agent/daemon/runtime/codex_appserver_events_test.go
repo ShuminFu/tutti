@@ -670,6 +670,7 @@ func TestCodexAppServerAdapterRoutesChildFileChangeApprovalWithChildInput(t *tes
 			"itemId":   "child-file-change-1",
 		}),
 	}
+	adapter.SetSessionEventSink(func(_ string, events []activityshared.Event) { emit(events) })
 	if _, err := adapter.appServerServerRequest(context.Background(), client, session, "root-turn-1", message, newACPTurnNormalizer(), emit); err != nil {
 		t.Fatalf("appServerServerRequest: %v", err)
 	}

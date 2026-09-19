@@ -619,6 +619,28 @@ child lane only through the immutable `parentToolCallId`; it must not parse
 provider-native spawn events, invent a missing parent card, or create a
 presentation-only child lane.
 
+Detached shell commands are tool activity, not child Sessions. The Claude SDK
+sidecar projects task progress and terminal notifications onto one stable
+`background:<taskId>` command card under the launching Turn. The task's retained
+Turn id, not the current root Turn, owns late output. These updates remain
+persistable after that Turn settles and do not reopen it. Task updates may
+precede a richer terminal notification; late progress cannot restore running
+state. Only explicit tool/task/agent aliases can assign child ownership; the
+number of running children is never identity evidence.
+
+Codex child approvals and questions may arrive after the root provider finishes.
+`codex_appserver_event_interactive.go` resolves the exact child before checking
+root emitter availability. Both request and response use the owning root emitter
+while attached, then the session sink; a newer root emitter never receives old
+child interactions. Provider terminal/cancel observations reject new requests,
+while canonical Interactions and Host continue to own durable lifecycle.
+
+Claude SDK `init`/`status.permissionMode` observations update both sidecar tool
+permission evaluation and the existing canonical settings report. Plan entry
+preserves the permission tier to restore on exit. Mode changes are explicit
+provider observations, not inferred from tool names or transcript text; shared
+controller code consumes normalized mode fields without provider branches.
+
 User-initiated Fork creates a new root Session rather than a provider-native
 subagent. The child records durable lineage to the source Session and inclusive
 boundary Turn, but receives a caller-reserved canonical Session id and a

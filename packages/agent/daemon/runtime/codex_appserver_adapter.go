@@ -327,6 +327,9 @@ type codexAppServerThreadContext struct {
 	parentThreadID       string
 	parentItemID         string
 	normalizer           *acpTurnNormalizer
+	// Provider terminal evidence fences new interactive requests; canonical
+	// lifecycle remains Host-owned. Guarded by the adapter mutex.
+	terminalObserved bool
 	// droppedBeforeRegistration counts events for this thread that arrived
 	// (and were dropped as unknown) before its receiverThreadIds registration
 	// - permanent telemetry for ADR 0003's ordering question.

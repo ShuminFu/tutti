@@ -570,13 +570,13 @@ func (c *Controller) applySessionEventsByAgentSessionID(agentSessionID string, e
 		return
 	}
 	stateEvents := eventsOwnedBySession(events, session.AgentSessionID)
-	// Cursor mirrors agent-driven plan entry/exit through a separate settings
+	// Provider mode observations update settings through a separate
 	// path that locks internally. Only break the atomic window when such an
 	// event is actually present, otherwise the unlock re-opens the lost-update
 	// race the surrounding lock guards against.
-	if hasACPCurrentModeUpdatedEvent(stateEvents) {
+	if hasProviderModeUpdatedEvent(stateEvents) {
 		c.mu.Unlock()
-		c.syncCursorPlanModeFromEvents(session, stateEvents)
+		c.syncProviderModeFromEvents(session, stateEvents)
 		c.mu.Lock()
 		var stillPresent bool
 		session, stillPresent = c.sessions[foundKey]

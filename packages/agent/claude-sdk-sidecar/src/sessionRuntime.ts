@@ -301,6 +301,14 @@ export class SessionRuntime {
           this.emitSessionState();
         }
       },
+      onRuntimePermissionMode: (value) => {
+        if (this.configuration.observePermissionMode(value)) {
+          emit({
+            type: "permission_mode_updated",
+            payload: { permissionMode: value }
+          });
+        }
+      },
       onSessionState: () => this.emitSessionState(),
       onMaybeTitle: (shouldEmit) =>
         this.maybeEmitSessionTitleUpdated(shouldEmit),

@@ -44,6 +44,7 @@ export class SDKMessageRouter {
   private readonly setProviderSessionId: (value: string) => void;
   private readonly onAssistantUuid: (value: string) => void;
   private readonly onRuntimeModel: (value: string) => void;
+  private readonly onRuntimePermissionMode: (value: string) => void;
   private readonly onSessionState: () => void;
   private readonly onMaybeTitle: (shouldEmit?: () => boolean) => Promise<void>;
   private readonly onTerminalConnectionError: () => void;
@@ -78,6 +79,7 @@ export class SDKMessageRouter {
     setProviderSessionId: (value: string) => void;
     onAssistantUuid: (value: string) => void;
     onRuntimeModel: (value: string) => void;
+    onRuntimePermissionMode: (value: string) => void;
     onSessionState: () => void;
     onMaybeTitle: (shouldEmit?: () => boolean) => Promise<void>;
     onTerminalConnectionError: () => void;
@@ -107,6 +109,7 @@ export class SDKMessageRouter {
     this.setProviderSessionId = options.setProviderSessionId;
     this.onAssistantUuid = options.onAssistantUuid;
     this.onRuntimeModel = options.onRuntimeModel;
+    this.onRuntimePermissionMode = options.onRuntimePermissionMode;
     this.onSessionState = options.onSessionState;
     this.onMaybeTitle = options.onMaybeTitle;
     this.onTerminalConnectionError = options.onTerminalConnectionError;
@@ -172,6 +175,12 @@ export class SDKMessageRouter {
 
     if (message.type === "system") {
       const raw = message as unknown as Record<string, unknown>;
+      if (
+        !parentToolUseID &&
+        (systemSubtype === "init" || systemSubtype === "status")
+      ) {
+        this.onRuntimePermissionMode(stringValue(raw.permissionMode));
+      }
       const sdkErrorStatus =
         typeof raw.error_status === "number" ? raw.error_status : undefined;
       const sdkAssistantError = stringValue(raw.error);
