@@ -64,6 +64,10 @@ export type AgentHostFilesystemApi = AgentHostRecord & {
     name?: string;
     path?: string;
   }>;
+  downloadFile?: (payload: { path: string }) => AgentHostAsyncResult<void>;
+  getFileInfo?: (payload: {
+    path: string;
+  }) => AgentHostAsyncResult<{ sizeBytes: number | null } | null>;
   openPath?: (payload: { path: string }) => AgentHostAsyncResult<void>;
   revealInFolder?: (payload: { path: string }) => AgentHostAsyncResult<{
     fallbackToDirectory: boolean;

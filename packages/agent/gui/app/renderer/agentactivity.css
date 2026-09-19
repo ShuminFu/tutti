@@ -11954,3 +11954,68 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
 .agent-gui-node__layout[data-agent-gui-visible="false"] {
   content-visibility: hidden;
 }
+
+/* Delivered files remain separate from prose and retain fixed action targets. */
+.agent-message-file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: min(100%, 400px);
+  min-width: 0;
+  margin-top: 18px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--background-panel);
+  color: var(--text-primary);
+}
+.agent-message-file-card__icon {
+  display: grid;
+  flex: 0 0 28px;
+  height: 32px;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--tutti-purple);
+  color: var(--white-stationary);
+}
+.agent-message-file-card__body {
+  flex: 1;
+  min-width: 0;
+}
+.agent-message-file-card__name {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.agent-message-file-card__name:focus-visible {
+  outline: 2px solid var(--tutti-purple);
+  outline-offset: 2px;
+}
+.agent-message-file-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agent-message-file-card__size {
+  flex: 1;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 24px;
+}
+.agent-message-file-card__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}

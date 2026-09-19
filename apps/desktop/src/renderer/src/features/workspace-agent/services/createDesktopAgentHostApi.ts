@@ -31,7 +31,10 @@ import {
 import type { WorkspaceUserProject } from "@tutti-os/workspace-user-project";
 import type { IWorkspaceAgentActivityService } from "./workspaceAgentActivityService.interface.ts";
 import { requestWorkspaceTerminalLoginLaunch } from "./workspaceTerminalLoginLaunchCoordinator.ts";
-import { isHostBridgeAvailable } from "../../../platform/desktop/web/webHostBridgeClient.ts";
+import {
+  isHostBridgeAvailable,
+  requestHostCapability
+} from "../../../platform/desktop/web/webHostBridgeClient.ts";
 
 interface CreateDesktopAgentHostApiInput {
   agentQuickPromptService?: AgentHostQuickPromptsApi;
@@ -271,6 +274,34 @@ export function createDesktopAgentHostApi({
       }
     },
     filesystem: {
+      downloadFile: isHostBridgeAvailable()
+        ? (payload: { path: string }) =>
+            requestHostCapability<void>("saveWorkspaceFile", [payload])
+        : undefined,
+      getFileInfo: async ({ path }: { path: string }) => {
+        if (isHostBridgeAvailable()) {
+          return requestHostCapability<{ sizeBytes: number | null }>(
+            "getWorkspaceFileInfo",
+            [{ path }]
+          );
+        }
+        const expanded =
+          path.startsWith("~/") && platformApi.homeDirectory
+            ? `${platformApi.homeDirectory}/${path.slice(2)}`
+            : path;
+        const normalized = expanded.replaceAll("\\", "/");
+        const slash = normalized.lastIndexOf("/");
+        const directory = normalized.slice(0, slash + 1);
+        const listing = await tuttidClient.listWorkspaceFileDirectory(
+          workspaceId,
+          { path: directory, includeHidden: true }
+        );
+        const entry = listing.entries.find(
+          (item) =>
+            item.name === normalized.slice(slash + 1) && item.kind === "file"
+        );
+        return entry ? { sizeBytes: entry.sizeBytes } : null;
+      },
       readFileText: async (payload: { path?: string; uri?: string }) => {
         const path = pathFromFileReadPayload(payload);
         return hostFilesApi.readLocalFileText(path);

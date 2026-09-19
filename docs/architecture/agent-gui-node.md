@@ -3132,3 +3132,21 @@ A reserved inline status row communicates preparation or offers the existing
 retry/setup action. Setup errors must not replace or clear the draft editor.
 Canonical Composer/runtime gates continue to apply, including read-only access
 and missing-project constraints. The setup dialog remains mounted at the root.
+
+### Delivered files in assistant messages
+
+`AgentMessageMarkdown` enables delivery cards only for assistant message bodies.
+`remarkAgentFileCards` consumes parsed Markdown links (including reference links),
+resolves local artifact paths against the existing workspace/session context,
+and appends one card per path while preserving the original prose links. Code
+examples, remote URLs, file mentions and source-code references do not become
+attachments. Message text, headings, lists, inline images and process statistics
+keep their existing rendering.
+
+`AgentMessageFileCard` uses optional host filesystem metadata to show byte size
+without loading file contents. Unknown metadata stays unknown. Download delegates
+to an optional native save capability, falling back to a browser download when
+the host exposes a byte reader; reveal delegates to `filesystem.revealInFolder` and
+preserves its missing-file directory fallback. Hosts without a capability omit
+that action. The desktop metadata adapter reuses the canonical directory query;
+this presentation does not change Session, Turn or file lifecycle ownership.

@@ -68,6 +68,8 @@ import {
   MarkdownUnorderedList,
   textFromReactNode
 } from "./AgentMessageMarkdownRenderers";
+import { AgentMessageFileCard } from "./AgentMessageFileCard";
+import { remarkAgentFileCards } from "./remarkAgentFileCards";
 import { MarkdownMedia } from "./AgentMessageMarkdownMedia";
 import { ConversationFileContextMenu } from "./agentConversation/components/ConversationFileContextMenu";
 import { remarkLiteralAutolinkBoundary } from "./remarkLiteralAutolinkBoundary";
@@ -95,6 +97,14 @@ export const AGENT_MARKDOWN_PLAIN_TITLE_CLASSNAME =
 
 const MARKDOWN_SANITIZE_SCHEMA: RehypeSanitizeOptions = {
   ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      "dataAgentFilePath",
+      "dataAgentFileName"
+    ]
+  },
   protocols: {
     ...defaultSchema.protocols,
     href: [
@@ -146,6 +156,7 @@ interface AgentMessageMarkdownProps {
   workspaceLinkContext?: AgentMessageMarkdownWorkspaceLinkContext | null;
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
   agentTargets?: readonly AgentMessageMarkdownAgentTarget[];
+  fileCards?: boolean;
   collapsible?: boolean;
   expandLabel?: string;
   className?: string;
@@ -185,6 +196,7 @@ export function AgentMessageMarkdown({
   workspaceLinkContext = null,
   workspaceAppIcons = EMPTY_WORKSPACE_APP_ICONS,
   agentTargets,
+  fileCards = false,
   collapsible = false,
   expandLabel,
   className,
@@ -240,6 +252,14 @@ export function AgentMessageMarkdown({
       remarkGfm,
       remarkLiteralAutolinkBoundary,
       [
+        remarkAgentFileCards,
+        {
+          enabled: fileCards && !inline,
+          workspaceRoot: workspaceLinkContext?.workspaceRoot,
+          basePath: workspaceLinkContext?.basePath
+        }
+      ],
+      [
         cachedMarkdownParser,
         {
           cacheKey: documentCacheKey?.trim() || "content",
@@ -247,7 +267,14 @@ export function AgentMessageMarkdown({
         }
       ]
     ],
-    [documentCacheKey, normalizedContent]
+    [
+      documentCacheKey,
+      normalizedContent,
+      fileCards,
+      inline,
+      workspaceLinkContext?.workspaceRoot,
+      workspaceLinkContext?.basePath
+    ]
   );
   const isMentionOnly = isMentionOnlyMarkdownContent(normalizedContent);
   const handleLinkClick = useCallback(
@@ -282,6 +309,18 @@ export function AgentMessageMarkdown({
   );
   const markdownComponents = useMemo(
     () => ({
+      div: ({ node, ...props }: MarkdownDomProps<"div">) => {
+        const properties = (node as MarkdownHastNode | undefined)?.properties;
+        return typeof properties?.dataAgentFilePath === "string" ? (
+          <AgentMessageFileCard
+            path={properties.dataAgentFilePath}
+            name={String(properties.dataAgentFileName ?? "")}
+            onOpen={handleLinkClick}
+          />
+        ) : (
+          <div {...props} />
+        );
+      },
       a: (props: MarkdownDomProps<"a">) => (
         <MarkdownLink
           {...props}

@@ -459,8 +459,8 @@ function createWebHostApi(): DesktopHostApi {
       revealInFolder() {
         return Promise.reject(electronDebugRequired("revealInFolder"));
       },
-      revealWorkspaceFile() {
-        return Promise.reject(electronDebugRequired("revealWorkspaceFile"));
+      revealWorkspaceFile(_workspaceID, path) {
+        return requestHostCapability("revealWorkspaceFile", [{ path }]);
       },
       openExternal(url) {
         return requestHostCapability("openExternal", [url]).then(

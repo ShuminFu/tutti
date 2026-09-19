@@ -537,7 +537,9 @@ export function requestHostCapability<T>(
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
   const interactive =
-    capability === "selectUploadFiles" || capability === "selectDirectory";
+    capability === "selectUploadFiles" ||
+    capability === "selectDirectory" ||
+    capability === "saveWorkspaceFile";
   const failure = (message: string, code: string): Error =>
     Object.assign(new HostBridgeUnavailableError(message), { code });
   const coordinates = isHostBridgeAvailable() ? bridgeCoordinates() : null;

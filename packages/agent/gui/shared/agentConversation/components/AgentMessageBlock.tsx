@@ -344,6 +344,7 @@ export function AgentMessageBlock({
         <AgentMessageMarkdown
           content={message.body}
           documentCacheKey={message.id}
+          fileCards={!isUser}
           className={styles.assistantMarkdown}
           onLinkAction={onLinkAction}
           workspaceLinkContext={{
