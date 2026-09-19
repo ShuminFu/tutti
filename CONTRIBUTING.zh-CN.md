@@ -86,7 +86,7 @@ pnpm check:full
 
 ## 仓库规则
 
-- 业务逻辑归属 `services/tuttid`
+- daemon 产品逻辑归属 `services/tuttid`，provider-neutral agent 生命周期归属 `packages/agent/host`
 - UI 与桌面集成归属 `apps/desktop`
 - 只有存在真实共享边界时，代码才应进入 `packages/`
 - 业务代码文件应保持在 `800` 行以内；超过即为重构信号
@@ -130,7 +130,7 @@ git commit -s -m "feat(scope): add something"
 
 ## Pull Request 流程
 
-1. Fork 仓库并从 `main` 创建分支。建议的分支命名：`feat/...`、`fix/...`、`docs/...`
+1. Fork 仓库并从 `dintal-dock` 创建分支。建议的分支命名：`feat/...`、`fix/...`、`docs/...`
 2. 完成你的改动；每个 PR 只关注一件事
 3. 提交 PR，清晰描述动机与改动内容
 4. CI 会根据变更文件运行相关的 TypeScript、Go、包和工具检查；所有选中的检查必须通过
@@ -190,3 +190,32 @@ flowchart TB
 向 Tutti 提交贡献，即表示你同意你的贡献以 [Apache License 2.0](LICENSE) 授权。
 
 > 翻译说明：本文档与英文版内容同步，如有出入，以[英文版](CONTRIBUTING.md)为准。
+
+## 功能与缺陷交付 SOP
+
+1. 明确目标、非目标、约束、用户旅程和验收标准（Intent）。缺陷记录复现条件、期望与实际行为。
+2. 通过 [AGENTS](AGENTS.md) 与 [STYLE](STYLE.md) 定位职责和适用规范（Policy）。变更围绕当前任务，保留无关未提交改动，按功能边界准备提交。
+3. 随实现交付行为 / 集成测试，包括关键失败与恢复路径；缺陷修复配套捕获原问题的回归用例。
+4. 性能敏感路径交付 benchmark，明确负载、并发、计时边界、指标和比较条件；不适用时说明原因。
+5. 按 [Validation Selection](docs/conventions/testing.md#validation-selection) 选择检查。如实说明通过、失败、跳过与未运行的内容；缺少可比基线或预算时不声明性能达标。
+6. 更新 current / next、决定与原因、剩余阻塞（State），关联测试、复现与执行结果（Evidence），遵循[知识模型](docs/README.md#knowledge-model)。
+
+根 `integration-tests/` 管理跨模块行为场景，根 `benchmarks/` 管理性能场景和负载。单元测试与实现相邻；依赖包内私有成员或专属夹具的现有测试保留包内实现，由根目录登记，不为搬测试扩大生产 API。
+
+行为测试断言可观察结果；benchmark 保留正确性断言并在可比环境重复采样。可复用测试和夹具随源码交付；运行证据标明版本、环境、命令与结果，原始输出关联任务 / CI 产物，按知识模型选择需要保留的证据。
+
+## 可执行流程与发布交接
+
+- `bash integration-tests/run.sh --list`：选择行为套件。
+- `bash benchmarks/run.sh --list`：选择性能套件。
+- `pnpm check:changed`：变更范围验证；`pnpm check:full`：完整验证。选择与重试细节由 [Testing](docs/conventions/testing.md) 维护。
+- Git hooks：[Local Git Hooks](docs/conventions/local-git-hooks.md)；静态分析：[Static Analysis](docs/conventions/static-analysis.md)。
+- Worker 派遣：[DeepSeek workers](docs/conventions/deepseek-workers.md)。
+
+现有脚本、包命令和 hooks 是可执行 SOP，修改时同步其文档，不增加平行包装。新增运行时 / 环境变量约定写入所属规范；HTTP 契约变更先改 `services/tuttid/api/openapi/tuttid.v1.yaml` 并遵循 [API contracts](docs/conventions/api-contracts.md)。
+
+开发分支与获准推送的默认目标为 `dintal-dock` / `origin/dintal-dock`，用户另行指定时从其要求。push、PR、rebase 和发布按任务授权执行。用户要求创建的 PR 使用 ready-for-review 状态、英文标题和中文描述；创建或更新后读回草稿状态、标题、描述编码、head commit 与 CI 状态。
+
+冲突解决先理解双方意图，涉及职责边界的内容人工合并；没有明确要求时不整侧覆盖。确认无未解决路径，并按合并后的行为选择检查。
+
+用户可见变化通过所属发布流程更新 release notes / changelog：[Desktop releases](docs/conventions/desktop-release.md) 或 [npm package releases](docs/conventions/npm-package-release.md)。沿用现有版本、tag 和评审门禁，不另建一套发布流程。

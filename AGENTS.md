@@ -1,218 +1,46 @@
-# AGENTS.md
+# DinTalDock / Tutti
 
-## Shape
+A local-first desktop application and shared-package workspace. Repository overview: [README](README.md).
 
-`tutti` is a local-first desktop monorepo.
+## Repository boundaries
 
-- `services/tuttid`: daemon product rules, durable local state, HTTP/query, and adapters
-- `packages/agent/host`: provider-neutral agent lifecycle application core
-- `apps/desktop`: Electron shell, preload, renderer UI, desktop integration
-- `packages/clients/*`: generated and hand-written domain clients
-- `packages/configs/*`: shared TypeScript and formatting config
-- `config`: sources used to generate runtime defaults
+- `services/tuttid` owns daemon product behavior; `packages/agent/host` owns provider-neutral session, turn, goal and runtime-operation lifecycle semantics.
+- `apps/desktop` owns desktop composition and UI. Published workspace packages use `@tutti-os/*`.
+- This file owns repository-wide rules and routing; scoped `AGENTS.md` files own area-specific guidance.
 
-Keep daemon/product-specific business logic in `services/tuttid`; keep extracted cross-consumer application cores in their owning package. Do not let `apps/desktop` become a second business core. Do not create vague packages such as `shared`, `common`, `utils`, or `client-sdk`.
+## Related repositories
 
-## Routing
+The related projects occupy independent Git repositories with separate branches, versions and delivery. This repository's internal package workspace does not make the platform a single monorepo. Sibling `../` links assume adjacent checkouts.
 
-Read the closest `AGENTS.md` before editing:
+| Repository                                  | Relationship / change owner                                                                                                                               |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [rndmaster-dev](../rndmaster-dev/AGENTS.md) | Embeds this repository's Web UI and manages `tuttid` through `cliagent-backend`; embedding, packaging and product integration belong there                |
+| [dintal-claw](../dintal-claw/AGENTS.md)     | Native application host loading the RnDMaster bundle; application shell and master loading belong there                                                   |
+| [engine-core](../engine-core/AGENTS.md)     | Embeddable Go runtime kernel consumed by DinTalClaw; distinct from this repository's provider-neutral application lifecycle core in `packages/agent/host` |
 
-- `apps/desktop/*` -> `apps/desktop/AGENTS.md`
-- `services/tuttid/*` -> `services/tuttid/AGENTS.md`
-- `packages/agent/gui/*` -> `packages/agent/gui/AGENTS.md`
-- `packages/agent/session-replay/*` -> `packages/agent/session-replay/AGENTS.md`
-- `packages/ui/*` -> `packages/ui/AGENTS.md`
-- `packages/*` -> `packages/AGENTS.md`
+RnDMaster selects this repository's source via its [UPSTREAM.lock](../rndmaster-dev/third_party/tutti/UPSTREAM.lock); source and artifact responsibilities are described in [FORK](FORK.md). Local source changes do not automatically update the consumer's pin or installed artifacts. Read the target repository's `AGENTS.md` before cross-repository edits.
 
-Use this root file for repository-wide defaults only. Area-specific files win.
+## Task routing
 
-Route agent application-core requests to `packages/agent/host` first. If a
-request mentions agent session, turn, goal, or runtime-operation lifecycle,
-creation, resume, send, cancel, recovery, or the agent host boundary, read
-`packages/agent/host/README.md` and the `Agent Host Boundary` section below
-before planning or editing, then the nearest area `AGENTS.md`.
+| Task                                                       | Read first                                                                                                                                          |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Feature development, bug fixes, contributions and releases | [CONTRIBUTING](CONTRIBUTING.md)                                                                                                                     |
+| Code style, UI components and copy                         | [STYLE](STYLE.md)                                                                                                                                   |
+| Intent, Policy, State and Evidence                         | [Documentation](docs/README.md)                                                                                                                     |
+| Desktop changes                                            | [Desktop guide](apps/desktop/AGENTS.md)                                                                                                             |
+| Daemon changes and HTTP contracts                          | [Daemon guide](services/tuttid/AGENTS.md), [API contracts](docs/conventions/api-contracts.md)                                                       |
+| Session / turn / goal / runtime-operation lifecycle        | [Host contracts](packages/agent/host/README.md), then the nearest area guide                                                                        |
+| AgentGUI, composer, approvals or interactive prompts       | [AgentGUI architecture](docs/architecture/agent-gui-node.md), [area guide](packages/agent/gui/AGENTS.md)                                            |
+| Session replay                                             | [Replay guide](packages/agent/session-replay/AGENTS.md)                                                                                             |
+| Shared packages or UI system                               | [Packages guide](packages/AGENTS.md), [UI guide](packages/ui/AGENTS.md)                                                                             |
+| Windows or platform-specific behavior                      | [Windows architecture](docs/architecture/windows-platform-support.md)                                                                               |
+| Delegate independent work                                  | [DeepSeek workers](docs/conventions/deepseek-workers.md)                                                                                            |
+| Checks, hooks or troubleshooting                           | [Testing](docs/conventions/testing.md), [hooks](docs/conventions/local-git-hooks.md), [troubleshooting](docs/conventions/troubleshooting/README.md) |
 
-Also route by module name, not only by path. If a request mentions AgentGUI,
-AgentGuiNode, Agent GUI, the agent conversation module, agent composer,
-workspace agent timeline, agent approvals, or interactive agent prompts, read
-`docs/architecture/agent-gui-node.md` first, then
-`packages/agent/gui/AGENTS.md`, before planning or editing, even when no file
-path is supplied.
+## Command entrypoints
 
-If a request mentions Microsoft Windows support, Windows packaging, ConPTY,
-platform-specific process behavior, or managed POSIX shell portability, read
-`docs/architecture/windows-platform-support.md` before planning or editing.
-Keep product logic platform-neutral: callers depend on capability interfaces,
-and operating-system differences stay in the narrow owning adapter or
-composition root. Do not scatter OS checks, executable suffixes, path literals,
-or user-directory assumptions through business logic.
-
-## Agent Host Boundary
-
-Agent application-core lifecycle semantics have a single owner:
-`packages/agent/host`. That package owns when a session, turn, goal, or
-runtime-operation is created, when it may be sent, when it reaches a terminal
-state, and how it is recovered. `services/tuttid/service/agent` and other Host
-consumers such as tsh `cmd/desktopd` are adapter surfaces that translate
-HTTP, query, composer, analytics, transport, and provider-preparation concerns
-and delegate lifecycle through `ApplicationHost()`.
-
-Before adding or changing agent behavior, answer the decision rule:
-
-> Does this change define or change the lifecycle semantics of a
-> session/turn/goal/runtime-operation (when it is created, when it may be sent,
-> when it is terminal, how it is recovered)?
->
-> - Yes -> it must live in `packages/agent/host` (tuttid and tsh write only
->   delegate/adapter code).
-> - No (transport, DTO, query, presentation, product policy) -> adapter.
-> - Unsure -> answer in the PR description: "Does tsh (or another Host consumer)
->   also need this behavior?" If yes, it belongs in Host.
-
-New lifecycle semantics must first gain a scenario in
-`packages/agent/host/conformance`; scenarios may only program against the Host
-contract. When a consumer finds a missing Host capability, add the Host API in
-`packages/agent/host` and release it, rather than reimplementing it in the
-adapter. The `GetSession`, `UpdateSettings`, `UpdatePin`, and `DeleteSession`
-APIs were added to Host this way (PR #1329) after tsh's cutover surfaced them,
-instead of being reimplemented in tsh.
-
-`services/tuttid/service/agent/AGENTS.md` records the adapter-only rules for
-that directory, and `pnpm check:agent-host-boundary` ratchets against new
-`*Coordinator`/`*Worker`/`*Actor` orchestration surfaces landing in the
-adapter.
-
-## GPT orchestration and DeepSeek workers
-
-Encourage GPT (including Astra) to act as the orchestration layer: define goals,
-write precise worker instructions, integrate results and make the final decision.
-Prefer DeepSeek Flash for bounded implementation, research and peer review when
-delegation reduces total work. Keep trivial tasks local.
-
-Use DeepSeek Harness through the RnDMaster CLI (`deepseek-harness`) or the native
-Tutti CLI (`extension:deepseek-harness`), never a Claude Code or Codex Harness
-with a DeepSeek model substituted. The configured Dintal gateway currently uses
-`deepseek-flash`; prefer High reasoning and the `[1m]` model marker for a
-1,000,000-token context. Discover the actual target and model catalog before
-launch. RnDMaster CLI delegation defaults to Demo; validate changes with an
-explicit Test instance without restarting or updating running Demo work.
-See [DeepSeek worker delegation](docs/conventions/deepseek-workers.md).
-
-Worker prompts must state the goal, context, absolute working directory, allowed
-write scope, constraints, completion criteria and result delivery path. Workers
-inherit the caller's validation and publishing authorization. Do not recursively
-delegate unless requested. GPT must inspect delivered evidence before treating
-a worker as complete or a peer review as passing. Run peer review after the
-implementation is complete and authorized validation succeeds; do not dispatch
-a fresh review for every edit.
-
-## Contribution Workflow
-
-The development branch for this repository is `dintal-dock`. Use
-`origin/dintal-dock` as the default base and push target when publishing is
-authorized, unless the user explicitly selects another branch.
-
-Before preparing commits or pull requests, read `CONTRIBUTING.md` and follow it
-for repository-wide contribution requirements, including Conventional Commits,
-DCO sign-off, PR workflow, review gates, and multilingual documentation updates.
-
-When creating pull requests for the user, create a regular ready-for-review PR
-(not a draft), write the PR title in English, and write the PR description in
-Chinese.
-After creating or updating a pull request, read it back from GitHub and verify
-its draft state, title, description encoding, head commit, and CI status.
-
-## Hard Rules
-
-- Published workspace packages use `@tutti-os/*`; keep manifests, imports, docs, and release config aligned.
-- All new requirements and features across Tutti projects must first reuse existing `@tutti-os/ui-system` components, semantic color tokens, typography, spacing, and other established UI conventions. Before introducing bespoke UI or raw color values, inspect the existing UI System exports and tokens; if the required capability is missing, prefer extending the shared UI System with a reusable primitive or token and document the rationale.
-- User-visible copy must go through the relevant i18n layer. Do not hardcode UI text, dialog text, status labels, empty states, or user-facing errors.
-- Chinese user-facing UI copy must not end with a Chinese full stop (。); keep this punctuation rule consistent across settings and other product surfaces.
-- Change `services/tuttid/api/openapi/tuttid.v1.yaml` before daemon HTTP request/response contracts.
-- Document new supported runtime/env overrides in the matching durable convention doc.
-- Business-code files should stay at or below `800` lines as measured by the
-  repository `file-length-limit` lint rule, which excludes blank and
-  comment-only lines. Prefer decomposition before adding more logic.
-- When changing repository-managed checks, hooks, or static analysis, update `docs/conventions/local-git-hooks.md` or `docs/conventions/static-analysis.md`.
-- When a fix captures a recurring debugging trap, route it through `docs/conventions/troubleshooting/README.md` and update the matching domain file.
-
-## Self-Evolution Notes
-
-After any code change, run a documentation impact check. If the change affects
-module ownership, data flow, user-visible interaction, public API/CLI behavior,
-runtime/config/env overrides, validation commands, troubleshooting paths, or
-directory responsibility, update the corresponding durable documentation in the
-same change.
-
-When proposing a durable lesson from a completed fix or implementation, use the
-AutoSkill-style decision set: `discard`, `improve`, `merge`, or `create`.
-Record only reusable patterns backed by real implementation/debugging evidence.
-Prefer improving or merging an existing note over creating duplicates, and
-remove secrets, personal data, local paths, customer names, tokens, and one-off
-issue details before writing any prompt, architecture, or troubleshooting
-update. For `improve`, `merge`, or `create`, update the matching durable doc:
-architecture docs for ownership/data-flow/interaction rules, convention docs
-for repository-wide practices, README/package docs for usage or public
-contracts, or troubleshooting docs for recurring symptom playbooks. Final
-responses should mention which durable docs were updated, or state that no
-documentation impact was found.
-
-## Toolchain
-
-- Package manager: `pnpm@10.11.0`
-- TypeScript lint: `pnpm lint:ts` -> Oxlint
-- TypeScript format: Oxfmt for TS/JS, Prettier for JSON/MD/YAML/CSS/HTML
-- Typecheck: `pnpm typecheck` -> compact incremental native TypeScript `tsgo`
-- Changed-aware local validation: `pnpm check:changed`
-- Full local/CI validation: `pnpm check:full`
-- Go lint requires the pinned `golangci-lint`; install with `pnpm install:golangci-lint`
-
-## Common Checks
-
-- UI-only exception: if a change modifies only UI presentation and does not alter logic or behavior, do not run any checks. This exception takes precedence over the checks below and includes tests, lint, typecheck, builds, boundary checks, and visual checks.
-- For every other change, follow the single validation-selection policy in
-  [Testing](docs/conventions/testing.md#validation-selection). Closest-area
-  instructions may add a domain-specific check, but they do not redefine the
-  repository workflow.
-
-## Hooks
-
-Local hooks use Husky.
-
-- `pre-commit`: `lint-staged`, staged Electron/UI/renderer boundary checks
-- `pre-push`: `pnpm check:changed -- --push-ready`
-
-Changed-aware command behavior and rerun options are documented in
-[Local Git Hooks](docs/conventions/local-git-hooks.md#changed-aware-validation).
-
-## Conflict Workflows
-
-For merge, rebase, cherry-pick, or manual conflict resolution, inspect both branch intents and never resolve source conflicts with `--ours` or `--theirs` unless explicitly asked. Review high-risk desktop, daemon API, generated contract, release, and shared test harness files manually. After conflicts, run `git diff --name-only --diff-filter=U` and targeted checks for the affected surface.
-
-## Docs
-
-Start from:
-
-- `docs/conventions/README.md`
-- `docs/architecture/README.md`
-- nearest area `AGENTS.md`
-
-Finish every task by merging its durable outcome into the authoritative document
-(architecture for ownership/data flow/interaction, conventions for rules,
-troubleshooting for recurring symptoms, ADR for accepted cross-cutting
-decisions) and then deleting the execution artifacts: implementation plans,
-progress notes, acceptance or review reports, one-off investigation journals,
-and per-file change tables. Do not add a completion report, changelog, or
-"what I did" file to the repository, and do not keep a finished plan by moving
-it to an archive directory or by concatenating its summaries into a larger
-document. A durable document must help the next Agent or Harness change the
-system: state remaining decisions, constraints, and code entry points, never
-timestamps, machine-local paths, commit SHA lists, or test-run transcripts.
-Unfinished work that is still valid stays in `docs/specs` as a short record of
-open decisions, not as a step-by-step script.
-
-## Logs
-
-dev (when the feature is not in remote): ~/.tutti-dev/tuttid.db
-
-prod: ~/.tutti/tuttid.db
+- Local development: `make dev-gui`
+- Changed-aware validation: `pnpm check:changed`; full validation: `pnpm check:full`
+- Behavioral suites: `bash integration-tests/run.sh --list`
+- Benchmarks: `bash benchmarks/run.sh --list`
+- Toolchain, setup and release commands: [CONTRIBUTING](CONTRIBUTING.md)

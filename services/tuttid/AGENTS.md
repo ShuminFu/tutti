@@ -30,7 +30,6 @@ app/
 api/
 biz/
 data/
-integration/
 server/
 service/
 types/
@@ -46,7 +45,7 @@ types/
 - `service/`: use-case orchestration
 - `biz/`: small domain-local models shared across layers
 - `data/`: persistence adapters
-- `integration/`: daemon-wide black-box and process-level tests
+- 根目录 `integration-tests/tuttid/`: daemon-wide black-box and process-level tests
 - `types/`: cross-domain helpers only
 
 ## Platform adapter rules
@@ -91,7 +90,7 @@ types/
 - Run `pnpm lint:go`
 - Run `pnpm test:go && pnpm build:go` before finishing daemon changes
 - Add or update tests when changing handlers, service logic, or persistence behavior
-- Keep near-layer tests beside the package they exercise; place real-process or cross-layer daemon tests under `integration/`
+- Keep near-layer tests beside the package they exercise; place real-process or cross-layer daemon tests under 根目录 `integration-tests/tuttid/`
 
 ## Related docs
 

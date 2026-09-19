@@ -498,3 +498,13 @@ actually tests. Small helper tests belong in the module's main spec as a nested
 
 A test file that only holds one or two trivial assertions provides no regression
 protection. Delete it or fold its coverage into a behavioral test.
+
+## Root Integration and Benchmark Directories
+
+Repository-level behavioral scenarios live in `integration-tests/`; performance workloads and entrypoints live in `benchmarks/`. Both directories expose `bash <directory>/run.sh --list` and require an explicit suite name to execute. New features carry behavioral coverage and, for performance-sensitive paths, benchmarks with stated load, timing boundaries, metrics and comparison conditions. A missing baseline is not a performance pass. Execution continues to follow Validation Selection above.
+
+`integration-tests/go.mod` is a workspace test module registered in `go.work`. `integration-tests/tuttid/agent_activity_eventhub_test.go` owns the daemon activity-projection/event-hub integration scenario through public module APIs. The normal Go workspace runner discovers this module automatically; do not add a parallel module whitelist. Package-private and near-layer cases stay with their implementation and are exposed through the root runner where relevant. The existing Host conformance suite remains Host-owned.
+
+`benchmarks/run.sh` selects existing store-sqlite Go benchmarks or the existing AgentGUI performance runner. Store benchmarks retain their package-local database/fixture dependencies. These entrypoints do not automatically create new CI performance gates, start a production instance, or run every suite. Existing per-scenario setup and skip behavior remain authoritative.
+
+AgentGUI performance workloads, runner and dedicated Cursor fixture live in `benchmarks/agent-gui/`. `pnpm perf:agent-gui` points directly to that runner. Its unit tests stay in `tools/scripts/*.test.mjs`, preserving `test:tools` discovery; shared trace and launch tools remain tool-owned.

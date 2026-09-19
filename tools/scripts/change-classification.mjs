@@ -160,7 +160,8 @@ export function isAgentSessionReplayRelevant(file) {
     file === "apps/desktop/electron.vite.config.ts" ||
     file === "config/tutti.defaults.json" ||
     file.startsWith("tools/scripts/run-agent-session-replay") ||
-    file === "tools/scripts/fixtures/agent-gui-performance/cursor-agent" ||
+    file ===
+      "benchmarks/agent-gui/fixtures/agent-gui-performance/cursor-agent" ||
     file.startsWith("packages/agent/session-replay/") ||
     file.startsWith("packages/agent/daemon/providerregistry/") ||
     file.startsWith("packages/agent/daemon/runtime/") ||

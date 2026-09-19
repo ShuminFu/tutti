@@ -3,21 +3,21 @@ import test from "node:test";
 import {
   providerSwitchScenario,
   selectProviderSwitchTargets
-} from "./agent-gui-performance-scenario.mjs";
-import { selectSessionSwitchTargets } from "./agent-gui-performance-helpers.mjs";
+} from "../../benchmarks/agent-gui/agent-gui-performance-scenario.mjs";
+import { selectSessionSwitchTargets } from "../../benchmarks/agent-gui/agent-gui-performance-helpers.mjs";
 import {
   agentGuiPerformanceScenarios,
   resolveAgentGuiPerformanceScenario
-} from "./agent-gui-performance-scenarios.mjs";
-import { sessionSwitchScenario } from "./agent-gui-session-performance-scenarios.mjs";
-import { composerInputScenario } from "./agent-gui-composer-performance-scenarios.mjs";
+} from "../../benchmarks/agent-gui/agent-gui-performance-scenarios.mjs";
+import { sessionSwitchScenario } from "../../benchmarks/agent-gui/agent-gui-session-performance-scenarios.mjs";
+import { composerInputScenario } from "../../benchmarks/agent-gui/agent-gui-composer-performance-scenarios.mjs";
 import {
   assessWorkbenchWindowDragTrace,
   prepareAgentGUIWindowStressSnapshot
-} from "./agent-gui-window-performance-scenarios.mjs";
-import { summarizeProviderStatusFocusRefresh } from "./agent-provider-status-performance-scenario.mjs";
+} from "../../benchmarks/agent-gui/agent-gui-window-performance-scenarios.mjs";
+import { summarizeProviderStatusFocusRefresh } from "../../benchmarks/agent-gui/agent-provider-status-performance-scenario.mjs";
 import { buildAllProcessTimeProfileArgs } from "./all-process-time-profile.mjs";
-import { prepareConcurrentAgentStreamingWorkbenchSnapshot } from "./agent-gui-concurrent-streaming-performance-scenario.mjs";
+import { prepareConcurrentAgentStreamingWorkbenchSnapshot } from "../../benchmarks/agent-gui/agent-gui-concurrent-streaming-performance-scenario.mjs";
 import { isDesktopBundleFresh } from "./prepared-desktop-launch.mjs";
 import {
   applyScenarioAssessment,
@@ -25,7 +25,7 @@ import {
   parseDesktopStartupFailure,
   performanceRunFailureReasons,
   prepareWorkbenchSnapshotForPerformance
-} from "./run-agent-gui-performance.mjs";
+} from "../../benchmarks/agent-gui/run-agent-gui-performance.mjs";
 
 test("parses the structured Desktop startup failure from process output", () => {
   assert.deepEqual(

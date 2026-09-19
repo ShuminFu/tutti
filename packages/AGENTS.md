@@ -11,8 +11,8 @@ If you are editing `packages/agent/gui/*`, read
 first, then [packages/agent/gui/AGENTS.md](agent/gui/AGENTS.md).
 
 If you are editing Agent session, Turn, Goal, runtime-operation, or recovery
-lifecycle under `packages/agent/*`, read the root `Agent Host Boundary` and
-[packages/agent/host/README.md](agent/host/README.md) first.
+lifecycle under `packages/agent/*`, read the ownership decision rule in
+[packages/agent/host/README.md](agent/host/README.md#ownership-decision-rule) first.
 
 If you are editing Cassette projection, checkpoint readiness, or final-state
 replay compare under `packages/agent/session-replay/*`, read

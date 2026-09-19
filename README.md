@@ -258,3 +258,10 @@ To report a security vulnerability, see [SECURITY.md](SECURITY.md).
 ## License
 
 Tutti is licensed under the [Apache License 2.0](LICENSE).
+
+## 测试交付入口
+
+- [行为 / 集成测试](integration-tests/README.md)：场景、夹具与执行入口。
+- [性能测试 / Benchmark](benchmarks/README.md)：负载、指标与对比约定。
+
+测试源码随功能交付；是否已运行、是否满足性能预算需分别说明。

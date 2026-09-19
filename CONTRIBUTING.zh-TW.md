@@ -86,7 +86,7 @@ pnpm check:full
 
 ## 儲存庫規則
 
-- 業務邏輯歸屬 `services/tuttid`
+- daemon 產品邏輯歸屬 `services/tuttid`，provider-neutral agent 生命週期歸屬 `packages/agent/host`
 - UI 與桌面整合歸屬 `apps/desktop`
 - 只有存在真實共用邊界時，程式碼才應進入 `packages/`
 - 業務程式碼檔案應保持在 `800` 行以內；超過即為重構訊號
@@ -130,7 +130,7 @@ git commit -s -m "feat(scope): add something"
 
 ## Pull Request 流程
 
-1. Fork 儲存庫並從 `main` 建立分支。建議的分支命名：`feat/...`、`fix/...`、`docs/...`
+1. Fork 儲存庫並從 `dintal-dock` 建立分支。建議的分支命名：`feat/...`、`fix/...`、`docs/...`
 2. 完成你的變更；每個 PR 只聚焦一件事
 3. 送出 PR，清楚描述動機與變更內容
 4. CI 會根據變更檔案執行相關的 TypeScript、Go、套件和工具檢查；所有選取的檢查必須通過
@@ -190,3 +190,32 @@ flowchart TB
 向 Tutti 提交貢獻，即表示你同意你的貢獻以 [Apache License 2.0](LICENSE) 授權釋出。
 
 > 翻譯說明：本文件與英文版內容同步，如有出入，以[英文版](CONTRIBUTING.md)為準。
+
+## 功能與缺陷交付 SOP
+
+1. 明確目標、非目標、約束、使用者旅程和驗收標準（Intent）。缺陷記錄重現條件、預期與實際行為。
+2. 透過 [AGENTS](AGENTS.md) 與 [STYLE](STYLE.md) 定位職責和適用規範（Policy）。變更聚焦目前任務，保留無關未提交變更，依功能邊界準備提交。
+3. 隨實作交付行為 / 整合測試，包括關鍵失敗與恢復路徑；缺陷修復配套捕捉原問題的回歸案例。
+4. 效能敏感路徑交付 benchmark，明確負載、並行量、計時邊界、指標和比較條件；不適用時說明原因。
+5. 按 [Validation Selection](docs/conventions/testing.md#validation-selection) 選擇檢查。如實說明通過、失敗、略過與未執行項目；缺少可比較基準或預算時不宣稱效能達標。
+6. 更新 current / next、決定與原因、剩餘阻礙（State），關聯測試、重現與執行結果（Evidence），遵循[知識模型](docs/README.md#knowledge-model)。
+
+根 `integration-tests/` 管理跨模組行為情境，根 `benchmarks/` 管理效能情境和負載。單元測試與實作相鄰；依賴套件私有成員或專屬夾具的既有測試保留套件內實作，由根目錄登記，不為搬移測試擴大正式 API。
+
+行為測試斷言可觀察結果；benchmark 保留正確性斷言並在可比較環境重複取樣。可重用測試和夾具隨原始碼交付；執行證據標明版本、環境、命令與結果，原始輸出關聯任務 / CI 產物，依知識模型選擇需要保留的證據。
+
+## 可執行流程與發布交接
+
+- `bash integration-tests/run.sh --list`：選擇行為套件。
+- `bash benchmarks/run.sh --list`：選擇效能套件。
+- `pnpm check:changed`：變更範圍驗證；`pnpm check:full`：完整驗證。選擇與重試細節由 [Testing](docs/conventions/testing.md) 維護。
+- Git hooks：[Local Git Hooks](docs/conventions/local-git-hooks.md)；靜態分析：[Static Analysis](docs/conventions/static-analysis.md)。
+- Worker 派遣：[DeepSeek workers](docs/conventions/deepseek-workers.md)。
+
+既有腳本、套件命令和 hooks 是可執行 SOP，修改時同步文件，不增加平行包裝。新增執行階段 / 環境變數約定寫入所屬規範；HTTP 契約變更先改 `services/tuttid/api/openapi/tuttid.v1.yaml` 並遵循 [API contracts](docs/conventions/api-contracts.md)。
+
+開發分支與獲准推送的預設目標為 `dintal-dock` / `origin/dintal-dock`，使用者另行指定時依其要求。push、PR、rebase 和發布依任務授權執行。使用者要求建立的 PR 採 ready-for-review 狀態、英文標題和中文描述；建立或更新後讀回草稿狀態、標題、描述編碼、head commit 與 CI 狀態。
+
+解決衝突前先理解雙方意圖，涉及職責邊界的內容手動合併；沒有明確要求時不整側覆蓋。確認無未解決路徑，並按合併後的行為選擇檢查。
+
+使用者可見變化透過所屬發布流程更新 release notes / changelog：[Desktop releases](docs/conventions/desktop-release.md) 或 [npm package releases](docs/conventions/npm-package-release.md)。沿用既有版本、tag 和評審門禁，不另建一套發布流程。

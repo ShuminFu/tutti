@@ -17,6 +17,12 @@ effect value. Runtime readers treat version zero as a legacy snapshot, mapping
 its intensity to effect and using balanced speed (`50`). This is an upgrade
 read path, not support for connecting a new client to an older daemon.
 
+## Ownership decision rule
+
+Lifecycle semantics (when a Session, Turn, Goal or runtime operation is created, can be sent, becomes terminal or recovers) belong to this package. Transport, DTO, query, presentation and product-policy translation belong to adapters. `services/tuttid/service/agent` delegates lifecycle commands through `ApplicationHost()`; other consumers must use the same Host contract.
+
+New lifecycle semantics first gain a scenario in `conformance/` against the Host contract. If another Host consumer needs the capability, extend the Host API instead of reimplementing orchestration in the adapter. `pnpm check:agent-host-boundary` protects this boundary.
+
 The module owns:
 
 - lifecycle command and runtime observation types;

@@ -44,7 +44,7 @@ Current examples include:
 - `capture-electron-trace.mjs` for recording desktop Electron performance
   traces through CDP stream mode without opening the DevTools Performance export
   UI
-- `run-agent-gui-performance.mjs` for starting an isolated Desktop from a
+- [`benchmarks/agent-gui/run-agent-gui-performance.mjs`](../../benchmarks/agent-gui/run-agent-gui-performance.mjs) for starting an isolated Desktop from a
   consistent backup of the developer database, running a selected AgentGUI or
   window interaction, capturing its exact trace window, and generating
   report-only JSON and Markdown summaries. It reuses a fresh production
@@ -165,7 +165,7 @@ not runtime stack attribution.
 
 `analyze-electron-trace.mjs` is marker- and scenario-neutral. Interactive
 automation lives in scenario modules registered by
-`agent-gui-performance-scenarios.mjs`; each owns preparation, execution,
+`benchmarks/agent-gui/agent-gui-performance-scenarios.mjs`; each owns preparation, execution,
 milestones, completion, and assertions. New scenarios should reuse the runner
 and analyzer through that boundary. Native close/reopen is intentionally not
 mixed into the renderer-marked native-window scenario because it destroys the

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { evaluate, withTimeout } from "./agent-gui-performance-helpers.mjs";
+import {
+  evaluate,
+  withTimeout
+} from "../../benchmarks/agent-gui/agent-gui-performance-helpers.mjs";
 
 test("withTimeout rejects when the promise never settles", async () => {
   await assert.rejects(

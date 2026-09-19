@@ -21,17 +21,17 @@ import {
   resolveBrowserWebSocketUrl,
   resolvePageWebSocketUrl,
   writeStreamToFile
-} from "./capture-electron-trace.mjs";
+} from "../../tools/scripts/capture-electron-trace.mjs";
 import {
   analyzeElectronTrace,
   renderElectronTraceMarkdown
-} from "./analyze-electron-trace.mjs";
-import { ensurePreparedDesktopLaunch } from "./prepared-desktop-launch.mjs";
+} from "../../tools/scripts/analyze-electron-trace.mjs";
+import { ensurePreparedDesktopLaunch } from "../../tools/scripts/prepared-desktop-launch.mjs";
 import {
   agentGuiPerformanceScenarios,
   resolveAgentGuiPerformanceScenario
 } from "./agent-gui-performance-scenarios.mjs";
-import { startAllProcessTimeProfile } from "./all-process-time-profile.mjs";
+import { startAllProcessTimeProfile } from "../../tools/scripts/all-process-time-profile.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(scriptDirectory, "..", "..");

@@ -187,6 +187,7 @@ export function isToolContractRelevant(file) {
   const normalized = normalize(file);
   return (
     normalized.startsWith("tools/scripts/") ||
+    normalized.startsWith("benchmarks/agent-gui/") ||
     normalized.startsWith("packages/workspace/app-release-tools/") ||
     normalized.startsWith("apps/desktop/scripts/") ||
     normalized.startsWith(".github/workflows/") ||

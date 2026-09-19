@@ -65,7 +65,7 @@
     "e2e:agent-gui": "node ./tools/scripts/run-agent-session-replay.mjs",
     "pretest:ts": "pnpm prewarm:electron",
     "preview:desktop": "pnpm --filter @tutti-os/desktop preview",
-    "perf:agent-gui": "node ./tools/scripts/run-agent-gui-performance.mjs",
+    "perf:agent-gui": "node ./benchmarks/agent-gui/run-agent-gui-performance.mjs",
     "prewarm:electron": "node ./tools/scripts/prewarm-electron.mjs",
     "push:checked": "node ./tools/scripts/push-checked.mjs",
     "generate:api": "node ./tools/scripts/generate-openapi.mjs",

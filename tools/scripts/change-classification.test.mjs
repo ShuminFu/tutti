@@ -74,11 +74,13 @@ test("generated source files select generated contracts before outputs change", 
   }
 });
 
-test("workflow and hook changes select repository tool contracts", () => {
+test("workflow, hook and benchmark scenario changes select repository tool contracts", () => {
   for (const file of [
     ".github/workflows/desktop-release.yml",
     ".github/workflows/publish-tutti-app-release.yml",
-    ".husky/pre-push"
+    ".husky/pre-push",
+    "benchmarks/agent-gui/agent-gui-performance-scenarios.mjs",
+    "benchmarks/agent-gui/fixtures/agent-gui-performance/cursor-agent"
   ]) {
     const classification = classifyChangedFiles([file], {
       releasePackages

@@ -87,7 +87,7 @@ pnpm check:full
 
 ## Repository Rules
 
-- Business logic belongs in `services/tuttid`
+- Daemon product logic belongs in `services/tuttid`; provider-neutral agent lifecycle belongs in `packages/agent/host`
 - UI and desktop integration belong in `apps/desktop`
 - Code should move into `packages/` only when there is a real shared boundary
 - Business-code files should stay at or below `800` lines; crossing the limit is a refactoring signal
@@ -131,7 +131,7 @@ This appends a `Signed-off-by: Your Name <your@email>` line to the commit messag
 
 ## Pull Request Workflow
 
-1. Fork the repository and create a branch from `main`. Suggested branch naming: `feat/...`, `fix/...`, `docs/...`
+1. Fork the repository and create a branch from `dintal-dock`. Suggested branch naming: `feat/...`, `fix/...`, `docs/...`
 2. Make your changes; keep each PR focused on a single concern
 3. Open a PR with a clear description of the motivation and changes
 4. CI classifies the changed files and runs the relevant TypeScript, Go, package, and tooling checks; all selected checks must pass
@@ -189,3 +189,32 @@ flowchart TB
 ## License
 
 By contributing to Tutti, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).
+
+## Feature and defect delivery SOP
+
+1. Define goals, non-goals, constraints, user journeys and acceptance criteria (Intent). For a defect, capture reproduction conditions and expected versus observed behavior.
+2. Locate ownership and applicable rules through [AGENTS](AGENTS.md) and [STYLE](STYLE.md) (Policy). Keep changes focused, preserve unrelated uncommitted work, and prepare commits by functional boundary.
+3. Ship behavioral/integration tests with the implementation, including critical failure and recovery paths. Bug fixes include regression coverage for the original failure.
+4. Ship benchmarks for performance-sensitive paths, specifying workload, concurrency, timing boundaries, metrics and comparison conditions. Explain when performance coverage is not applicable.
+5. Select checks using [Validation Selection](docs/conventions/testing.md#validation-selection). Report actual passes, failures, skips and unrun checks; performance without a comparable baseline or budget is not a pass verdict.
+6. Update current/next state, decisions and reasons, and remaining blockers (State). Link test, reproducer and execution results (Evidence), following [the knowledge model](docs/README.md#knowledge-model).
+
+Root `integration-tests/` owns cross-module behavioral scenarios; root `benchmarks/` owns performance scenarios and workloads. Unit tests remain adjacent to implementation. Existing tests requiring private package symbols or package-specific fixtures stay in-package and are indexed by the root runners; do not expand production APIs solely to move tests.
+
+Behavioral tests assert observable results; benchmarks retain correctness assertions and compare repeated samples under equivalent conditions. Reusable tests and fixtures ship with source; execution evidence identifies the revision, environment, command and result. Use linked issue/CI artifacts for raw output and retain selected evidence according to the knowledge model.
+
+## Executable workflows and release handoff
+
+- `bash integration-tests/run.sh --list`: select a behavioral suite.
+- `bash benchmarks/run.sh --list`: select a performance suite.
+- `pnpm check:changed`: changed-aware validation; `pnpm check:full`: full validation. Selection and retry details have one owner: [Testing](docs/conventions/testing.md).
+- Git hooks: [Local Git Hooks](docs/conventions/local-git-hooks.md); analysis configuration: [Static Analysis](docs/conventions/static-analysis.md).
+- Worker orchestration: [DeepSeek workers](docs/conventions/deepseek-workers.md).
+
+Existing scripts, package commands and hooks are the executable SOP; keep their documentation aligned instead of creating a second wrapper layer. Document new runtime/env overrides in their owning convention. HTTP contract changes start with `services/tuttid/api/openapi/tuttid.v1.yaml` and follow [API contracts](docs/conventions/api-contracts.md).
+
+The development branch and default authorized push target are `dintal-dock` / `origin/dintal-dock`, unless explicitly specified otherwise. Push, PR, rebase and release actions follow the task's authorization. User-requested PRs are ready for review, with an English title and Chinese description; read back draft state, title, description encoding, head commit and CI status after creation or updates.
+
+For conflict resolution, inspect both intents and manually resolve ownership-sensitive changes; do not replace one side wholesale without an explicit request. Confirm no unresolved paths remain and select checks for the resolved behavior.
+
+User-visible changes update release notes/changelog through the owning release procedure: [Desktop releases](docs/conventions/desktop-release.md) or [npm package releases](docs/conventions/npm-package-release.md). Retain existing version/tag and review gates rather than adding parallel release instructions here.

@@ -43,3 +43,5 @@ use (
 	./packages/agent/store-sqlite/canonical
 	./packages/appcli/core
 )
+
+use ./integration-tests

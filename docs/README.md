@@ -15,38 +15,29 @@ records. Choose the document type by the question you are trying to answer.
 | What should I do in this directory?              | The nearest `AGENTS.md`                          | Scoped routing, action rules, and required checks   |
 
 Package READMEs remain the source for a package's public usage and exports.
-When documents disagree, prefer current code and generated contracts, then the
-narrowest current architecture or convention document. Use dated records or
-Git history to recover intent, not to override current behavior.
+Code and generated contracts establish observed implementation State. Use the
+applicable Policy and Intent to decide what should change; record discrepancies
+with Evidence rather than silently treating existing behavior as the requirement.
 
-## Document Lifecycle
+## Knowledge model
 
-- `current`: describes implemented behavior and is maintained with the code
-- `accepted`: records a decision that remains in force
-- `proposed`: design work that has not been accepted or implemented
-- `active`: accepted work that is still being implemented
-- `superseded`: retained only for history and linked to its replacement
+Use these dimensions to assign ownership; they do not require four new directory trees.
 
-New specs and plans should include a visible status near the title. If a dated
-record has no status, treat its implementation state as unverified.
+| Dimension | Question                      | Contents and owner                                                                                                                                                                                                                     |
+| --------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Intent    | What do we want?              | Goals, non-goals, constraints, DoD, user journeys and acceptance criteria in the relevant requirement, spec or issue                                                                                                                   |
+| Policy    | How should work be done here? | `AGENTS.md` for top-level rules and routing; `CONTRIBUTING.md` for SOP; `STYLE.md` for style; skills, runbooks, canonical commands and hooks own their execution rules                                                                 |
+| State     | What is true now, and why?    | Current / next, decisions and reasons, rejected alternatives, relevant failed attempts, gotchas and blockers; architecture describes the implementation, ADRs record decisions, active work belongs in the existing spec/backlog entry |
+| Evidence  | How do we prove it?           | Tests, benchmarks, E2E, reproducers, logs, screenshots, recordings and validation results; reusable source and fixtures live with tests, executions link to the issue or CI artifacts                                                  |
 
-## Source-Of-Truth Rules
+Intent is not proof of implementation, Policy is not proof of execution, and observed behavior does not automatically redefine acceptance criteria. Link these dimensions through the relevant feature or issue so a criterion has evidence and a decision has a reason.
 
-- Keep `AGENTS.md` files short: routing, required checks, and high-priority
-  local instructions only.
-- Put stable requirements in `docs/conventions`.
-- Put the implemented subsystem model in `docs/architecture`.
-- Put active PRDs, proposals, designs, and implementation plans in
-  `docs/specs`; remove them after their durable result is documented.
-- Put accepted cross-cutting decisions in `docs/adr`.
-- Put reusable failure symptoms, causes, and verification steps in
-  [Troubleshooting](./conventions/troubleshooting/README.md). Git history is sufficient
-  for one-off defect journals.
-- Do not add completion reports, execution logs, or review transcripts to any
-  directory. When dated work finishes, merge what still constrains future
-  changes into the owning durable document and delete the dated file; never
-  archive it or answer a future reader with its step-by-step script.
+## Knowledge lifecycle
 
-When a plan lands, update the architecture or convention document that now
-owns the durable result. Do not make future readers reconstruct current
-behavior from the implementation plan.
+- Maintain one authoritative source per concern; other documents link to it.
+- Separate implemented, active, next and blocked State. Retain rejected alternatives and failed attempts when their reasons, conditions and evidence affect future choices; omit chat-by-chat transcripts.
+- When work lands, merge enduring goals and acceptance criteria into the maintained specification, decisions into architecture/ADRs and remaining work into the active backlog. Remove redundant execution checklists and completion reports.
+- Evidence records revision, environment, command or procedure, actual result and scope. Raw logs and media follow the linked issue/CI artifact retention policy; minimal reproducers, fixtures and selected evidence needed for future regression work may be versioned.
+- Supersede or remove stale content deliberately. Do not delete business resources, release notes or useful evidence based solely on dates, filenames or the word "report".
+
+Current architecture lives in `docs/architecture`, accepted decisions in `docs/adr`, and active Intent / next work in `docs/specs`. Reusable gotchas belong in [Troubleshooting](conventions/troubleshooting/README.md).
