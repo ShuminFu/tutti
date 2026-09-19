@@ -1,15 +1,13 @@
 package agent
 
 import (
-	"bytes"
 	"context"
-	"log/slog"
+	"github.com/tutti-os/tutti/packages/agent/runtimeprep/localskills"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
-	"time"
 )
 
 type extensionComposerProfileResolverStub struct {
@@ -55,17 +53,19 @@ description: Review any project.
 		nil,
 		map[string]any{"kind": "agent_extension", "extensionInstallationId": "gemini@1.0.1"},
 	)
-	if got := composerSkillOptionTriggers(options); !slices.Equal(got, []string{"/skill:project-review", "/skill:personal-review"}) {
+	if got := composerSkillOptionTriggers(options); !slices.Equal(got, []string{"/skill:project-review", "/personal-review", "/skill-creator"}) {
 		t.Fatalf("extension skill triggers = %#v", got)
 	}
 	for _, option := range options {
-		if option.Invocation != "textTrigger" {
+		if option.Name == "project-review" && option.Invocation != "textTrigger" {
 			t.Fatalf("extension skill invocation = %q", option.Invocation)
 		}
 	}
 }
 
 func TestDiscoverComposerSkillOptionsForExtensionHidesTuttiInjectedSkills(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", os.Getenv("HOME"))
 	tempDir := t.TempDir()
 	repoDir := filepath.Join(tempDir, "repo")
 	cwd := filepath.Join(repoDir, "packages", "app")
@@ -96,7 +96,7 @@ description: Native Hermes skill.
 		nil,
 		map[string]any{"kind": "agent_extension", "extensionInstallationId": "hermes@0.1.0"},
 	)
-	if got := composerSkillOptionTriggers(options); !slices.Equal(got, []string{"/hermes-native"}) {
+	if got := composerSkillOptionTriggers(options); !slices.Equal(got, []string{"/hermes-native", "/skill-creator"}) {
 		t.Fatalf("extension skill triggers = %#v, want native Hermes skills without Tutti-injected browser-use", got)
 	}
 }
@@ -111,12 +111,14 @@ func TestDiscoverComposerSkillOptionsCodexUsesProviderNativeTriggers(t *testing.
 	t.Setenv("USERPROFILE", homeDir)
 
 	writeSkill(t, filepath.Join(repoDir, ".codex", "skills", "architecture-review", "SKILL.md"), `---
+name: architecture-review
 description: Review architecture changes.
 ---
 
 Review repository changes.
 `)
 	writeSkill(t, filepath.Join(homeDir, ".agents", "skills", "lark-doc", "SKILL.md"), `---
+name: lark-doc
 description: >
   Work with Lark documents.
   Search and edit cloud docs.
@@ -126,23 +128,28 @@ description: >
 ---
 `)
 	writeSkill(t, filepath.Join(homeDir, ".codex", "skills", "caveman", "SKILL.md"), `---
+name: caveman
 description: >
   Ultra-compressed communication mode.
   Use when the user asks to be brief.
 ---
 `)
 	writeSkill(t, filepath.Join(homeDir, ".codex", "skills", "broken-codex", "SKILL.md"), `---
+name: broken-codex
 description: Missing closing delimiter.
 `)
 	writeSkill(t, filepath.Join(homeDir, ".codex", "skills", ".system", "hidden", "SKILL.md"), `---
+name: hidden
 description: Hidden system skill.
 ---
 `)
 	writeSkill(t, filepath.Join(codexHome, "skills", ".system", "imagegen", "SKILL.md"), `---
+name: imagegen
 description: Generate images.
 ---
 `)
 	writeSkill(t, filepath.Join(codexHome, "skills", "tutti-cli", "SKILL.md"), `---
+name: tutti-cli
 description: Internal Tutti CLI.
 ---
 `)
@@ -152,7 +159,7 @@ description: Internal Tutti CLI.
 	})
 
 	triggers := composerSkillOptionTriggers(options)
-	want := []string{"$architecture-review", "$caveman", "$lark-doc", "$imagegen"}
+	want := []string{"$architecture-review", "$caveman", "/lark-doc", "$imagegen", "/skill-creator"}
 	if !equalStringSlices(triggers, want) {
 		t.Fatalf("triggers = %#v, want %#v", triggers, want)
 	}
@@ -177,18 +184,22 @@ func TestDiscoverComposerSkillOptionsClaudeUsesSlashAndPluginNamespace(t *testin
 	t.Setenv("USERPROFILE", homeDir)
 
 	writeSkill(t, filepath.Join(repoDir, ".claude", "skills", "summarize", "SKILL.md"), `---
+name: summarize
 description: Summarize changes.
 ---
 `)
 	writeSkill(t, filepath.Join(homeDir, ".claude", "skills", "personal-review", "SKILL.md"), `---
+name: personal-review
 description: Review personal workflow.
 ---
 `)
 	writeSkill(t, filepath.Join(pluginDir, "skills", "frontend-design", "SKILL.md"), `---
+name: frontend-design
 description: Design frontend UI.
 ---
 `)
 	writeSkill(t, filepath.Join(pluginDir, "skills", "tutti-cli", "SKILL.md"), `---
+name: tutti-cli
 description: Internal Tutti CLI.
 ---
 `)
@@ -198,7 +209,7 @@ description: Internal Tutti CLI.
 	})
 
 	triggers := composerSkillOptionTriggers(options)
-	want := []string{"/summarize", "/personal-review", "/product-design:frontend-design"}
+	want := []string{"/summarize", "/personal-review", "/product-design:frontend-design", "/skill-creator"}
 	if !equalStringSlices(triggers, want) {
 		t.Fatalf("triggers = %#v, want %#v", triggers, want)
 	}
@@ -217,18 +228,22 @@ func TestDiscoverComposerSkillOptionsCursorUsesPluginDir(t *testing.T) {
 	t.Setenv("USERPROFILE", homeDir)
 
 	writeSkill(t, filepath.Join(repoDir, ".cursor", "skills", "project-skill", "SKILL.md"), `---
+name: project-skill
 description: Project Cursor skill.
 ---
 `)
 	writeSkill(t, filepath.Join(homeDir, ".cursor", "skills", "personal-skill", "SKILL.md"), `---
+name: personal-skill
 description: Personal Cursor skill.
 ---
 `)
 	writeSkill(t, filepath.Join(pluginDir, "skills", "workflow-check", "SKILL.md"), `---
+name: workflow-check
 description: Runtime Cursor plugin skill.
 ---
 `)
 	writeSkill(t, filepath.Join(pluginDir, "skills", "tutti-cli", "SKILL.md"), `---
+name: tutti-cli
 description: Internal Tutti CLI.
 ---
 `)
@@ -238,7 +253,7 @@ description: Internal Tutti CLI.
 	})
 
 	triggers := composerSkillOptionTriggers(options)
-	want := []string{"$project-skill", "$personal-skill", "$workflow-check"}
+	want := []string{"$project-skill", "$personal-skill", "$workflow-check", "/skill-creator"}
 	if !equalStringSlices(triggers, want) {
 		t.Fatalf("triggers = %#v, want %#v", triggers, want)
 	}
@@ -257,30 +272,37 @@ func TestDiscoverComposerSkillOptionsOpenCodeUsesNativeAndCompatibleRoots(t *tes
 	t.Setenv("USERPROFILE", homeDir)
 
 	writeSkill(t, filepath.Join(repoDir, ".opencode", "skills", "project-open", "SKILL.md"), `---
+name: project-open
 description: Project OpenCode skill.
 ---
 `)
 	writeSkill(t, filepath.Join(repoDir, ".claude", "skills", "project-claude", "SKILL.md"), `---
+name: project-claude
 description: Claude-compatible OpenCode skill.
 ---
 `)
 	writeSkill(t, filepath.Join(repoDir, ".agents", "skills", "project-agent", "SKILL.md"), `---
+name: project-agent
 description: Agent-compatible OpenCode skill.
 ---
 `)
 	writeSkill(t, filepath.Join(homeDir, ".config", "opencode", "skills", "personal-open", "SKILL.md"), `---
+name: personal-open
 description: Personal OpenCode skill.
 ---
 `)
 	writeSkill(t, filepath.Join(homeDir, ".claude", "skills", "personal-claude", "SKILL.md"), `---
+name: personal-claude
 description: Personal Claude-compatible skill.
 ---
 `)
 	writeSkill(t, filepath.Join(homeDir, ".agents", "skills", "personal-agent", "SKILL.md"), `---
+name: personal-agent
 description: Personal agent-compatible skill.
 ---
 `)
 	writeSkill(t, filepath.Join(customConfigDir, "opencode", "skills", "custom-config", "SKILL.md"), `---
+name: custom-config
 description: Custom OpenCode config skill.
 ---
 `)
@@ -298,6 +320,7 @@ description: Custom OpenCode config skill.
 		"/personal-agent",
 		"/personal-claude",
 		"/personal-open",
+		"/skill-creator",
 	}
 	if !equalStringSlices(triggers, want) {
 		t.Fatalf("triggers = %#v, want %#v", triggers, want)
@@ -307,44 +330,18 @@ description: Custom OpenCode config skill.
 	}
 }
 
-func TestDiscoverComposerSkillOptionsWarnsOnceForUnchangedInvalidSkill(t *testing.T) {
-	tempDir := t.TempDir()
-	homeDir := filepath.Join(tempDir, "home")
-	cwd := filepath.Join(tempDir, "repo")
-	t.Setenv("HOME", homeDir)
-	t.Setenv("USERPROFILE", homeDir)
-	skillPath := filepath.Join(homeDir, ".codex", "skills", "broken", "SKILL.md")
-	writeSkill(t, skillPath, `description: Missing frontmatter delimiter.
----
-`)
-	skillMetadataCache.mu.Lock()
-	skillMetadataCache.entries = make(map[string]skillMetadataCacheEntry)
-	skillMetadataCache.mu.Unlock()
-	var output bytes.Buffer
-	previousLogger := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
-	t.Cleanup(func() {
-		slog.SetDefault(previousLogger)
-	})
-
-	_ = discoverComposerSkillOptions("codex", cwd, nil)
-	_ = discoverComposerSkillOptions("codex", cwd, nil)
-
-	if count := strings.Count(output.String(), "skill_frontmatter_invalid"); count != 1 {
-		t.Fatalf("invalid frontmatter warnings = %d, want 1; output:\n%s", count, output.String())
+func TestSkillDiagnosticsRefreshAfterFix(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "broken", "SKILL.md")
+	writeSkill(t, path, "missing frontmatter")
+	first := localskills.Discover([]localskills.Root{{Path: root}})
+	if len(first.Diagnostics) != 1 || !strings.Contains(first.Diagnostics[0], path) {
+		t.Fatalf("diagnostics=%#v", first.Diagnostics)
 	}
-
-	writeSkill(t, skillPath, `description: Still missing frontmatter delimiter.
----
-`)
-	modTime := time.Now().Add(2 * time.Second)
-	if err := os.Chtimes(skillPath, modTime, modTime); err != nil {
-		t.Fatalf("Chtimes: %v", err)
-	}
-	_ = discoverComposerSkillOptions("codex", cwd, nil)
-
-	if count := strings.Count(output.String(), "skill_frontmatter_invalid"); count != 2 {
-		t.Fatalf("invalid frontmatter warnings after modification = %d, want 2; output:\n%s", count, output.String())
+	writeSkill(t, path, "---\nname: repaired\ndescription: fixed\n---\n")
+	next := localskills.Discover([]localskills.Root{{Path: root}})
+	if len(next.Diagnostics) != 0 || len(next.Skills) != 1 {
+		t.Fatalf("repaired=%#v", next)
 	}
 }
 

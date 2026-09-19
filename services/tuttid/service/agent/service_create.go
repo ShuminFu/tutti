@@ -713,6 +713,7 @@ func (s *Service) prepareRuntimeWithModelEndpoint(
 		AgentCapabilitiesExplicit: input.AgentCapabilitiesExplicit,
 		AgentSkills:               append([]string(nil), input.AgentSkills...),
 		AgentTools:                append([]string(nil), input.AgentTools...),
+		NativeSkillReferences:     s.nativeSkillReferences(ctx, provider, cwd),
 		ExtraSkills:               sessionSkillBundlesToProviderSkillBundles(input.ExtraSkills),
 		Connector:                 connectorContext,
 		Metadata:                  input.Metadata,

@@ -23,7 +23,11 @@ func tuttiCLIPolicyWithContext(ctx context.Context, input PrepareInput) (string,
 			return "", err
 		}
 	}
-	return tuttiRuntimePolicy(input)
+	policy, err := tuttiRuntimePolicy(input)
+	if err != nil {
+		return "", err
+	}
+	return policy + localSkillPolicy(input), nil
 }
 
 func hostAppContextPolicy(input PrepareInput) (string, error) {

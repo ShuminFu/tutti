@@ -36,7 +36,6 @@ func NewService(runtime RuntimeController, configs ...ServiceConfig) *Service {
 	}
 	service := &Service{
 		Runtime:                   runtime,
-		skillOptionsCache:         newComposerSkillOptionsCache(),
 		providerAvailabilityCache: newProviderAvailabilityCache(),
 		capabilityCatalogCache:    newComposerCapabilityCatalogCache(),
 		liveModelCache:            newComposerLiveModelCache(),

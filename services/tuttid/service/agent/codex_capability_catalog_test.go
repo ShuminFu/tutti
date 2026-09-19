@@ -94,3 +94,55 @@ func TestAppServerCatalogRequestsRejectsUnknownSet(t *testing.T) {
 		t.Fatal("appServerCatalogRequests() error = nil, want unsupported request set")
 	}
 }
+
+func TestAppServerLocalSkillsReadsOnlyEnabledInstalledPlugins(t *testing.T) {
+	var requests bytes.Buffer
+	if err := writeAppServerCapabilityListRequests(&requests, "/tmp/project", appServerCatalogRequestSetLocalSkills); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(requests.String(), "app/list") || strings.Contains(requests.String(), "mcpServerStatus/list") || !strings.Contains(requests.String(), `"cwds":["/tmp/project"]`) {
+		t.Fatal(requests.String())
+	}
+	responses := strings.Join([]string{
+		`{"id":"2","result":{"data":[]}}`,
+		`{"id":"4","result":{"marketplaces":[{"name":"local","path":"/tmp/market","plugins":[{"name":"active","installed":true,"enabled":true},{"name":"disabled","installed":true,"enabled":false},{"name":"uninstalled","installed":false,"enabled":true},{"name":"admin-disabled","installed":true,"enabled":true,"availability":"DISABLED_BY_ADMIN"}]}]}}`,
+		`{"id":"plugin-skill:0","result":{"plugin":{"summary":{"name":"active","installed":true,"enabled":true},"skills":[{"name":"review","description":"Review","enabled":true,"path":"/tmp/review/SKILL.md"},{"name":"disabled","enabled":false,"path":"/tmp/disabled/SKILL.md"},{"name":"remote","enabled":true,"path":null}]}}}`,
+	}, "\n")
+	requests.Reset()
+	options, err := readAppServerCapabilityListResponsesWithPlugins(strings.NewReader(responses), &requests, appServerCatalogRequestSetLocalSkills)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(requests.String(), `"method":"plugin/read"`) != 1 || !strings.Contains(requests.String(), `"marketplacePath":"/tmp/market"`) {
+		t.Fatal(requests.String())
+	}
+	var skills []ComposerCapabilityOption
+	for _, option := range options {
+		if option.Kind == "skill" {
+			skills = append(skills, option)
+		}
+	}
+	if len(skills) != 1 || skills[0].Name != "active:review" || skills[0].Path != "/tmp/review/SKILL.md" {
+		t.Fatalf("skills=%#v", skills)
+	}
+}
+
+func TestParseCodexPluginSkillsRejectsChangedDisabledPlugin(t *testing.T) {
+	for _, summary := range []string{`{"name":"active","installed":true,"enabled":false}`, `{"name":"other","installed":true,"enabled":true}`} {
+		raw := json.RawMessage(`{"plugin":{"summary":` + summary + `,"skills":[{"name":"review","enabled":true,"path":"/tmp/review/SKILL.md"}]}}`)
+		if got := parseCodexPluginSkillCapabilities(raw, "active"); len(got) != 0 {
+			t.Fatalf("got=%#v", got)
+		}
+	}
+}
+
+func TestAppServerLocalSkillsReportsIncompleteAndRPCFailure(t *testing.T) {
+	for _, responses := range []string{
+		`{"id":"2","result":{"data":[]}}`,
+		"{\"id\":\"2\",\"result\":{\"data\":[]}}\n{\"id\":\"4\",\"error\":{\"message\":\"unavailable\"}}",
+	} {
+		if _, err := readAppServerCapabilityListResponses(strings.NewReader(responses), appServerCatalogRequestSetLocalSkills); err == nil {
+			t.Fatal("incomplete discovery reported success")
+		}
+	}
+}

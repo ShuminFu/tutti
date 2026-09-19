@@ -84,7 +84,6 @@ type Service struct {
 	LiveModelCacheTTL              time.Duration
 	GeneratedFilesClock            func() time.Time
 	LiveModelDiscoveryDeleteDelay  time.Duration
-	skillOptionsCache              *composerSkillOptionsCache
 	providerAvailabilityCache      *providerAvailabilityCache
 	capabilityCatalogCache         *composerCapabilityCatalogCache
 	liveModelCache                 *composerLiveModelCache

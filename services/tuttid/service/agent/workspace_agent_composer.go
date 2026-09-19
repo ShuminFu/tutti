@@ -1,6 +1,9 @@
 package agent
 
-import "strings"
+import (
+	"github.com/tutti-os/tutti/packages/agent/runtimeprep/localskills"
+	"strings"
+)
 
 func cloneBoolPointer(value *bool) *bool {
 	if value == nil {
@@ -15,10 +18,6 @@ func filterWorkspaceAgentComposerSkills(options []ComposerSkillOption, selected 
 	if !capabilitiesExplicit && len(selected) == 0 {
 		return options
 	}
-	wanted := make(map[string]struct{}, len(selected))
-	for _, value := range selected {
-		wanted[strings.ToLower(strings.TrimSpace(value))] = struct{}{}
-	}
 	result := make([]ComposerSkillOption, 0, len(options))
 	for _, option := range options {
 		// Daemon/system injected entries are part of the trusted runtime profile
@@ -27,7 +26,7 @@ func filterWorkspaceAgentComposerSkills(options []ComposerSkillOption, selected 
 			result = append(result, option)
 			continue
 		}
-		if workspaceAgentComposerSkillSelected(option, wanted) {
+		if workspaceAgentComposerSkillSelected(option, selected) {
 			result = append(result, option)
 		}
 	}
@@ -83,15 +82,28 @@ func workspaceAgentComposerCapabilitySelected(option ComposerCapabilityOption, w
 	return false
 }
 
-func workspaceAgentComposerSkillSelected(option ComposerSkillOption, wanted map[string]struct{}) bool {
-	for _, candidate := range []string{option.Name, option.Trigger, option.Path} {
-		candidate = strings.ToLower(strings.TrimSpace(candidate))
-		if candidate == "" {
-			continue
-		}
-		if _, ok := wanted[candidate]; ok {
-			return true
+func workspaceAgentComposerSkillSelected(option ComposerSkillOption, selected []string) bool {
+	name, plugin := option.Name, option.PluginName
+	if prefix, suffix, ok := strings.Cut(name, ":"); ok {
+		plugin, name = prefix, suffix
+	}
+	// Use the runtime selector verbatim, including namespace, alias and
+	// case-sensitive path handling. The menu must never widen this selection.
+	catalog := localskills.Catalog{Skills: []localskills.Skill{{Name: name, PluginName: plugin, Path: option.Path, UserInvocable: true}}}
+	return len(localskills.Filter(catalog, selected, true).Skills) != 0
+}
+
+// Native plugin catalogs are additional skill sources and obey the same custom
+// agent selection as filesystem skills, rather than bypassing it as tools.
+func filterWorkspaceAgentCapabilitySkills(options []ComposerCapabilityOption, selected []string, explicit bool) []ComposerCapabilityOption {
+	if !explicit && len(selected) == 0 {
+		return options
+	}
+	result := make([]ComposerCapabilityOption, 0, len(options))
+	for _, option := range options {
+		if option.Kind != "skill" || option.Path == "builtin:skill-creator" || workspaceAgentComposerSkillSelected(ComposerSkillOption{Name: option.Name, PluginName: option.PluginName, Trigger: option.Trigger, Path: option.Path}, selected) {
+			result = append(result, option)
 		}
 	}
-	return false
+	return result
 }

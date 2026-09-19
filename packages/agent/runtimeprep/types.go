@@ -2,6 +2,7 @@ package runtimeprep
 
 import (
 	"context"
+	"github.com/tutti-os/tutti/packages/agent/runtimeprep/localskills"
 )
 
 type Preparer interface {
@@ -55,6 +56,7 @@ type PrepareInput struct {
 	AgentCapabilitiesExplicit bool
 	AgentSkills               []string
 	AgentTools                []string
+	NativeSkillReferences     []localskills.Skill
 	ExtraSkills               []ProviderSkillBundle
 	// ConnectorRoutingHints is a non-secret snapshot of Connector routes that
 	// are active when this provider runtime is prepared. Connector keys and

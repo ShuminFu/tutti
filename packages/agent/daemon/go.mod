@@ -7,6 +7,7 @@ toolchain go1.24.5
 require (
 	github.com/atombender/go-jsonschema v0.20.0
 	github.com/tutti-os/tutti/packages/agent/host v0.0.0
+	github.com/tutti-os/tutti/packages/agent/runtimeprep v0.0.0
 	github.com/tutti-os/tutti/packages/agent/session-replay v0.0.0
 	github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical v0.0.0
 	golang.org/x/net v0.50.0
@@ -29,6 +30,7 @@ require (
 	github.com/tutti-os/tutti/packages/agent/activity-replication v0.0.0 // indirect
 	github.com/tutti-os/tutti/packages/agent/store-sqlite v0.0.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20260120221211-b8f7ae30c516
@@ -42,3 +44,5 @@ replace github.com/tutti-os/tutti/packages/agent/activity-replication => ../acti
 replace github.com/tutti-os/tutti/packages/agent/store-sqlite => ../store-sqlite
 
 replace github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical => ../store-sqlite/canonical
+
+replace github.com/tutti-os/tutti/packages/agent/runtimeprep => ../runtimeprep

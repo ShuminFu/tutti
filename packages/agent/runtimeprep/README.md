@@ -252,3 +252,55 @@ Set `TUTTI_RUNTIME_INSTRUCTIONS_CWD_WRITE=off` to skip the cwd
 `AGENTS.md` / `CLAUDE.md` managed-block write from `InstructionFilePreparer`
 and extension runtime instructions. Skills and other prepare branches stay
 unchanged. Unset or any other value keeps the current cwd write.
+
+## Standard local skills
+
+`localskills` owns discovery and YAML metadata parsing for all local providers.
+The composer and provider prompt projection consume the same catalog. Sources
+are ordered as follows (first valid identity wins):
+
+1. `.agents/skills/<name>/SKILL.md`, then `.agents/<name>/SKILL.md` at the cwd,
+   followed by each ancestor up to and including the nearest `.git` root.
+   Worktree `.git` files count as roots; outside Git, traversal ends at the
+   filesystem root.
+2. The same two layouts under the user's Home.
+3. Provider-native skill sources, including Claude `.claude/skills`; these keep
+   their native invocation semantics. Codex plugin sources come from its native
+   `skills/list`, `plugin/list` and `plugin/read`, including enabled state and installed version selection.
+4. Built-in skills. `skill-creator` is available without installation and writes
+   new project skills to `.agents/skills`; global output requires user intent.
+
+The standard root tiers take precedence over native sources even when the
+native source is closer to cwd. Plugin identities retain their namespace.
+Symlinked source files are deduplicated by physical path, while scripts and
+references continue to resolve against the selected skill directory. No user
+skills are copied, migrated, or deleted. Built-in runtime materializations and
+Claude native reference entries are session-owned delivery artifacts, not
+additional user skill roots.
+
+Metadata requires nonempty string `name` and `description`. Names permit
+letters, digits, dots, underscores and hyphens (first character alphanumeric,
+maximum 64 characters). Invalid YAML, duplicate keys, unreadable files and name
+conflicts produce source-qualified diagnostics. `user-invocable: false` hides
+explicit selection; `disable-model-invocation: true` and
+`agents/openai.yaml`'s `policy.allow_implicit_invocation: false` suppress automatic
+selection. Custom Agent skill selections also apply to native plugin sources.
+
+A leading `/name` or `$name`, or an exact structured skill selection, resolves
+against the current catalog before provider validation and dispatch. The
+provider receives source-reading instructions; canonical/display prompt data
+stays intact. Unknown native commands, inline prose and code examples are not
+rewritten. Deleted, renamed or mismatched standard selections fail visibly.
+
+Each preparation emits `TUTTI_LOCAL_SKILLS_FILE` (a session catalog) and
+`TUTTI_LOCAL_SKILLS_SELECTION_FILE` (the selection and native source snapshot).
+Both values are file paths so large catalogs do not overflow Windows environment
+limits. These are internal launch metadata, not user configuration overrides.
+The session catalog refreshes before dispatch. DeepSeek projects it into the
+registry shared by child agents; native plugin sources refresh at new/resumed
+session preparation. Claude receives native reference skills plus the common
+system-prompt index. Codex receives the index in its runtime instructions,
+including plugin skill references in isolated/fast-start sessions, without
+copying personal credentials or enabling plugin MCP services. Agents forward
+selected skill sources to native child tasks. New sessions refresh automatic
+native-child guidance; menu refresh and explicit invocation reread local files.

@@ -160,6 +160,14 @@ func (p *DefaultPreparer) Prepare(ctx context.Context, input PrepareInput) (Prep
 	if instructionsPath != "" {
 		result.Env = append(result.Env, runtimeInstructionsFileEnv+"="+instructionsPath)
 	}
+	localSkillEnv, err := prepareLocalSkillCatalog(input, runtimeRoot)
+	if err != nil {
+		if result.Cleanup != nil {
+			_ = result.Cleanup(ctx)
+		}
+		return PreparedRuntime{}, err
+	}
+	result.Env = append(result.Env, localSkillEnv...)
 	result.Env = append(defaultRuntimeEnv(input, p.StateDir), result.Env...)
 	logRuntimePrepareTrace("runtime_prepare.env_prepared", input, map[string]any{
 		"env_count": len(result.Env),

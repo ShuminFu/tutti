@@ -107,7 +107,11 @@ func (c *Controller) Exec(ctx context.Context, input ExecInput) (result ExecResu
 	if len(content) == 0 {
 		return ExecResult{}, fmt.Errorf("prompt is required")
 	}
-	providerContent := projectRuntimePromptContent(content)
+	localContent, err := projectLocalSkillPrompt(session, content, true)
+	if err != nil {
+		return ExecResult{}, err
+	}
+	providerContent := projectRuntimePromptContent(localContent)
 	displayPrompt := strings.TrimSpace(input.DisplayPrompt)
 	ctx = withSubmittedPrompt(ctx, content, displayPrompt)
 	if promptAdapter, ok := adapter.(PromptContentAdapter); ok {

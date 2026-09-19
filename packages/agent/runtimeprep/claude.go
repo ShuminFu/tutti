@@ -115,7 +115,7 @@ func installClaudeTuttiPlugin(pluginDir string, input PrepareInput) error {
 	if _, err := installProviderNativeSkills(filepath.Join(pluginDir, "skills"), input); err != nil {
 		return fmt.Errorf("install claude tutti skill plugin: %w", err)
 	}
-	return nil
+	return installLocalClaudeSkillReferences(filepath.Join(pluginDir, "skills"), input)
 }
 
 // claudeCodeExecutableEnv selects which claude binary the sidecar should

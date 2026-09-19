@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,8 +20,9 @@ const codexAppServerCapabilityListTimeout = 8 * time.Second
 type appServerCatalogRequestSet string
 
 const (
-	appServerCatalogRequestSetCodex      appServerCatalogRequestSet = "codex"
-	appServerCatalogRequestSetSkillsOnly appServerCatalogRequestSet = "skills_only"
+	appServerCatalogRequestSetCodex       appServerCatalogRequestSet = "codex"
+	appServerCatalogRequestSetSkillsOnly  appServerCatalogRequestSet = "skills_only"
+	appServerCatalogRequestSetLocalSkills appServerCatalogRequestSet = "local_skills"
 )
 
 type CodexCLICapabilityLister struct {
@@ -66,10 +69,20 @@ func discoverComposerCapabilityOptions(
 		return fallback, nil
 	}
 	options, err := lister.List(ctx, cwd)
+	var diagnostics []string
 	if err != nil {
-		return fallback, []string{err.Error()}
+		diagnostics = append(diagnostics, err.Error())
 	}
-	return mergeComposerCapabilityOptions(fallback, options), nil
+	// Native enabled/disabled status wins for provider-owned entries. Standard
+	// skills remain authoritative when a native scanner also reports their path.
+	standard := make([]ComposerCapabilityOption, 0)
+	for _, option := range fallback {
+		path := "/" + filepath.ToSlash(option.Path)
+		if strings.Contains(path, "/.agents/") || strings.HasPrefix(option.Path, "builtin:") {
+			standard = append(standard, option)
+		}
+	}
+	return mergeComposerCapabilityOptions(standard, mergeComposerCapabilityOptions(options, fallback)), diagnostics
 }
 
 func composerCapabilityCatalogLister(profile composerProfile) (CodexCLICapabilityLister, bool, error) {
@@ -133,19 +146,19 @@ func (l CodexCLICapabilityLister) List(ctx context.Context, cwd string) ([]Compo
 		}
 		return nil, err
 	}
-	options, err := readAppServerCapabilityListResponses(process.stdout, l.RequestSet)
+	options, err := readAppServerCapabilityListResponsesWithPlugins(process.stdout, process.stdin, l.RequestSet)
 	processErr := processCtx.Err()
 	_ = process.stop(cancel)
 	if err == nil {
 		return options, nil
 	}
 	if processErr != nil {
-		return nil, fmt.Errorf("codex app-server capability discovery timed out: %w", processErr)
+		return options, fmt.Errorf("codex app-server capability discovery timed out: %w", processErr)
 	}
 	if stderr := strings.TrimSpace(process.stderr.String()); stderr != "" {
-		return nil, fmt.Errorf("%w: %s", err, stderr)
+		return options, fmt.Errorf("%w: %s", err, stderr)
 	}
-	return nil, err
+	return options, err
 }
 
 func writeAppServerCapabilityListRequests(
@@ -214,6 +227,10 @@ func appServerCatalogRequests(
 	switch requestSet {
 	case appServerCatalogRequestSetSkillsOnly:
 		return requests, pending, nil
+	case appServerCatalogRequestSetLocalSkills:
+		requests = append(requests, map[string]any{"id": "4", "method": "plugin/list", "params": map[string]any{"cwds": cwds}})
+		pending["4"] = "plugin/list"
+		return requests, pending, nil
 	case appServerCatalogRequestSetCodex:
 	default:
 		return nil, nil, fmt.Errorf("unsupported app-server catalog request set %q", requestSet)
@@ -231,7 +248,7 @@ func appServerCatalogRequests(
 			"id":     "4",
 			"method": "plugin/list",
 			"params": map[string]any{
-				"limit": 200,
+				"cwds": cwds,
 			},
 		},
 		map[string]any{
@@ -249,62 +266,90 @@ func appServerCatalogRequests(
 	return requests, pending, nil
 }
 
-func readAppServerCapabilityListResponses(
-	stdout io.Reader,
-	requestSet appServerCatalogRequestSet,
-) ([]ComposerCapabilityOption, error) {
-	_, pendingMethods, err := appServerCatalogRequests("", requestSet)
+func readAppServerCapabilityListResponses(stdout io.Reader, requestSet appServerCatalogRequestSet) ([]ComposerCapabilityOption, error) {
+	return readAppServerCapabilityListResponsesWithPlugins(stdout, nil, requestSet)
+}
+
+func readAppServerCapabilityListResponsesWithPlugins(stdout io.Reader, stdin io.Writer, requestSet appServerCatalogRequestSet) ([]ComposerCapabilityOption, error) {
+	_, pending, err := appServerCatalogRequests("", requestSet)
 	if err != nil {
 		return nil, err
 	}
-	pending := make(map[string]struct{}, len(pendingMethods))
-	for id := range pendingMethods {
-		pending[id] = struct{}{}
-	}
+	pluginReads := map[string]string{}
+	var failures []error
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), codexModelListMaxLineBytes)
 	options := make([]ComposerCapabilityOption, 0)
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
 		var payload map[string]json.RawMessage
-		if json.Unmarshal([]byte(line), &payload) != nil {
+		if json.Unmarshal(scanner.Bytes(), &payload) != nil {
 			continue
 		}
 		id := codexRPCIDString(payload["id"])
-		if _, ok := pending[id]; !ok {
+		method, ok := pending[id]
+		if !ok {
 			continue
 		}
 		delete(pending, id)
 		if rawError, ok := payload["error"]; ok && string(rawError) != "null" {
-			if len(pending) == 0 {
-				return dedupeComposerCapabilityOptions(options), nil
+			failures = append(failures, fmt.Errorf("codex %s: %s", method, rawError))
+		} else {
+			switch id {
+			case "2":
+				options = append(options, parseCodexSkillCapabilities(payload["result"])...)
+			case "3":
+				options = append(options, parseCodexAppCapabilities(payload["result"])...)
+			case "4":
+				options = append(options, parseCodexPluginCapabilities(payload["result"])...)
+				if stdin != nil {
+					var listing codexPluginListing
+					if err := json.Unmarshal(payload["result"], &listing); err != nil {
+						failures = append(failures, fmt.Errorf("decode plugin/list: %w", err))
+						break
+					}
+					for _, failure := range listing.MarketplaceLoadErrors {
+						failures = append(failures, fmt.Errorf("plugin marketplace %s: %s", failure.MarketplacePath, failure.Message))
+					}
+					for _, marketplace := range listing.Marketplaces {
+						for _, plugin := range marketplace.Plugins {
+							if !codexPluginEnabled(plugin) {
+								continue
+							}
+							name := codexTextValue(plugin, "name")
+							readID := fmt.Sprintf("plugin-skill:%d", len(pluginReads))
+							params := map[string]any{"pluginName": name}
+							if marketplace.Path != "" {
+								params["marketplacePath"] = marketplace.Path
+							} else {
+								params["remoteMarketplaceName"] = marketplace.Name
+							}
+							if err := json.NewEncoder(stdin).Encode(map[string]any{"id": readID, "method": "plugin/read", "params": params}); err != nil {
+								return options, fmt.Errorf("write plugin/read: %w", err)
+							}
+							pluginReads[readID] = name
+							pending[readID] = "plugin/read"
+						}
+					}
+				}
+			case "5":
+				options = append(options, parseCodexMCPCapabilities(payload["result"])...)
+			default:
+				if name, ok := pluginReads[id]; ok {
+					options = append(options, parseCodexPluginSkillCapabilities(payload["result"], name)...)
+				}
 			}
-			continue
-		}
-		switch id {
-		case "2":
-			options = append(options, parseCodexSkillCapabilities(payload["result"])...)
-		case "3":
-			options = append(options, parseCodexAppCapabilities(payload["result"])...)
-		case "4":
-			options = append(options, parseCodexPluginCapabilities(payload["result"])...)
-		case "5":
-			options = append(options, parseCodexMCPCapabilities(payload["result"])...)
 		}
 		if len(pending) == 0 {
-			return dedupeComposerCapabilityOptions(options), nil
+			return dedupeComposerCapabilityOptions(options), errors.Join(failures...)
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read codex app-server stdout: %w", err)
+		failures = append(failures, fmt.Errorf("read codex app-server stdout: %w", err))
 	}
-	if len(options) > 0 {
-		return dedupeComposerCapabilityOptions(options), nil
+	if len(pending) > 0 {
+		failures = append(failures, fmt.Errorf("codex app-server exited with %d capability responses pending", len(pending)))
 	}
-	return nil, fmt.Errorf("codex app-server exited before capability responses")
+	return dedupeComposerCapabilityOptions(options), errors.Join(failures...)
 }
 
 func codexRPCIDString(raw json.RawMessage) string {
@@ -397,30 +442,70 @@ func parseCodexAppCapabilities(raw json.RawMessage) []ComposerCapabilityOption {
 	return options
 }
 
+type codexPluginListing struct {
+	Marketplaces []struct {
+		Name    string           `json:"name"`
+		Path    string           `json:"path"`
+		Plugins []map[string]any `json:"plugins"`
+	} `json:"marketplaces"`
+	MarketplaceLoadErrors []struct {
+		MarketplacePath string `json:"marketplacePath"`
+		Message         string `json:"message"`
+	} `json:"marketplaceLoadErrors"`
+}
+
+func codexPluginEnabled(plugin map[string]any) bool {
+	installed, _ := codexBoolValue(plugin, "installed")
+	enabled, _ := codexBoolValue(plugin, "enabled")
+	return installed && enabled && codexTextValue(plugin, "availability") != "DISABLED_BY_ADMIN" && codexTextValue(plugin, "name") != ""
+}
+
 func parseCodexPluginCapabilities(raw json.RawMessage) []ComposerCapabilityOption {
-	var result struct {
-		Data []map[string]any `json:"data"`
-	}
+	var result codexPluginListing
 	if json.Unmarshal(raw, &result) != nil {
 		return nil
 	}
-	options := make([]ComposerCapabilityOption, 0, len(result.Data))
-	for _, plugin := range result.Data {
-		name := firstNonEmptyString(codexTextValue(plugin, "name"), codexTextValue(plugin, "id"), codexTextValue(plugin, "pluginName"))
-		if name == "" {
+	options := make([]ComposerCapabilityOption, 0)
+	for _, marketplace := range result.Marketplaces {
+		for _, plugin := range marketplace.Plugins {
+			name := codexTextValue(plugin, "name")
+			if name == "" {
+				continue
+			}
+			status := "disabled"
+			if codexPluginEnabled(plugin) {
+				status = "available"
+			}
+			options = append(options, ComposerCapabilityOption{
+				ID: "plugin:" + firstNonEmptyString(codexTextValue(plugin, "id"), name), Kind: "plugin", Name: name, Label: name,
+				Description: codexTextValue(plugin, "description"), Status: status, Source: codexPluginSource(plugin), PluginName: name, Invocation: "none",
+			})
+		}
+	}
+	return options
+}
+
+func parseCodexPluginSkillCapabilities(raw json.RawMessage, expectedName string) []ComposerCapabilityOption {
+	var result struct {
+		Plugin struct {
+			Summary map[string]any   `json:"summary"`
+			Skills  []map[string]any `json:"skills"`
+		} `json:"plugin"`
+	}
+	if json.Unmarshal(raw, &result) != nil || !codexPluginEnabled(result.Plugin.Summary) || codexTextValue(result.Plugin.Summary, "name") != expectedName {
+		return nil
+	}
+	options := make([]ComposerCapabilityOption, 0)
+	for _, skill := range result.Plugin.Skills {
+		enabled, _ := codexBoolValue(skill, "enabled")
+		name, path := codexTextValue(skill, "name"), codexTextValue(skill, "path")
+		if !enabled || name == "" || !filepath.IsAbs(path) {
 			continue
 		}
-		label := firstNonEmptyString(codexTextValue(plugin, "displayName"), codexTextValue(plugin, "title"), name)
+		identity := expectedName + ":" + name
 		options = append(options, ComposerCapabilityOption{
-			ID:          "plugin:" + name,
-			Kind:        "plugin",
-			Name:        name,
-			Label:       label,
-			Description: codexTextValue(plugin, "description"),
-			Status:      "available",
-			Source:      codexPluginSource(plugin),
-			PluginName:  name,
-			Invocation:  "none",
+			ID: "skill:" + identity, Kind: "skill", Name: identity, Label: identity, Description: codexTextValue(skill, "description"),
+			Status: "available", Trigger: "$" + identity, Path: path, PluginName: expectedName, Invocation: "promptItem",
 		})
 	}
 	return options

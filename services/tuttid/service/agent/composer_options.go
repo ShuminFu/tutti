@@ -7,6 +7,7 @@ import (
 
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	agenthost "github.com/tutti-os/tutti/packages/agent/host"
+	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	"github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
 	modelplanbiz "github.com/tutti-os/tutti/services/tuttid/biz/modelplan"
 	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
@@ -295,6 +296,7 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 	capabilityErrors := []string(nil)
 	if composerOptionsIncludeCapabilityCatalog(input) {
 		capabilityCatalog, capabilityErrors = s.listComposerCapabilityOptions(ctx, provider, input.Cwd, skills)
+		capabilityCatalog = filterWorkspaceAgentCapabilitySkills(capabilityCatalog, launchInput.AgentSkills, launchInput.AgentCapabilitiesExplicit)
 		connectorsVisible, err := s.connectorCatalogVisible(ctx)
 		if err != nil {
 			capabilityErrors = append(capabilityErrors, "load connector visibility: "+err.Error())
@@ -403,6 +405,7 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		}
 	}
 	runtimeContext["capabilityCatalog"] = composerCapabilityOptionsRuntimeContext(capabilityCatalog)
+	capabilityErrors = append(capabilityErrors, runtimeprep.LocalSkillCatalog(input.Cwd, runtimeprep.LocalSkillSelection{}).Diagnostics...)
 	if len(capabilityErrors) > 0 {
 		runtimeContext["capabilityCatalogErrors"] = capabilityErrors
 	}
