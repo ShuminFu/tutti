@@ -328,7 +328,7 @@ file is added to `ALLOWLIST` with a reviewed ownership reason. The rule runs in
 `pnpm check:full`, in the `check:changed` `boundary:agent-host` lane whenever a
 change touches `services/tuttid/service/agent` or the checker/fixture itself,
 and in the PR `go-lint` job. The boundary rationale and adapter rules live in
-the root `AGENTS.md` `Agent Host Boundary` section and
+`packages/agent/host/README.md` (Ownership decision rule) and
 `services/tuttid/service/agent/AGENTS.md`.
 
 The same check also verifies production reachability: `services/tuttid/wiring.go`

@@ -7,7 +7,7 @@ This file applies to `services/tuttid/service/agent/*`.
 This directory is an **adapter** onto `packages/agent/host`. It translates
 HTTP, query, composer, analytics, transport, and provider-preparation concerns
 and delegates agent lifecycle through `ApplicationHost()`. It is not the agent
-application core. Read the root `Agent Host Boundary` section and
+application core. Read the ownership decision rule in
 `packages/agent/host/README.md` before editing here.
 
 ## Decision rule

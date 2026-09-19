@@ -276,3 +276,7 @@ Bounded runtime raster assets are enforced in two modes:
 The check reads PNG dimensions directly, so it stays fast and does not depend
 on a platform image tool. Pixel and byte ceilings are documented in
 [Runtime Image Assets](runtime-image-assets.md).
+
+## Root test suites
+
+`integration-tests/` is registered in `go.work`, so Go workspace validation discovers its cross-module tests through the existing module discovery. Performance scenarios live in `benchmarks/`; they require explicit execution and do not add an automatic pre-commit or pre-push performance gate. Runner unit tests remain under `tools/scripts` for the existing tool-test gate. `repository-checks.mjs` selects that gate for `benchmarks/agent-gui/` changes, including workload fixtures.

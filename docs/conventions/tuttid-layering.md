@@ -158,7 +158,7 @@ Within a domain adapter directory, prefer splitting by responsibility:
 - backend implementation files such as `sqlite_store.go`
 - `migrations.go` for schema setup
 
-### `integration/`
+### `integration-tests/tuttid/`
 
 Owns process-level and cross-layer black-box tests:
 
@@ -167,8 +167,8 @@ Owns process-level and cross-layer black-box tests:
 - verifying durable state behavior through the public daemon surface
 - covering startup, recovery, and other flows that cross `api/`, `service/`, and `data/`
 
-Use `integration/` when a test is no longer about one layer in isolation.
-Keep unit and near-layer tests next to the code they exercise; use `integration/` only for daemon-wide behavior.
+Use `integration-tests/tuttid/` when a test is no longer about one layer in isolation.
+Keep unit and near-layer tests next to the code they exercise; use `integration-tests/tuttid/` only for daemon-wide behavior.
 
 ### `types/`
 
@@ -252,7 +252,7 @@ Practical rules:
 Prefer placing tests according to the responsibility they validate:
 
 - keep unit and near-layer tests beside the owning package with `*_test.go`
-- keep process-level and cross-layer daemon tests under `integration/`
+- keep process-level and cross-layer daemon tests under `integration-tests/tuttid/`
 - use `testdata/` only for fixtures and sample data, not for test logic
 
 Examples:
