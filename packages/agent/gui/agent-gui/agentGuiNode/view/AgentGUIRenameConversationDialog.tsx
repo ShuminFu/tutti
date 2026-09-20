@@ -183,6 +183,13 @@ export const AgentGUIRenameConversationDialog = memo(
           value={title}
           onChange={(event) => setTitle(event.currentTarget.value)}
           onKeyDown={(event) => {
+            // the Enter that commits an IME composition must not rename
+            if (
+              event.nativeEvent.isComposing ||
+              event.nativeEvent.keyCode === 229
+            ) {
+              return;
+            }
             if (event.key === "Enter") {
               event.preventDefault();
               confirmRename();

@@ -65,6 +65,60 @@ describe("AgentGUIRenameConversationDialog", () => {
     );
   });
 
+  it("does not rename on the Enter that commits an IME composition", () => {
+    const onRename = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AgentGUIRenameConversationDialog
+        conversation={{
+          cwd: "/workspace",
+          id: "session-1",
+          provider: "codex",
+          status: "ready",
+          title: "Session 1",
+          updatedAtUnixMs: 1
+        }}
+        labels={RENAME_LABELS}
+        open
+        onOpenChange={() => {}}
+        onRename={onRename}
+      />
+    );
+    const input = screen.getByRole("textbox", { name: "Rename" });
+    fireEvent.change(input, { target: { value: "【进行中】合并test到demo" } });
+    fireEvent.keyDown(input, { isComposing: true, key: "Enter" });
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+
+    expect(onRename).not.toHaveBeenCalled();
+    expect(input).toHaveValue("【进行中】合并test到demo");
+  });
+
+  it("still renames on a plain Enter from the input", async () => {
+    const onRename = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AgentGUIRenameConversationDialog
+        conversation={{
+          cwd: "/workspace",
+          id: "session-1",
+          provider: "codex",
+          status: "ready",
+          title: "Session 1",
+          updatedAtUnixMs: 1
+        }}
+        labels={RENAME_LABELS}
+        open
+        onOpenChange={() => {}}
+        onRename={onRename}
+      />
+    );
+    const input = screen.getByRole("textbox", { name: "Rename" });
+    fireEvent.change(input, { target: { value: "Plain Enter rename" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(onRename).toHaveBeenCalledWith("session-1", "Plain Enter rename")
+    );
+  });
+
   it("does not place the untitled display fallback in the editable value", () => {
     render(
       <AgentGUIRenameConversationDialog
