@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { AgentGUIRuntime } from "../../../agentActivityRuntime";
 import type { AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
 import { useAgentGUIConversationDeletion } from "./useAgentGUIConversationDeletion";
+import { normalizeAgentActivitySession } from "@tutti-os/agent-activity-core";
+import { createTestAgentSessionEngine } from "../../../shared/testing/createTestAgentSessionEngine";
 
 const targetConversation: AgentGUIConversationSummary = {
   cwd: "/workspace",
@@ -59,6 +61,60 @@ function createInput(agentActivityRuntime: AgentGUIRuntime) {
 }
 
 describe("useAgentGUIConversationDeletion", () => {
+  it("confirms deletion of an archive outside the current Rail filter", async () => {
+    const engine = createTestAgentSessionEngine("workspace-1");
+    engine.dispatch({
+      type: "session/upserted",
+      session: normalizeAgentActivitySession({
+        agentSessionId: "archived",
+        workspaceId: "workspace-1",
+        provider: "codex",
+        title: "Archived",
+        cwd: "/workspace",
+        archivedAtUnixMs: 1,
+        latestTurnInteractions: [],
+        pendingInteractions: [],
+        activeTurnId: null,
+        updatedAtUnixMs: 2
+      })
+    });
+    const deleteSession = vi.fn(async () => ({
+      removed: true,
+      removedMessages: 0,
+      cleanupFailed: false
+    }));
+    const { input } = createInput({
+      deleteSession,
+      getSessionEngine: () => engine
+    } as unknown as AgentGUIRuntime);
+    const { result } = renderHook(() => {
+      const [pendingDeleteConversation, setPendingDeleteConversation] =
+        useState<AgentGUIConversationSummary | null>(null);
+      return {
+        pendingDeleteConversation,
+        ...useAgentGUIConversationDeletion({
+          ...input,
+          pendingDeleteConversation,
+          setPendingDeleteConversation
+        })
+      };
+    });
+    act(() => result.current.requestDeleteConversation("archived"));
+    expect(result.current.pendingDeleteConversation?.id).toBe("archived");
+    expect(deleteSession).not.toHaveBeenCalled();
+    act(() => result.current.cancelDeleteConversation());
+    expect(result.current.pendingDeleteConversation).toBeNull();
+    act(() => result.current.requestDeleteConversation("archived"));
+    act(() => result.current.confirmDeleteConversation());
+    await waitFor(() =>
+      expect(deleteSession).toHaveBeenCalledWith({
+        workspaceId: "workspace-1",
+        agentSessionId: "archived"
+      })
+    );
+    engine.dispose();
+  });
+
   it("returns home only after deleting the active session", async () => {
     let committedActiveConversationId: string | null = targetConversation.id;
     let activeConversationIdObservedByDelete: string | null = null;

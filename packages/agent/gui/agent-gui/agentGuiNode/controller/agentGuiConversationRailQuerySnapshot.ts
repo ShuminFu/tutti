@@ -1,4 +1,5 @@
 import {
+  selectEngineSession,
   selectWorkspaceAgentConsumerSessions,
   type AgentSessionEngineState
 } from "@tutti-os/agent-activity-core";
@@ -19,7 +20,16 @@ export function createConversationRailConversationsSelector(): (
     createAgentGUIConversationRailTitlePromptSelector();
   return (input, previous = []) => {
     if (input.interactionLocked && previous.length > 0) {
-      return previous as AgentGUIConversationSummary[];
+      const retained = previous.filter(
+        (item) =>
+          !(
+            selectEngineSession(input.engineState, item.id)?.archivedAtUnixMs ??
+            0
+          )
+      );
+      return retained.length === previous.length
+        ? (previous as AgentGUIConversationSummary[])
+        : retained;
     }
     const workspaceSessions = selectWorkspaceAgentConsumerSessions(
       input.engineState
@@ -45,8 +55,10 @@ export function createConversationRailConversationsSelector(): (
     return stabilizeConversationSectionItems(
       previous,
       projectCanonicalAgentGUIConversationSummaries(
-        workspaceSessions.filter((session) =>
-          projectionSessionIds.has(session.session.agentSessionId)
+        workspaceSessions.filter(
+          (session) =>
+            (session.session.archivedAtUnixMs ?? 0) === 0 &&
+            projectionSessionIds.has(session.session.agentSessionId)
         ),
         selectRailTitlePrompts(input.engineState)
       )
@@ -99,6 +111,7 @@ function conversationSummariesRenderEqual(
     left.isolation?.mode === right.isolation?.mode &&
     left.railSectionKey === right.railSectionKey &&
     left.pinnedAtUnixMs === right.pinnedAtUnixMs &&
+    left.archivedAtUnixMs === right.archivedAtUnixMs &&
     // 同 stableHelpers：在线圆点依赖 endedAtUnixMs，必须参与比较。
     left.endedAtUnixMs === right.endedAtUnixMs &&
     left.sortTimeUnixMs === right.sortTimeUnixMs &&

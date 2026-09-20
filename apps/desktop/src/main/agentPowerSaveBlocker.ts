@@ -143,7 +143,8 @@ export function connectAgentPowerSaveBlocker(
       const nextActiveSessionKeys = new Set<string>();
       for (const workspace of workspaces.workspaces) {
         const sessions = await deps.tuttidClient.listWorkspaceAgentSessions(
-          workspace.id
+          workspace.id,
+          { includeArchived: true }
         );
         for (const session of sessions.sessions) {
           if (isAgentSessionRunningTask(workspaceAgentSessionStatus(session))) {

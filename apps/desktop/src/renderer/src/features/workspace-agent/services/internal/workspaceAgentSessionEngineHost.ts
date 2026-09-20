@@ -1,6 +1,7 @@
 import {
   AGENT_SESSION_ENGINE_LOCAL_ORIGIN,
   createAgentSessionEngine,
+  selectWorkspaceAgentConsumerSessions,
   type AgentActivityAdapter,
   type AgentActivityGoalControlInput,
   type AgentActivityGoalControlResult,
@@ -58,7 +59,10 @@ export function reconcileHostMintedActivation(
   let dismissed = false;
   for (const record of Object.values(activations)) {
     if (record.mode !== "new" || record.agentSessionId !== requested) continue;
-    engine.dispatch({ requestId: record.requestId, type: "activation/dismissed" });
+    engine.dispatch({
+      requestId: record.requestId,
+      type: "activation/dismissed"
+    });
     dismissed = true;
   }
   if (dismissed) {
@@ -221,7 +225,11 @@ export function createWorkspaceAgentSessionEngineHost(
           );
           // 嵌入态宿主代建会话（补丁 0099）会铸另一个 agentSessionId；引擎里按
           // 请求 id 记的 pending 记录永远等不到同名会话，会话栏就多出一条幽灵行。
-          reconcileHostMintedActivation(engine, effectInput.agentSessionId, result);
+          reconcileHostMintedActivation(
+            engine,
+            effectInput.agentSessionId,
+            result
+          );
           return result;
         },
         cancelTurn: (effectInput, options) =>
@@ -264,6 +272,15 @@ export function createWorkspaceAgentSessionEngineHost(
           ),
         setSessionPinned: async (effectInput, options) => {
           const session = await adapter.setSessionPinned({
+            ...effectInput,
+            signal: options?.signal
+          });
+          return { session };
+        },
+        setSessionArchived: async (effectInput, options) => {
+          if (!adapter.setSessionArchived)
+            throw new Error("agent_session_archive_unsupported");
+          const session = await adapter.setSessionArchived({
             ...effectInput,
             signal: options?.signal
           });
@@ -391,6 +408,22 @@ export function createWorkspaceAgentSessionEngineHost(
               sessions: list.sessions,
               type: "session/snapshotReceived"
             });
+            const receivedIds = new Set(
+              list.sessions.map((session) => session.agentSessionId)
+            );
+            for (const { session } of selectWorkspaceAgentConsumerSessions(
+              engine.getSnapshot()
+            )) {
+              if (!receivedIds.has(session.agentSessionId)) {
+                engine.dispatch({
+                  type: "session/reconcileRequested",
+                  agentSessionId: session.agentSessionId,
+                  workspaceId: command.workspaceId,
+                  needsState: true,
+                  needsMessages: false
+                });
+              }
+            }
             return list;
           }
           case "session/reconcile":

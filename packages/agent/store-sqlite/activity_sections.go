@@ -38,7 +38,8 @@ func (s *Store) ListSessionSection(
 	if limit > 0 {
 		queryLimit = limit + 1
 	}
-	if sectionKey == PinnedSessionPageKey {
+	if sectionKey == PinnedSessionPageKey || sectionKey == ArchivedSessionPageKey {
+		input.SectionKey = sectionKey
 		return s.listPinnedSessionPage(
 			ctx,
 			input,
@@ -94,6 +95,7 @@ WITH section_sessions AS (
     ` + includedPredicate + `
     AND deleted_at_unix_ms = 0
     AND json_extract(session_metadata_json, '$.visible') IS NOT 0
+    AND COALESCE(json_extract(session_metadata_json, '$.archivedAtUnixMs'), 0) = 0
 )
 SELECT workspace_id, agent_session_id, session_kind, root_agent_session_id, root_turn_id,
        parent_agent_session_id, parent_turn_id, parent_tool_call_id,
@@ -277,6 +279,7 @@ WITH requested_sections(section_key) AS MATERIALIZED (
                {{INCLUDED_PREDICATE}}
                AND sessions.deleted_at_unix_ms = 0
                AND json_extract(sessions.session_metadata_json, '$.visible') IS NOT 0
+               AND COALESCE(json_extract(sessions.session_metadata_json, '$.archivedAtUnixMs'), 0) = 0
            )
            ELSE (
              SELECT COUNT(1)
@@ -289,6 +292,7 @@ WITH requested_sections(section_key) AS MATERIALIZED (
                {{INCLUDED_PREDICATE}}
                AND sessions.deleted_at_unix_ms = 0
                AND json_extract(sessions.session_metadata_json, '$.visible') IS NOT 0
+               AND COALESCE(json_extract(sessions.session_metadata_json, '$.archivedAtUnixMs'), 0) = 0
            )
          END AS total_count,
          CASE requested_sections.section_key
@@ -308,6 +312,7 @@ WITH requested_sections(section_key) AS MATERIALIZED (
                  {{INCLUDED_PREDICATE}}
                  AND sessions.deleted_at_unix_ms = 0
                  AND json_extract(sessions.session_metadata_json, '$.visible') IS NOT 0
+                 AND COALESCE(json_extract(sessions.session_metadata_json, '$.archivedAtUnixMs'), 0) = 0
                ORDER BY sessions.pinned_at_unix_ms DESC, sessions.agent_session_id ASC
                LIMIT ?
              ) AS pinned_page
@@ -348,6 +353,7 @@ WITH requested_sections(section_key) AS MATERIALIZED (
                  {{INCLUDED_PREDICATE}}
                  AND sessions.deleted_at_unix_ms = 0
                  AND json_extract(sessions.session_metadata_json, '$.visible') IS NOT 0
+                 AND COALESCE(json_extract(sessions.session_metadata_json, '$.archivedAtUnixMs'), 0) = 0
                ORDER BY conversation_sort_time_unix_ms DESC, sessions.agent_session_id ASC
                LIMIT ?
              ) AS ordinary_page
@@ -439,7 +445,7 @@ func (s *Store) ListSessionSectionDeletionCandidates(
 	workspaceID := strings.TrimSpace(input.WorkspaceID)
 	sectionKey := NormalizeRailSectionKey(strings.TrimSpace(input.SectionKey))
 	agentTargetID := strings.TrimSpace(input.AgentTargetID)
-	if workspaceID == "" || sectionKey == "" || sectionKey == PinnedSessionPageKey {
+	if workspaceID == "" || sectionKey == "" || sectionKey == PinnedSessionPageKey || sectionKey == ArchivedSessionPageKey {
 		return SessionSectionDeletionCandidates{}, false, nil
 	}
 	includedPredicate, includedArgs, err := includedSessionIDsPredicate("agent_session_id", input.IncludedSessionIDs)
@@ -457,6 +463,7 @@ WHERE workspace_id = ?
   ` + includedPredicate + `
   AND deleted_at_unix_ms = 0
   AND json_extract(session_metadata_json, '$.visible') IS NOT 0
+  AND COALESCE(json_extract(session_metadata_json, '$.archivedAtUnixMs'), 0) = 0
 ORDER BY updated_at_unix_ms DESC, agent_session_id ASC
 `
 	args := []any{workspaceID, sectionKey, agentTargetID, agentTargetID, input.ExcludePinned}
@@ -499,12 +506,19 @@ func (s *Store) listPinnedSessionPage(
 	totalCount int,
 ) (SessionSectionPage, bool, error) {
 	indexName := "idx_workspace_agent_sessions_pinned_page"
+	sortColumn := "pinned_at_unix_ms"
+	membershipPredicate := "pinned_at_unix_ms > 0 AND COALESCE(json_extract(session_metadata_json, '$.archivedAtUnixMs'), 0) = 0"
 	targetPredicate := ""
 	args := []any{workspaceID}
 	if agentTargetID != "" {
 		indexName = "idx_workspace_agent_sessions_pinned_target_page"
 		targetPredicate = "AND agent_target_id = ?"
 		args = append(args, agentTargetID)
+	}
+	if input.SectionKey == ArchivedSessionPageKey {
+		indexName = "idx_workspace_agent_sessions_archive_page"
+		sortColumn = "COALESCE(json_extract(session_metadata_json, '$.archivedAtUnixMs'), 0)"
+		membershipPredicate = sortColumn + " > 0"
 	}
 	includedPredicate, includedArgs, err := includedSessionIDsPredicate("agent_session_id", input.IncludedSessionIDs)
 	if err != nil {
@@ -523,13 +537,13 @@ SELECT workspace_id, agent_session_id, session_kind, root_agent_session_id, root
 FROM workspace_agent_sessions INDEXED BY ` + indexName + `
 WHERE workspace_id = ?
   AND session_kind = 'root'
-  AND pinned_at_unix_ms > 0
+  AND ` + membershipPredicate + `
   ` + targetPredicate + `
   ` + includedPredicate + `
   AND deleted_at_unix_ms = 0
   AND json_extract(session_metadata_json, '$.visible') IS NOT 0
-  AND (? = '' OR pinned_at_unix_ms < ? OR (pinned_at_unix_ms = ? AND agent_session_id > ?))
-ORDER BY pinned_at_unix_ms DESC, agent_session_id ASC`
+  AND (? = '' OR ` + sortColumn + ` < ? OR (` + sortColumn + ` = ? AND agent_session_id > ?))
+ORDER BY ` + sortColumn + ` DESC, agent_session_id ASC`
 	args = append(args,
 		strings.TrimSpace(input.CursorSessionID),
 		input.CursorSortTimeUnixMS,
@@ -566,11 +580,15 @@ ORDER BY pinned_at_unix_ms DESC, agent_session_id ASC`
 	nextCursor := ""
 	if hasMore && len(sessions) > 0 {
 		last := sessions[len(sessions)-1]
-		nextCursor = strconv.FormatInt(last.PinnedAtUnixMS, 10) + "|" + strings.TrimSpace(last.ID)
+		sortTime := last.PinnedAtUnixMS
+		if input.SectionKey == ArchivedSessionPageKey {
+			sortTime = last.Metadata.ArchivedAtUnixMS
+		}
+		nextCursor = strconv.FormatInt(sortTime, 10) + "|" + strings.TrimSpace(last.ID)
 	}
 	return SessionSectionPage{
 		WorkspaceID: workspaceID,
-		SectionKey:  PinnedSessionPageKey,
+		SectionKey:  input.SectionKey,
 		Sessions:    sessions,
 		HasMore:     hasMore,
 		TotalCount:  totalCount,
@@ -587,10 +605,15 @@ func (s *Store) countVisibleSessionSectionRows(
 	excludePinned bool,
 ) (int, error) {
 	sectionPredicate := "rail_section_key = ?"
+	archivePredicate := "COALESCE(json_extract(session_metadata_json, '$.archivedAtUnixMs'), 0) = 0"
 	indexName := "idx_workspace_agent_sessions_rail_section_page"
 	if sectionKey == PinnedSessionPageKey {
 		sectionPredicate = "pinned_at_unix_ms > 0"
 		indexName = "idx_workspace_agent_sessions_pinned_page"
+	} else if sectionKey == ArchivedSessionPageKey {
+		sectionPredicate = "1 = 1"
+		indexName = "idx_workspace_agent_sessions_archive_page"
+		archivePredicate = "COALESCE(json_extract(session_metadata_json, '$.archivedAtUnixMs'), 0) > 0"
 	} else if excludePinned {
 		sectionPredicate += " AND pinned_at_unix_ms = 0"
 	}
@@ -599,7 +622,7 @@ func (s *Store) countVisibleSessionSectionRows(
 		targetPredicate = "AND agent_target_id = ?"
 		if sectionKey == PinnedSessionPageKey {
 			indexName = "idx_workspace_agent_sessions_pinned_target_page"
-		} else {
+		} else if sectionKey != ArchivedSessionPageKey {
 			indexName = "idx_workspace_agent_sessions_rail_section_target_page"
 		}
 	}
@@ -616,9 +639,10 @@ WHERE workspace_id = ?
   ` + targetPredicate + `
   ` + includedPredicate + `
   AND deleted_at_unix_ms = 0
-  AND json_extract(session_metadata_json, '$.visible') IS NOT 0`
+  AND json_extract(session_metadata_json, '$.visible') IS NOT 0
+  AND ` + archivePredicate
 	args := []any{workspaceID}
-	if sectionKey != PinnedSessionPageKey {
+	if sectionKey != PinnedSessionPageKey && sectionKey != ArchivedSessionPageKey {
 		args = append(args, sectionKey)
 	}
 	if agentTargetID != "" {

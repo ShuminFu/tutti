@@ -6,6 +6,8 @@ import {
   type SetStateAction
 } from "react";
 import { flushSync } from "react-dom";
+import { selectWorkspaceAgentConsumerSessions } from "@tutti-os/agent-activity-core";
+import { projectCanonicalAgentGUIConversationSummaries } from "../../../shared/agentGUIConversationSummaryProjection";
 import type { AgentGUIRuntime } from "../../../agentActivityRuntime";
 import type { useAgentHostApi } from "../../../agentActivityHost";
 import type { AgentSessionViewRef } from "../../../contexts/workspace/presentation/renderer/agentSessions/useAgentSessionPagingState";
@@ -92,16 +94,25 @@ export function useAgentGUIConversationDeletion(
       if (!normalized || isDeletingConversation) {
         return;
       }
-      const conversation = conversations.find(
-        (candidate) => candidate.id === normalized
-      );
+      const conversation =
+        conversations.find((candidate) => candidate.id === normalized) ??
+        projectCanonicalAgentGUIConversationSummaries(
+          selectWorkspaceAgentConsumerSessions(
+            agentActivityRuntime.getSessionEngine(workspaceId).getSnapshot()
+          ).filter(
+            ({ session }) =>
+              session.workspaceId === workspaceId &&
+              session.agentSessionId === normalized &&
+              (session.archivedAtUnixMs ?? 0) > 0
+          )
+        )[0];
       if (!conversation) {
         return;
       }
       setPendingDeleteConversation(conversation);
       setDetailError(null);
     },
-    [conversations, isDeletingConversation]
+    [agentActivityRuntime, conversations, isDeletingConversation, workspaceId]
   );
 
   const cancelDeleteConversation = useCallback(() => {

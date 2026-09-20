@@ -21,6 +21,7 @@ import {
 } from "./agentGuiConversationRailDiagnostics";
 import {
   mergeConversationRailSessionIds,
+  pruneConversationRailArchiveMemberships,
   planRuntimeRailMembershipRefresh
 } from "./agentConversationRailQueryModel";
 import { projectConversationRailMembershipRecords } from "../model/agentGuiConversationRailMembershipRecords";
@@ -370,6 +371,30 @@ export class AgentGUIConversationRailQueryController {
       this.previousMembershipRecords = next;
       return;
     }
+    const previousById = new Map(
+      this.previousMembershipRecords.map((record) => [record.id, record])
+    );
+    const archiveChanged = next.some((record) => {
+      const previous = previousById.get(record.id);
+      return (
+        previous &&
+        (previous.archivedAtUnixMs ?? 0) !== (record.archivedAtUnixMs ?? 0)
+      );
+    });
+    if (archiveChanged) {
+      this.previousMembershipRecords = next;
+      this.cancelPagingRequests();
+      this.firstPageAbortController?.abort();
+      this.firstPageRequest = null;
+      this.targetedPageRefresher.cancel();
+      this.sessionSectionsQueryCache.invalidate();
+      this.pruneArchivedMemberships(state);
+      if (this.searchController.searchQuery)
+        this.searchController.request(true);
+      this.publish(state, true);
+      if (this.attached) void this.refreshFirstPages("manual");
+      return;
+    }
     if (
       !this.runtimeSectionsEnabled() ||
       state.engineRuntime.workspaceReconcile.status === "loading" ||
@@ -398,7 +423,7 @@ export class AgentGUIConversationRailQueryController {
       )
     });
     this.previousMembershipRecords = next;
-    if (plan.kind !== "refresh_pages") {
+    if (this.scope?.archiveOnly || plan.kind !== "refresh_pages") {
       this.publishIfReady(state);
       return;
     }
@@ -426,7 +451,24 @@ export class AgentGUIConversationRailQueryController {
   private refreshFirstPages(
     refreshReason: ConversationRailRefreshReason
   ): Promise<void> {
-    const listSections = this.runtime.listSessionSections;
+    const listSections =
+      this.scope?.archiveOnly && this.runtime.listSessionSectionPage
+        ? async (
+            input: Parameters<
+              NonNullable<ConversationRailQueryRuntime["listSessionSections"]>
+            >[0]
+          ) => ({
+            workspaceId: input.workspaceId,
+            pinned: undefined,
+            sections: [
+              await this.runtime.listSessionSectionPage!({
+                ...input,
+                sectionKey: "archive",
+                limit: input.limitPerSection
+              })
+            ]
+          })
+        : this.runtime.listSessionSections;
     const scopeKey = this.railSectionQueryKey;
     if (!this.runtimeSectionsEnabled() || !listSections || !scopeKey) {
       this.queryState = EMPTY_CONVERSATION_RAIL_QUERY_STATE;
@@ -611,7 +653,8 @@ export class AgentGUIConversationRailQueryController {
   }
   private runtimeSectionsEnabled(): boolean {
     return Boolean(
-      this.runtime.listSessionSections && this.runtime.listSessionSectionPage
+      (this.scope?.archiveOnly || this.runtime.listSessionSections) &&
+      this.runtime.listSessionSectionPage
     );
   }
   private publishIfReady(
@@ -623,9 +666,10 @@ export class AgentGUIConversationRailQueryController {
   }
 
   private publish(
-    _state: AgentSessionEngineState = this.engine.getSnapshot(),
+    state: AgentSessionEngineState = this.engine.getSnapshot(),
     force = false
   ): void {
+    this.pruneArchivedMemberships(state);
     const snapshot = this.selectSnapshot(
       {
         queryState: this.queryState,
@@ -649,6 +693,14 @@ export class AgentGUIConversationRailQueryController {
       runtimeRailFailed: true,
       sectionPageStates: this.queryState.sectionPageStates
     });
+  }
+
+  private pruneArchivedMemberships(state: AgentSessionEngineState): void {
+    this.queryState = pruneConversationRailArchiveMemberships(
+      this.queryState,
+      state,
+      this.scope?.archiveOnly === true
+    );
   }
 
   private commitSnapshot(

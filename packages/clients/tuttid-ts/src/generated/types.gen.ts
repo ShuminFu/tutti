@@ -2202,8 +2202,12 @@ export type AgentProviderStatus = {
   auth: AgentProviderAuthInfo;
   update: AgentProviderUpdateStatus;
   actions: Array<AgentProviderAction>;
-  /** Raw ACP session config options captured by the provider readiness probe. */
-  configOptions?: Array<{ [key: string]: unknown }>;
+  /**
+   * Raw ACP session config options captured by the provider readiness probe.
+   */
+  configOptions?: Array<{
+    [key: string]: unknown;
+  }>;
   network?: AgentProviderNetworkStatus | null;
   activeAction?: AgentProviderActiveAction | null;
   lastOperation?: AgentProviderActionRunResponse | null;
@@ -2496,6 +2500,30 @@ export type ForkWorkspaceAgentSessionRequest = {
   point: WorkspaceAgentSessionForkPoint;
 };
 
+export type WorkspaceAgentSessionLivenessResponse = {
+  /**
+   * Keyed by the requested agent session id. Every requested id is present, including ids this workspace does not know.
+   */
+  sessions: {
+    [key: string]: WorkspaceAgentSessionLivenessEntry;
+  };
+};
+
+export type WorkspaceAgentSessionLivenessEntry = {
+  /**
+   * True when this workspace owns a session with that id.
+   */
+  found: boolean;
+  /**
+   * True when the session still owns a live provider (ACP) process. Always false when found is false.
+   */
+  runtimeLive: boolean;
+  /**
+   * Turn currently open on the session, or an empty string when no turn is open (or the session is unknown).
+   */
+  activeTurnId: string;
+};
+
 export type WorkspaceAgentSession = {
   id: string;
   kind: WorkspaceAgentSessionKind;
@@ -2587,16 +2615,19 @@ export type WorkspaceAgentSession = {
    * Protocol v2. True when the session was imported from external provider history. Explicit field extracted from runtimeContext.
    */
   imported: boolean;
+  /**
+   * True when this session still owns a live provider (ACP) process in the daemon runtime registry. Point-in-time observation: idle reclamation releases the process without changing session status or emitting an event, so this field is the only way to learn it. Older daemons may omit this observation.
+   */
+  runtimeLive?: boolean;
   visible: boolean;
   settings: AgentSessionComposerSettings;
   permissionConfig: PermissionConfig;
   resumable: boolean;
-  /**
-   * Whether the daemon currently holds a live agent process for this session.
-   * Optional on the wire: older daemons omit it.
-   */
-  runtimeLive?: boolean;
   pinnedAtUnixMs: number | null;
+  /**
+   * Organization metadata. Zero means unarchived. Expiry is 30 days after this timestamp and never deletes data automatically.
+   */
+  archivedAtUnixMs?: number;
   title: string | null;
   /**
    * Protocol v2. Unix milliseconds replacement for createdAt.
@@ -2988,7 +3019,10 @@ export type WorkspaceAgentSessionPage = {
   nextCursor?: string;
 };
 
-export type WorkspaceAgentSessionSectionKind = "conversations" | "project";
+export type WorkspaceAgentSessionSectionKind =
+  | "conversations"
+  | "project"
+  | "archive";
 
 export type WorkspaceAgentSessionSection = {
   kind: WorkspaceAgentSessionSectionKind;
@@ -6411,8 +6445,6 @@ export type ListAgentTargetsData = {
   query?: {
     /**
      * Resolve extension runtime availability before returning. Set false to read only the durable target catalog.
-     *
-     * @default true
      */
     resolveAvailability?: boolean;
   };
@@ -10620,6 +10652,10 @@ export type ListWorkspaceAgentSessionsData = {
     workspaceID: string;
   };
   query?: {
+    /**
+     * Include archives for canonical bootstrap and reconnect; discovery defaults to active sessions.
+     */
+    includeArchived?: boolean;
     agentTargetId?: string;
     /**
      * Case-insensitive, whitespace-tokenized search over the session title only.
@@ -10778,6 +10814,60 @@ export type DeleteWorkspaceAgentSessionsBatchResponses = {
 
 export type DeleteWorkspaceAgentSessionsBatchResponse2 =
   DeleteWorkspaceAgentSessionsBatchResponses[keyof DeleteWorkspaceAgentSessionsBatchResponses];
+
+export type GetWorkspaceAgentSessionLivenessData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+  };
+  query: {
+    /**
+     * Agent session ids to probe. Repeat the parameter and/or use a comma-separated list; both forms are accepted and merged. At least one and at most 200 distinct ids.
+     */
+    ids: Array<string>;
+  };
+  url: "/v1/workspaces/{workspaceID}/agent-sessions/liveness";
+};
+
+export type GetWorkspaceAgentSessionLivenessErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type GetWorkspaceAgentSessionLivenessError =
+  GetWorkspaceAgentSessionLivenessErrors[keyof GetWorkspaceAgentSessionLivenessErrors];
+
+export type GetWorkspaceAgentSessionLivenessResponses = {
+  /**
+   * Agent session liveness snapshot
+   */
+  200: WorkspaceAgentSessionLivenessResponse;
+};
+
+export type GetWorkspaceAgentSessionLivenessResponse =
+  GetWorkspaceAgentSessionLivenessResponses[keyof GetWorkspaceAgentSessionLivenessResponses];
 
 export type PurgeWorkspaceDeletedAgentSessionsData = {
   body?: never;
@@ -13220,6 +13310,54 @@ export type UpdateWorkspaceAgentSessionVisibilityResponses = {
 
 export type UpdateWorkspaceAgentSessionVisibilityResponse =
   UpdateWorkspaceAgentSessionVisibilityResponses[keyof UpdateWorkspaceAgentSessionVisibilityResponses];
+
+export type UpdateWorkspaceAgentSessionArchiveData = {
+  body: {
+    archived: boolean;
+  };
+  path: {
+    workspaceID: string;
+    agentSessionID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/archive";
+};
+
+export type UpdateWorkspaceAgentSessionArchiveErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type UpdateWorkspaceAgentSessionArchiveError =
+  UpdateWorkspaceAgentSessionArchiveErrors[keyof UpdateWorkspaceAgentSessionArchiveErrors];
+
+export type UpdateWorkspaceAgentSessionArchiveResponses = {
+  /**
+   * Authoritative session organization state
+   */
+  200: WorkspaceAgentSessionResponse;
+};
+
+export type UpdateWorkspaceAgentSessionArchiveResponse =
+  UpdateWorkspaceAgentSessionArchiveResponses[keyof UpdateWorkspaceAgentSessionArchiveResponses];
 
 export type UpdateWorkspaceAgentSessionPinData = {
   body: UpdateWorkspaceAgentSessionPinRequest;

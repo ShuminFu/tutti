@@ -138,7 +138,7 @@ export function createDesktopAgentActivityAdapter({
     async listSessions(input) {
       const response = await tuttidClient.listWorkspaceAgentSessions(
         input.workspaceId,
-        { limit: agentActivitySessionListLimit }
+        { limit: agentActivitySessionListLimit, includeArchived: true }
       );
       return {
         sessions: response.sessions.map((session) =>
@@ -539,6 +539,15 @@ export function createDesktopAgentActivityAdapter({
         input.workspaceId,
         input.agentSessionId,
         { title: input.title },
+        { signal: input.signal }
+      );
+      return agentActivitySessionFromTuttidSession(input.workspaceId, session);
+    },
+    async setSessionArchived(input) {
+      const session = await tuttidClient.updateWorkspaceAgentSessionArchive(
+        input.workspaceId,
+        input.agentSessionId,
+        { archived: input.archived },
         { signal: input.signal }
       );
       return agentActivitySessionFromTuttidSession(input.workspaceId, session);

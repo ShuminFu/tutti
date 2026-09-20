@@ -586,6 +586,26 @@ applied, rollback means disabling the quick-prompt feature flag or reverting
 the renderer surface; do not run an older daemon writer against that database.
 Older writers do not maintain `sort_order`, so binary daemon downgrade followed
 by create/delete is not a supported recovery path.
+Root Session `archivedAtUnixMs` is canonical organization metadata. Host
+`UpdateArchive` changes only that timestamp and the canonical version; a retry
+does not extend it, restoration clears it, and rearchiving starts a new period.
+Runtime reports preserve the timestamp. Archive does not close a runtime,
+interrupt a Turn, resolve an Interaction, change a Goal, or change pin/project
+placement. Canonical inventory, child/detail reads, recovery and worktree
+protection remain archive-inclusive. Ordinary discovery, pinned/search pages,
+counts and section deletion candidates filter archived roots before paging.
+The synthetic `archive` section uses timestamp/id cursor ordering and its own
+partial index; it never becomes a Session's immutable `railSectionKey`.
+
+Desktop's bounded workspace bootstrap and sleep-prevention inventory request
+`includeArchived`. Desktop reconciles retained roots omitted by bootstrap;
+Mobile reconciles already-loaded roots because Rail refreshes retain membership
+beyond their response cap. Archive commands and canonical observations enter
+the Engine as versioned Session upserts, never removals or tombstones. Older snapshots cannot reset the
+organization state. Imported Sessions expose the canonical persistence version
+as wire `updatedAtUnixMs`, independently of their historical display timestamp.
+External hosts opt in with optional `setSessionArchived`.
+
 Conversation rail sections are also an `AgentGUIRuntime` contract:
 AgentGUI calls `listSessionSections` for the first page of every returned rail
 section and `listSessionSectionPage` for Show more by `sectionKey` and cursor.

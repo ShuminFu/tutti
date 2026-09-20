@@ -43,6 +43,35 @@ func (api DaemonAPI) UpdateWorkspaceAgentSessionSettings(ctx context.Context, re
 	}, nil
 }
 
+func (api DaemonAPI) UpdateWorkspaceAgentSessionArchive(ctx context.Context, request tuttigenerated.UpdateWorkspaceAgentSessionArchiveRequestObject) (tuttigenerated.UpdateWorkspaceAgentSessionArchiveResponseObject, error) {
+	if api.AgentSessionService == nil {
+		return tuttigenerated.UpdateWorkspaceAgentSessionArchive503JSONResponse{ServiceUnavailableErrorJSONResponse: agentSessionServiceUnavailableError()}, nil
+	}
+	if request.Body == nil {
+		return tuttigenerated.UpdateWorkspaceAgentSessionArchive400JSONResponse{InvalidRequestErrorJSONResponse: invalidRequestError(apierrors.EmptyBody())}, nil
+	}
+	if request.Body.Archived == nil {
+		return tuttigenerated.UpdateWorkspaceAgentSessionArchive400JSONResponse{InvalidRequestErrorJSONResponse: invalidRequestError(apierrors.InvalidRequest("archived_required"))}, nil
+	}
+	session, err := api.AgentSessionService.UpdateArchive(ctx, string(request.WorkspaceID), string(request.AgentSessionID), *request.Body.Archived)
+	if err == nil {
+		generated, projectionErr := generatedAgentSession(session)
+		if projectionErr == nil {
+			return tuttigenerated.UpdateWorkspaceAgentSessionArchive200JSONResponse{Session: generated}, nil
+		}
+		err = projectionErr
+	}
+	protocolErr := apierrors.Classify(err)
+	switch protocolErr.Code {
+	case tuttigenerated.WorkspaceNotFound:
+		return tuttigenerated.UpdateWorkspaceAgentSessionArchive404JSONResponse{WorkspaceNotFoundErrorJSONResponse: workspaceNotFoundError(protocolErr)}, nil
+	case tuttigenerated.InvalidRequest:
+		return tuttigenerated.UpdateWorkspaceAgentSessionArchive400JSONResponse{InvalidRequestErrorJSONResponse: invalidRequestError(protocolErr)}, nil
+	default:
+		return tuttigenerated.UpdateWorkspaceAgentSessionArchive502JSONResponse{WorkspaceOperationErrorJSONResponse: workspaceOperationError(protocolErr)}, nil
+	}
+}
+
 func (api DaemonAPI) UpdateWorkspaceAgentSessionPin(ctx context.Context, request tuttigenerated.UpdateWorkspaceAgentSessionPinRequestObject) (tuttigenerated.UpdateWorkspaceAgentSessionPinResponseObject, error) {
 	if api.AgentSessionService == nil {
 		return tuttigenerated.UpdateWorkspaceAgentSessionPin503JSONResponse{

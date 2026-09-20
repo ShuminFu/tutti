@@ -11,6 +11,7 @@ import (
 )
 
 func TestGeneratedAgentSessionIncludesIndependentLatestTurnProjection(t *testing.T) {
+	updatedAt := time.UnixMilli(20)
 	latest := agentactivitybiz.Turn{
 		WorkspaceID:     "workspace-1",
 		AgentSessionID:  "session-1",
@@ -33,14 +34,16 @@ func TestGeneratedAgentSessionIncludesIndependentLatestTurnProjection(t *testing
 		},
 	}
 	generated, err := generatedAgentSession(agentservice.Session{
-		ID:                     "session-1",
-		Kind:                   agentactivitybiz.SessionKindRoot,
-		Provider:               "codex",
-		RailSectionKey:         "project:repo-1",
-		CreatedAt:              time.UnixMilli(10),
-		MessageVersion:         11,
-		LatestTurn:             &latest,
-		LatestTurnInteractions: latestInteractions,
+		ID:                       "session-1",
+		Kind:                     agentactivitybiz.SessionKindRoot,
+		Provider:                 "codex",
+		RailSectionKey:           "project:repo-1",
+		CreatedAt:                time.UnixMilli(10),
+		UpdatedAt:                &updatedAt,
+		CanonicalUpdatedAtUnixMS: 100,
+		MessageVersion:           11,
+		LatestTurn:               &latest,
+		LatestTurnInteractions:   latestInteractions,
 		GoalSyncState: &agentservice.SessionGoalSyncState{
 			PendingOperationID: "goal-operation-1",
 			Revision:           3,
@@ -53,8 +56,9 @@ func TestGeneratedAgentSessionIncludesIndependentLatestTurnProjection(t *testing
 				ContextWindow: &agentactivitybiz.SessionUsageContextWindow{UsedTokens: 7_460, TotalTokens: 200_000},
 				Quotas:        []agentactivitybiz.SessionUsageQuota{},
 			},
-			Goal:     &agentactivitybiz.SessionGoal{Objective: "ship", Status: "active"},
-			Imported: true,
+			Goal:             &agentactivitybiz.SessionGoal{Objective: "ship", Status: "active"},
+			Imported:         true,
+			ArchivedAtUnixMS: 100,
 		},
 	})
 	if err != nil {
@@ -62,6 +66,9 @@ func TestGeneratedAgentSessionIncludesIndependentLatestTurnProjection(t *testing
 	}
 	if generated.MessageVersion != 11 {
 		t.Fatalf("messageVersion = %#v, want 11", generated.MessageVersion)
+	}
+	if generated.UpdatedAtUnixMs != 100 || generated.ArchivedAtUnixMs == nil || *generated.ArchivedAtUnixMs != 100 {
+		t.Fatalf("imported session must expose canonical archive version: %#v", generated)
 	}
 	if generated.ActiveTurn != nil || generated.ActiveTurnId != nil {
 		t.Fatalf("active turn = %#v id=%#v, want none", generated.ActiveTurn, generated.ActiveTurnId)

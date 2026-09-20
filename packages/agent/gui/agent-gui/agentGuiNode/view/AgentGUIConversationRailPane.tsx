@@ -1,8 +1,8 @@
 import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollArea } from "@tutti-os/ui-system/components";
-import type { UiLanguage } from "../../../contexts/settings/domain/agentSettings";
-import type { WorkspaceLinkAction } from "../../../actions/workspaceLinkActions";
-import type { WorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
+import { ConfirmationDialog } from "@tutti-os/ui-system";
+import { useTranslation } from "../../../i18n";
+import { AgentGUIConversationArchive } from "./AgentGUIConversationArchive";
 import { useOptionalAgentHostApi } from "../../../agentActivityHost";
 import type { AgentGUINodeViewModel } from "../model/agentGuiNodeTypes";
 import { matchesAgentGUIConversationSummaryFilter } from "../model/agentGuiConversationFilter";
@@ -24,7 +24,6 @@ import {
 } from "../model/agentGuiConversationRail";
 import { preserveConversationRailSectionTemplates } from "../model/agentGuiConversationRailSectionTemplates";
 import { agentGUIConversationRailViewScopeKey } from "../model/agentGuiConversationRailViewState";
-import type { useAgentGUIConversationRailQuery } from "../controller/useAgentGUIConversationRailQuery";
 import { useAgentGUIProjectDrag } from "../controller/useAgentGUIProjectDrag";
 import { AgentGUIConversationRailSection } from "./AgentGUIConversationRailSection";
 import { AgentGUIConversationActivityView } from "./AgentGUIConversationActivityView";
@@ -42,14 +41,13 @@ import {
   conversationPlainTitle,
   roundAgentGuiPerfMs
 } from "./agentGUIViewUtils";
-import type { AgentGUIConversationRailLabels } from "./agentGUIConversationRailLabels";
 import styles from "../AgentGUINode.styles";
 import { useAgentGUIConversationRailViewState } from "./useAgentGUIConversationRailViewState";
 import { useAgentGUIProjectMenuState } from "./useAgentGUIProjectMenuState";
 import { useAgentGUIConversationActivityView } from "../controller/useAgentGUIConversationActivityView";
 import { useDelayedBoolean } from "../controller/useDelayedBoolean";
 import type {
-  AgentGUIConversationFilterTargetSelection,
+  AgentGUIConversationRailPaneProps,
   AgentGUIProjectActionDialog
 } from "./agentGUIConversationRailTypes";
 import { useAgentGUIConversationRailBatchDeletion } from "./useAgentGUIConversationRailBatchDeletion";
@@ -57,89 +55,11 @@ import { useHostSessionLiveness } from "../../../shared/agentConversation/useHos
 import { useHostSessionAttach } from "../../../shared/agentConversation/useHostSessionAttach";
 import { agentGUIConversationPresence } from "./agentGUIConversationPresence";
 export type { AgentGUIProjectActionDialog } from "./agentGUIConversationRailTypes";
-export interface AgentGUIConversationRailControllerProps {
-  activityContextKey?: string;
-  conversations: AgentGUINodeViewModel["rail"]["conversations"];
-  currentUserId?: string | null;
-  nodeId?: string | null;
-  footer?: React.ReactNode;
-  /**
-   * Leading cell of the rail's own top row. Surfaces without an Agent header
-   * row (`frame.hostProvidedTopBar`) pass the conversation-rail toggle here.
-   */
-  railToolbarLeadingAccessory?: React.ReactNode;
-  workspaceId: string;
-  userProjects: AgentGUINodeViewModel["rail"]["userProjects"];
-  activeConversation: AgentGUINodeViewModel["rail"]["activeConversation"];
-  activeConversationId: string | null;
-  revealRequest: AgentGUINodeViewModel["rail"]["revealRequest"];
-  pendingDeleteConversationId: string | null;
-  isLoadingConversations: boolean;
-  isDeletingConversation: boolean;
-  isDeletingProjectConversations: boolean;
-  isUserProjectMutationPending?: boolean;
-  labels: AgentGUIConversationRailLabels;
-  workspaceUserProjectI18n: WorkspaceUserProjectI18nRuntime;
-  uiLanguage: UiLanguage;
-  createConversationDisabled: boolean;
-  isCollapsed: boolean;
-  agentTargets: AgentGUINodeViewModel["rail"]["agentTargets"];
-  agentTargetsLoading: AgentGUINodeViewModel["rail"]["agentTargetsLoading"];
-  conversationFilter: AgentGUINodeViewModel["rail"]["conversationFilter"];
-  /**
-   * Lets the host subtree observe the rail query controller's interaction
-   * lock (e.g. so header-dispatched session actions honor the same lock).
-   */
-  registerInteractionLockProbe?: (probe: (() => boolean) | null) => void;
-  onUpdateConversationFilter: (
-    filter: AgentGUINodeViewModel["rail"]["conversationFilter"]
-  ) => void;
-  onSelectConversationFilterTarget: AgentGUIConversationFilterTargetSelection;
-  onCreateConversation: (options?: {
-    projectPath?: string | null;
-    source?: string;
-  }) => void;
-  onSelectConversation: (agentSessionId: string) => void;
-  onToggleConversationPinned: (agentSessionId: string, pinned: boolean) => void;
-  onMarkConversationUnread: (agentSessionId: string) => void;
-  onOpenProjectFiles?: ((action: WorkspaceLinkAction) => void) | null;
-  onOpenConversationWindow?: (agentSessionId: string) => void;
-  selectProjectDirectory?: () => Promise<{ path: string } | null>;
-  onRemoveProject: (path: string) => void;
-  onMoveProject: (
-    projectId: string,
-    beforeProjectId: string | null
-  ) => Promise<void>;
-  onToggleProjectPinned: (projectId: string, pinned: boolean) => Promise<void>;
-  onConfirmDeleteProjectConversations: (
-    sectionKey?: string,
-    agentTargetId?: string | null
-  ) => Promise<string[]>;
-  onConfirmDeleteConversations: (agentSessionIds: string[]) => void;
-  onRequestDeleteConversation: (agentSessionId: string) => void;
-  onRequestRenameConversation: (
-    conversation: AgentGUINodeViewModel["rail"]["conversations"][number]
-  ) => void;
-  onCancelDeleteConversation: () => void;
-  onConfirmDeleteConversation: () => void;
-}
-
-export type AgentGUIConversationRailPaneProps =
-  AgentGUIConversationRailControllerProps & {
-    conversationQuery: string;
-    onConversationQueryChange: (query: string) => void;
-    railQuery: ReturnType<typeof useAgentGUIConversationRailQuery>;
-  };
-
-type AgentGUIConversationRailDataProps = Pick<
+export type {
   AgentGUIConversationRailControllerProps,
-  "conversations" | "userProjects" | "workspaceId"
->;
-
-export type AgentGUIConversationRailState = Omit<
-  AgentGUIConversationRailControllerProps,
-  keyof AgentGUIConversationRailDataProps
->;
+  AgentGUIConversationRailPaneProps,
+  AgentGUIConversationRailState
+} from "./agentGUIConversationRailTypes";
 
 export const AgentGUIConversationRailPane = memo(
   function AgentGUIConversationRailPane({
@@ -184,6 +104,7 @@ export const AgentGUIConversationRailPane = memo(
   }: AgentGUIConversationRailPaneProps): React.JSX.Element {
     "use memo";
     const agentHostApi = useOptionalAgentHostApi();
+    const { t } = useTranslation();
     const [pendingProjectAction, setPendingProjectAction] =
       useState<AgentGUIProjectActionDialog | null>(null);
     const [isRequestingBatchDeletion, setIsRequestingBatchDeletion] =
@@ -569,6 +490,25 @@ export const AgentGUIConversationRailPane = memo(
           aria-hidden={isCollapsed ? "true" : undefined}
         >
           <AgentGUIConversationRailToolbar
+            archiveAccessory={
+              <AgentGUIConversationArchive
+                {...{
+                  workspaceId,
+                  activeConversationId,
+                  labels,
+                  uiLanguage,
+                  pendingDeleteConversationId,
+                  isDeletingConversation,
+                  onSelectConversation,
+                  onRequestDeleteConversation,
+                  onCancelDeleteConversation,
+                  onConfirmDeleteConversation,
+                  onRequestRenameConversation,
+                  onToggleConversationPinned,
+                  onMarkConversationUnread
+                }}
+              />
+            }
             activityView={activityView}
             conversationQuery={conversationQuery}
             createConversationDisabled={createConversationDisabled}
@@ -849,6 +789,22 @@ export const AgentGUIConversationRailPane = memo(
             onConfirmDeleteConversations={onConfirmDeleteConversations}
             onRemoveProject={onRemoveProject}
             setAction={setPendingProjectAction}
+          />
+          <ConfirmationDialog
+            open={pendingDeleteConversationId !== null}
+            title={labels.deleteSession}
+            description={t("agentHost.agentGui.deleteSessionDescription")}
+            cancelLabel={labels.cancel}
+            confirmLabel={labels.deleteSessionConfirm}
+            confirmBusy={isDeletingConversation}
+            confirmDisabled={isInteractionLocked()}
+            tone="destructive"
+            onCancel={onCancelDeleteConversation}
+            onOpenChange={(open) => {
+              if (!open && !isDeletingConversation)
+                onCancelDeleteConversation();
+            }}
+            onConfirm={onConfirmDeleteConversation}
           />
         </aside>
       </AgentGUIConversationRailPeerPairingProvider>

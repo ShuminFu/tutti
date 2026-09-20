@@ -52,6 +52,7 @@ type AgentSessionService interface {
 	ReconcileGoal(context.Context, string, string) (agentservice.GoalStateSessionResult, error)
 	SendInput(context.Context, string, string, agentservice.SendInput) (agentservice.SendInputResult, error)
 	UpdatePin(context.Context, string, string, bool) (agentservice.Session, error)
+	UpdateArchive(context.Context, string, string, bool) (agentservice.Session, error)
 	UpdateTitle(context.Context, string, string, string) (agentservice.Session, error)
 	UpdateVisible(context.Context, string, string, bool) (agentservice.Session, error)
 	UpdateSettings(context.Context, string, string, agentservice.ComposerSettingsPatch) (agentservice.Session, error)
@@ -719,6 +720,9 @@ func generatedAgentSession(session agentservice.Session) (tuttigenerated.Workspa
 	if session.UpdatedAt != nil {
 		updatedAtUnixMS = session.UpdatedAt.UnixMilli()
 	}
+	if session.CanonicalUpdatedAtUnixMS > 0 {
+		updatedAtUnixMS = session.CanonicalUpdatedAtUnixMS
+	}
 	var endedAtUnixMS *int64
 	if session.EndedAt != nil {
 		value := session.EndedAt.UnixMilli()
@@ -777,6 +781,7 @@ func generatedAgentSession(session agentservice.Session) (tuttigenerated.Workspa
 		Provider:             tuttigenerated.WorkspaceAgentProvider(session.Provider),
 		ProviderSessionId:    stringPointer(strings.TrimSpace(session.ProviderSessionID)),
 		PinnedAtUnixMs:       int64Pointer(session.PinnedAtUnixMS),
+		ArchivedAtUnixMs:     int64Pointer(session.Metadata.ArchivedAtUnixMS),
 		RailSectionKey:       strings.TrimSpace(session.RailSectionKey),
 		Resumable:            session.Resumable,
 		// 补丁 0125：会话此刻还有没有活的 provider（ACP）进程。值由 service 层的

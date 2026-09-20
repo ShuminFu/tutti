@@ -48,6 +48,7 @@ import {
   submitWorkspaceAgentInteractive,
   submitWorkspaceAgentPlanDecision,
   updateWorkspaceAgentSessionPin,
+  updateWorkspaceAgentSessionArchive,
   updateAgentSessionReplayTransportPlayback,
   updateWorkspaceAgentSessionSettings,
   updateWorkspaceAgentSessionTitle,
@@ -111,6 +112,7 @@ type WorkspaceAgentClient = Pick<
   | "submitWorkspaceAgentInteractive"
   | "submitWorkspaceAgentPlanDecision"
   | "updateWorkspaceAgentSessionPin"
+  | "updateWorkspaceAgentSessionArchive"
   | "updateAgentSessionReplayTransportPlayback"
   | "updateWorkspaceAgentSessionSettings"
   | "updateWorkspaceAgentSessionTitle"
@@ -742,6 +744,22 @@ export function createWorkspaceAgentClient(
           ...agentCommandRequestOptions(requestOptions)
         }),
         "Update workspace agent session settings failed."
+      ).session;
+    },
+    async updateWorkspaceAgentSessionArchive(
+      workspaceID,
+      agentSessionID,
+      request,
+      requestOptions
+    ) {
+      return unwrapData(
+        await updateWorkspaceAgentSessionArchive({
+          client,
+          body: request,
+          path: { agentSessionID, workspaceID },
+          ...requestOptions
+        }),
+        "Update workspace agent session archive failed."
       ).session;
     },
     async updateWorkspaceAgentSessionPin(

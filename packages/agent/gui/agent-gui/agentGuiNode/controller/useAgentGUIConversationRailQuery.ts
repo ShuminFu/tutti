@@ -189,6 +189,18 @@ export function useAgentGUIConversationRailQuery({
     engine,
     (state) => state.sessionLifecycle.deletedSessionIds
   );
+  const archivedSessionIds = useEngineSelector(
+    engine,
+    (state) =>
+      Object.fromEntries(
+        selectWorkspaceAgentConsumerSessions(state)
+          .filter(({ session }) => (session.archivedAtUnixMs ?? 0) > 0)
+          .map(({ session }) => [session.agentSessionId, true as const])
+      ),
+    (left, right) =>
+      Object.keys(left).length === Object.keys(right).length &&
+      Object.keys(left).every((id) => right[id] === true)
+  );
   useEffect(() => {
     controller.configure({
       conversationFilter,
@@ -199,6 +211,7 @@ export function useAgentGUIConversationRailQuery({
       available: activityEnabled,
       conversations: activityConversations,
       deletedSessionIds,
+      archivedSessionIds,
       identityKey: `${workspaceId}\u0000${activityContextKey}`,
       scopeKey: agentGUIConversationRailViewScopeKey({
         conversationFilter,
@@ -213,6 +226,7 @@ export function useAgentGUIConversationRailQuery({
     conversationFilter,
     conversationQuery,
     deletedSessionIds,
+    archivedSessionIds,
     userProjects,
     workspaceId
   ]);
@@ -279,7 +293,11 @@ function selectAgentGUIConversationActivityRootFacts(
   ]);
   return new Map(
     selectWorkspaceAgentConsumerSessions(state)
-      .filter((item) => item.session.visible !== false)
+      .filter(
+        (item) =>
+          item.session.visible !== false &&
+          (item.session.archivedAtUnixMs ?? 0) === 0
+      )
       .map((item) => [
         item.session.agentSessionId,
         {
@@ -308,7 +326,9 @@ function selectCanonicalActivityConversations(
   const rootFacts = selectAgentGUIConversationActivityRootFacts(state);
   const attention = selectAttentionReadState(state, input.currentUserId);
   const summaries = projectCanonicalAgentGUIConversationSummaries(
-    selectWorkspaceAgentConsumerSessions(state),
+    selectWorkspaceAgentConsumerSessions(state).filter(
+      (item) => (item.session.archivedAtUnixMs ?? 0) === 0
+    ),
     input.firstUserDisplayPromptsBySessionId
   ).map((conversation): AgentGUIConversationSummary => {
     const fact = rootFacts.get(conversation.id);

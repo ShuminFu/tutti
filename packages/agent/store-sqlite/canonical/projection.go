@@ -3,6 +3,7 @@ package canonical
 import "strings"
 
 type SessionSnapshot struct {
+	ArchivedAtUnixMS     int64
 	WorkspaceID          string
 	AgentSessionID       string
 	Kind                 string

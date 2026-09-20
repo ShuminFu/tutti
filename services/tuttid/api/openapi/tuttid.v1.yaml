@@ -3580,6 +3580,12 @@ paths:
         - agent-session
       summary: List agent sessions for one workspace
       parameters:
+        - name: includeArchived
+          in: query
+          description: Include archives for canonical bootstrap and reconnect; discovery defaults to active sessions.
+          schema:
+            type: boolean
+            default: false
         - name: agentTargetId
           in: query
           required: false
@@ -5535,6 +5541,44 @@ paths:
           $ref: "#/components/responses/WorkspaceNotFoundError"
         "405":
           $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/archive:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/AgentSessionID"
+    post:
+      operationId: updateWorkspaceAgentSessionArchive
+      tags:
+        - agent-session
+      summary: Archive or restore a root session without changing its runtime or history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [archived]
+              properties:
+                archived:
+                  type: boolean
+                  x-go-type: "*bool"
+      responses:
+        "200":
+          description: Authoritative session organization state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAgentSessionResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/WorkspaceNotFoundError"
         "502":
           $ref: "#/components/responses/WorkspaceOperationError"
         "503":
@@ -12153,6 +12197,7 @@ components:
             $ref: "#/components/schemas/AgentProviderAction"
         configOptions:
           type: array
+          x-go-type-skip-optional-pointer: true
           description: Raw ACP session config options captured by the provider readiness probe.
           items:
             type: object
@@ -12826,7 +12871,6 @@ components:
         - goalSyncState
         - tuttiModeActivation
         - imported
-        - runtimeLive
       properties:
         id:
           type: string
@@ -13001,6 +13045,9 @@ components:
             the daemon runtime registry. Point-in-time observation: idle
             reclamation releases the process without changing session status or
             emitting an event, so this field is the only way to learn it.
+            Older daemons may omit this observation.
+          x-go-type-skip-optional-pointer: true
+          x-omitempty: false
         visible:
           type: boolean
         settings:
@@ -13014,6 +13061,11 @@ components:
           format: int64
           nullable: true
           minimum: 0
+        archivedAtUnixMs:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Organization metadata. Zero means unarchived. Expiry is 30 days after this timestamp and never deletes data automatically.
         title:
           type: string
           nullable: true
@@ -13890,6 +13942,7 @@ components:
       enum:
         - conversations
         - project
+        - archive
     WorkspaceAgentSessionSection:
       type: object
       additionalProperties: false

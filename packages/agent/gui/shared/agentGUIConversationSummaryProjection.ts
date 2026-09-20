@@ -38,6 +38,7 @@ export interface AgentConversationRailSummary {
   isolation?: AgentActivitySession["isolation"];
   needsUserAction?: boolean;
   pinnedAtUnixMs?: number | null;
+  archivedAtUnixMs?: number;
   provider: AgentGUIResolvedProvider;
   railSectionKey?: string;
   resumable?: boolean;
@@ -88,6 +89,7 @@ export function projectCanonicalAgentGUIConversationSummaries(
         rootSessionIdsAwaitingUserAction?.has(item.session.agentSessionId) ??
         item.pendingInteractions.length > 0,
       pinnedAtUnixMs: item.session.pinnedAtUnixMs ?? null,
+      archivedAtUnixMs: item.session.archivedAtUnixMs ?? 0,
       provider,
       railSectionKey: item.session.railSectionKey,
       resumable: item.session.resumable,
@@ -117,7 +119,9 @@ export function projectCanonicalAgentGUIConversationSummariesFromState(
   const provider = input.provider?.trim().toLowerCase() ?? "";
   return projectCanonicalAgentGUIConversationSummaries(
     selectWorkspaceAgentConsumerSessions(state).filter(
-      (item) => item.session.workspaceId === input.workspaceId
+      (item) =>
+        item.session.workspaceId === input.workspaceId &&
+        (item.session.archivedAtUnixMs ?? 0) === 0
     ),
     input.firstUserDisplayPromptsBySessionId,
     input.rootSessionIdsAwaitingUserAction

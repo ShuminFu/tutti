@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"slices"
 	"testing"
@@ -382,6 +383,57 @@ func TestDaemonAPIGeneratedRoutesCreateAgentSessionMapsTypedInitialGoal(t *testi
 	})
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusCreated, recorder.Body.String())
+	}
+}
+
+func TestDaemonAPIGeneratedRoutesUpdateAgentSessionArchive(t *testing.T) {
+	archivedAt := int64(1000)
+	calls := 0
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, NewRoutes(DaemonAPI{
+		AgentSessionService: stubAgentSessionService{
+			updateArchiveFn: func(_ context.Context, workspaceID, sessionID string, archived bool) (agentservice.Session, error) {
+				if workspaceID != "ws-1" || sessionID != "session-1" {
+					t.Fatalf("unexpected archive identity: %s/%s", workspaceID, sessionID)
+				}
+				calls++
+				archivedAt = 0
+				if archived {
+					archivedAt = 1000
+				}
+				return agentservice.Session{
+					ID: sessionID, Provider: "codex", CreatedAt: time.UnixMilli(1),
+					Metadata: agentactivitybiz.SessionMetadata{ArchivedAtUnixMS: archivedAt},
+				}, nil
+			},
+		},
+	}))
+	const path = "/v1/workspaces/ws-1/agent-sessions/session-1/archive"
+	for _, body := range []string{`{}`, `{"archived":null}`, `null`} {
+		t.Run(body, func(t *testing.T) {
+			recorder := performGeneratedRouteRequest(t, mux, http.MethodPost, path, json.RawMessage(body))
+			if recorder.Code != http.StatusBadRequest || calls != 0 || archivedAt != 1000 {
+				t.Fatalf("invalid request mutated archive: status=%d calls=%d archive=%d body=%s", recorder.Code, calls, archivedAt, recorder.Body.String())
+			}
+		})
+	}
+	for _, archived := range []bool{false, true} {
+		recorder := performGeneratedRouteRequest(t, mux, http.MethodPost, path, map[string]any{"archived": archived})
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("archive %t: status=%d body=%s", archived, recorder.Code, recorder.Body.String())
+		}
+		var response tuttigenerated.WorkspaceAgentSessionResponse
+		decodeGeneratedRouteResponse(t, recorder, &response)
+		responseArchivedAt := int64(0)
+		if response.Session.ArchivedAtUnixMs != nil {
+			responseArchivedAt = *response.Session.ArchivedAtUnixMs
+		}
+		if responseArchivedAt != archivedAt || (archivedAt > 0) != archived {
+			t.Fatalf("archive %t: response=%#v state=%d", archived, response.Session.ArchivedAtUnixMs, archivedAt)
+		}
+	}
+	if calls != 2 {
+		t.Fatalf("archive calls=%d, want 2", calls)
 	}
 }
 

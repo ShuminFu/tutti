@@ -201,6 +201,7 @@ export function conversationDetailSessionsEqual(
     left.endedAtUnixMs === right.endedAtUnixMs &&
     left.title === right.title &&
     left.pinnedAtUnixMs === right.pinnedAtUnixMs &&
+    left.archivedAtUnixMs === right.archivedAtUnixMs &&
     left.createdAtUnixMs === right.createdAtUnixMs &&
     left.updatedAtUnixMs === right.updatedAtUnixMs &&
     left.cwd === right.cwd &&

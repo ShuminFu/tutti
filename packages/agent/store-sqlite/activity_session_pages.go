@@ -32,6 +32,9 @@ func (s *Store) ListSessionsPage(
 		"json_extract(session_metadata_json, '$.visible') IS NOT 0",
 	}
 	args := []any{workspaceID}
+	if !input.IncludeArchived {
+		predicates = append(predicates, "COALESCE(json_extract(session_metadata_json, '$.archivedAtUnixMs'), 0) = 0")
+	}
 	if agentTargetID := strings.TrimSpace(input.AgentTargetID); agentTargetID != "" {
 		predicates = append(predicates, "agent_target_id = ?")
 		args = append(args, agentTargetID)

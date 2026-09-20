@@ -22,6 +22,7 @@ func projectionSessionToDTO(session agentactivityprojection.SessionSnapshot) (Se
 	if capabilities == nil {
 		capabilities = legacyCapabilities
 	}
+	metadata.ArchivedAtUnixMS = session.ArchivedAtUnixMS
 	return Session{
 		ID:                     session.AgentSessionID,
 		WorkspaceID:            session.WorkspaceID,

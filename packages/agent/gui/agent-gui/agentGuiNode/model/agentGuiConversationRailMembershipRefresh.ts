@@ -4,6 +4,7 @@ export interface ConversationRailMembershipRecord {
   agentTargetId?: string | null;
   id: string;
   pinnedAtUnixMs?: number | null;
+  archivedAtUnixMs?: number;
   projectionSource?: "pending_activation";
   railSectionKey?: string | null;
   title: string;
@@ -76,11 +77,13 @@ export function planRuntimeRailMembershipRefresh(input: {
       continue;
     }
     if (
+      (previous.archivedAtUnixMs ?? 0) !== (next.archivedAtUnixMs ?? 0) ||
       (previous.pinnedAtUnixMs ?? 0) !== (next.pinnedAtUnixMs ?? 0) ||
       previous.railSectionKey !== next.railSectionKey
     ) {
       addPage(previous);
       addPage(next);
+      refreshSearch ||= Boolean(input.searchActive);
     }
     if (previous.title !== next.title) {
       refreshSearch ||= Boolean(input.searchActive);

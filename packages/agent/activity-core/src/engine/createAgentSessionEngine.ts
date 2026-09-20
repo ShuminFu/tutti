@@ -1,6 +1,5 @@
 import type { EngineDiagnosticSink } from "./diagnostics.ts";
 import type { AgentActivityComposerOptions } from "../types.ts";
-import { projectAgentActivitySession } from "./agentActivitySnapshot.projector.ts";
 import { composerOptionsRequestSignature } from "./composerOptions.helpers.ts";
 import type { ComposerOptionsEntry } from "./composerOptions.types.ts";
 import { projectPublicAgentSessionEngineState } from "./engineState.publicProjection.ts";
@@ -9,10 +8,6 @@ import { createEngineExpiryClock } from "./expiryClock.ts";
 import {
   selectEngineActiveTurn,
   selectEngineInteractionResponse,
-  selectEngineInteractionsForSession,
-  selectEngineLatestTurn,
-  selectEnginePendingInteractions,
-  selectEngineSession,
   selectEngineSessionSettingsUpdate
 } from "./sessionLifecycle.selectors.ts";
 import {
@@ -24,6 +19,7 @@ import {
   selectEngineSubmitWouldBeVisibleInQueue
 } from "./promptQueue.selectors.ts";
 import {
+  commitSessionMetadata,
   dispatchSessionMutationWithCancellation,
   type SessionMutationCancellation
 } from "./sessionMutationDispatch.ts";
@@ -399,7 +395,9 @@ export function createAgentSessionEngine({
     });
   }
 
-  function nextSessionMutationId(kind: "delete" | "pin" | "rename"): string {
+  function nextSessionMutationId(
+    kind: "delete" | "pin" | "rename" | "archive"
+  ): string {
     const sequence = sessionMutationSequence++;
     return `${kind}:${clock.nowUnixMs()}:${sequence}`;
   }
@@ -630,18 +628,6 @@ export function createAgentSessionEngine({
     });
   }
 
-  function mutationSessionResult(agentSessionId: string) {
-    const session = selectEngineSession(publicSnapshot, agentSessionId);
-    if (!session) return null;
-    return projectAgentActivitySession(
-      session,
-      selectEngineActiveTurn(publicSnapshot, agentSessionId),
-      selectEngineLatestTurn(publicSnapshot, agentSessionId),
-      selectEngineInteractionsForSession(publicSnapshot, agentSessionId),
-      selectEnginePendingInteractions(publicSnapshot, agentSessionId)
-    );
-  }
-
   function mutationCancellation(
     signal?: AbortSignal
   ): SessionMutationCancellation {
@@ -713,12 +699,11 @@ export function createAgentSessionEngine({
       return publicSnapshot;
     },
     loadComposerOptions,
-    async renameSession(input) {
-      const agentSessionId = input.agentSessionId.trim();
-      const mutation = await dispatchSessionMutationWithCancellation(
+    renameSession(input) {
+      return commitSessionMetadata(
         engine,
         {
-          agentSessionId,
+          agentSessionId: input.agentSessionId.trim(),
           mutationId: nextSessionMutationId("rename"),
           timeoutMs: SESSION_MUTATION_TIMEOUT_MS,
           title: input.title,
@@ -727,21 +712,12 @@ export function createAgentSessionEngine({
         },
         mutationCancellation(input.signal)
       );
-      if (mutation.kind !== "rename") {
-        throw new Error("agent_session_rename_result_missing");
-      }
-      const session = mutationSessionResult(agentSessionId);
-      if (!session) {
-        throw new Error("agent_session_rename_result_missing");
-      }
-      return session;
     },
-    async setSessionPinned(input) {
-      const agentSessionId = input.agentSessionId.trim();
-      const mutation = await dispatchSessionMutationWithCancellation(
+    setSessionPinned(input) {
+      return commitSessionMetadata(
         engine,
         {
-          agentSessionId,
+          agentSessionId: input.agentSessionId.trim(),
           mutationId: nextSessionMutationId("pin"),
           pinned: input.pinned,
           timeoutMs: SESSION_MUTATION_TIMEOUT_MS,
@@ -750,14 +726,20 @@ export function createAgentSessionEngine({
         },
         mutationCancellation(input.signal)
       );
-      if (mutation.kind !== "pin") {
-        throw new Error("agent_session_pin_result_missing");
-      }
-      const session = mutationSessionResult(agentSessionId);
-      if (!session) {
-        throw new Error("agent_session_pin_result_missing");
-      }
-      return session;
+    },
+    setSessionArchived(input) {
+      return commitSessionMetadata(
+        engine,
+        {
+          agentSessionId: input.agentSessionId.trim(),
+          mutationId: nextSessionMutationId("archive"),
+          archived: input.archived,
+          timeoutMs: SESSION_MUTATION_TIMEOUT_MS,
+          type: "session/archiveRequested",
+          workspaceId: engineIdentity.workspaceId
+        },
+        mutationCancellation(input.signal)
+      );
     },
     onDispose(listener) {
       // 已经释放过的引擎不会再有状态推送，直接告诉等待方，免得它永远挂着。

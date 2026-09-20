@@ -1,4 +1,14 @@
 export const enAgentGuiSessionActions = {
+  archiveSession: "Archive session",
+  archiveView: "Archive",
+  restoreArchive: "Restore session",
+  archiveEmpty: "No archived sessions",
+  archiveRemaining: "{{days}} days remaining",
+  archiveExpired: "Expired",
+  archiveRetention:
+    "Archived sessions expire after 30 days. They remain available until you delete them.",
+  deleteSessionDescription:
+    "Delete this conversation and its child conversations? Running work will be interrupted.",
   moreSessionActions: "More session actions",
   copiedToClipboard: "Copied",
   copyFailed: "Copy failed",
@@ -21,7 +31,8 @@ export const enAgentGuiSessionActions = {
   splitDropPair: "Pair",
   splitDropRelaunch: "Relaunches first",
   splitPaired: "Paired",
-  splitRelaunchTimeout: "The relaunched session did not show up in time; open it from the rail later",
+  splitRelaunchTimeout:
+    "The relaunched session did not show up in time; open it from the rail later",
   splitUnpair: "Unpair",
   splitPair: "Pair",
   splitClosePane: "Close pane",

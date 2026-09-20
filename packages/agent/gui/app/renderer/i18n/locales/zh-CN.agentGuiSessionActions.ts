@@ -1,4 +1,12 @@
 export const zhCNAgentGuiSessionActions = {
+  archiveSession: "归档会话",
+  archiveView: "归档",
+  restoreArchive: "还原会话",
+  archiveEmpty: "暂无归档会话",
+  archiveRemaining: "剩余 {{days}} 天",
+  archiveExpired: "已过期",
+  archiveRetention: "归档会话在 30 天后过期，主动删除前仍可查看和还原",
+  deleteSessionDescription: "删除此会话及其子会话？正在进行的工作将被中断",
   moreSessionActions: "更多会话操作",
   copiedToClipboard: "已复制",
   copyFailed: "复制失败",
@@ -37,7 +45,8 @@ export const zhCNAgentGuiSessionActions = {
   splitPairRoleReviewer: "审查者",
   splitPairKickoffPreviewFailed: "开工卡没准备好，这句按普通消息发出",
   splitPairKickoffCommitFailed: "搭档没收到开工卡，下一句会再试",
-  splitPairKickoffRolesChanged: "结对角色刚被调整，这张开工卡没投；下一句按新角色再发",
+  splitPairKickoffRolesChanged:
+    "结对角色刚被调整，这张开工卡没投；下一句按新角色再发",
   retryConversations: "重试",
   conversationCopyImage: "图片",
   conversationCopyMentionPrefix: "@",

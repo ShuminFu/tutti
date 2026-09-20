@@ -12,7 +12,8 @@ import {
   ExternalLink,
   FileText,
   MoreHorizontal,
-  Pencil
+  Pencil,
+  Trash2
 } from "lucide-react";
 import {
   ContextMenu,
@@ -55,6 +56,7 @@ import type { AgentGUIViewLabels } from "./AgentGUINodeView.types";
 import { conversationPlainTitle } from "./agentGUIViewUtils";
 import { buildConversationRailPeerPairingMenuEntries } from "./conversationRailPeerPairingMenu";
 import { useAgentGUIConversationRailPeerPairing } from "./agentGUIConversationRailPeerPairingContext";
+import { translate } from "../../../i18n";
 
 const menuContentClassName =
   "w-max min-w-44 nodrag [-webkit-app-region:no-drag]";
@@ -356,6 +358,7 @@ interface AgentGUIConversationActionsMenuProps {
   onMarkConversationUnread: (agentSessionId: string) => void;
   onOpenConversationWindow?: (agentSessionId: string) => void;
   onRequestRenameConversation: (conversation: Conversation) => void;
+  onRequestDeleteConversation?: (agentSessionId: string) => void;
 }
 
 export interface AgentGUIConversationActionsMenuState {
@@ -372,7 +375,8 @@ export function useConversationActionGroups({
   isInteractionLocked,
   onMarkConversationUnread,
   onOpenConversationWindow,
-  onRequestRenameConversation
+  onRequestRenameConversation,
+  onRequestDeleteConversation
 }: AgentGUIConversationActionsMenuProps): AgentGUIConversationActionsMenuState {
   const agentHostApi = useOptionalAgentHostApi();
   const agentActivityRuntime = useOptionalAgentGUIRuntime();
@@ -474,7 +478,20 @@ export function useConversationActionGroups({
           label: labels.markSessionUnread,
           onSelect: () => run(() => onMarkConversationUnread(conversation.id))
         }
-      ]
+      ],
+      ...(onRequestDeleteConversation
+        ? [
+            [
+              {
+                icon: <Trash2 aria-hidden="true" />,
+                id: "delete",
+                label: translate("agentHost.agentGui.deleteSession"),
+                onSelect: () =>
+                  run(() => onRequestDeleteConversation(conversation.id))
+              }
+            ]
+          ]
+        : [])
     ].filter((group) => group.length > 0);
   }, [
     agentActivityRuntime,
@@ -486,6 +503,7 @@ export function useConversationActionGroups({
     onMarkConversationUnread,
     onOpenConversationWindow,
     onRequestRenameConversation,
+    onRequestDeleteConversation,
     peerPairing,
     run,
     uiLanguage,

@@ -316,7 +316,7 @@ test("desktop agent activity adapter maps tuttid sessions and messages", async (
 
   assert.deepEqual(calls, [
     {
-      args: [workspaceId, { limit: 100 }],
+      args: [workspaceId, { includeArchived: true, limit: 100 }],
       method: "listSessions"
     },
     {

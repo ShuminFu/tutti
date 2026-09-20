@@ -1538,6 +1538,27 @@ because it is resumable or receives later canonical updates.
 
 When runtime sections are enabled, projection unions IDs from the current section, search, and reconciliation, then joins canonical Sessions. Unchanged summaries preserve structural sharing so unrelated engine updates do not rebuild the whole Rail snapshot.
 
+Archive is a separate, paged Rail view using the same query controller with an
+archive-specific cache identity. Canonical archive transitions evict retained
+ordinary Rail tails and Activity summaries, fence in-flight pages, and refresh
+counts. Those transitions invalidate all shared query scopes, including closed
+Archive views and inactive target filters. Retained membership is not proof of
+a fresh canonical read; Mobile reconnect reconciles already-loaded roots even
+when they survive beyond the bounded refresh page.
+Restoration refreshes original/pinned membership even for the selected
+Session. Active and transient overlays cannot insert an archived Session back
+into ordinary discovery; exact Session detail stays readable.
+
+Hosts expose archive/restore through optional `AgentGUIRuntime.setSessionArchived`
+and the existing Engine mutation protocol. Supported hosts show Archive as the
+primary row action and expose the Archive view from the toolbar. The view uses
+the shared minute clock to show remaining days until 30 days after the archive
+timestamp, then an expired state. Expiry does not delete anything: archived
+Sessions remain readable and restorable. Delete is available only in More/context
+menus, followed by a modal confirmation and the existing deletion coordinator.
+Deleting from Archive closes the archive dialog before confirmation. Existing
+deleted-session retention is unchanged.
+
 Scroll, section collapse, visible limits, and search query belong to mounted view scope. Non-search state is isolated by `workspaceId + agentTargetId/all`; search creates a temporary navigation scope. `activeConversationId` expresses selection only. Scrolling requires an explicit reveal intent.
 
 On the Home composer, a single-Agent Rail filter follows the effective composer

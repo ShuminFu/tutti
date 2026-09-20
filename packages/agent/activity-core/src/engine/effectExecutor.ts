@@ -273,6 +273,17 @@ function executeCommand(
         },
         { commandId: command.commandId, origin: "engine", signal }
       );
+    case "session/setArchived":
+      if (!effects.setSessionArchived)
+        return Promise.reject(new Error("agent_session_archive_unsupported"));
+      return effects.setSessionArchived(
+        {
+          agentSessionId: command.agentSessionId,
+          archived: command.archived,
+          workspaceId: command.workspaceId
+        },
+        { commandId: command.commandId, origin: "engine", signal }
+      );
     case "session/rename":
       return effects.renameSession(
         {

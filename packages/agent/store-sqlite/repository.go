@@ -305,6 +305,7 @@ type ListSessionSectionDeletionCandidatesInput struct {
 }
 
 type ListSessionsPageInput struct {
+	IncludeArchived      bool
 	WorkspaceID          string
 	AgentTargetID        string
 	SearchQuery          string

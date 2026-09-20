@@ -20,9 +20,23 @@ export function validRenameResult(
   return session?.title === record.title ? session : null;
 }
 
+export function validArchiveResult(
+  value: unknown,
+  record: Extract<SessionMutationRecord, { kind: "archive" }>
+): AgentActivitySession | null {
+  const session = validSessionResult(value, record);
+  return session?.kind === "root" &&
+    typeof session.archivedAtUnixMs === "number" &&
+    Number.isFinite(session.archivedAtUnixMs) &&
+    session.archivedAtUnixMs >= 0 &&
+    session.archivedAtUnixMs > 0 === record.archived
+    ? session
+    : null;
+}
+
 function validSessionResult(
   value: unknown,
-  record: Extract<SessionMutationRecord, { kind: "pin" | "rename" }>
+  record: Extract<SessionMutationRecord, { kind: "pin" | "rename" | "archive" }>
 ): AgentActivitySession | null {
   if (!value || typeof value !== "object") return null;
   const session = (value as { session?: Partial<AgentActivitySession> })

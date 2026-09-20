@@ -45,6 +45,7 @@ type stubAgentSessionService struct {
 	resolveWorktreeSupportFn          func(context.Context, string, string, string) (agentservice.SessionWorktreeSupport, error)
 	applyGitPatchForPathFn            func(context.Context, string, agentservice.ApplyGitPatchInput) (agentservice.ApplyGitPatchResult, error)
 	updatePinFn                       func(context.Context, string, string, bool) (agentservice.Session, error)
+	updateArchiveFn                   func(context.Context, string, string, bool) (agentservice.Session, error)
 	updateTitleFn                     func(context.Context, string, string, string) (agentservice.Session, error)
 	updateVisibleFn                   func(context.Context, string, string, bool) (agentservice.Session, error)
 	updateSettingsFn                  func(context.Context, string, string, agentservice.ComposerSettingsPatch) (agentservice.Session, error)
@@ -312,6 +313,13 @@ func (s stubAgentSessionService) SendInput(ctx context.Context, workspaceID stri
 		return s.sendInputFn(ctx, workspaceID, agentSessionID, input)
 	}
 	return agentservice.SendInputResult{}, nil
+}
+
+func (s stubAgentSessionService) UpdateArchive(ctx context.Context, workspaceID string, agentSessionID string, archived bool) (agentservice.Session, error) {
+	if s.updateArchiveFn == nil {
+		return agentservice.Session{}, agentservice.ErrSessionNotFound
+	}
+	return s.updateArchiveFn(ctx, workspaceID, agentSessionID, archived)
 }
 
 func (s stubAgentSessionService) UpdatePin(ctx context.Context, workspaceID string, agentSessionID string, pinned bool) (agentservice.Session, error) {

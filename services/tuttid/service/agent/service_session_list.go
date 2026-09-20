@@ -36,6 +36,7 @@ func (s *Service) ListPage(ctx context.Context, workspaceID string, input ListSe
 		cursor = parsed
 	}
 	page, ok, err := reader.ListSessionsPage(ctx, agentactivitybiz.ListSessionsPageInput{
+		IncludeArchived:      input.IncludeArchived,
 		WorkspaceID:          workspaceID,
 		AgentTargetID:        strings.TrimSpace(input.AgentTargetID),
 		SearchQuery:          input.SearchQuery,

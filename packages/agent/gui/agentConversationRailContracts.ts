@@ -19,7 +19,7 @@ export interface AgentConversationRailSessionPage {
 }
 
 export interface AgentConversationRailSessionSection extends AgentConversationRailSessionPage {
-  kind: "conversations" | "project";
+  kind: "conversations" | "project" | "archive";
   sectionKey: string;
   userProject?: AgentConversationRailUserProject;
 }

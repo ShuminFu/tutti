@@ -7,6 +7,7 @@ import type { CachedConversationRailQuery } from "./agentGuiConversationRailQuer
 import { userProjectCollectionKey } from "./agentGuiConversationRailQueryScope";
 
 export interface ConversationRailQueryScope {
+  archiveOnly?: boolean;
   conversationFilter:
     | { kind: "all" }
     | { agentTargetId: string; kind: "agentTarget" };
@@ -57,7 +58,8 @@ export function resolveConversationRailQueryScope(
         ? `agentTarget:${scope.conversationFilter.agentTargetId.trim()}`
         : "all",
       agentTargetId,
-      projectCollectionKey
+      projectCollectionKey,
+      scope.archiveOnly === true
     ])
   };
 }

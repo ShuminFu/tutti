@@ -326,6 +326,11 @@ export interface IWorkspaceAgentActivityService {
     pinned: boolean;
     workspaceId: string;
   }): Promise<AgentActivitySession>;
+  setSessionArchived?(input: {
+    agentSessionId: string;
+    archived: boolean;
+    workspaceId: string;
+  }): Promise<AgentActivitySession>;
   subscribe(
     workspaceId: string,
     listener: AgentActivitySnapshotListener

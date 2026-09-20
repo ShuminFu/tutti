@@ -17,6 +17,7 @@ export function projectConversationRailMembershipRecords(
       agentTargetId: item.session.agentTargetId,
       id: item.session.agentSessionId,
       pinnedAtUnixMs: item.session.pinnedAtUnixMs ?? null,
+      archivedAtUnixMs: item.session.archivedAtUnixMs ?? 0,
       railSectionKey: item.session.railSectionKey?.trim() || null,
       title: item.session.title
     })),
@@ -31,6 +32,7 @@ export function projectConversationRailMembershipRecords(
         agentTargetId: record.agentTargetId,
         id: record.agentSessionId,
         pinnedAtUnixMs: null,
+        archivedAtUnixMs: 0,
         projectionSource: "pending_activation" as const,
         railSectionKey: record.railSectionKey?.trim() || null,
         title: record.title ?? ""

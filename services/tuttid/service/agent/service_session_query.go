@@ -155,6 +155,16 @@ func (s *Service) UpdatePin(ctx context.Context, workspaceID string, agentSessio
 	return s.projectHostSessionResult(ctx, result.Canonical, result.Session, result.Live, false, true)
 }
 
+func (s *Service) UpdateArchive(ctx context.Context, workspaceID string, agentSessionID string, archived bool) (Session, error) {
+	result, err := s.ApplicationHost().UpdateArchive(ctx, agenthost.UpdateArchiveInput{
+		WorkspaceID: workspaceID, AgentSessionID: agentSessionID, Archived: archived,
+	})
+	if err != nil {
+		return Session{}, err
+	}
+	return s.projectHostSessionResult(ctx, result.Canonical, result.Session, result.Live, false, true)
+}
+
 func (s *Service) cleanupRuntime(ctx context.Context, workspaceID string, agentSessionID string) error {
 	return s.cleanupRuntimeWithOptions(ctx, workspaceID, agentSessionID, false)
 }

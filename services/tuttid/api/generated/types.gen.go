@@ -3714,6 +3714,7 @@ func (e WorkspaceAgentSessionKind) Valid() bool {
 
 // Defines values for WorkspaceAgentSessionSectionKind.
 const (
+	WorkspaceAgentSessionSectionKindArchive       WorkspaceAgentSessionSectionKind = "archive"
 	WorkspaceAgentSessionSectionKindConversations WorkspaceAgentSessionSectionKind = "conversations"
 	WorkspaceAgentSessionSectionKindProject       WorkspaceAgentSessionSectionKind = "project"
 )
@@ -3721,6 +3722,8 @@ const (
 // Valid indicates whether the value is a known member of the WorkspaceAgentSessionSectionKind enum.
 func (e WorkspaceAgentSessionSectionKind) Valid() bool {
 	switch e {
+	case WorkspaceAgentSessionSectionKindArchive:
+		return true
 	case WorkspaceAgentSessionSectionKindConversations:
 		return true
 	case WorkspaceAgentSessionSectionKindProject:
@@ -5250,12 +5253,14 @@ type AgentProviderSkillOptionSourceKind string
 
 // AgentProviderStatus defines model for AgentProviderStatus.
 type AgentProviderStatus struct {
-	Actions       []AgentProviderAction           `json:"actions"`
-	ActiveAction  *AgentProviderActiveAction      `json:"activeAction,omitempty"`
-	Adapter       AgentProviderAdapterStatus      `json:"adapter"`
-	Auth          AgentProviderAuthInfo           `json:"auth"`
-	Availability  AgentProviderAvailability       `json:"availability"`
-	Cli           AgentProviderCliStatus          `json:"cli"`
+	Actions      []AgentProviderAction      `json:"actions"`
+	ActiveAction *AgentProviderActiveAction `json:"activeAction,omitempty"`
+	Adapter      AgentProviderAdapterStatus `json:"adapter"`
+	Auth         AgentProviderAuthInfo      `json:"auth"`
+	Availability AgentProviderAvailability  `json:"availability"`
+	Cli          AgentProviderCliStatus     `json:"cli"`
+
+	// ConfigOptions Raw ACP session config options captured by the provider readiness probe.
 	ConfigOptions []map[string]interface{}        `json:"configOptions,omitempty"`
 	LastOperation *AgentProviderActionRunResponse `json:"lastOperation,omitempty"`
 	Network       *AgentProviderNetworkStatus     `json:"network,omitempty"`
@@ -6520,15 +6525,15 @@ type CreateWorkspaceAgentSessionRequest struct {
 	// RecordingId Developer create-session scenario waiting for this root Session.
 	RecordingId *openapi_types.UUID `json:"recordingId,omitempty"`
 
-	// RuntimeContractFile Optional local runtime contract file prepared by the RnDMaster headless dispatcher.
-	RuntimeContractFile *string `json:"runtimeContractFile,omitempty"`
-
 	// ResumeProviderSessionId Optional Cursor ACP session id imported into the new Tutti session via session/load.
-	ResumeProviderSessionId *string                 `json:"resumeProviderSessionId,omitempty"`
-	Speed                   *string                 `json:"speed,omitempty"`
-	SubmitDiagnostics       *AgentSubmitDiagnostics `json:"submitDiagnostics,omitempty"`
-	Title                   *string                 `json:"title,omitempty"`
-	Visible                 *bool                   `json:"visible,omitempty"`
+	ResumeProviderSessionId *string `json:"resumeProviderSessionId,omitempty"`
+
+	// RuntimeContractFile Optional local runtime contract file prepared by the RnDMaster headless dispatcher.
+	RuntimeContractFile *string                 `json:"runtimeContractFile,omitempty"`
+	Speed               *string                 `json:"speed,omitempty"`
+	SubmitDiagnostics   *AgentSubmitDiagnostics `json:"submitDiagnostics,omitempty"`
+	Title               *string                 `json:"title,omitempty"`
+	Visible             *bool                   `json:"visible,omitempty"`
 }
 
 // CreateWorkspaceAppFactoryJobRequest defines model for CreateWorkspaceAppFactoryJobRequest.
@@ -7050,16 +7055,21 @@ type ExternalAgentImportScanRequest struct {
 
 // ExternalAgentImportScanResponse defines model for ExternalAgentImportScanResponse.
 type ExternalAgentImportScanResponse struct {
-	Complete        *bool                         `json:"complete,omitempty"`
-	CutoffUnixMs    *int64                        `json:"cutoffUnixMs,omitempty"`
-	Errors          []ExternalAgentImportError    `json:"errors"`
-	Projects        []ExternalAgentImportProject  `json:"projects"`
-	Providers       []ExternalAgentImportProvider `json:"providers"`
-	ScannedAtUnixMs *int64                        `json:"scannedAtUnixMs,omitempty"`
-	ScannedMessages int                           `json:"scannedMessages"`
-	ScannedSessions int                           `json:"scannedSessions"`
-	Sessions        []ExternalAgentImportSession  `json:"sessions"`
-	SkippedSessions int                           `json:"skippedSessions"`
+	// Complete True when the daemon finished a full enumeration. Partial or cancelled scans are not returned as success.
+	Complete *bool `json:"complete,omitempty"`
+
+	// CutoffUnixMs Absolute message-time cutoff used for this scan. 0 means all available history.
+	CutoffUnixMs *int64                        `json:"cutoffUnixMs,omitempty"`
+	Errors       []ExternalAgentImportError    `json:"errors"`
+	Projects     []ExternalAgentImportProject  `json:"projects"`
+	Providers    []ExternalAgentImportProvider `json:"providers"`
+
+	// ScannedAtUnixMs Daemon clock when this scan completed. Clients use it with cutoffUnixMs to reuse the snapshot for a narrower window.
+	ScannedAtUnixMs *int64                       `json:"scannedAtUnixMs,omitempty"`
+	ScannedMessages int                          `json:"scannedMessages"`
+	ScannedSessions int                          `json:"scannedSessions"`
+	Sessions        []ExternalAgentImportSession `json:"sessions"`
+	SkippedSessions int                          `json:"skippedSessions"`
 }
 
 // ExternalAgentImportSession defines model for ExternalAgentImportSession.
@@ -8804,6 +8814,9 @@ type WorkspaceAgentSession struct {
 	// AgentTargetId Agent target that authorized this session launch. Historical or imported provider-only sessions may omit it.
 	AgentTargetId *string `json:"agentTargetId"`
 
+	// ArchivedAtUnixMs Organization metadata. Zero means unarchived. Expiry is 30 days after this timestamp and never deletes data automatically.
+	ArchivedAtUnixMs *int64 `json:"archivedAtUnixMs,omitempty"`
+
 	// Capabilities Protocol v2. Authoritative session capability snapshot. Null means no authoritative session snapshot is available, either because the runtime has not reported one yet or because legacy persisted data is ambiguous. A non-null object is complete, so false means explicitly unsupported. Only while this field is null may clients fall back to the authoritative provider composer descriptor; they must never infer capabilities from provider identity.
 	Capabilities *WorkspaceAgentCapabilities `json:"capabilities"`
 
@@ -8869,7 +8882,7 @@ type WorkspaceAgentSession struct {
 	// RootTurnId Root turn under which this child session was created. Null when kind is root.
 	RootTurnId *string `json:"rootTurnId"`
 
-	// RuntimeLive True when this session still owns a live provider (ACP) process in the daemon runtime registry. Point-in-time observation: idle reclamation releases the process without changing session status or emitting an event, so this field is the only way to learn it.
+	// RuntimeLive True when this session still owns a live provider (ACP) process in the daemon runtime registry. Point-in-time observation: idle reclamation releases the process without changing session status or emitting an event, so this field is the only way to learn it. Older daemons may omit this observation.
 	RuntimeLive bool                         `json:"runtimeLive"`
 	Settings    AgentSessionComposerSettings `json:"settings"`
 	Title       *string                      `json:"title"`
@@ -10317,7 +10330,9 @@ type ResolveWorkspaceAgentSessionWorktreeSupportParams struct {
 
 // ListWorkspaceAgentSessionsParams defines parameters for ListWorkspaceAgentSessions.
 type ListWorkspaceAgentSessionsParams struct {
-	AgentTargetId *string `form:"agentTargetId,omitempty" json:"agentTargetId,omitempty"`
+	// IncludeArchived Include archives for canonical bootstrap and reconnect; discovery defaults to active sessions.
+	IncludeArchived *bool   `form:"includeArchived,omitempty" json:"includeArchived,omitempty"`
+	AgentTargetId   *string `form:"agentTargetId,omitempty" json:"agentTargetId,omitempty"`
 
 	// SearchQuery Case-insensitive, whitespace-tokenized search over the session title only.
 	SearchQuery *string `form:"searchQuery,omitempty" json:"searchQuery,omitempty"`
@@ -10344,6 +10359,11 @@ type GetWorkspaceAgentSessionLivenessParams struct {
 type GetWorkspaceAgentSessionParams struct {
 	// Projection Selects the detail projection. messageHydration preserves the session hierarchy and message cursors used by reconciliation discovery without resolving provider-backed lifecycle capabilities.
 	Projection *WorkspaceAgentSessionDetailProjection `form:"projection,omitempty" json:"projection,omitempty"`
+}
+
+// UpdateWorkspaceAgentSessionArchiveJSONBody defines parameters for UpdateWorkspaceAgentSessionArchive.
+type UpdateWorkspaceAgentSessionArchiveJSONBody struct {
+	Archived *bool `json:"archived"`
 }
 
 // GoalControlWorkspaceAgentSessionParams defines parameters for GoalControlWorkspaceAgentSession.
@@ -10646,6 +10666,9 @@ type ImportWorkspaceExternalAgentSessionsJSONRequestBody = ImportExternalAgentSe
 
 // ScanWorkspaceExternalAgentSessionImportsJSONRequestBody defines body for ScanWorkspaceExternalAgentSessionImports for application/json ContentType.
 type ScanWorkspaceExternalAgentSessionImportsJSONRequestBody = ExternalAgentImportScanRequest
+
+// UpdateWorkspaceAgentSessionArchiveJSONRequestBody defines body for UpdateWorkspaceAgentSessionArchive for application/json ContentType.
+type UpdateWorkspaceAgentSessionArchiveJSONRequestBody UpdateWorkspaceAgentSessionArchiveJSONBody
 
 // SetAgentSessionAutomationRuleOverrideJSONRequestBody defines body for SetAgentSessionAutomationRuleOverride for application/json ContentType.
 type SetAgentSessionAutomationRuleOverrideJSONRequestBody = SetAgentSessionAutomationRuleOverrideRequest

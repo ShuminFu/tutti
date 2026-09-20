@@ -6,6 +6,7 @@ import {
   selectEngineSessionRuntimeAvailability,
   selectPendingActivations,
   selectSessionGoalControlSettlement,
+  selectWorkspaceAgentConsumerSessions,
   type AgentActivitySessionSettings,
   type AgentActivityInteraction,
   type AgentActivitySessionReconcileExecutor,
@@ -698,11 +699,24 @@ export class WorkspaceActivityService extends ObservableService<WorkspaceActivit
   }
 
   private async reconcileWorkspace(): Promise<unknown> {
+    const retainedSessions = selectWorkspaceAgentConsumerSessions(
+      this.engine.getSnapshot()
+    );
     const rail = await this.rail.reconcile();
     if (this.disposed || this.paused) {
       throw new Error("mobile workspace activity is unavailable");
     }
     this.errorCode = null;
+    // Rail membership includes retained tails beyond the refreshed page.
+    for (const { session } of retainedSessions) {
+      this.engine.dispatch({
+        type: "session/reconcileRequested",
+        workspaceId: this.workspace.id,
+        agentSessionId: session.agentSessionId,
+        needsState: true,
+        needsMessages: false
+      });
+    }
     return {
       sessionIds: selectWorkspaceConversationRailSessionIds(rail.sections)
     };

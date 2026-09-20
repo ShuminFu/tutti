@@ -276,35 +276,36 @@ type ExtensionComposerSlashCommand struct {
 }
 
 type Session struct {
-	ID                   string
-	Kind                 string
-	RootAgentSessionID   string
-	RootTurnID           string
-	ParentAgentSessionID string
-	ParentTurnID         string
-	ParentToolCallID     string
-	UserID               string
-	AgentTargetID        string
-	Provider             string
-	ProviderSessionID    string
-	Cwd                  string
-	RailSectionKind      string
-	RailProjectPath      string
-	RailSectionKey       string
-	Visible              bool
-	Resumable            bool
-	Settings             *ComposerSettings
-	Capabilities         *canonical.CapabilitySnapshot
-	PermissionConfig     PermissionConfig
-	Title                *string
-	MessageVersion       uint64
-	PinnedAtUnixMS       int64
-	CreatedAt            time.Time
-	UpdatedAt            *time.Time
-	EndedAt              *time.Time
-	Metadata             agentactivitybiz.SessionMetadata
-	Isolation            *SessionIsolation
-	Warnings             []SessionWarning
+	ID                       string
+	Kind                     string
+	RootAgentSessionID       string
+	RootTurnID               string
+	ParentAgentSessionID     string
+	ParentTurnID             string
+	ParentToolCallID         string
+	UserID                   string
+	AgentTargetID            string
+	Provider                 string
+	ProviderSessionID        string
+	Cwd                      string
+	RailSectionKind          string
+	RailProjectPath          string
+	RailSectionKey           string
+	Visible                  bool
+	Resumable                bool
+	Settings                 *ComposerSettings
+	Capabilities             *canonical.CapabilitySnapshot
+	PermissionConfig         PermissionConfig
+	Title                    *string
+	MessageVersion           uint64
+	PinnedAtUnixMS           int64
+	CreatedAt                time.Time
+	UpdatedAt                *time.Time
+	CanonicalUpdatedAtUnixMS int64
+	EndedAt                  *time.Time
+	Metadata                 agentactivitybiz.SessionMetadata
+	Isolation                *SessionIsolation
+	Warnings                 []SessionWarning
 	// Protocol v2 turn state (agent-gui refactor plan): the session keeps an
 	// activeTurnId reference; phase/outcome/error live on the turn entity.
 	ActiveTurnID           string
@@ -363,10 +364,11 @@ type SessionWarning struct {
 }
 
 type ListSessionsInput struct {
-	AgentTargetID string
-	Cursor        string
-	SearchQuery   string
-	Limit         int
+	IncludeArchived bool
+	AgentTargetID   string
+	Cursor          string
+	SearchQuery     string
+	Limit           int
 }
 
 type SessionListPage struct {

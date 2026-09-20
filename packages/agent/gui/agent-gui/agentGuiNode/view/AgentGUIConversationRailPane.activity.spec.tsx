@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor
+} from "@testing-library/react";
 import { useState } from "react";
 import { toast, TooltipProvider } from "@tutti-os/ui-system";
 import { describe, expect, it, vi } from "vitest";
@@ -13,8 +19,105 @@ import type { useAgentGUIConversationRailQuery } from "../controller/useAgentGUI
 import type { AgentGUIConversationRailLabels } from "./agentGUIConversationRailLabels";
 import { AgentGUIConversationRailPane } from "./AgentGUIConversationRailPane";
 import { createAgentGUIConversationActivityController } from "../controller/agentGUIConversationActivityController";
+import { createTestAgentSessionEngine } from "../../../shared/testing/createTestAgentSessionEngine";
+import { normalizeAgentActivitySession } from "@tutti-os/agent-activity-core";
+import { archiveRemainingDays } from "./AgentGUIConversationArchive";
 
 describe("AgentGUIConversationRailPane Activity capability", () => {
+  it("pages and opens expired archives, restores through the engine, and confirms menu-only deletion", async () => {
+    const engine = createTestAgentSessionEngine("workspace-1");
+    const deadline = 30 * 86_400_000;
+    const archivedAtUnixMs = Date.now() - deadline;
+    expect(archiveRemainingDays(1000, 1000 + deadline - 1)).toBe(1);
+    expect(archiveRemainingDays(1000, 1000 + deadline)).toBe(0);
+    const archived = normalizeAgentActivitySession({
+      activeTurnId: null,
+      agentSessionId: "expired",
+      archivedAtUnixMs,
+      cwd: "/workspace",
+      latestTurnInteractions: [],
+      pendingInteractions: [],
+      provider: "codex",
+      railSectionKey: "conversations",
+      title: "Expired conversation",
+      updatedAtUnixMs: 1,
+      workspaceId: "workspace-1"
+    });
+    const later = { ...archived, agentSessionId: "later", title: "Later page" };
+    const onSelectConversation = vi.fn();
+    const onConfirmDeleteConversation = vi.fn();
+    let restored = false;
+    const setSessionArchived = vi.fn(async () => {
+      restored = true;
+      const session = { ...archived, archivedAtUnixMs: 0, updatedAtUnixMs: 2 };
+      engine.dispatch({ type: "session/upserted", session });
+      return session;
+    });
+    const listSessionSectionPage = vi.fn<
+      NonNullable<AgentGUIRuntime["listSessionSectionPage"]>
+    >(async (input) => ({
+      kind: "archive",
+      sectionKey: "archive",
+      hasMore: !input.cursor,
+      nextCursor: input.cursor ? undefined : "next",
+      totalCount: restored ? 1 : 2,
+      sessions: input.cursor ? [later] : restored ? [] : [archived]
+    }));
+    renderPane({
+      capability: false,
+      runtimeOverrides: {
+        getSessionEngine: () => engine,
+        listSessionSectionPage,
+        setSessionArchived
+      },
+      onSelectConversation,
+      onConfirmDeleteConversation
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    const row = await screen.findByTestId(
+      "agent-gui-conversation-item-expired"
+    );
+    expect(screen.getByText("Expired")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    await screen.findByTestId("agent-gui-conversation-item-later");
+    expect(listSessionSectionPage.mock.calls[1]?.[0].cursor).toBe("next");
+    fireEvent.click(row.querySelector("button")!);
+    expect(onSelectConversation).toHaveBeenCalledWith("expired");
+    fireEvent.animationEnd(screen.getByRole("dialog"));
+    fireEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    fireEvent.contextMenu(
+      await screen.findByTestId("agent-gui-conversation-item-expired")
+    );
+    fireEvent.pointerUp(
+      await screen.findByRole("menuitem", { name: "Delete session" }),
+      { button: 0 }
+    );
+    await screen.findByRole("button", { name: "Confirm delete" });
+    expect(onConfirmDeleteConversation).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(
+      engine.getSnapshot().sessionLifecycle.sessionsById.expired
+        ?.archivedAtUnixMs
+    ).toBe(archivedAtUnixMs);
+    for (const dialog of screen.queryAllByRole("dialog"))
+      fireEvent.animationEnd(dialog);
+    fireEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    fireEvent.pointerEnter(
+      await screen.findByTestId("agent-gui-conversation-item-expired")
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Restore session" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId("agent-gui-conversation-item-expired")
+      ).toBeNull()
+    );
+    expect(setSessionArchived).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      agentSessionId: "expired",
+      archived: false
+    });
+    engine.dispose();
+  });
   it("fails closed when the host does not opt in", () => {
     renderPane({ capability: false });
 
@@ -232,7 +335,10 @@ function renderPane({
   runtimeSectionsEnabled = false,
   retryRuntimeRail = vi.fn(() => Promise.resolve()),
   activityConversations: requestedActivityConversations,
-  conversations: requestedConversations
+  conversations: requestedConversations,
+  runtimeOverrides = {},
+  onSelectConversation = () => {},
+  onConfirmDeleteConversation = () => {}
 }: {
   capability: boolean;
   hasUnreadCompletion?: boolean;
@@ -247,6 +353,9 @@ function renderPane({
   retryRuntimeRail?: () => Promise<void>;
   activityConversations?: AgentGUIConversationSummary[];
   conversations?: AgentGUIConversationSummary[];
+  runtimeOverrides?: Partial<AgentGUIRuntime>;
+  onSelectConversation?: (id: string) => void;
+  onConfirmDeleteConversation?: () => void;
 }) {
   const conversation = conversationFixture({ hasUnreadCompletion });
   const activityConversations = requestedActivityConversations ?? [
@@ -267,10 +376,13 @@ function renderPane({
     conversationActivityViewEnabled: capability,
     getSnapshot: () => snapshot,
     listSessionsPage: listPage,
-    subscribe: () => () => {}
+    subscribe: () => () => {},
+    ...runtimeOverrides
   } as unknown as AgentGUIRuntime;
   function PaneHarness(): React.JSX.Element {
     const [conversationQuery, setConversationQuery] = useState("");
+    const [pendingDeleteConversationId, setPendingDeleteConversationId] =
+      useState<string | null>(null);
     return (
       <AgentGUIConversationRailPane
         activeConversation={null}
@@ -286,7 +398,7 @@ function renderPane({
         isDeletingProjectConversations={false}
         isLoadingConversations={false}
         labels={LABELS}
-        pendingDeleteConversationId={null}
+        pendingDeleteConversationId={pendingDeleteConversationId}
         railQuery={{
           ...RAIL_QUERY,
           activityController,
@@ -303,8 +415,8 @@ function renderPane({
         userProjects={[]}
         workspaceId="workspace-1"
         workspaceUserProjectI18n={PROJECT_I18N}
-        onCancelDeleteConversation={() => {}}
-        onConfirmDeleteConversation={() => {}}
+        onCancelDeleteConversation={() => setPendingDeleteConversationId(null)}
+        onConfirmDeleteConversation={onConfirmDeleteConversation}
         onConfirmDeleteConversations={() => {}}
         onConfirmDeleteProjectConversations={async () => []}
         onConversationQueryChange={setConversationQuery}
@@ -312,9 +424,9 @@ function renderPane({
         onMarkConversationUnread={() => {}}
         onMoveProject={async () => {}}
         onRemoveProject={() => {}}
-        onRequestDeleteConversation={() => {}}
+        onRequestDeleteConversation={setPendingDeleteConversationId}
         onRequestRenameConversation={() => {}}
-        onSelectConversation={() => {}}
+        onSelectConversation={onSelectConversation}
         onSelectConversationFilterTarget={() => {}}
         onToggleConversationPinned={() => {}}
         onToggleProjectPinned={async () => {}}
@@ -379,6 +491,10 @@ const PROJECT_I18N = {
 } as never;
 
 const LABELS = {
+  cancel: "Cancel",
+  deleteSession: "Delete session",
+  deleteSessionConfirm: "Confirm delete",
+  showMoreConversations: "Show more",
   activityConversationSource: "Conversation",
   activityNothingNeedsAttention: "Nothing needs attention",
   activityPriority: "Priority",

@@ -539,6 +539,9 @@ function createTransportClient(
     async updateWorkspaceAgentSessionPin() {
       throw new Error("not used");
     },
+    async updateWorkspaceAgentSessionArchive() {
+      throw new Error("unused");
+    },
     async submitWorkspaceAgentInteractive() {
       throw new Error("not used");
     },

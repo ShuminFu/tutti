@@ -178,6 +178,8 @@ SELECT EXISTS(
 		dto.RailSectionKey = existingRail.Section.Key
 		return false, false, projected.LastEventUnixMS, dto, nil
 	}
+	// Organization metadata belongs to canonical commands, never runtime reports.
+	projected.Session.ArchivedAtUnixMS = existing.ArchivedAtUnixMS
 	session := projected.Session
 	settingsJSON, err := marshalJSONMap(session.Settings)
 	if err != nil {
@@ -191,6 +193,7 @@ SELECT EXISTS(
 	if capabilities == nil {
 		capabilities = legacyCapabilities
 	}
+	metadata.ArchivedAtUnixMS = existing.ArchivedAtUnixMS
 	metadataJSON, err := marshalSessionMetadata(metadata, capabilities)
 	if err != nil {
 		return false, false, 0, Session{}, fmt.Errorf("encode workspace agent session metadata: %w", err)

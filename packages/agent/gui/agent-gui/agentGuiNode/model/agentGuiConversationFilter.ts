@@ -39,12 +39,14 @@ export function filterAgentGUIConversationSummaries(
   filter: AgentGUIConversationFilter
 ): AgentGUIConversationSummary[] {
   const normalizedFilter = normalizeAgentGUIConversationFilter(filter);
-  return conversations.filter((conversation) =>
-    matchesAgentGUIConversationFilterAgentTarget(
-      conversation.agentTargetId,
-      conversation.provider,
-      normalizedFilter
-    )
+  return conversations.filter(
+    (conversation) =>
+      (conversation.archivedAtUnixMs ?? 0) === 0 &&
+      matchesAgentGUIConversationFilterAgentTarget(
+        conversation.agentTargetId,
+        conversation.provider,
+        normalizedFilter
+      )
   );
 }
 
@@ -53,12 +55,14 @@ export function filterWorkspaceAgentActivitySessionsForConversations(
   filter: AgentGUIConversationFilter
 ): AgentActivitySession[] {
   const normalizedFilter = normalizeAgentGUIConversationFilter(filter);
-  return sessions.filter((session) =>
-    matchesAgentGUIConversationFilterAgentTarget(
-      session.agentTargetId,
-      session.provider,
-      normalizedFilter
-    )
+  return sessions.filter(
+    (session) =>
+      (session.archivedAtUnixMs ?? 0) === 0 &&
+      matchesAgentGUIConversationFilterAgentTarget(
+        session.agentTargetId,
+        session.provider,
+        normalizedFilter
+      )
   );
 }
 

@@ -210,6 +210,7 @@ func sessionFromPersisted(session PersistedSession, resumable bool) Session {
 	result.ParentToolCallID = strings.TrimSpace(session.ParentToolCallID)
 	result.MessageVersion = session.MessageVersion
 	result.Metadata = session.Metadata
+	result.CanonicalUpdatedAtUnixMS = session.UpdatedAtUnixMS
 	result.Capabilities = canonical.CloneCapabilitySnapshot(session.Capabilities)
 	result.Isolation = sessionIsolationFromRuntimeContext(session.InternalRuntimeContext)
 	return result
@@ -265,6 +266,7 @@ func mergePersistedSessionState(session Session, persisted PersistedSession) Ses
 		session.UpdatedAt = timeFromUnixMSPointer(persisted.UpdatedAtUnixMS)
 	}
 	session.Metadata = persisted.Metadata
+	session.CanonicalUpdatedAtUnixMS = persisted.UpdatedAtUnixMS
 	if session.Capabilities == nil {
 		session.Capabilities = canonical.CloneCapabilitySnapshot(persisted.Capabilities)
 	}

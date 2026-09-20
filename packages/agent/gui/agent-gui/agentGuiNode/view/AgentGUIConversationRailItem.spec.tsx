@@ -13,6 +13,10 @@ import {
 import { AgentTargetInfoRendererProvider } from "../../../shared/AgentTargetInfoRendererContext";
 import type { AgentGUIViewLabels } from "./AgentGUINodeView.types";
 import { AgentGUIConversationRailItem } from "./AgentGUIConversationRailItem";
+import {
+  AgentGUIRuntimeProvider,
+  type AgentGUIRuntime
+} from "../../../agentActivityRuntime";
 
 describe("AgentGUIConversationRailItem interaction lock", () => {
   it("keeps the provider icon and plain @ title without a task icon", () => {
@@ -350,15 +354,37 @@ describe("AgentGUIConversationRailItem interaction lock", () => {
     );
   });
 
-  it("keeps pin and delete as direct row actions outside the menu", () => {
-    renderRailItem({ isRailInteractionLocked: () => false });
+  it("archives through the optional runtime action and requests delete only from the menu", async () => {
+    const setSessionArchived = vi.fn(async () => ({}));
+    const onRequestDeleteConversation = vi.fn();
+    renderRailItem({
+      isRailInteractionLocked: () => false,
+      runtime: { setSessionArchived } as unknown as AgentGUIRuntime,
+      onRequestDeleteConversation
+    });
 
     expect(screen.queryByRole("button", { name: "Pin" })).toBeNull();
     fireEvent.pointerEnter(
       screen.getByTestId("agent-gui-conversation-item-session-1")
     );
     expect(screen.getByRole("button", { name: "Pin" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Archive session" }));
+    expect(setSessionArchived).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      agentSessionId: "session-1",
+      archived: true
+    });
+    fireEvent.contextMenu(
+      screen.getByTestId("agent-gui-conversation-item-session-1")
+    );
+    fireEvent.pointerUp(
+      await screen.findByRole("menuitem", { name: "Delete session" }),
+      { button: 0 }
+    );
+    await waitFor(() =>
+      expect(onRequestDeleteConversation).toHaveBeenCalledWith("session-1")
+    );
   });
 
   it("uses the same shared actions for the more button and context menu", async () => {
@@ -375,11 +401,12 @@ describe("AgentGUIConversationRailItem interaction lock", () => {
       "Rename",
       "Copy as Markdown",
       "Copy as reference",
-      "Mark as unread"
+      "Mark as unread",
+      "Delete session"
     ]) {
       expect(await screen.findByRole("menuitem", { name: label })).toBeTruthy();
     }
-    for (const label of ["Pin", "Delete", "Archive"]) {
+    for (const label of ["Pin", "Archive"]) {
       expect(screen.queryByRole("menuitem", { name: label })).toBeNull();
     }
     fireEvent.keyDown(document.activeElement ?? document.body, {
@@ -393,11 +420,12 @@ describe("AgentGUIConversationRailItem interaction lock", () => {
       "Rename",
       "Copy as Markdown",
       "Copy as reference",
-      "Mark as unread"
+      "Mark as unread",
+      "Delete session"
     ]) {
       expect(await screen.findByRole("menuitem", { name: label })).toBeTruthy();
     }
-    for (const label of ["Pin", "Delete", "Archive"]) {
+    for (const label of ["Pin", "Archive"]) {
       expect(screen.queryByRole("menuitem", { name: label })).toBeNull();
     }
   });
@@ -579,6 +607,8 @@ describe("AgentGUIConversationRailItem 在线圆点", () => {
 });
 
 function renderRailItem(overrides: {
+  runtime?: AgentGUIRuntime;
+  onRequestDeleteConversation?: (id: string) => void;
   agentTargets?: readonly AgentMessageMarkdownAgentTarget[];
   hostLiveness?: React.ComponentProps<
     typeof AgentGUIConversationRailItem
@@ -618,7 +648,9 @@ function renderRailItem(overrides: {
       workspaceId="workspace-1"
       onCancelDeleteConversation={() => {}}
       onConfirmDeleteConversation={() => {}}
-      onRequestDeleteConversation={() => {}}
+      onRequestDeleteConversation={
+        overrides.onRequestDeleteConversation ?? (() => {})
+      }
       onRequestRenameConversation={
         overrides.onRequestRenameConversation ?? vi.fn()
       }
@@ -640,7 +672,13 @@ function renderRailItem(overrides: {
         agentTargets={overrides.targetInfoTargets ?? []}
         renderer={overrides.renderAgentTargetInfo}
       >
-        {withTargetPresentation}
+        {overrides.runtime ? (
+          <AgentGUIRuntimeProvider runtime={overrides.runtime}>
+            {withTargetPresentation}
+          </AgentGUIRuntimeProvider>
+        ) : (
+          withTargetPresentation
+        )}
       </AgentTargetInfoRendererProvider>
     </TooltipProvider>
   );

@@ -305,6 +305,9 @@ type ServerInterface interface {
 	// Record explicit user acceptance for the session's claimed work
 	// (POST /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/acceptance)
 	AcceptAgentSessionWork(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, agentSessionID AgentSessionID)
+	// Archive or restore a root session without changing its runtime or history
+	// (POST /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/archive)
+	UpdateWorkspaceAgentSessionArchive(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, agentSessionID AgentSessionID)
 	// Read one workspace agent session attachment
 	// (GET /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/attachments/{attachmentID})
 	ReadWorkspaceAgentSessionAttachment(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, agentSessionID AgentSessionID, attachmentID AgentSessionAttachmentID)
@@ -1482,6 +1485,12 @@ func (siw *ServerInterfaceWrapper) ListAgentTargets(w http.ResponseWriter, r *ht
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListAgentTargetsParams
 
@@ -1497,12 +1506,6 @@ func (siw *ServerInterfaceWrapper) ListAgentTargets(w http.ResponseWriter, r *ht
 		}
 		return
 	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListAgentTargets(w, r, params)
@@ -3693,6 +3696,19 @@ func (siw *ServerInterfaceWrapper) ListWorkspaceAgentSessions(w http.ResponseWri
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListWorkspaceAgentSessionsParams
 
+	// ------------- Optional query parameter "includeArchived" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "includeArchived", r.URL.Query(), &params.IncludeArchived, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "includeArchived"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "includeArchived", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "agentTargetId" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "agentTargetId", r.URL.Query(), &params.AgentTargetId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -4127,6 +4143,47 @@ func (siw *ServerInterfaceWrapper) AcceptAgentSessionWork(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AcceptAgentSessionWork(w, r, workspaceID, agentSessionID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWorkspaceAgentSessionArchive operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWorkspaceAgentSessionArchive(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspaceID" -------------
+	var workspaceID WorkspaceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspaceID", r.PathValue("workspaceID"), &workspaceID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspaceID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agentSessionID" -------------
+	var agentSessionID AgentSessionID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentSessionID", r.PathValue("agentSessionID"), &agentSessionID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentSessionID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWorkspaceAgentSessionArchive(w, r, workspaceID, agentSessionID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11468,6 +11525,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}", wrapper.GetWorkspaceAgentSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/acceptance", wrapper.GetAgentSessionAcceptance)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/acceptance", wrapper.AcceptAgentSessionWork)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/archive", wrapper.UpdateWorkspaceAgentSessionArchive)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/attachments/{attachmentID}", wrapper.ReadWorkspaceAgentSessionAttachment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/automation-rule-override", wrapper.GetAgentSessionAutomationRuleOverride)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/automation-rule-override", wrapper.SetAgentSessionAutomationRuleOverride)
@@ -20331,6 +20389,108 @@ type AcceptAgentSessionWork503JSONResponse struct {
 }
 
 func (response AcceptAgentSessionWork503JSONResponse) VisitAcceptAgentSessionWorkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWorkspaceAgentSessionArchiveRequestObject struct {
+	WorkspaceID    WorkspaceID    `json:"workspaceID"`
+	AgentSessionID AgentSessionID `json:"agentSessionID"`
+	Body           *UpdateWorkspaceAgentSessionArchiveJSONRequestBody
+}
+
+type UpdateWorkspaceAgentSessionArchiveResponseObject interface {
+	VisitUpdateWorkspaceAgentSessionArchiveResponse(w http.ResponseWriter) error
+}
+
+type UpdateWorkspaceAgentSessionArchive200JSONResponse WorkspaceAgentSessionResponse
+
+func (response UpdateWorkspaceAgentSessionArchive200JSONResponse) VisitUpdateWorkspaceAgentSessionArchiveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWorkspaceAgentSessionArchive400JSONResponse struct {
+	InvalidRequestErrorJSONResponse
+}
+
+func (response UpdateWorkspaceAgentSessionArchive400JSONResponse) VisitUpdateWorkspaceAgentSessionArchiveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWorkspaceAgentSessionArchive401JSONResponse struct{ UnauthorizedErrorJSONResponse }
+
+func (response UpdateWorkspaceAgentSessionArchive401JSONResponse) VisitUpdateWorkspaceAgentSessionArchiveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWorkspaceAgentSessionArchive404JSONResponse struct {
+	WorkspaceNotFoundErrorJSONResponse
+}
+
+func (response UpdateWorkspaceAgentSessionArchive404JSONResponse) VisitUpdateWorkspaceAgentSessionArchiveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWorkspaceAgentSessionArchive502JSONResponse struct {
+	WorkspaceOperationErrorJSONResponse
+}
+
+func (response UpdateWorkspaceAgentSessionArchive502JSONResponse) VisitUpdateWorkspaceAgentSessionArchiveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWorkspaceAgentSessionArchive503JSONResponse struct {
+	ServiceUnavailableErrorJSONResponse
+}
+
+func (response UpdateWorkspaceAgentSessionArchive503JSONResponse) VisitUpdateWorkspaceAgentSessionArchiveResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -39715,6 +39875,9 @@ type StrictServerInterface interface {
 	// Record explicit user acceptance for the session's claimed work
 	// (POST /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/acceptance)
 	AcceptAgentSessionWork(ctx context.Context, request AcceptAgentSessionWorkRequestObject) (AcceptAgentSessionWorkResponseObject, error)
+	// Archive or restore a root session without changing its runtime or history
+	// (POST /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/archive)
+	UpdateWorkspaceAgentSessionArchive(ctx context.Context, request UpdateWorkspaceAgentSessionArchiveRequestObject) (UpdateWorkspaceAgentSessionArchiveResponseObject, error)
 	// Read one workspace agent session attachment
 	// (GET /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/attachments/{attachmentID})
 	ReadWorkspaceAgentSessionAttachment(ctx context.Context, request ReadWorkspaceAgentSessionAttachmentRequestObject) (ReadWorkspaceAgentSessionAttachmentResponseObject, error)
@@ -42974,6 +43137,42 @@ func (sh *strictHandler) AcceptAgentSessionWork(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AcceptAgentSessionWorkResponseObject); ok {
 		if err := validResponse.VisitAcceptAgentSessionWorkResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateWorkspaceAgentSessionArchive operation middleware
+func (sh *strictHandler) UpdateWorkspaceAgentSessionArchive(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, agentSessionID AgentSessionID) {
+	var request UpdateWorkspaceAgentSessionArchiveRequestObject
+
+	request.WorkspaceID = workspaceID
+	request.AgentSessionID = agentSessionID
+
+	var body UpdateWorkspaceAgentSessionArchiveJSONRequestBody
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateWorkspaceAgentSessionArchive(ctx, request.(UpdateWorkspaceAgentSessionArchiveRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateWorkspaceAgentSessionArchive")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateWorkspaceAgentSessionArchiveResponseObject); ok {
+		if err := validResponse.VisitUpdateWorkspaceAgentSessionArchiveResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

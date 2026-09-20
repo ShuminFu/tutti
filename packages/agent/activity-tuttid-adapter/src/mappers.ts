@@ -92,6 +92,7 @@ export function agentActivitySessionFromTuttidSession(
     messageVersion: session.messageVersion,
     lastEventUnixMs: updatedAtUnixMs,
     pinnedAtUnixMs: session.pinnedAtUnixMs ?? null,
+    archivedAtUnixMs: session.archivedAtUnixMs ?? 0,
     startedAtUnixMs: createdAtUnixMs,
     endedAtUnixMs: session.endedAtUnixMs ?? null,
     createdAtUnixMs,

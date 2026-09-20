@@ -280,6 +280,9 @@ func (s *Service) ListSessionSectionPage(
 	if sectionKey == sessionSectionKeyConversations {
 		return s.sessionSectionPage(ctx, workspaceID, sessionSectionKindConversations, sectionKey, nil, input.Cursor, input.Limit, agentTargetID)
 	}
+	if sectionKey == agentactivitybiz.ArchivedSessionPageKey {
+		return s.sessionSectionPage(ctx, workspaceID, "archive", sectionKey, nil, input.Cursor, input.Limit, agentTargetID)
+	}
 	projects, err := s.currentUserProjects(ctx)
 	if err != nil {
 		return SessionSection{}, err

@@ -73,6 +73,12 @@ export interface AgentActivityAdapter {
   setSessionPinned(
     input: AgentActivitySetSessionPinnedInput
   ): Promise<AgentActivitySession>;
+  setSessionArchived?(input: {
+    workspaceId: string;
+    agentSessionId: string;
+    archived: boolean;
+    signal?: AbortSignal;
+  }): Promise<AgentActivitySession>;
   forkSession(
     input: AgentActivityForkSessionThroughTurnInput
   ): Promise<AgentActivityForkSessionResult>;

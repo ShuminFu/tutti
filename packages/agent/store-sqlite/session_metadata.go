@@ -9,10 +9,11 @@ import (
 )
 
 type SessionMetadata struct {
-	Visible  bool          `json:"visible"`
-	Imported bool          `json:"imported"`
-	Usage    *SessionUsage `json:"usage,omitempty"`
-	Goal     *SessionGoal  `json:"goal,omitempty"`
+	ArchivedAtUnixMS int64         `json:"archivedAtUnixMs,omitempty"`
+	Visible          bool          `json:"visible"`
+	Imported         bool          `json:"imported"`
+	Usage            *SessionUsage `json:"usage,omitempty"`
+	Goal             *SessionGoal  `json:"goal,omitempty"`
 }
 
 // persistedSessionMetadata is the private compatibility carrier for
@@ -241,6 +242,9 @@ func DecodeSessionMetadataJSON(raw []byte) (SessionMetadata, *canonical.Capabili
 }
 
 func validateSessionMetadata(value SessionMetadata) error {
+	if value.ArchivedAtUnixMS < 0 {
+		return fmt.Errorf("archive timestamp must be non-negative")
+	}
 	if value.Usage != nil {
 		if err := validateSessionUsage(*value.Usage); err != nil {
 			return err

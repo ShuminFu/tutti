@@ -139,6 +139,7 @@ export interface AgentActivitySession {
   startedAtUnixMs: number;
   endedAtUnixMs: number | null;
   pinnedAtUnixMs: number | null;
+  archivedAtUnixMs?: number;
   createdAtUnixMs: number;
   updatedAtUnixMs: number;
 }

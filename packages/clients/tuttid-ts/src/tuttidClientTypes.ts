@@ -776,6 +776,7 @@ export interface TuttidClient
   listWorkspaceAgentSessions(
     workspaceID: string,
     request?: {
+      includeArchived?: boolean;
       agentTargetId?: string;
       cursor?: string;
       limit?: number;
@@ -1035,6 +1036,12 @@ export interface TuttidClient
     workspaceID: string,
     agentSessionID: string,
     request: UpdateWorkspaceAgentSessionPinRequest,
+    requestOptions?: TuttidRequestOptions
+  ): Promise<WorkspaceAgentSession>;
+  updateWorkspaceAgentSessionArchive(
+    workspaceID: string,
+    agentSessionID: string,
+    request: import("./generated/types.gen").UpdateWorkspaceAgentSessionArchiveData["body"],
     requestOptions?: TuttidRequestOptions
   ): Promise<WorkspaceAgentSession>;
   updateWorkspaceAgentSessionTitle(

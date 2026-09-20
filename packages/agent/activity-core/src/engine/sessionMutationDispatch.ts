@@ -8,6 +8,41 @@ import type {
   SessionForkThroughTurnMutationRecord
 } from "./sessionMutations.types.ts";
 import type { AgentSessionEngine } from "./types.ts";
+import { projectAgentActivitySession } from "./agentActivitySnapshot.projector.ts";
+import {
+  selectEngineActiveTurn,
+  selectEngineInteractionsForSession,
+  selectEngineLatestTurn,
+  selectEnginePendingInteractions,
+  selectEngineSession
+} from "./sessionLifecycle.selectors.ts";
+
+export async function commitSessionMetadata(
+  engine: AgentSessionEngine,
+  intent: Extract<
+    SessionMutationsIntent,
+    {
+      type:
+        | "session/renameRequested"
+        | "session/pinRequested"
+        | "session/archiveRequested";
+    }
+  >,
+  cancellation: SessionMutationCancellation
+) {
+  await dispatchSessionMutationWithCancellation(engine, intent, cancellation);
+  const state = engine.getSnapshot();
+  const id = intent.agentSessionId;
+  const session = selectEngineSession(state, id);
+  if (!session) throw new Error("agent_session_mutation_result_missing");
+  return projectAgentActivitySession(
+    session,
+    selectEngineActiveTurn(state, id),
+    selectEngineLatestTurn(state, id),
+    selectEngineInteractionsForSession(state, id),
+    selectEnginePendingInteractions(state, id)
+  );
+}
 
 export interface DispatchSessionForkThroughTurnInput {
   sourceAgentSessionId: string;

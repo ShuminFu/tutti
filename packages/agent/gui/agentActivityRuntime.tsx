@@ -450,6 +450,12 @@ export interface AgentGUIRuntime {
   setSessionPinned(
     input: AgentActivityRuntimeSetSessionPinnedInput
   ): Promise<AgentActivitySession>;
+  setSessionArchived?(input: {
+    workspaceId: string;
+    agentSessionId: string;
+    archived: boolean;
+    signal?: AbortSignal;
+  }): Promise<AgentActivitySession>;
   trackSettingsProjectChange?(
     input: AgentActivityRuntimeTrackSettingsProjectChangeInput
   ): Promise<void>;

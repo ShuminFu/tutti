@@ -16,8 +16,200 @@ import {
 import { resolveConversationRailQueryScope } from "./agentGuiConversationRailQueryTypes";
 import { createConversationRailConversationsSelector } from "./agentGuiConversationRailQuerySnapshot";
 import type { CachedConversationRailQuery } from "./agentGuiConversationRailQueryCache";
+import { createAgentGUIConversationRailQueryController } from "../../../agentConversationRailController";
 
 describe("AgentGUIConversationRailQueryController", () => {
+  it("refreshes shared closed Archive and inactive target caches after archive and restore", async () => {
+    const engine = createTestAgentSessionEngine();
+    let session = createTestSession("session", "conversations");
+    const runtime: ConversationRailQueryRuntime = {
+      listSessionSections: vi.fn(async () => ({
+        workspaceId: "test-workspace",
+        sections: [
+          {
+            kind: "conversations" as const,
+            sectionKey: "conversations",
+            sessions: session.archivedAtUnixMs ? [] : [session],
+            hasMore: false,
+            totalCount: session.archivedAtUnixMs ? 0 : 1
+          }
+        ]
+      })),
+      listSessionSectionPage: vi.fn(async () => ({
+        kind: "archive" as const,
+        sectionKey: "archive",
+        sessions: session.archivedAtUnixMs ? [session] : [],
+        hasMore: false,
+        totalCount: session.archivedAtUnixMs ? 1 : 0
+      }))
+    };
+    const open = (scope: ConversationRailQueryScope) => {
+      const controller = createAgentGUIConversationRailQueryController({
+        engine,
+        runtime,
+        workspaceId: "test-workspace",
+        getActiveConversationId: () => null
+      });
+      controller.configure(scope);
+      return { controller, close: controller.attach() };
+    };
+    const all: ConversationRailQueryScope = {
+      conversationFilter: { kind: "all" },
+      userProjects: []
+    };
+    const archiveScope = { ...all, archiveOnly: true };
+    const normal = open(all);
+    await vi.waitFor(() =>
+      expect(normal.controller.getSnapshot().runtimeRailSectionsPending).toBe(
+        false
+      )
+    );
+    const initialArchive = open(archiveScope);
+    await vi.waitFor(() =>
+      expect(
+        initialArchive.controller.getSnapshot().runtimeRailSectionsPending
+      ).toBe(false)
+    );
+    expect(
+      initialArchive.controller.getSnapshot().runtimeRailMemberships?.[0]
+        ?.sessionIds
+    ).toEqual([]);
+    initialArchive.close();
+    session = { ...session, archivedAtUnixMs: 20, updatedAtUnixMs: 2 };
+    engine.dispatch({ type: "session/upserted", session });
+    const reopenedArchive = open(archiveScope);
+    await vi.waitFor(() =>
+      expect(
+        reopenedArchive.controller.getSnapshot().runtimeRailMemberships?.[0]
+          ?.sessionIds
+      ).toEqual(["session"])
+    );
+    expect(runtime.listSessionSectionPage).toHaveBeenCalledTimes(2);
+    reopenedArchive.close();
+
+    const targetScope: ConversationRailQueryScope = {
+      ...all,
+      conversationFilter: { kind: "agentTarget", agentTargetId: "local:codex" }
+    };
+    const target = open(targetScope);
+    await vi.waitFor(() =>
+      expect(target.controller.getSnapshot().runtimeRailSectionsPending).toBe(
+        false
+      )
+    );
+    expect(
+      target.controller.getSnapshot().runtimeRailMemberships?.[0]?.sessionIds
+    ).toEqual([]);
+    target.close();
+    session = { ...session, archivedAtUnixMs: 0, updatedAtUnixMs: 3 };
+    engine.dispatch({ type: "session/upserted", session });
+    const reopenedTarget = open(targetScope);
+    await vi.waitFor(() =>
+      expect(
+        reopenedTarget.controller.getSnapshot().runtimeRailMemberships?.[0]
+          ?.sessionIds
+      ).toEqual(["session"])
+    );
+    reopenedTarget.close();
+    normal.close();
+    engine.dispose();
+  });
+
+  it("evicts an archived loaded tail, fences a stale page, and refreshes selected restoration", async () => {
+    const engine = createTestAgentSessionEngine();
+    const first = createTestSession("first", "conversations");
+    const tail = createTestSession("tail", "conversations");
+    let archived = false;
+    let restored = false;
+    let resolveStale!: () => void;
+    const listSessionSections = vi.fn(async () => ({
+      workspaceId: "test-workspace",
+      sections: [
+        {
+          kind: "conversations" as const,
+          sectionKey: "conversations",
+          sessions: restored
+            ? [first, { ...tail, updatedAtUnixMs: 3 }]
+            : [first],
+          totalCount: archived ? 1 : 2,
+          hasMore: !archived && !restored,
+          nextCursor: "tail-page"
+        }
+      ]
+    }));
+    let pageCalls = 0;
+    const controller = new AgentGUIConversationRailQueryController({
+      engine,
+      getActiveConversationId: () => "tail",
+      runtime: {
+        listSessionSections,
+        listSessionSectionPage: async () => {
+          if (pageCalls++ > 0)
+            await new Promise<void>((resolve) => {
+              resolveStale = resolve;
+            });
+          return {
+            kind: "conversations",
+            sectionKey: "conversations",
+            sessions: [tail],
+            totalCount: 2,
+            hasMore: true,
+            nextCursor: "stale-page"
+          };
+        }
+      },
+      workspaceId: "test-workspace"
+    });
+    controller.configure({
+      conversationFilter: { kind: "all" },
+      userProjects: []
+    });
+    const detach = controller.attach();
+    await vi.waitFor(() =>
+      expect(controller.getSnapshot().runtimeRailSectionsPending).toBe(false)
+    );
+    controller.loadMoreSectionConversations({ id: "conversations" });
+    await vi.waitFor(() =>
+      expect(
+        controller.getSnapshot().runtimeRailMemberships?.[0]?.sessionIds
+      ).toEqual(["first", "tail"])
+    );
+    const presentation = createRailConversationPresentation(controller, engine);
+    controller.loadMoreSectionConversations({ id: "conversations" });
+    archived = true;
+    engine.dispatch({
+      type: "session/upserted",
+      session: { ...tail, archivedAtUnixMs: 20, updatedAtUnixMs: 2 }
+    });
+    resolveStale();
+    await vi.waitFor(() =>
+      expect(
+        controller.getSnapshot().runtimeRailMemberships?.[0]?.sessionIds
+      ).toEqual(["first"])
+    );
+    expect(
+      selectEngineSession(engine.getSnapshot(), "tail")?.archivedAtUnixMs
+    ).toBe(20);
+    expect(
+      engine.getSnapshot().sessionLifecycle.deletedSessionIds.tail
+    ).toBeUndefined();
+    archived = false;
+    restored = true;
+    engine.dispatch({
+      type: "session/upserted",
+      session: { ...tail, archivedAtUnixMs: 0, updatedAtUnixMs: 3 }
+    });
+    await vi.waitFor(() =>
+      expect(
+        controller.getSnapshot().runtimeRailMemberships?.[0]?.sessionIds
+      ).toEqual(["first", "tail"])
+    );
+    expect(listSessionSections).toHaveBeenCalledTimes(3);
+    presentation.dispose();
+    detach();
+    engine.dispose();
+  });
+
   it("does not ingest a first-page response after detach", async () => {
     const engine = createTestAgentSessionEngine();
     const session = createTestSession("detached-session", "conversations");

@@ -45,6 +45,7 @@ export interface AgentGUIConversationSummary {
   railSectionKey?: string;
   project?: AgentGUIConversationProjectSummary | null;
   pinnedAtUnixMs?: number | null;
+  archivedAtUnixMs?: number;
   sortTimeUnixMs?: number;
   updatedAtUnixMs: number;
   // 会话已结束（后端 `CanonicalAgentSession.endedAtUnixMs`）。会话栏据此

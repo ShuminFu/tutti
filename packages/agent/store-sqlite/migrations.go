@@ -327,6 +327,9 @@ CREATE TABLE IF NOT EXISTS `+schemaMigrationsTable+` (
 	if err := s.applyAgentMCPAppResourcesV1(ctx); err != nil {
 		return err
 	}
+	if err := s.applySessionArchiveIndex(ctx); err != nil {
+		return err
+	}
 	return s.applyWorkspaceAgentActivityRailV2(ctx)
 }
 

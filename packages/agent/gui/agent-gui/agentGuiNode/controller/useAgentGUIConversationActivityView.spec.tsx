@@ -5,6 +5,28 @@ import { createAgentGUIConversationActivityController } from "./agentGUIConversa
 import { useAgentGUIConversationActivityView } from "./useAgentGUIConversationActivityView";
 
 describe("useAgentGUIConversationActivityView", () => {
+  it("evicts an archived Priority member from an already-open retained view without evicting other summaries", () => {
+    const controller = createAgentGUIConversationActivityController();
+    const sibling = { ...CONVERSATION, id: "sibling" };
+    configure(controller, [CONVERSATION, sibling]);
+    controller.toggle();
+    configure(controller, [sibling], {
+      archivedSessionIds: { "session-1": true }
+    });
+    expect(controller.getSnapshot().conversationCache.has("session-1")).toBe(
+      false
+    );
+    expect(controller.getSnapshot().conversationCache.get("sibling")).toBe(
+      sibling
+    );
+    expect(
+      controller.getSnapshot().activation?.priority.map((member) => member.id)
+    ).toEqual(["sibling"]);
+    configure(controller, [CONVERSATION, sibling]);
+    expect(
+      controller.getSnapshot().activation?.priority.map((member) => member.id)
+    ).toContain("session-1");
+  });
   it("clears an active view when the host capability fails closed", () => {
     const activityController = createAgentGUIConversationActivityController();
     const rendered = renderHook(() =>
@@ -212,6 +234,7 @@ function configure(
   overrides: Partial<{
     available: boolean;
     deletedSessionIds: Readonly<Record<string, true>>;
+    archivedSessionIds: Readonly<Record<string, true>>;
     identityKey: string;
     scopeKey: string;
   }> = {}
@@ -220,6 +243,7 @@ function configure(
     available: overrides.available ?? true,
     conversations,
     deletedSessionIds: overrides.deletedSessionIds,
+    archivedSessionIds: overrides.archivedSessionIds,
     identityKey: overrides.identityKey ?? "workspace-1",
     scopeKey: overrides.scopeKey ?? "workspace-1"
   });

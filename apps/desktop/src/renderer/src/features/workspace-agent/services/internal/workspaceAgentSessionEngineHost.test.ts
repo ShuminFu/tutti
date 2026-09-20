@@ -196,6 +196,70 @@ test("desktop host follows the shared settings-before-send workflow", async () =
   host.dispose();
 });
 
+test("workspace reconnect rereads retained sessions omitted by the bounded archive-inclusive bootstrap", async () => {
+  const reads: string[] = [];
+  const host = createWorkspaceAgentSessionEngineHost({
+    executeEngineActivateSession: async () => ({}) as never,
+    executeEngineCancelTurn: async () => ({}),
+    executeEngineGoalControl: async () => ({}) as never,
+    reconcileSession: async (command) => {
+      reads.push(command.agentSessionId);
+      host.engine.dispatch({
+        type: "session/upserted",
+        session: { ...session({ updatedAtUnixMs: 3 }), archivedAtUnixMs: 3 }
+      });
+      return {};
+    },
+    restorePendingSessionRecording() {},
+    runtimeApi: { logTerminalDiagnostic: async () => {} },
+    executeEngineSendInput: async () => ({ ok: true }),
+    executeEngineSubmitInteractive: async () => ({}) as never,
+    executeEngineSubmitPlanDecision: async () => ({}) as never,
+    subscribeSessionEvents: () => () => {},
+    takePendingSessionRecording: () => null,
+    tuttidClient: {
+      async listWorkspaceAgentSessions(
+        ...[_workspaceId, options]: Parameters<
+          TuttidClient["listWorkspaceAgentSessions"]
+        >
+      ) {
+        assert.equal(options?.includeArchived, true);
+        return {
+          sessions: [],
+          hasMore: true,
+          nextCursor: "next",
+          workspaceId: "workspace-1"
+        };
+      }
+    } as unknown as TuttidClient,
+    unactivateSession: async () => ({}) as never,
+    executeEngineUpdateSessionSettings: async () => ({}) as never,
+    updateTuttiModeActivation: async () => ({}) as never,
+    workspaceId: "workspace-1"
+  });
+  host.engine.dispatch({ session: session({}), type: "session/upserted" });
+  host.engine.dispatch({
+    type: "workspace/reconcileRequested",
+    workspaceId: "workspace-1"
+  });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  host.engine.dispatch({
+    sessions: [session({})],
+    type: "session/snapshotReceived"
+  });
+  assert.deepEqual(reads, ["session-1"]);
+  assert.equal(
+    host.engine.getSnapshot().sessionLifecycle.sessionsById["session-1"]
+      ?.archivedAtUnixMs,
+    3
+  );
+  assert.equal(
+    host.engine.getSnapshot().sessionLifecycle.deletedSessionIds["session-1"],
+    undefined
+  );
+  host.dispose();
+});
+
 test("desktop host lets the Engine apply Goal Control transport results", async () => {
   const calls: Array<
     Parameters<TuttidClient["goalControlWorkspaceAgentSession"]>
@@ -475,6 +539,7 @@ function tuttidSession(
     providerSessionId: null,
     railSectionKey: "conversations",
     resumable: true,
+    runtimeLive: false,
     rootAgentSessionId: null,
     rootTurnId: null,
     settings: {},

@@ -88,6 +88,7 @@ WHERE workspace_id = ? AND agent_session_id = ?
 		return agentactivityprojection.SessionSnapshot{}, false, fmt.Errorf("join workspace agent runtime context: %w", err)
 	}
 	session.Capabilities = agentactivityprojection.CloneCapabilitySnapshot(capabilities)
+	session.ArchivedAtUnixMS = metadata.ArchivedAtUnixMS
 	return session, true, nil
 }
 

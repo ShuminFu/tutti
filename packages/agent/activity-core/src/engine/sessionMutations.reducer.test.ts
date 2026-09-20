@@ -178,6 +178,84 @@ async function flushCommandResults(): Promise<void> {
   await Promise.resolve();
 }
 
+test("archive commits canonical metadata without removing live entities and rejects a delayed pre-archive snapshot", async () => {
+  const commands: EngineExternalCommand[] = [];
+  const engine = createAgentSessionEngine({
+    clock: { nowUnixMs: () => 42 },
+    commandPort: createTestEngineCommandPort(async (command) => {
+      commands.push(command);
+      assert.equal(command.type, "session/setArchived");
+      return {
+        session: { ...session, archivedAtUnixMs: 42, updatedAtUnixMs: 42 }
+      };
+    }),
+    identity: { origin: "local", workspaceId: "workspace-1" },
+    scheduler: { schedule: () => ({ cancel() {} }) }
+  });
+  const sibling = { ...session, agentSessionId: "sibling" };
+  engine.dispatch({
+    sessions: [session, sibling],
+    type: "session/snapshotReceived"
+  });
+  const before = engine.getSnapshot().sessionLifecycle;
+  const result = await engine.setSessionArchived({
+    agentSessionId: session.agentSessionId,
+    archived: true
+  });
+  assert.equal(result.archivedAtUnixMs, 42);
+  assert.equal(commands.length, 1);
+  engine.dispatch({ sessions: [session], type: "session/snapshotReceived" });
+  const after = engine.getSnapshot().sessionLifecycle;
+  assert.equal(
+    after.sessionsById[session.agentSessionId]?.archivedAtUnixMs,
+    42
+  );
+  assert.equal(after.sessionsById.sibling, before.sessionsById.sibling);
+  assert.equal(after.turnsById, before.turnsById);
+  assert.equal(after.interactionsById, before.interactionsById);
+  assert.equal(after.deletedSessionIds, before.deletedSessionIds);
+  engine.dispose();
+});
+
+test("unsupported archive settles as failed and releases the session for a supported mutation", async () => {
+  const timer = createManualTimer();
+  const commands: EngineExternalCommand[] = [];
+  const commandPort = createTestEngineCommandPort(async (command) => {
+    commands.push(command);
+    return { session: { ...session, pinnedAtUnixMs: 2, updatedAtUnixMs: 2 } };
+  });
+  delete commandPort.effects.setSessionArchived;
+  const engine = createAgentSessionEngine({
+    clock: timer.clock,
+    commandPort,
+    identity: { origin: "local", workspaceId: "workspace-1" },
+    scheduler: timer.scheduler
+  });
+  engine.dispatch({ session, type: "session/upserted" });
+  await assert.rejects(
+    engine.setSessionArchived({
+      agentSessionId: session.agentSessionId,
+      archived: true
+    }),
+    /agent_session_archive_unsupported/
+  );
+  const archive = Object.values(
+    engine.getSnapshot().sessionMutations.byMutationId
+  ).find((record) => record.kind === "archive");
+  assert.equal(archive?.status, "failed");
+  assert.equal(timer.pendingTaskCount(), 0);
+  const pinned = await engine.setSessionPinned({
+    agentSessionId: session.agentSessionId,
+    pinned: true
+  });
+  assert.equal(pinned.pinnedAtUnixMs, 2);
+  assert.deepEqual(
+    commands.map((command) => command.type),
+    ["session/setPinned"]
+  );
+  engine.dispose();
+});
+
 test("pin result commits mutation and canonical session in one engine notification", async () => {
   let resolveCommand: (value: unknown) => void = () => {};
   const commandPort = createTestEngineCommandPort(

@@ -27,6 +27,9 @@ func (api DaemonAPI) ListWorkspaceAgentSessions(ctx context.Context, request tut
 		}, nil
 	}
 	input := agentservice.ListSessionsInput{}
+	if request.Params.IncludeArchived != nil {
+		input.IncludeArchived = *request.Params.IncludeArchived
+	}
 	if request.Params.AgentTargetId != nil {
 		input.AgentTargetID = strings.TrimSpace(*request.Params.AgentTargetId)
 	}

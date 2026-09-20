@@ -21,6 +21,17 @@ export type SessionForkObservationAckStatus =
 
 export type SessionMutationRecord =
   | {
+      agentSessionIds: readonly [string];
+      commandId: string;
+      errorCode: string | null;
+      errorMessage: string | null;
+      kind: "archive";
+      mutationId: string;
+      archived: boolean;
+      status: SessionMutationStatus;
+      workspaceId: string;
+    }
+  | {
       agentSessionIds: readonly string[];
       commandId: string;
       deleteResult: SessionDeleteMutationResult | null;
@@ -119,6 +130,14 @@ export interface SessionForkThroughTurnRequestedIntent {
 }
 
 export type SessionMutationsIntent =
+  | {
+      type: "session/archiveRequested";
+      agentSessionId: string;
+      mutationId: string;
+      archived: boolean;
+      timeoutMs?: number;
+      workspaceId: string;
+    }
   | SessionForkThroughTurnRequestedIntent
   | SessionPinRequestedIntent
   | SessionRenameRequestedIntent
@@ -175,6 +194,15 @@ export interface SessionAcknowledgeForkObservedCommand {
 }
 
 export type SessionMutationCommand =
+  | {
+      type: "session/setArchived";
+      agentSessionId: string;
+      commandId: string;
+      correlationId: string;
+      archived: boolean;
+      timeoutMs?: number;
+      workspaceId: string;
+    }
   | SessionAcknowledgeForkObservedCommand
   | SessionForkThroughTurnCommand
   | SessionRenameCommand

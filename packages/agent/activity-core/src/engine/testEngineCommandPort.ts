@@ -55,6 +55,9 @@ export function createTestEngineCommandPort(
     setSessionPinned(_input, options) {
       return executeObserved(options);
     },
+    setSessionArchived(_input, options) {
+      return executeObserved(options);
+    },
     updateSessionSettings(_input, options) {
       return executeObserved(options);
     }

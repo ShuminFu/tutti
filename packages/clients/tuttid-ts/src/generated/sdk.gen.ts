@@ -306,6 +306,9 @@ import type {
   GetWorkspaceAgentSessionGoalData,
   GetWorkspaceAgentSessionGoalErrors,
   GetWorkspaceAgentSessionGoalResponses,
+  GetWorkspaceAgentSessionLivenessData,
+  GetWorkspaceAgentSessionLivenessErrors,
+  GetWorkspaceAgentSessionLivenessResponses,
   GetWorkspaceAgentSessionResponses,
   GetWorkspaceAgentSessionTuttiModeActivationData,
   GetWorkspaceAgentSessionTuttiModeActivationErrors,
@@ -724,6 +727,9 @@ import type {
   UpdateWorkspaceAgentData,
   UpdateWorkspaceAgentErrors,
   UpdateWorkspaceAgentResponses,
+  UpdateWorkspaceAgentSessionArchiveData,
+  UpdateWorkspaceAgentSessionArchiveErrors,
+  UpdateWorkspaceAgentSessionArchiveResponses,
   UpdateWorkspaceAgentSessionPinData,
   UpdateWorkspaceAgentSessionPinErrors,
   UpdateWorkspaceAgentSessionPinResponses,
@@ -3172,6 +3178,26 @@ export const deleteWorkspaceAgentSessionsBatch = <
   });
 
 /**
+ * Batch-read provider-process liveness for agent sessions
+ *
+ * Answers "does this session still own a live provider (ACP) process" for many sessions in one call. Idle reclamation releases a provider process without changing session status or emitting an event, so polling this endpoint is the only way to observe it. Every requested id appears in the response; unknown ids come back with found=false.
+ */
+export const getWorkspaceAgentSessionLiveness = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<GetWorkspaceAgentSessionLivenessData, ThrowOnError>
+) =>
+  (options.client ?? client).get<
+    GetWorkspaceAgentSessionLivenessResponses,
+    GetWorkspaceAgentSessionLivenessErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-sessions/liveness",
+    ...options
+  });
+
+/**
  * Permanently purge all soft-deleted agent sessions in one workspace
  */
 export const purgeWorkspaceDeletedAgentSessions = <
@@ -4066,6 +4092,28 @@ export const updateWorkspaceAgentSessionVisibility = <
   >({
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/visibility",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Archive or restore a root session without changing its runtime or history
+ */
+export const updateWorkspaceAgentSessionArchive = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<UpdateWorkspaceAgentSessionArchiveData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    UpdateWorkspaceAgentSessionArchiveResponses,
+    UpdateWorkspaceAgentSessionArchiveErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/archive",
     ...options,
     headers: {
       "Content-Type": "application/json",

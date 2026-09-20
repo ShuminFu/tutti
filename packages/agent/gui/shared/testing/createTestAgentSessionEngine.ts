@@ -84,6 +84,7 @@ export function createTestEngineCommandPort(
     respondToInteraction: (_input, options) => executeObserved(options),
     sendInput: (_input, options) => executeObserved(options),
     setSessionPinned: (_input, options) => executeObserved(options),
+    setSessionArchived: (_input, options) => executeObserved(options),
     updateSessionSettings: (_input, options) => executeObserved(options)
   };
   return {

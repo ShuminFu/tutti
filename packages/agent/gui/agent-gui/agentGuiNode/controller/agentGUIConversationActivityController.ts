@@ -5,12 +5,11 @@ import {
 } from "../model/agentGuiConversationActivityView";
 import type { AgentGUIConversationSummary } from "../model/agentGuiConversationTypes";
 
-const EMPTY_DELETED_SESSION_IDS: Readonly<Record<string, true>> = {};
-
 export interface AgentGUIConversationActivityControllerInput {
   available: boolean;
   conversations: readonly AgentGUIConversationSummary[];
   deletedSessionIds?: Readonly<Record<string, true>>;
+  archivedSessionIds?: Readonly<Record<string, true>>;
   identityKey: string;
   scopeKey: string;
 }
@@ -75,8 +74,10 @@ export function createAgentGUIConversationActivityController(): AgentGUIConversa
     const sameContext =
       snapshot.identityKey === input.identityKey &&
       snapshot.scopeKey === input.scopeKey;
-    const deletedSessionIds =
-      input.deletedSessionIds ?? EMPTY_DELETED_SESSION_IDS;
+    const deletedSessionIds = {
+      ...input.deletedSessionIds,
+      ...input.archivedSessionIds
+    };
     const candidates = input.conversations.filter(
       (conversation) => !deletedSessionIds[conversation.id]
     );
@@ -118,8 +119,10 @@ export function createAgentGUIConversationActivityController(): AgentGUIConversa
       publish(AVAILABLE_OFF_SNAPSHOT);
       return;
     }
-    const deletedSessionIds =
-      input.deletedSessionIds ?? EMPTY_DELETED_SESSION_IDS;
+    const deletedSessionIds = {
+      ...input.deletedSessionIds,
+      ...input.archivedSessionIds
+    };
     const candidates = input.conversations.filter(
       (conversation) => !deletedSessionIds[conversation.id]
     );

@@ -34,13 +34,16 @@ test("shouldBlockSleep maps sleep prevention modes to blocker state", () => {
   assert.equal(shouldBlockSleep("always", 0), true);
 });
 
-test("agent power save blocker starts while enabled sessions are running", async () => {
+test("agent power save blocker retains running archives across startup, reconnect and preference refresh", async () => {
   const eventStreamClient = createFakeEventStreamClient();
   const preferences = createFakePreferences("whileAgentRunning");
   const runtime = createFakeRuntime();
   const client = createFakeTuttidClient({
     sessions: {
-      "ws-1:session-1": createSession("session-1", "running")
+      "ws-1:session-1": {
+        ...createSession("session-1", "running"),
+        archivedAtUnixMs: 3
+      }
     }
   });
 
@@ -57,6 +60,23 @@ test("agent power save blocker starts while enabled sessions are running", async
 
   assert.deepEqual(runtime.startedTypes, ["prevent-app-suspension"]);
   assert.equal(runtime.activeIDs.size, 1);
+
+  await eventStreamClient.connect();
+  await settle();
+  assert.equal(runtime.activeIDs.size, 1);
+  assert.deepEqual(runtime.stoppedIDs, []);
+  preferences.setSleepPreventionMode("never");
+  assert.equal(runtime.activeIDs.size, 0);
+  preferences.setSleepPreventionMode("whileAgentRunning");
+  await settle();
+  assert.equal(runtime.activeIDs.size, 1);
+  client.sessions["ws-1:session-1"] = {
+    ...createSession("session-1", "completed"),
+    archivedAtUnixMs: 3
+  };
+  await eventStreamClient.connect();
+  await settle();
+  assert.equal(runtime.activeIDs.size, 0);
 
   blocker.dispose();
 });
@@ -175,13 +195,16 @@ function createFakeTuttidClient(input: {
         }
       };
     },
-    async listWorkspaceAgentSessions(workspaceID) {
+    async listWorkspaceAgentSessions(workspaceID, options) {
       return {
         hasMore: false,
         workspaceId: workspaceID,
         sessions: Object.entries(input.sessions)
           .filter(([key]) => key.startsWith(`${workspaceID}:`))
           .map(([, session]) => session)
+          .filter(
+            (session) => options?.includeArchived || !session.archivedAtUnixMs
+          )
       };
     },
     async listWorkspaces() {

@@ -220,7 +220,11 @@ export function projectConversationRailSectionsWithActiveConversation(input: {
 }): ConversationRailDisplayProjection {
   const activeConversation = input.activeConversation;
   const activeConversationId = activeConversation?.id.trim() ?? "";
-  if (!activeConversation || !activeConversationId) {
+  if (
+    !activeConversation ||
+    !activeConversationId ||
+    (activeConversation.archivedAtUnixMs ?? 0) > 0
+  ) {
     return { activeOverlay: null, sections: input.sections };
   }
 
@@ -298,6 +302,7 @@ function conversationWithRailProject(
 function conversationRailSectionId(
   conversation: AgentGUINodeViewModel["rail"]["conversations"][number]
 ): string | null {
+  if ((conversation.archivedAtUnixMs ?? 0) > 0) return null;
   if ((conversation.pinnedAtUnixMs ?? 0) > 0) {
     return "pinned";
   }
@@ -654,6 +659,7 @@ export function conversationSummariesRenderEqual(
     left.isolation?.mode === right.isolation?.mode &&
     left.railSectionKey === right.railSectionKey &&
     left.pinnedAtUnixMs === right.pinnedAtUnixMs &&
+    left.archivedAtUnixMs === right.archivedAtUnixMs &&
     left.sortTimeUnixMs === right.sortTimeUnixMs &&
     left.updatedAtUnixMs === right.updatedAtUnixMs &&
     left.isTransient === right.isTransient &&

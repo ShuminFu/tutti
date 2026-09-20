@@ -9,6 +9,7 @@ import type { CanonicalAgentSession } from "./sessionLifecycle.types.ts";
 import { canonicalTurnKey } from "./sessionEntityKeys.ts";
 import {
   validDeleteResult,
+  validArchiveResult,
   validForkResult,
   validPinResult,
   validRenameResult
@@ -52,8 +53,11 @@ export function sessionMutationsReducer(
     turnsById?: Readonly<Record<string, AgentActivityTurn>>;
   }
 ): EngineReducerResult<SessionMutationsState> {
-  if (intent.type === "session/pinRequested") {
-    return requestPin(state, intent, context);
+  if (
+    intent.type === "session/pinRequested" ||
+    intent.type === "session/archiveRequested"
+  ) {
+    return requestOrganizationUpdate(state, intent, context);
   }
   if (intent.type === "session/renameRequested") {
     return requestRename(state, intent, context);
@@ -82,6 +86,7 @@ export function sessionMutationsReducer(
   }
   if (
     intent.commandType !== "session/setPinned" &&
+    intent.commandType !== "session/setArchived" &&
     intent.commandType !== "session/rename" &&
     intent.commandType !== "sessions/delete" &&
     intent.commandType !== "session/forkThroughTurn"
@@ -95,6 +100,8 @@ export function sessionMutationsReducer(
     record.commandId !== intent.commandId ||
     record.status !== "inFlight" ||
     (record.kind === "pin" && intent.commandType !== "session/setPinned") ||
+    (record.kind === "archive" &&
+      intent.commandType !== "session/setArchived") ||
     (record.kind === "rename" && intent.commandType !== "session/rename") ||
     (record.kind === "delete" && intent.commandType !== "sessions/delete") ||
     (record.kind === "forkThroughTurn" &&
@@ -124,8 +131,11 @@ export function sessionMutationsReducer(
       status: "unknown"
     });
   }
-  if (record.kind === "pin") {
-    const session = validPinResult(intent.value, record);
+  if (record.kind === "pin" || record.kind === "archive") {
+    const session =
+      record.kind === "pin"
+        ? validPinResult(intent.value, record)
+        : validArchiveResult(intent.value, record);
     if (!session) return invalidResult(state, record);
     return {
       commands: NO_COMMANDS,
@@ -326,9 +336,12 @@ function requestForkThroughTurn(
   };
 }
 
-function requestPin(
+function requestOrganizationUpdate(
   state: SessionMutationsState,
-  intent: Extract<EngineIntent, { type: "session/pinRequested" }>,
+  intent: Extract<
+    EngineIntent,
+    { type: "session/pinRequested" | "session/archiveRequested" }
+  >,
   context: {
     deletedSessionIds: Readonly<Record<string, true>>;
     sessionsById: Readonly<Record<string, CanonicalAgentSession>>;
@@ -345,23 +358,27 @@ function requestPin(
     state.byMutationId[mutationId] ||
     context.deletedSessionIds[agentSessionId] ||
     session?.workspaceId !== workspaceId ||
+    (intent.type === "session/archiveRequested" && session.kind !== "root") ||
     hasInFlightOverlap(state, [agentSessionId])
   ) {
     return unchanged(state);
   }
-  const record: Extract<SessionMutationRecord, { kind: "pin" }> = {
+  const record: Extract<SessionMutationRecord, { kind: "pin" | "archive" }> = {
     agentSessionIds: [agentSessionId],
     commandId: mutationId,
     errorCode: null,
     errorMessage: null,
-    kind: "pin",
+    ...(intent.type === "session/pinRequested"
+      ? { kind: "pin" as const, pinned: intent.pinned }
+      : { kind: "archive" as const, archived: intent.archived }),
     mutationId,
-    pinned: intent.pinned,
     status: "inFlight",
     workspaceId
   };
-  const currentlyPinned = session.pinnedAtUnixMs != null;
-  if (currentlyPinned === intent.pinned) {
+  if (
+    intent.type === "session/pinRequested" &&
+    (session.pinnedAtUnixMs != null) === intent.pinned
+  ) {
     return replaceRecord(state, { ...record, status: "succeeded" });
   }
   return {
@@ -370,11 +387,15 @@ function requestPin(
         agentSessionId,
         commandId: mutationId,
         correlationId: mutationId,
-        pinned: intent.pinned,
+        ...(intent.type === "session/pinRequested"
+          ? { type: "session/setPinned" as const, pinned: intent.pinned }
+          : {
+              type: "session/setArchived" as const,
+              archived: intent.archived
+            }),
         ...(intent.timeoutMs === undefined
           ? {}
           : { timeoutMs: intent.timeoutMs }),
-        type: "session/setPinned",
         workspaceId
       }
     ],

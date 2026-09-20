@@ -207,7 +207,13 @@ export type EngineExternalCommand =
 type AgentSessionEffectCommand =
   | Extract<
       SessionMutationCommand,
-      { type: "session/rename" | "session/setPinned" | "sessions/delete" }
+      {
+        type:
+          | "session/rename"
+          | "session/setPinned"
+          | "session/setArchived"
+          | "sessions/delete";
+      }
     >
   | InteractionRespondCommand
   | PromptQueueSendCommand
@@ -407,6 +413,10 @@ export interface AgentSessionEffectPort {
     input: Omit<AgentActivitySetSessionPinnedInput, "signal">,
     options?: EngineEffectOptions
   ): Promise<{ session: AgentActivitySession }>;
+  setSessionArchived?(
+    input: { workspaceId: string; agentSessionId: string; archived: boolean },
+    options?: EngineEffectOptions
+  ): Promise<{ session: AgentActivitySession }>;
   updateSessionSettings(
     input: {
       agentSessionId: string;
@@ -577,6 +587,11 @@ export interface AgentSessionEngine {
   submitInteractionResponse(
     input: AgentSessionSubmitInteractionResponseInput
   ): boolean;
+  setSessionArchived(input: {
+    agentSessionId: string;
+    archived: boolean;
+    signal?: AbortSignal;
+  }): Promise<AgentActivitySession>;
   submitPrompt(
     input: AgentSessionSubmitPromptInput
   ): AgentSessionSubmitPromptResult;

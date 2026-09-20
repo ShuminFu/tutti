@@ -1,5 +1,6 @@
 import {
   canonicalInteractionKey,
+  selectEngineSession,
   selectPendingActivations,
   type AgentSessionEngine
 } from "@tutti-os/agent-activity-core";
@@ -44,6 +45,98 @@ function createEditRetryAvailability(): WorkspaceAgentEditRetryAvailability {
 }
 
 describe("WorkspaceActivityService", () => {
+  test("reconciles a nonselected loaded tail archived while disconnected beyond the refresh cap", async () => {
+    let archived = false;
+    const sessions = Array.from({ length: 200 }, (_, index) => ({
+      ...createSession(),
+      id: `session-${index + 1}`
+    }));
+    const other = sessions[109]!;
+    const visibleSessions = () =>
+      sessions.filter((session) => !archived || session.id !== other.id);
+    const reads: string[] = [];
+    const refreshLimits: number[] = [];
+    const page = (offset: number, limit: number) => ({
+      kind: "conversations" as const,
+      sectionKey: "conversations",
+      sessions: visibleSessions().slice(offset, offset + limit),
+      totalCount: visibleSessions().length,
+      hasMore: offset + limit < visibleSessions().length,
+      nextCursor: String(offset + limit)
+    });
+    const client = createClient({
+      sessions: visibleSessions,
+      listSections: async (_workspaceId, query) => {
+        refreshLimits.push(query?.limitPerSection ?? 30);
+        return {
+          workspaceId: workspace.id,
+          pinned: { sessions: [], totalCount: 0, hasMore: false },
+          sections: [page(0, query?.limitPerSection ?? 30)]
+        };
+      },
+      listMessages: emptyMessagePage,
+      detail: async (_workspaceId, id) => {
+        reads.push(id);
+        return {
+          ...fullSessionDetailProjection,
+          childSessions: [],
+          turns: [],
+          session:
+            id === other.id
+              ? {
+                  ...other,
+                  archivedAtUnixMs: archived ? 10 : 0,
+                  updatedAtUnixMs: archived ? 10 : 2
+                }
+              : sessions.find((session) => session.id === id)!
+        };
+      }
+    });
+    client.listWorkspaceAgentSessionSectionPage = async (
+      _workspaceId,
+      query
+    ) => ({
+      workspaceId: workspace.id,
+      section: page(Number(query.cursor ?? 0), query.limit ?? 30)
+    });
+    const service = createService(client);
+    await service.start();
+    await flushAsyncWork();
+    for (let index = 0; index < 3; index += 1) {
+      await service.rail.loadMore("conversations");
+    }
+    const engine = (service as unknown as { engine: AgentSessionEngine })
+      .engine;
+    expect(service.rail.getSnapshot().sections[0]?.sessionIds).toHaveLength(
+      120
+    );
+    expect(reads).not.toContain(other.id);
+    expect(
+      service.getSnapshot().activity.sessionMessagesById[other.id]
+    ).toBeUndefined();
+    expect(service.getSnapshot().selectedAgentSessionId).toBe("session-1");
+    service.pause();
+    archived = true;
+    reads.length = 0;
+    service.resume();
+    await flushAsyncWork();
+    expect(refreshLimits).toContain(100);
+    expect(reads).toContain(other.id);
+    expect(
+      selectEngineSession(engine.getSnapshot(), other.id)?.archivedAtUnixMs
+    ).toBe(10);
+    expect(service.rail.getSnapshot().sections[0]?.sessionIds).not.toContain(
+      other.id
+    );
+    expect(
+      service.getSnapshot().activityConversations.map((item) => item.id)
+    ).not.toContain(other.id);
+    expect(
+      selectEngineSession(engine.getSnapshot(), "session-120")
+    ).not.toBeNull();
+    service.dispose();
+  });
+
   test("disposes the conversation Rail it owns", () => {
     const service = createService(
       createClient({ listMessages: emptyMessagePage })

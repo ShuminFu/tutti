@@ -289,6 +289,15 @@ export function createDesktopAgentActivityRuntime(
           ) => workspaceAgentActivityService.setCollaborationAdoption!(input)
         }
       : {}),
+    ...(workspaceAgentActivityService.setSessionArchived
+      ? {
+          setSessionArchived: (
+            input: Parameters<
+              NonNullable<AgentGUIRuntime["setSessionArchived"]>
+            >[0]
+          ) => workspaceAgentActivityService.setSessionArchived!(input)
+        }
+      : {}),
     async setSessionPinned(input) {
       const session =
         await workspaceAgentActivityService.setSessionPinned(input);

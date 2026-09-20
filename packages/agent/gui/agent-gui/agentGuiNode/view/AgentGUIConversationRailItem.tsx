@@ -4,7 +4,7 @@ import { FolderIcon, NewWorkspaceLinedIcon, cn } from "@tutti-os/ui-system";
 import { WorkspaceUserProjectSelect } from "@tutti-os/workspace-user-project/ui";
 import type { WorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
 import { BareIconButton } from "@tutti-os/ui-system/components";
-import { CanvasNodeTrashLinedIcon } from "../../shared/canvasNodeChromeIcons";
+import { AgentGUIConversationArchiveAction } from "./AgentGUIConversationArchiveAction";
 import { PinFilledIcon } from "../../../app/renderer/components/icons/PinFilledIcon";
 import { PinLinedIcon } from "../../../app/renderer/components/icons/PinLinedIcon";
 import { useAgentHostApi } from "../../../agentActivityHost";
@@ -137,8 +137,6 @@ export const AgentGUIConversationRailItem = memo(
     onOpenConversationWindow,
     onRequestDeleteConversation,
     onRequestRenameConversation,
-    onCancelDeleteConversation,
-    onConfirmDeleteConversation,
     presentation
   }: AgentGUIConversationRailItemProps): React.JSX.Element {
     "use memo";
@@ -240,15 +238,6 @@ export const AgentGUIConversationRailItem = memo(
       },
       [item.id, registerItemElement]
     );
-    const handleMouseLeave = useCallback(() => {
-      if (isPendingDeleteConversation && !isRailInteractionLocked()) {
-        onCancelDeleteConversation();
-      }
-    }, [
-      isPendingDeleteConversation,
-      isRailInteractionLocked,
-      onCancelDeleteConversation
-    ]);
     // 分栏配对（补丁 0108）：条目可被指针拖进主区。宿主未注册时 draggable=false，
     // 行为与今天完全一致。交互锁 / 待删除中的行不拖。
     // 这一条的「摘要」：拖影、放下判据、以及分栏栏头（票 04）用的是同一份。
@@ -307,11 +296,6 @@ export const AgentGUIConversationRailItem = memo(
         onToggleConversationPinned(item.id, !pinned);
       }
     };
-    const handleRequestDelete = (): void => {
-      if (!isRailInteractionLocked()) {
-        onRequestDeleteConversation(item.id);
-      }
-    };
     const handleOpenConversationWindow = (): void => {
       if (!isRailInteractionLocked()) {
         onOpenConversationWindow?.(item.id);
@@ -333,7 +317,8 @@ export const AgentGUIConversationRailItem = memo(
       workspaceId,
       onMarkConversationUnread,
       onOpenConversationWindow,
-      onRequestRenameConversation
+      onRequestRenameConversation,
+      onRequestDeleteConversation
     });
     const activityPresentation =
       presentation?.kind === "activity" ? presentation : null;
@@ -465,7 +450,6 @@ export const AgentGUIConversationRailItem = memo(
         }}
         onFocusCapture={() => setActionsActivated(true)}
         onLostPointerCapture={splitDrag.handlers.onLostPointerCapture}
-        onMouseLeave={handleMouseLeave}
         onPointerCancel={splitDrag.handlers.onPointerCancel}
         onPointerDown={splitDrag.handlers.onPointerDown}
         onPointerEnter={() => setActionsActivated(true)}
@@ -495,94 +479,61 @@ export const AgentGUIConversationRailItem = memo(
         ) : null}
         {actionsActivated || isPendingDeleteConversation ? (
           <div className={styles.conversationActions}>
-            {isPendingDeleteConversation ? (
-              <button
-                type="button"
-                className={styles.conversationDeleteButton}
-                aria-label={labels.deleteSessionConfirm}
-                title={labels.deleteSessionConfirm}
-                disabled={isDeletingConversation}
+            {onOpenConversationWindow ? (
+              <BareIconButton
+                className={styles.conversationOpenWindowButton}
+                aria-label={labels.openConversationWindow}
+                title={labels.openConversationWindow}
+                size="md"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                }}
+                onMouseDown={(event) => {
+                  event.stopPropagation();
+                }}
                 onClick={(event) => {
                   event.stopPropagation();
-                  if (!isRailInteractionLocked()) {
-                    onConfirmDeleteConversation();
-                  }
+                  handleOpenConversationWindow();
                 }}
               >
-                <span className={styles.conversationDeleteConfirmText}>
-                  {labels.deleteSessionConfirm}
-                </span>
-              </button>
-            ) : (
-              <>
-                {onOpenConversationWindow ? (
-                  <BareIconButton
-                    className={styles.conversationOpenWindowButton}
-                    aria-label={labels.openConversationWindow}
-                    title={labels.openConversationWindow}
-                    size="md"
-                    onPointerDown={(event) => {
-                      event.stopPropagation();
-                    }}
-                    onMouseDown={(event) => {
-                      event.stopPropagation();
-                    }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleOpenConversationWindow();
-                    }}
-                  >
-                    <ExternalLink aria-hidden="true" />
-                  </BareIconButton>
-                ) : null}
-                <BareIconButton
-                  className={styles.conversationPinButton}
-                  data-testid="agent-gui-session-pin"
-                  aria-label={pinned ? labels.unpinSession : labels.pinSession}
-                  title={pinned ? labels.unpinSession : labels.pinSession}
-                  size="md"
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onMouseDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleTogglePinned();
-                  }}
-                >
-                  {pinned ? (
-                    <PinFilledIcon aria-hidden="true" />
-                  ) : (
-                    <PinLinedIcon aria-hidden="true" />
-                  )}
-                </BareIconButton>
-                <BareIconButton
-                  className={styles.conversationDeleteButton}
-                  aria-label={labels.deleteSession}
-                  title={labels.deleteSession}
-                  size="md"
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onMouseDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleRequestDelete();
-                  }}
-                >
-                  <CanvasNodeTrashLinedIcon aria-hidden="true" />
-                </BareIconButton>
-                <AgentGUIConversationActionsDropdown
-                  buttonClassName={styles.conversationMoreButton}
-                  menu={menu}
-                  moreSessionActionsLabel={labels.moreSessionActions}
-                />
-              </>
-            )}
+                <ExternalLink aria-hidden="true" />
+              </BareIconButton>
+            ) : null}
+            <BareIconButton
+              className={styles.conversationPinButton}
+              data-testid="agent-gui-session-pin"
+              aria-label={pinned ? labels.unpinSession : labels.pinSession}
+              title={pinned ? labels.unpinSession : labels.pinSession}
+              size="md"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleTogglePinned();
+              }}
+            >
+              {pinned ? (
+                <PinFilledIcon aria-hidden="true" />
+              ) : (
+                <PinLinedIcon aria-hidden="true" />
+              )}
+            </BareIconButton>
+            <AgentGUIConversationArchiveAction
+              agentSessionId={item.id}
+              archived={(item.archivedAtUnixMs ?? 0) > 0}
+              workspaceId={workspaceId}
+              disabled={isDeletingConversation || isPendingDeleteConversation}
+              isInteractionLocked={isRailInteractionLocked}
+            />
+            <AgentGUIConversationActionsDropdown
+              buttonClassName={styles.conversationMoreButton}
+              menu={menu}
+              moreSessionActionsLabel={labels.moreSessionActions}
+            />
           </div>
         ) : null}
       </div>

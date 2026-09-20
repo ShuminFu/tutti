@@ -452,6 +452,16 @@ export class WorkspaceAgentActivityService
     return this.importOperations.selectArchive();
   }
 
+  async setSessionArchived(input: {
+    agentSessionId: string;
+    archived: boolean;
+    workspaceId: string;
+  }): Promise<AgentActivitySession> {
+    return this.entry(
+      normalizeWorkspaceId(input.workspaceId)
+    ).engine.setSessionArchived(input);
+  }
+
   async setSessionPinned(input: {
     agentSessionId: string;
     pinned: boolean;

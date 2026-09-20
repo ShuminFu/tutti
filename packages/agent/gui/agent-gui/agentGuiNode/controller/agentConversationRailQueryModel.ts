@@ -41,6 +41,25 @@ export interface ConversationRailQueryState {
   sections: ConversationRailSectionMembership[] | null;
 }
 
+export function pruneConversationRailArchiveMemberships(
+  query: ConversationRailQueryState,
+  state: AgentSessionEngineState,
+  archiveOnly: boolean
+): ConversationRailQueryState {
+  if (!query.sections) return query;
+  let changed = false;
+  const sections = query.sections.map((section) => {
+    const sessionIds = section.sessionIds.filter((id) => {
+      const session = selectEngineSession(state, id);
+      return !session || (session.archivedAtUnixMs ?? 0) > 0 === archiveOnly;
+    });
+    if (sessionIds.length === section.sessionIds.length) return section;
+    changed = true;
+    return { ...section, sessionIds };
+  });
+  return changed ? { ...query, sections } : query;
+}
+
 export function mergeConversationRailSessionIds(
   base: readonly string[],
   loaded: readonly string[]
@@ -72,10 +91,14 @@ export function projectRuntimeSectionsToConversationRailMemberships(input: {
   for (const section of input.sections) {
     result.push({
       id: section.sectionKey,
-      kind: section.kind,
+      kind: section.kind === "archive" ? "conversations" : section.kind,
       project: section.userProject ? { ...section.userProject } : null,
       sessionIds: section.sessions.map((session) => session.agentSessionId)
     });
   }
   return result;
 }
+import {
+  selectEngineSession,
+  type AgentSessionEngineState
+} from "@tutti-os/agent-activity-core";
