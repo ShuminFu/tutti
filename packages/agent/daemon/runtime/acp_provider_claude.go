@@ -12,8 +12,60 @@ const (
 	claudeCodeRuntimeACP = "acp"
 )
 
+// Mirrors runtimeprep's claude env names. The daemon reads them back off the
+// prepared session env, the same way the cursor adapter reads its own plugin
+// dir (see acp_provider_cursor.go).
+const (
+	claudePluginDirEnv        = "TUTTI_CLAUDE_PLUGIN_DIR"
+	claudeSystemPromptFileEnv = "TUTTI_CLAUDE_SYSTEM_PROMPT_FILE"
+)
+
 func claudeCodeACPRuntimeEnabled() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv(claudeCodeRuntimeEnv)), claudeCodeRuntimeACP)
+}
+
+// claudeACPSessionMeta carries the runtimeprep-prepared DinTalDock surface across
+// the ACP hop.
+//
+// claude-agent-acp builds its query options from the session/new `_meta` it
+// receives: `_meta.claudeCode.options` is spread straight into the SDK options
+// and `_meta.systemPrompt` replaces the default `{type:"preset",
+// preset:"claude_code"}` while preserving every other preset key. The SDK
+// sidecar already consumes both env vars (claude-sdk-sidecar/src/options.ts), so
+// without this the ACP runtime silently drops the injected skill plugin and the
+// routing system prompt that every other runtime path delivers.
+//
+// Missing files degrade to "not injected" rather than failing session/new: a
+// session without the DinTalDock plugin is still usable, and the injected
+// system prompt already tells the model to fall back to the materialized
+// SKILL.md when the Skill tool is unavailable.
+func claudeACPSessionMeta(session Session) map[string]any {
+	meta := map[string]any{}
+
+	if pluginDir := strings.TrimSpace(sessionEnvValue(session.Env, claudePluginDirEnv)); pluginDir != "" {
+		meta["claudeCode"] = map[string]any{
+			"options": map[string]any{
+				"plugins": []map[string]any{{"type": "local", "path": pluginDir}},
+			},
+		}
+	}
+
+	path := strings.TrimSpace(sessionEnvValue(session.Env, claudeSystemPromptFileEnv))
+	if path == "" {
+		return meta
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return meta
+	}
+	if prompt := strings.TrimSpace(string(content)); prompt != "" {
+		meta["systemPrompt"] = map[string]any{
+			"type":   "preset",
+			"preset": "claude_code",
+			"append": prompt,
+		}
+	}
+	return meta
 }
 
 func newClaudeCodeACPAdapterFromProviderDescriptor(
@@ -49,6 +101,9 @@ func newClaudeCodeACPAdapterFromProviderDescriptor(
 			failOnSetModeError:          true,
 			env: func(session Session) []string {
 				return append(standardACPEnv(session, host), "IS_SANDBOX=1")
+			},
+			applySessionMeta: func(params map[string]any, session Session, _ HostMetadata) {
+				mergeACPParamsMeta(params, claudeACPSessionMeta(session))
 			},
 			commandResolver: commandResolver,
 			// Claude Code is the one standard ACP runtime that reads the 1M
