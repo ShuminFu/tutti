@@ -27,6 +27,7 @@ import {
 import { resolveWebBackendConfigFrom } from "./resolveWebBackendConfig";
 import {
   HostBridgeUnavailableError,
+  installHostClearTextSelectionBridge,
   installHostFileDropBridge,
   installHostFocusRecovery,
   installHostLocaleBridge,
@@ -55,6 +56,7 @@ const webAppUpdateState: AppUpdateState = {
 export function createWebDesktopApi(): DesktopApi {
   const backendConfig = resolveWebBackendConfig();
   installHostFileDropBridge();
+  installHostClearTextSelectionBridge();
   installHostFocusRecovery();
   installHostThemeBridge(
     setHostThemeAppearance,

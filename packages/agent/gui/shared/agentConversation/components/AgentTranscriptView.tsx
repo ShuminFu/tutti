@@ -9,6 +9,7 @@ import {
   type ReactNode,
   type Ref
 } from "react";
+import { useTranscriptNativeSelectionGuard } from "../useTranscriptNativeSelectionGuard";
 import { providerForkBindingAllowsAttempt } from "@tutti-os/agent-activity-core";
 import type { WorkspaceLinkAction } from "../../../contexts/workspace/presentation/renderer/actions/workspaceLinkActions";
 import type { AgentMessageMarkdownWorkspaceAppIcon } from "../../AgentMessageMarkdown";
@@ -397,10 +398,15 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
     () => assessAgentTranscriptComplexity(turnGroups).shouldVirtualize,
     [turnGroups]
   );
+  const { isSelecting: isTextSelecting } = useTranscriptNativeSelectionGuard({
+    enabled: isVisible,
+    sessionId: agentSessionId
+  });
   const { rowVirtualizer, setVirtualizerHostElement, virtualizerHostRef } =
     useAgentTranscriptVirtualizer({
       agentSessionId,
       followEndMode,
+      freezeGeometry: isTextSelecting,
       hasMovingTurnDisclosure,
       scrollElement: virtualScrollElement,
       scrollMargin: virtualListOffsetFromScrollOrigin,

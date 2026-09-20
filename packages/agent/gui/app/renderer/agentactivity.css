@@ -5915,7 +5915,6 @@ aside.workspace-agents-status-panel
   background: var(--agent-gui-session-flow-background);
 }
 
-
 .agent-gui-node__detail-panel > .agent-gui-node__detail {
   min-height: 0;
   border-radius: inherit;
@@ -7110,9 +7109,11 @@ button.agent-gui-node__conversation-section-toggle:hover
   opacity: 0.6;
 }
 
-[data-radix-menu-content] [role="menuitem"]:hover
+[data-radix-menu-content]
+  [role="menuitem"]:hover
   .agent-gui-node__conversation-peer-menu-remove,
-[data-radix-menu-content] [role="menuitem"][data-highlighted]
+[data-radix-menu-content]
+  [role="menuitem"][data-highlighted]
   .agent-gui-node__conversation-peer-menu-remove {
   color: var(--status-error, #e5484d);
   opacity: 1;
@@ -7716,6 +7717,8 @@ button.agent-gui-node__conversation-section-toggle:hover
   gap: 24px;
   min-height: 0;
   overflow: auto;
+  -webkit-user-select: none;
+  user-select: none;
   padding: 32px var(--agent-gui-detail-padding-x)
     calc(24px + var(--agent-gui-bottom-dock-safe-area, 0px));
   scroll-padding-bottom: calc(
@@ -7964,6 +7967,8 @@ button.agent-gui-node__conversation-section-toggle:hover
   min-width: 0;
   contain: layout;
   overflow-anchor: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .agent-gui-transcript-virtual-item {
@@ -7975,7 +7980,14 @@ button.agent-gui-node__conversation-section-toggle:hover
   width: 100%;
   min-width: 0;
   padding-bottom: 16px;
-  will-change: transform;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+[data-agent-transcript-native-select="true"],
+[data-agent-transcript-native-select="true"] * {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .agent-gui-transcript-virtual-item

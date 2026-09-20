@@ -183,6 +183,36 @@ describe("AgentTranscriptView virtual rendering", () => {
     expect(screen.queryByText("turn 11 assistant row")).toBeNull();
   });
 
+  it("pauses append-following and direct transforms while a message is being selected", async () => {
+    virtualizerMockState.virtualIndexes = [10];
+    render(
+      <div
+        data-testid="agent-gui-timeline"
+        style={{ height: "480px", overflow: "auto" }}
+      >
+        <AgentTranscriptView
+          conversation={conversationWithMultiRowTurns(40)}
+          labels={TRANSCRIPT_LABELS}
+        />
+      </div>
+    );
+    const message = await waitFor(() => {
+      const node = document.querySelector(
+        "[data-agent-transcript-native-select='true']"
+      );
+      expect(node).toBeTruthy();
+      return node as HTMLElement;
+    });
+    fireEvent.pointerDown(message, { button: 0 });
+    const options = vi.mocked(useVirtualizer).mock.calls.at(-1)?.[0];
+    expect(options).toEqual(
+      expect.objectContaining({
+        directDomUpdates: false,
+        followOnAppend: false
+      })
+    );
+  });
+
   it("keeps exact Fork behavior inside a virtualized settled Turn", () => {
     virtualizerMockState.virtualIndexes = [10];
     const onForkThroughTurn = vi.fn();

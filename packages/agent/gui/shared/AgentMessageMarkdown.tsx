@@ -76,7 +76,10 @@ import { remarkLiteralAutolinkBoundary } from "./remarkLiteralAutolinkBoundary";
 import { cachedMarkdownParser } from "./cachedMarkdownParser";
 export { resetCachedMarkdownImagesForTests } from "./AgentMessageMarkdownMedia";
 export type { StreamingMarkdownBlock } from "./agentMessageMarkdownRuntime";
-export { splitStreamingMarkdownBlocks } from "./agentMessageMarkdownRuntime";
+export {
+  splitStreamingMarkdownBlocks,
+  STREAMING_MARKDOWN_TAIL_KEY
+} from "./agentMessageMarkdownRuntime";
 
 const STREAMING_MARKDOWN_FRAME_MS = 24;
 const STREAMING_MARKDOWN_MAX_CHARS_PER_SECOND = 6_000;
@@ -397,6 +400,7 @@ export function AgentMessageMarkdown({
           className
         )}
         data-workspace-agent-markdown="true"
+        data-agent-transcript-native-select="true"
         data-agent-mention-only={isMentionOnly ? "true" : undefined}
         data-collapsed={isCollapsed ? "true" : "false"}
         onClickCapture={handleAnchorClickCapture}

@@ -10,7 +10,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AgentMessageMarkdown,
   resetCachedMarkdownImagesForTests,
-  splitStreamingMarkdownBlocks
+  splitStreamingMarkdownBlocks,
+  STREAMING_MARKDOWN_TAIL_KEY
 } from "./AgentMessageMarkdown";
 import {
   MANAGED_AGENT_ICON_ROUNDED_URLS,
@@ -1983,6 +1984,28 @@ describe("splitStreamingMarkdownBlocks", () => {
       "Intro paragraph.\n",
       "```ts\nconst value = 1;\n\nconsole.log(value);\n```\n",
       "- Tail item"
+    ]);
+  });
+
+  it("keeps a stable tail key while the last block grows", () => {
+    const first = splitStreamingMarkdownBlocks("Hello");
+    const second = splitStreamingMarkdownBlocks("Hello world");
+    expect(first).toEqual([
+      { content: "Hello", initialKeyContent: STREAMING_MARKDOWN_TAIL_KEY }
+    ]);
+    expect(second).toEqual([
+      {
+        content: "Hello world",
+        initialKeyContent: STREAMING_MARKDOWN_TAIL_KEY
+      }
+    ]);
+  });
+
+  it("promotes a completed block off the tail key when a new block starts", () => {
+    const blocks = splitStreamingMarkdownBlocks("Hello\n\nWorld");
+    expect(blocks).toEqual([
+      { content: "Hello\n", initialKeyContent: "Hello\n" },
+      { content: "World", initialKeyContent: STREAMING_MARKDOWN_TAIL_KEY }
     ]);
   });
 });

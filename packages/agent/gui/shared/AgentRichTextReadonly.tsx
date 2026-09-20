@@ -119,6 +119,7 @@ export function AgentRichTextReadonly({
           editorClassName,
           "max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] [&_p]:m-0 [&_p]:min-h-[1.45em] [&_a[data-agent-file-mention=true]]:cursor-pointer [&_[data-agent-file-mention=true]]:overflow-hidden"
         )}
+        data-agent-transcript-native-select="true"
         onClick={handleClick}
       >
         {renderedContent}

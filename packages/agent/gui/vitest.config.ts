@@ -14,6 +14,7 @@ const domTypeScriptTests = [
   "agent-message-center/messageCenterFilterPreferences.spec.ts",
   "build/cssSafeSvgDataUrl.spec.ts",
   "shared/agentConversation/lib/copyImageToClipboard.spec.ts",
+  "shared/agentConversation/nativeTextSelection.spec.ts",
   "workbench/contribution.test.ts",
   "workbench/commands.spec.ts"
 ];

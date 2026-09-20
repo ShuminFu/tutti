@@ -6,10 +6,12 @@ import {
   HOST_FOCUS_TYPE,
   HOST_OPEN_AGENT_SESSION_ACK_TYPE,
   HOST_OPEN_AGENT_SESSION_TYPE,
+  HOST_CLEAR_TEXT_SELECTION_TYPE,
   HOST_LOCALE_TYPE,
   HOST_THEME_TYPE,
   HOST_WORKBENCH_LAYOUT_TYPE,
   installHostAgentSessionBridge,
+  installHostClearTextSelectionBridge,
   installHostFileDropBridge,
   installHostFocusRecovery,
   installHostLocaleBridge,
@@ -674,6 +676,67 @@ test("embedded locale follows only secured host language pushes", () => {
   dispose();
   send();
   assert.deepEqual(applied, ["zh-CN", "en"]);
+});
+
+test("host clear-text-selection bridge collapses the document range", () => {
+  let messageListener: ((event: MessageEvent) => void) | null = null;
+  const parent = {} as WindowProxy;
+  const selection = {
+    removeAllRanges: () => {
+      selection.cleared += 1;
+    },
+    cleared: 0
+  };
+  const windowRef = {
+    addEventListener(type: string, listener: EventListener) {
+      if (type === "message") {
+        messageListener = listener as (event: MessageEvent) => void;
+      }
+    },
+    location: {
+      search:
+        "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+    },
+    parent,
+    removeEventListener(type: string) {
+      if (type === "message") {
+        messageListener = null;
+      }
+    }
+  } as unknown as Window;
+  const documentRef = {
+    getSelection() {
+      return selection;
+    }
+  } as unknown as Document;
+
+  const dispose = installHostClearTextSelectionBridge(windowRef, documentRef);
+  const send = (overrides: Record<string, unknown> = {}) => {
+    const { data, ...event } = overrides;
+    messageListener?.({
+      data: {
+        type: HOST_CLEAR_TEXT_SELECTION_TYPE,
+        nonce: "nonce-1",
+        ...(data as object | undefined)
+      },
+      origin: "http://wails.localhost",
+      source: parent,
+      ...event
+    } as MessageEvent);
+  };
+
+  send({ data: { nonce: "wrong" } });
+  send({ origin: "https://evil.example" });
+  send({ source: {} as WindowProxy });
+  send({ data: { type: HOST_THEME_TYPE } });
+  assert.equal(selection.cleared, 0);
+
+  send();
+  assert.equal(selection.cleared, 1);
+
+  dispose();
+  send();
+  assert.equal(selection.cleared, 1);
 });
 
 test("host locale bridge stays inert outside the embedded host", () => {

@@ -9,6 +9,7 @@
 // Wire protocol (mirrors the host side):
 //   request  (iframe -> host): { type: "tutti-host-request", capability, id, args?, nonce }
 //   response (host -> iframe): { type: "tutti-host-response", id, result }
+//   clear text selection (host -> iframe): { type: "tutti-host-clear-text-selection", nonce }
 //                              { type: "tutti-host-response", id, error: "unsupported" }
 //                              { type: "tutti-host-response", id, error: "<message>", code? }
 //
@@ -102,6 +103,7 @@ export const HOST_OPEN_AGENT_SESSION_ACK_TYPE =
 export const HOST_WORKBENCH_LAYOUT_TYPE = "tutti-host-workbench-layout";
 export const HOST_THEME_TYPE = "tutti-host-theme";
 export const HOST_LOCALE_TYPE = "tutti-host-locale";
+export const HOST_CLEAR_TEXT_SELECTION_TYPE = "tutti-host-clear-text-selection";
 const FULLSCREEN_WORKBENCH_WINDOW_SELECTOR =
   '.workbench-window-shell[data-display-mode="fullscreen"]';
 const TERMINAL_FOCUS_SELECTOR =
@@ -319,6 +321,40 @@ export function installHostThemeBridge(
         applyHostWindowInsets(insets);
       }
     }
+  };
+
+  windowRef.addEventListener("message", onMessage);
+  return () => windowRef.removeEventListener("message", onMessage);
+}
+
+export function installHostClearTextSelectionBridge(
+  windowRef: Window = window,
+  documentRef: Document = document
+): () => void {
+  const coordinates = bridgeCoordinates(windowRef.location.search);
+  if (!coordinates || !windowRef.parent || windowRef.parent === windowRef) {
+    return () => undefined;
+  }
+
+  const parent = windowRef.parent;
+  const onMessage = (event: MessageEvent): void => {
+    const data = event.data as
+      | { type?: unknown; nonce?: unknown }
+      | null
+      | undefined;
+    if (
+      !data ||
+      typeof data !== "object" ||
+      data.type !== HOST_CLEAR_TEXT_SELECTION_TYPE ||
+      data.nonce !== coordinates.nonce ||
+      event.source !== parent ||
+      event.origin !== coordinates.hostOrigin
+    ) {
+      return;
+    }
+    // Host-originated: the user already left the iframe, so collapse even an
+    // editable Range. In-document Esc/click skip contenteditable separately.
+    documentRef.getSelection?.()?.removeAllRanges?.();
   };
 
   windowRef.addEventListener("message", onMessage);

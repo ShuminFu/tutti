@@ -3,6 +3,8 @@ import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
 const COLLAPSED_LINE_LIMIT = 8;
 const APPROX_CHARS_PER_LINE = 34;
 
+export const STREAMING_MARKDOWN_TAIL_KEY = "\u0000streaming-tail";
+
 export interface StreamingMarkdownBlock {
   content: string;
   initialKeyContent: string;
@@ -40,9 +42,22 @@ export function splitStreamingMarkdownBlocks(
     }
   }
   pushStreamingMarkdownBlock(blocks, current);
-  return blocks.length > 0
-    ? blocks
-    : [{ content: normalized, initialKeyContent: normalized }];
+  return markStreamingMarkdownTail(
+    blocks.length > 0
+      ? blocks
+      : [{ content: normalized, initialKeyContent: normalized }]
+  );
+}
+
+function markStreamingMarkdownTail(
+  blocks: StreamingMarkdownBlock[]
+): StreamingMarkdownBlock[] {
+  const last = blocks.at(-1);
+  if (!last) {
+    return blocks;
+  }
+  last.initialKeyContent = STREAMING_MARKDOWN_TAIL_KEY;
+  return blocks;
 }
 
 export function pushStreamingMarkdownBlock(

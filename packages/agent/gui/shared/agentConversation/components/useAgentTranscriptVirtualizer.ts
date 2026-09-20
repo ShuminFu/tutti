@@ -30,6 +30,7 @@ interface AgentTranscriptVirtualizer {
 export function useAgentTranscriptVirtualizer({
   agentSessionId,
   followEndMode = "following",
+  freezeGeometry = false,
   hasMovingTurnDisclosure,
   scrollElement,
   scrollMargin,
@@ -39,6 +40,7 @@ export function useAgentTranscriptVirtualizer({
 }: {
   agentSessionId: string;
   followEndMode?: AgentConversationFollowEndMode;
+  freezeGeometry?: boolean;
   hasMovingTurnDisclosure: boolean;
   scrollElement: HTMLElement | null;
   scrollMargin: number;
@@ -56,10 +58,16 @@ export function useAgentTranscriptVirtualizer({
   const rowVirtualizer = useVirtualizer<HTMLElement, Element>({
     anchorTo: shouldVirtualize && hasMovingTurnDisclosure ? "start" : "end",
     count: turnGroups.length,
-    directDomUpdates: true,
+    // Transform-positioned turns share a layout origin. Direct updates during
+    // a native drag-select stretch the Range across those overlapping boxes.
+    directDomUpdates: !freezeGeometry,
     directDomUpdatesMode: "transform",
     estimateSize: () => AGENT_TRANSCRIPT_ESTIMATED_TURN_HEIGHT_PX,
-    followOnAppend: shouldVirtualize && followsEnd && !hasMovingTurnDisclosure,
+    followOnAppend:
+      shouldVirtualize &&
+      followsEnd &&
+      !hasMovingTurnDisclosure &&
+      !freezeGeometry,
     getItemKey: getVirtualItemKey,
     getScrollElement: () => scrollElement,
     overscan: AGENT_TRANSCRIPT_VIRTUALIZATION_OVERSCAN,
@@ -68,7 +76,7 @@ export function useAgentTranscriptVirtualizer({
     useFlushSync: true
   });
   rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange =
-    shouldVirtualize && hasMovingTurnDisclosure
+    freezeGeometry || (shouldVirtualize && hasMovingTurnDisclosure)
       ? preventVirtualScrollAdjustment
       : undefined;
   useImperativeHandle(

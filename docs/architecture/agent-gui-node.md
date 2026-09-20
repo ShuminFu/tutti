@@ -1666,7 +1666,15 @@ height. The virtual list measures its offset from the timeline scroll origin as
 `scrollMargin`, including changes caused by the older-page loading indicator.
 Direct DOM transform mode owns the virtual sizer height and item transforms;
 React keeps only row content, measurement refs, cross-axis sizing, and
-disclosure spacing.
+disclosure spacing. Native text selection is not a geometry input: those
+transform-positioned turns share a layout origin, so a Range that crosses
+turns paints as a page-sized highlight in WKWebView and may not collapse on
+click. `user-select: text` is limited to one message body
+(`[data-agent-transcript-native-select]`); copy across messages uses the
+message Copy control. Escape, a pointer down outside that body, and an
+embedding-host `tutti-host-clear-text-selection` notification collapse
+non-editable Ranges. While a drag-select is in progress, append-following and
+direct transform updates pause so streaming layout cannot stretch the Range.
 
 Virtualizer- or layout-driven scroll events do not change the end-following
 mode or trigger older-page loading without explicit user scroll-away intent. A
