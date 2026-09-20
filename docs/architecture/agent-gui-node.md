@@ -1671,8 +1671,9 @@ height, and item transforms. While `detached`, AgentGUI disables append
 following so TanStack cannot bypass the shared intent owner, but retains
 stable-item mutation anchoring so prepending an older page preserves the
 visible viewport without reattaching to the end. AgentGUI retains Session
-selection, explicit user intent, top-page loading, bottom-dock safe-area
-measurement, and the non-virtualized short-transcript branch. It must not apply
+selection, explicit user intent, top-page loading, fixed dock viewport/exposure
+recovery, and the non-virtualized short-transcript branch. Dock-local scrolling
+is not a transcript follow-end event. It must not apply
 native `scrollHeight`-delta prepend compensation or a content-resize bottom
 write after the virtualizer accepts ownership.
 
@@ -2078,10 +2079,19 @@ failure semantics, or a parallel settings store; the desktop capture window
 is the first adopter.
 
 The Quick Composer uses the Composer's `embedded` layout contract. Unlike
-`dock`, which intentionally grows attachments and long drafts upward over a
-conversation timeline, `embedded` keeps the entire draft in normal document
-flow. Compact host surfaces must select that layout instead of compensating for
-dock overhang with consumer-specific offsets or clipping.
+`dock`, which owns a fixed, bounded bottom-dock viewport, `embedded` keeps the
+entire draft in normal document flow. Compact host surfaces must select that
+layout instead of compensating for dock overflow with consumer-specific offsets
+or clipping. In the existing-Session dock, the outer region is non-shrinking and
+reserves a content-independent border-box height of `min(240px, 40% of the
+definite detail pane height)`. Lifted prompts, session accessories, workflow
+cards, queued prompts, and the primary composer share one nested `min-height: 0`
+scroll viewport; a short pane therefore makes every control reachable by dock-
+local scrolling rather than pushing or covering the transcript. The floating
+scroll-to-bottom control remains outside that clipping viewport. Persistent
+prompt arrival reveals its exact prompt inside the dock viewport only; it never
+uses `scrollIntoView`, changes transcript scroll, or steals editor focus. Home,
+Quick Composer, and other `embedded` hosts retain their own flow contracts.
 
 Embedding hosts may inject the same `RichTextMentionService` and workspace
 reference-picker callback used by a full AgentGUI surface. Quick Composer wraps
@@ -2329,25 +2339,17 @@ an extra blank line. Natural content growth and the existing viewport cap
 remain responsible for multiline drafts. Dock and host-assigned embedded
 heights keep their own layout contracts.
 
-The dock observes geometry through one coalesced animation-frame measurement
-entry point. Editor document updates, attachment membership or intrinsic
-attachment size changes, and changes to the stable input-shell width may
-invalidate that entry point.
-`ResizeObserver` must not observe the animated input area or editor block size:
-their height transition is an output of measurement and must never feed back
-into another measurement cycle. Width observations compare inline size before
-invalidating, while attachment observers cover asynchronous chip and preview
-sizes without a duplicate global resize listener.
-
-The measurement pass is read-only. It derives natural text height from the
-editor document blocks, reads attachment heights, and publishes one atomic
-composer-metrics snapshot only when the snapshot changes. It must not
-temporarily collapse or restyle either the editor or transitioned input
-container. The dock input area establishes a local layout-containment boundary
-so a composer read cannot invalidate the conversation root. Composer paragraphs
-and the viewport calculation share the same line-height token so the 3.5-line
-cap remains exact. Regression coverage must expand across explicit newline
-rows, delete back to one row, and verify stable action-button placement.
+Composer measurement remains one coalesced, read-only entry point for the
+editor document, attachments, and stable input-shell width. It must not observe
+its animated editor block or feed the conversation root with intrinsic height.
+That bounded editor measurement still owns the dock input's local text-height
+cap and action-button placement, but it does not resize the outer dock or add
+transcript safe-area padding. The dock observes only its own viewport/exposure
+boundary to restore a following exact-Session bottom lock; prompt, accessory,
+and draft mutations are consumed by the dock-local scroll viewport and never
+trigger descendant geometry scans or transcript writes. Regression coverage
+must expand across explicit newline rows, delete back to one row, simultaneous
+cards, and stable action-button placement.
 
 Dynamic Agent surfaces must not use `:has()` on `.workbench-window`, the
 timeline, or transcript rows. Composer and streaming DOM mutations would make

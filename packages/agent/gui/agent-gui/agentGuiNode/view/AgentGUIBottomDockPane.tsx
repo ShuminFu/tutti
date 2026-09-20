@@ -131,10 +131,27 @@ export const AgentGUIBottomDockPane = memo(function AgentGUIBottomDockPane({
   const showGoalBanner = isGoalBannerVisible(goalObjective, goalStatus);
 
   const workflowPhase = tuttiWorkflowDock.phase;
+  const attentionPrompt =
+    bottomDockLiftedPrompt ??
+    bottomDockReplacementPrompt ??
+    composerProps.activePrompt;
+  const attentionKey = attentionPrompt
+    ? JSON.stringify([
+        bottomDockLiftedPrompt
+          ? "lifted"
+          : bottomDockReplacementPrompt
+            ? "replacement"
+            : "composer",
+        composerProps.agentSessionId,
+        "turnId" in attentionPrompt ? attentionPrompt.turnId : "",
+        attentionPrompt.requestId
+      ])
+    : undefined;
 
   return (
     <AgentComposerRegion
       regionRef={bottomDockRef}
+      attentionKey={attentionKey}
       floating={
         showScrollToBottom ? (
           <button
@@ -158,6 +175,7 @@ export const AgentGUIBottomDockPane = memo(function AgentGUIBottomDockPane({
           <div
             className={styles.bottomDockPrompt}
             data-testid="agent-gui-bottom-dock-active-prompt"
+            data-agent-composer-attention="true"
           >
             <AgentInteractivePromptSurface
               prompt={bottomDockLiftedPrompt}
@@ -269,6 +287,7 @@ export const AgentGUIBottomDockPane = memo(function AgentGUIBottomDockPane({
           <div
             className={styles.bottomDockPrompt}
             data-testid="agent-gui-bottom-dock-active-prompt"
+            data-agent-composer-attention="true"
           >
             <AgentInteractivePromptSurface
               prompt={bottomDockReplacementPrompt}

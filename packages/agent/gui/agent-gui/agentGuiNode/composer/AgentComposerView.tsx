@@ -323,6 +323,7 @@ export function AgentComposerView(input: Props): React.JSX.Element {
         <div
           className={styles.composerFloatingPrompt}
           data-testid="agent-gui-composer-floating-prompt"
+          data-agent-composer-attention="true"
         >
           <AgentInteractivePromptSurface
             prompt={visibleActivePrompt}

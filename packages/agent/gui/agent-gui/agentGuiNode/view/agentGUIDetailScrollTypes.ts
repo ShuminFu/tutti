@@ -8,7 +8,6 @@ import type { TimelineScrollAnchor } from "./agentGUIScrollMemory";
 export interface AgentGUIDetailScrollInput {
   actions: AgentGUINodeViewProps["actions"];
   bottomDockRef: RefObject<HTMLDivElement | null>;
-  bottomDockStoreRevision: string;
   conversation: AgentConversationVM | null;
   isVisible: boolean;
   pendingPrependScrollAnchorRef: MutableRefObject<{

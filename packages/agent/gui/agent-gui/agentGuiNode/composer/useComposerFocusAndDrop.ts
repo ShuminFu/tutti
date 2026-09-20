@@ -43,16 +43,31 @@ export function useComposerFocusAndDrop(input: Input) {
     }
     editorHandleRef.current?.openMentionPalette();
   }, [composerControlsHardDisabled, inputDisabled]);
-  const scheduleComposerFocus = useCallback(() => {
-    if (inputDisabled) {
-      return;
-    }
-    window.requestAnimationFrame(() => {
+  const scheduleComposerFocus = useCallback(
+    (automatic = false) => {
+      if (inputDisabled) {
+        return;
+      }
+      // presentation-work: two activation frames only; no recurring scheduler.
       window.requestAnimationFrame(() => {
-        editorHandleRef.current?.focusAtEnd();
+        // presentation-work: finish the bounded activation focus after layout.
+        window.requestAnimationFrame(() => {
+          // A pending prompt owns the dock's visible area on activation. Check at
+          // execution time too: it may have arrived during the two-frame delay.
+          if (
+            automatic &&
+            composerRef.current
+              ?.closest(".agent-gui-node__bottom-dock")
+              ?.querySelector("[data-agent-composer-attention]")
+          ) {
+            return;
+          }
+          editorHandleRef.current?.focusAtEnd();
+        });
       });
-    });
-  }, [inputDisabled]);
+    },
+    [composerRef, editorHandleRef, inputDisabled]
+  );
   const handlePastedImages = useCallback(
     (images: AgentRichTextPastedImage[]): void => {
       addDraftImages(images);
@@ -77,7 +92,7 @@ export function useComposerFocusAndDrop(input: Input) {
       return;
     }
     if (!wasActiveRef.current) {
-      scheduleComposerFocus();
+      scheduleComposerFocus(true);
     }
     wasActiveRef.current = true;
   }, [isActive, scheduleComposerFocus]);

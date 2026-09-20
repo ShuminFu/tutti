@@ -652,18 +652,6 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   );
   const emptyHeroProvider =
     composerSelectedProviderTarget?.provider ?? viewModel.shell.data.provider;
-  const bottomDockStoreRevision = [
-    bottomDockLiftedPrompt?.requestId ?? "",
-    bottomDockReplacementPrompt?.requestId ?? "",
-    inlineNoticeChrome?.recovery?.message ?? "",
-    sessionChrome.auth?.message ?? "",
-    sessionChrome.recovery?.kind ?? "",
-    sessionChrome.recovery?.message ?? "",
-    viewModel.composer.queuedPrompts.map((prompt) => prompt.id).join(","),
-    viewModel.composer.queueStatus,
-    viewModel.composer.drainingQueuedPromptId ?? "",
-    isInteractionPending ? "1" : "0"
-  ].join("|");
   const {
     followEndMode,
     isTimelineScrolledToBottom,
@@ -673,7 +661,6 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   } = useAgentGUIDetailScroll({
     actions,
     bottomDockRef,
-    bottomDockStoreRevision,
     conversation,
     isVisible,
     pendingPrependScrollAnchorRef,

@@ -18,11 +18,8 @@ import type { AgentGUIDetailScrollInput } from "./agentGUIDetailScrollTypes";
 import {
   hasStaleVirtualScrollController,
   matchingVirtualScrollController,
-  readBottomDockSafeArea,
   readTimelineGeometry,
-  userScrollBehavior,
-  writeBottomDockSafeArea,
-  type BottomDockSafeArea
+  userScrollBehavior
 } from "./agentGUIDetailScrollHelpers";
 import {
   setTimelineScrollTopInstantly,
@@ -37,7 +34,6 @@ export function useAgentGUIDetailScroll(input: AgentGUIDetailScrollInput) {
   const {
     actions,
     bottomDockRef,
-    bottomDockStoreRevision,
     conversation,
     isVisible,
     pendingPrependScrollAnchorRef,
@@ -85,7 +81,6 @@ export function useAgentGUIDetailScroll(input: AgentGUIDetailScrollInput) {
   const pointerScrollConversationRef = useRef<string | null>(null);
   const userScrollDirectionRef = useRef<"away" | "toward-end" | null>(null);
   const lastShowTimelineSkeletonRef = useRef(showTimelineSkeleton);
-  const bottomDockSafeAreaRef = useRef<BottomDockSafeArea | null>(null);
   const [virtualScrollControllerRevision, setVirtualScrollControllerRevision] =
     useState(0);
   const setVirtualScrollController = useCallback(
@@ -333,41 +328,6 @@ export function useAgentGUIDetailScroll(input: AgentGUIDetailScrollInput) {
       return activeConversationId;
     };
 
-    const syncBottomDockSafeArea = (forceMeasurement: boolean): void => {
-      const cachedSafeArea = bottomDockSafeAreaRef.current;
-      if (
-        !forceMeasurement &&
-        cachedSafeArea?.bottomDock === bottomDock &&
-        cachedSafeArea.revision === bottomDockStoreRevision
-      ) {
-        writeBottomDockSafeArea(timeline, cachedSafeArea);
-        return;
-      }
-      const measuredSafeArea = readBottomDockSafeArea(bottomDock);
-      if (
-        forceMeasurement &&
-        cachedSafeArea?.bottomDock === bottomDock &&
-        cachedSafeArea.timelineOverflowHeight ===
-          measuredSafeArea.timelineOverflowHeight &&
-        cachedSafeArea.floatingOverflowHeight ===
-          measuredSafeArea.floatingOverflowHeight
-      ) {
-        bottomDockSafeAreaRef.current = {
-          bottomDock,
-          revision: bottomDockStoreRevision,
-          ...measuredSafeArea
-        };
-        return;
-      }
-      const nextSafeArea: BottomDockSafeArea = {
-        bottomDock,
-        revision: bottomDockStoreRevision,
-        ...measuredSafeArea
-      };
-      bottomDockSafeAreaRef.current = nextSafeArea;
-      writeBottomDockSafeArea(timeline, nextSafeArea);
-    };
-
     const syncConversationBottomLock = (): void => {
       const scheduledConversationId = resolveBottomLockConversation();
       if (!scheduledConversationId) {
@@ -416,14 +376,9 @@ export function useAgentGUIDetailScroll(input: AgentGUIDetailScrollInput) {
       });
     };
 
-    syncBottomDockSafeArea(false);
     syncConversationBottomLock();
     if (typeof ResizeObserver === "undefined") {
       return () => {
-        timeline.style.removeProperty("--agent-gui-bottom-dock-safe-area");
-        bottomDock.style.removeProperty(
-          "--agent-gui-bottom-dock-floating-safe-area"
-        );
         if (animationFrameId !== null) {
           window.cancelAnimationFrame(animationFrameId);
         }
@@ -431,28 +386,16 @@ export function useAgentGUIDetailScroll(input: AgentGUIDetailScrollInput) {
     }
 
     const observer = new ResizeObserver(() => {
-      syncBottomDockSafeArea(true);
       syncConversationBottomLock();
     });
     observer.observe(bottomDock);
-    const promptInputArea = bottomDock.querySelector(
-      ".agent-gui-node__composer-prompt-input-area"
-    );
-    if (promptInputArea instanceof Element) {
-      observer.observe(promptInputArea);
-    }
     return () => {
-      timeline.style.removeProperty("--agent-gui-bottom-dock-safe-area");
-      bottomDock.style.removeProperty(
-        "--agent-gui-bottom-dock-floating-safe-area"
-      );
       if (animationFrameId !== null) {
         window.cancelAnimationFrame(animationFrameId);
       }
       observer.disconnect();
     };
   }, [
-    bottomDockStoreRevision,
     followEndController,
     hasTimelineConversation,
     isVisible,

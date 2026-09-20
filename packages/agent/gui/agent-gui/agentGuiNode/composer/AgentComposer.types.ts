@@ -173,7 +173,7 @@ export interface AgentComposerProps {
   canUploadAttachment?: boolean;
   composerFocusRequestSequence?: number | null;
   /**
-   * `dock` overhangs growing drafts above a conversation timeline, `hero`
+   * `dock` uses the conversation region's bounded scroll viewport, `hero`
    * presents the home composer, and `embedded` keeps all draft content in
    * normal flow for compact host surfaces.
    */

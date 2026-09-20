@@ -1,0 +1,52 @@
+@import "tailwindcss";
+@import "../../packages/ui/system/src/styles/index.css";
+@import "../../packages/agent/gui/app/renderer/agentactivity.css";
+@source "../../packages/agent/gui";
+@source "../../packages/ui/system/src";
+body {
+  margin: 0;
+  padding: 16px;
+  font-family: sans-serif;
+  color: var(--text-primary);
+  background: var(--background-base);
+}
+.fixture-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.fixture-controls button {
+  padding: 6px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--background-panel);
+}
+.fixture-frame {
+  display: flex;
+  width: min(100%, 900px);
+  height: 600px;
+  border: 1px solid var(--line-2);
+}
+.fixture-frame[data-size="short"] {
+  width: 480px;
+  max-width: 100%;
+  height: 320px;
+}
+.fixture-frame[data-size="narrow"] {
+  width: 340px;
+  max-width: 100%;
+  height: 480px;
+}
+.fixture-message {
+  margin-bottom: 24px;
+  line-height: 24px;
+}
+.fixture-message h2 {
+  font-weight: bold;
+}
+output {
+  display: block;
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+}

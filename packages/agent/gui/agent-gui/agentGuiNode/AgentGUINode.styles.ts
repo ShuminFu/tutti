@@ -4,6 +4,8 @@ const styles = {
   agentAvatarBadgeImage: "agent-gui-node__agent-avatar-badge-image",
   agentAvatarImage: "agent-gui-node__agent-avatar-image",
   bottomDock: "agent-gui-node__bottom-dock",
+  bottomDockViewport: "agent-gui-node__bottom-dock-viewport",
+  bottomDockContent: "agent-gui-node__bottom-dock-content",
   bottomDockPrompt: "agent-gui-node__bottom-dock-prompt",
   bottomDockScrollToBottom: "agent-gui-node__bottom-dock-scroll-to-bottom",
   body: "agent-gui-node__body",
