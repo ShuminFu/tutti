@@ -507,11 +507,9 @@ func (a *standardACPAdapter) clearTurnUsage(agentSessionID string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	session := a.sessions[strings.TrimSpace(agentSessionID)]
-	if session == nil {
-		return
+	if session != nil {
+		session.usage.lastTurn = nil
 	}
-	session.usage.lastTurn = nil
-	session.usage.lastTurnID = ""
 }
 
 func (a *standardACPAdapter) rootProviderTurnCompletedEvent(
@@ -526,12 +524,16 @@ func (a *standardACPAdapter) rootProviderTurnCompletedEvent(
 	}
 	a.mu.Lock()
 	acpSession := a.sessions[strings.TrimSpace(session.AgentSessionID)]
-	var usage acpUsageState
+	lastTurn := map[string]any{}
 	if acpSession != nil {
-		usage = acpSession.usage
+		lastTurn = clonePayload(acpSession.usage.lastTurn)
 	}
 	a.mu.Unlock()
-	if binding := acpTurnUsageBindingJSON(usage, rootTurnID); len(binding) > 0 {
+	if len(lastTurn) == 0 {
+		return event
+	}
+	binding, err := json.Marshal(map[string]any{"usage": map[string]any{"lastTurn": lastTurn}})
+	if err == nil {
 		event.Payload.ProviderTurnBindingJSON = binding
 	}
 	return event

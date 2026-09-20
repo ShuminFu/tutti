@@ -35,10 +35,6 @@ type acpUsageState struct {
 	contextModel        string
 	quotas              []map[string]any
 	lastTurn            map[string]any
-	// lastTurnID is the Dock turn that produced lastTurn. It is not published
-	// in runtimeContext; archive persistence uses it so a later turn cannot
-	// inherit the previous bill.
-	lastTurnID string
 }
 
 func newACPLiveState() acpLiveState {
@@ -128,7 +124,6 @@ func commandSnapshotFromACPLiveState(
 func applyACPUpdateToLiveState(
 	state *acpLiveState,
 	agentSessionID string,
-	turnID string,
 	raw json.RawMessage,
 ) *AgentSessionCommandSnapshot {
 	if state == nil {
@@ -164,9 +159,6 @@ func applyACPUpdateToLiveState(
 		}
 	case "usage_update":
 		if usage, ok := acpUsageValue(params.Update); ok {
-			if len(usage.lastTurn) > 0 {
-				usage.lastTurnID = strings.TrimSpace(turnID)
-			}
 			state.usage = mergeACPUsageState(state.usage, usage)
 		}
 	case "thread_goal_update":
@@ -199,25 +191,8 @@ func mergeACPUsageState(previous acpUsageState, next acpUsageState) acpUsageStat
 	}
 	if len(merged.lastTurn) == 0 && len(previous.lastTurn) > 0 {
 		merged.lastTurn = clonePayload(previous.lastTurn)
-		if strings.TrimSpace(merged.lastTurnID) == "" {
-			merged.lastTurnID = previous.lastTurnID
-		}
 	}
 	return merged
-}
-
-func acpTurnUsageBindingJSON(usage acpUsageState, turnID string) json.RawMessage {
-	turnID = strings.TrimSpace(turnID)
-	if turnID == "" || usage.lastTurnID != turnID || len(usage.lastTurn) == 0 {
-		return nil
-	}
-	raw, err := json.Marshal(map[string]any{
-		"usage": map[string]any{"lastTurn": clonePayload(usage.lastTurn)},
-	})
-	if err != nil {
-		return nil
-	}
-	return raw
 }
 
 func acpUsageValue(update map[string]any) (acpUsageState, bool) {
