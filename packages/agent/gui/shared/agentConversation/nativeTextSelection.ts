@@ -39,44 +39,23 @@ export function clearNonEditableTextSelection(documentRef: Document): boolean {
   return true;
 }
 
-export function constrainNativeTextSelectionToOneMessage(
-  documentRef: Document
-): boolean {
+export function clearDisconnectedTextSelection(documentRef: Document): boolean {
   const selection = documentRef.getSelection?.();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
     return false;
   }
-  const start = closestNativeTextSelectionRoot(selection.anchorNode);
-  const end = closestNativeTextSelectionRoot(selection.focusNode);
-  if (start && start === end) {
+  if (
+    isInsideEditable(selection.anchorNode) ||
+    isInsideEditable(selection.focusNode)
+  ) {
+    return false;
+  }
+  if (
+    selection.anchorNode?.isConnected !== false &&
+    selection.focusNode?.isConnected !== false
+  ) {
     return false;
   }
   selection.removeAllRanges();
   return true;
-}
-
-export function shouldAllowNativeTextSelectStart(
-  target: EventTarget | null
-): boolean {
-  return (
-    closestNativeTextSelectionRoot(target instanceof Node ? target : null) !==
-    null
-  );
-}
-
-export function shouldPreventTranscriptSelectStart(
-  target: EventTarget | null
-): boolean {
-  const node = target instanceof Node ? target : null;
-  const element = elementFromNode(node);
-  if (!element) {
-    return false;
-  }
-  if (closestNativeTextSelectionRoot(element)) {
-    return false;
-  }
-  if (isInsideEditable(element)) {
-    return false;
-  }
-  return Boolean(element.closest("[data-agent-transcript-row]"));
 }

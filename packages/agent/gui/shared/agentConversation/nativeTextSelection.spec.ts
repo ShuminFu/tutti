@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  clearNonEditableTextSelection,
-  constrainNativeTextSelectionToOneMessage,
-  shouldAllowNativeTextSelectStart,
-  shouldPreventTranscriptSelectStart
+  clearDisconnectedTextSelection,
+  clearNonEditableTextSelection
 } from "./nativeTextSelection";
 
 function selectAcross(start: Node, end: Node): Selection {
@@ -49,65 +47,6 @@ describe("nativeTextSelection", () => {
     expect(selection.toString()).toBe("draft prompt");
   });
 
-  it("collapses a range that crosses two message bodies", () => {
-    const first = document.createElement("p");
-    first.dataset.agentTranscriptNativeSelect = "true";
-    first.textContent = "one";
-    const second = document.createElement("p");
-    second.dataset.agentTranscriptNativeSelect = "true";
-    second.textContent = "two";
-    document.body.append(first, second);
-    const firstText = first.firstChild;
-    const secondText = second.firstChild;
-    if (!firstText || !secondText) {
-      throw new Error("expected text nodes");
-    }
-
-    const selection = selectAcross(firstText, secondText);
-    expect(constrainNativeTextSelectionToOneMessage(document)).toBe(true);
-    expect(selection.rangeCount).toBe(0);
-  });
-
-  it("keeps a range that stays inside one message body", () => {
-    const message = document.createElement("p");
-    message.dataset.agentTranscriptNativeSelect = "true";
-    message.textContent = "keep me";
-    document.body.append(message);
-    const text = message.firstChild;
-    if (!text) {
-      throw new Error("expected text node");
-    }
-
-    const selection = selectAcross(text, text);
-    expect(constrainNativeTextSelectionToOneMessage(document)).toBe(false);
-    expect(selection.toString()).toBe("keep me");
-  });
-
-  it("blocks selectstart on transcript chrome and allows it in a message body", () => {
-    const row = document.createElement("div");
-    row.dataset.agentTranscriptRow = "row-1";
-    const chrome = document.createElement("button");
-    chrome.textContent = "Copy";
-    const body = document.createElement("p");
-    body.dataset.agentTranscriptNativeSelect = "true";
-    body.textContent = "body";
-    row.append(chrome, body);
-    document.body.append(row);
-
-    expect(shouldPreventTranscriptSelectStart(chrome)).toBe(true);
-    expect(shouldAllowNativeTextSelectStart(body)).toBe(true);
-    expect(shouldPreventTranscriptSelectStart(body)).toBe(false);
-  });
-
-  it("does not block selectstart in the composer", () => {
-    const editor = document.createElement("div");
-    editor.setAttribute("contenteditable", "true");
-    editor.textContent = "prompt";
-    document.body.append(editor);
-    expect(shouldPreventTranscriptSelectStart(editor)).toBe(false);
-    expect(shouldAllowNativeTextSelectStart(editor)).toBe(false);
-  });
-
   it("clears a large non-editable range so Escape can dismiss it", () => {
     const message = document.createElement("div");
     message.dataset.agentTranscriptNativeSelect = "true";
@@ -121,5 +60,19 @@ describe("nativeTextSelection", () => {
     expect(selection.toString().length).toBe(400);
     expect(clearNonEditableTextSelection(document)).toBe(true);
     expect(selection.rangeCount).toBe(0);
+  });
+
+  it("does not clear a live range whose nodes are still connected", () => {
+    const message = document.createElement("p");
+    message.dataset.agentTranscriptNativeSelect = "true";
+    message.textContent = "keep me";
+    document.body.append(message);
+    const text = message.firstChild;
+    if (!text) {
+      throw new Error("expected text node");
+    }
+    const selection = selectAcross(text, text);
+    expect(clearDisconnectedTextSelection(document)).toBe(false);
+    expect(selection.toString()).toBe("keep me");
   });
 });

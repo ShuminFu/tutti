@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import {
+  clearDisconnectedTextSelection,
   clearNonEditableTextSelection,
-  constrainNativeTextSelectionToOneMessage,
-  closestNativeTextSelectionRoot,
-  shouldPreventTranscriptSelectStart
+  closestNativeTextSelectionRoot
 } from "./nativeTextSelection";
 
 /**
@@ -56,37 +55,20 @@ export function useTranscriptNativeSelectionGuard({
       }
       clearNonEditableTextSelection(documentRef);
     };
-    const onSelectStart = (event: Event): void => {
-      if (shouldPreventTranscriptSelectStart(event.target)) {
-        event.preventDefault();
-      }
-    };
     const onSelectionChange = (): void => {
-      constrainNativeTextSelectionToOneMessage(documentRef);
-      const selection = documentRef.getSelection?.();
-      const anchor = selection?.anchorNode;
-      if (
-        selection &&
-        !selection.isCollapsed &&
-        selection.rangeCount > 0 &&
-        (anchor?.isConnected === false ||
-          selection.focusNode?.isConnected === false)
-      ) {
-        selection.removeAllRanges();
+      if (clearDisconnectedTextSelection(documentRef)) {
         setSelectingState(false);
       }
     };
 
     documentRef.addEventListener("pointerdown", onPointerDown, true);
     documentRef.addEventListener("keydown", onKeyDown);
-    documentRef.addEventListener("selectstart", onSelectStart, true);
     documentRef.addEventListener("selectionchange", onSelectionChange);
     view?.addEventListener("pointerup", endSelecting);
     view?.addEventListener("pointercancel", endSelecting);
     return () => {
       documentRef.removeEventListener("pointerdown", onPointerDown, true);
       documentRef.removeEventListener("keydown", onKeyDown);
-      documentRef.removeEventListener("selectstart", onSelectStart, true);
       documentRef.removeEventListener("selectionchange", onSelectionChange);
       view?.removeEventListener("pointerup", endSelecting);
       view?.removeEventListener("pointercancel", endSelecting);

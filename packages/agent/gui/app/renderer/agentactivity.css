@@ -7717,8 +7717,6 @@ button.agent-gui-node__conversation-section-toggle:hover
   gap: 24px;
   min-height: 0;
   overflow: auto;
-  -webkit-user-select: none;
-  user-select: none;
   padding: 32px var(--agent-gui-detail-padding-x)
     calc(24px + var(--agent-gui-bottom-dock-safe-area, 0px));
   scroll-padding-bottom: calc(

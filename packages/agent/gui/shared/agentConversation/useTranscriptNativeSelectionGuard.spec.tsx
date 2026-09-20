@@ -77,20 +77,6 @@ describe("useTranscriptNativeSelectionGuard", () => {
     expect(onSelectingChange).toHaveBeenCalledWith(false);
   });
 
-  it("prevents selectstart on transcript chrome", () => {
-    const row = document.createElement("div");
-    row.dataset.agentTranscriptRow = "row-1";
-    const chrome = document.createElement("button");
-    chrome.type = "button";
-    row.append(chrome);
-    document.body.append(row);
-    render(<GuardHost />);
-
-    const event = new Event("selectstart", { bubbles: true, cancelable: true });
-    chrome.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(true);
-  });
-
   it("clears the range when the guarded session unmounts", () => {
     const body = document.createElement("p");
     body.dataset.agentTranscriptNativeSelect = "true";
