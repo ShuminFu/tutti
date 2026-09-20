@@ -36,6 +36,7 @@ import type { AgentQuickPromptLabels } from "./quickPrompts/agentQuickPromptLabe
 import type { AgentMentionFilterId } from "../AgentMentionSearchContracts";
 import type { AgentComposerInputHistoryEntry } from "../model/agentComposerInputHistory";
 import type { AgentGUISessionLaunchMode } from "../model/agentSessionLaunchMode";
+import type { ComposerDraftChangeMeta } from "../model/composerDraftVersion";
 
 export interface AgentComposerReferenceProvenanceFilter {
   snapshot: ReferenceProvenanceFilterSnapshot;
@@ -58,6 +59,16 @@ export interface AgentComposerSubmitOptions {
   capabilityRefs?: readonly AgentComposerCapabilityReference[];
   /** Exact canonical active Turn captured for native guidance. */
   targetTurnId?: string;
+  /**
+   * Structured composer draft captured at the send click. Payload, queue
+   * preview, and restore all derive from this snapshot instead of a later
+   * Controller table read.
+   */
+  submittedDraft?: AgentComposerDraft;
+  /** Composer revision that produced `submittedDraft`. */
+  draftRevision?: number;
+  /** Draft scope that owned the send. */
+  sourceScopeKey?: string;
   /**
    * Immutable Tutti presentation captured by the composer that initiated the
    * submit. An explicit inactive snapshot is authoritative over stale draft
@@ -403,7 +414,8 @@ export interface AgentComposerProps {
   workspaceUserProjectI18n: WorkspaceUserProjectI18nRuntime;
   onDraftContentChange: (
     draftContent: AgentComposerDraft,
-    sourceScopeKey?: string
+    sourceScopeKey?: string,
+    meta?: ComposerDraftChangeMeta
   ) => void;
   onProjectPathChange?: (
     path: string | null,

@@ -6,6 +6,10 @@ import {
 } from "../../../agentActivityHost";
 import type { AgentComposerDraftImage } from "../model/agentGuiNodeTypes";
 import { useComposerSlashActions } from "./useComposerSlashActions";
+import {
+  createComposerDraftVersionTracker,
+  recordComposerLocalDraftEdit
+} from "../model/composerDraftVersion";
 
 function createImage(
   overrides: Partial<AgentComposerDraftImage> = {}
@@ -90,6 +94,10 @@ function createInput(overrides: Record<string, unknown> = {}) {
     draftImagesRef: { current: [] },
     draftFilesRef: { current: [] },
     draftLargeTextsRef: { current: [] },
+    draftScopeKey: "session:session-1",
+    draftVersionTrackerRef: {
+      current: createComposerDraftVersionTracker("session:session-1")
+    },
     setPaletteDraftPrompt: vi.fn(),
     setIsPaletteOpen: vi.fn(),
     setIsReviewPickerOpen: vi.fn(),
@@ -177,6 +185,80 @@ describe("useComposerSlashActions submit readiness", () => {
       path: "/tmp/shot.png",
       type: "image"
     });
+  });
+
+  it("submits the live ref snapshot even when the rendered draft is stale", () => {
+    const onSubmit = vi.fn();
+    const tracker = createComposerDraftVersionTracker("session:session-1");
+    recordComposerLocalDraftEdit(tracker, "A");
+    recordComposerLocalDraftEdit(tracker, "AB");
+    const rendered = renderHook(() =>
+      useComposerSlashActions(
+        createInput({
+          draftContent: [{ text: "A", type: "text" as const }],
+          draftPromptRef: { current: "AB" },
+          draftVersionTrackerRef: { current: tracker },
+          onSubmit
+        }) as never
+      )
+    );
+
+    act(() => rendered.result.current.submitCurrentPrompt());
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      [{ text: "AB", type: "text" }],
+      undefined,
+      expect.objectContaining({
+        draftRevision: 2,
+        sourceScopeKey: "session:session-1",
+        submittedDraft: [{ text: "AB", type: "text" }]
+      })
+    );
+  });
+
+  it("does not resend the same consumed draft revision", () => {
+    const onSubmit = vi.fn();
+    const tracker = createComposerDraftVersionTracker("session:session-1");
+    recordComposerLocalDraftEdit(tracker, "hello");
+    const rendered = renderHook(() =>
+      useComposerSlashActions(
+        createInput({
+          draftVersionTrackerRef: { current: tracker },
+          onSubmit
+        }) as never
+      )
+    );
+
+    act(() => rendered.result.current.submitCurrentPrompt());
+    act(() => rendered.result.current.submitCurrentPrompt());
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes the same snapshot through guidance submit", () => {
+    const onSubmitGuidance = vi.fn();
+    const tracker = createComposerDraftVersionTracker("session:session-1");
+    recordComposerLocalDraftEdit(tracker, "steer this turn");
+    const rendered = renderHook(() =>
+      useComposerSlashActions(
+        createInput({
+          draftPromptRef: { current: "steer this turn" },
+          draftVersionTrackerRef: { current: tracker },
+          onSubmitGuidance
+        }) as never
+      )
+    );
+
+    act(() => rendered.result.current.submitCurrentPrompt({ guidance: true }));
+
+    expect(onSubmitGuidance).toHaveBeenCalledWith(
+      [{ text: "steer this turn", type: "text" }],
+      undefined,
+      expect.objectContaining({
+        draftRevision: 1,
+        submittedDraft: [{ text: "steer this turn", type: "text" }]
+      })
+    );
   });
 
   it("reports a failed attachment instead of sending silently", () => {

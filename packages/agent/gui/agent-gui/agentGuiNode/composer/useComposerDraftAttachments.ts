@@ -55,6 +55,8 @@ import { reportAgentComposerDiagnostic } from "./agentComposerDiagnostics";
 import { settleWithTimeout } from "./composerAssetUploadTimeout";
 import { uploadComposerDraftImage } from "./composerDraftImageUpload";
 import type { AgentGUIComposerContentType } from "../engagement/agentGUIEngagement.types";
+import type { ComposerDraftVersionTracker } from "../model/composerDraftVersion";
+import { recordComposerLocalDraftEdit } from "../model/composerDraftVersion";
 
 export interface WorkspaceReferencePickResult {
   files: readonly WorkspaceFileReference[];
@@ -90,8 +92,10 @@ interface UseComposerDraftAttachmentsInput {
   clearActiveFileMentionTrigger: () => void;
   onDraftContentChange: (
     draft: AgentComposerDraft,
-    sourceScopeKey?: string
+    sourceScopeKey?: string,
+    meta?: { revision: number }
   ) => void;
+  draftVersionTrackerRef: RefObject<ComposerDraftVersionTracker>;
   onPromptImagesUnsupported?: () => void;
   onContentEntered?: (contentType: AgentGUIComposerContentType) => void;
   onRequestWorkspaceReferences?:
@@ -123,6 +127,7 @@ export function useComposerDraftAttachments({
   setIsPaletteOpen,
   clearActiveFileMentionTrigger,
   onDraftContentChange,
+  draftVersionTrackerRef,
   onPromptImagesUnsupported,
   onContentEntered,
   onRequestWorkspaceReferences,
@@ -145,23 +150,29 @@ export function useComposerDraftAttachments({
     (agentHostApi?.toast?.info ?? agentHostApi?.toast?.error)?.(message);
   });
   const publishScopedDraft = useStableEventCallback(
-    (sourceScopeKey: string, nextDraft: AgentComposerDraft): void => {
+    (
+      sourceScopeKey: string,
+      nextDraft: AgentComposerDraft,
+      revision?: number
+    ): void => {
       draftByScopeKeyRef.current[sourceScopeKey] = nextDraft;
+      const meta = revision != null ? { revision } : undefined;
       if (sourceScopeKey === draftScopeKey) {
         draftPromptRef.current = agentComposerDraftPrompt(nextDraft);
         draftImagesRef.current = agentComposerDraftImages(nextDraft);
         draftFilesRef.current = agentComposerDraftFiles(nextDraft);
         draftLargeTextsRef.current = agentComposerDraftLargeTexts(nextDraft);
-        onDraftContentChange(nextDraft);
+        onDraftContentChange(nextDraft, undefined, meta);
       } else {
-        onDraftContentChange(nextDraft, sourceScopeKey);
+        onDraftContentChange(nextDraft, sourceScopeKey, meta);
       }
     }
   );
   const updateScopedDraft = useStableEventCallback(
     (
       sourceScopeKey: string,
-      update: (current: AgentComposerDraft) => AgentComposerDraft
+      update: (current: AgentComposerDraft) => AgentComposerDraft,
+      revision?: number
     ): AgentComposerDraft | null => {
       const current = draftByScopeKeyRef.current[sourceScopeKey];
       if (!current) {
@@ -179,8 +190,24 @@ export function useComposerDraftAttachments({
         return null;
       }
       const next = update(current);
-      publishScopedDraft(sourceScopeKey, next);
+      const effectiveRevision =
+        revision ?? draftVersionTrackerRef.current.nextRevision;
+      if (
+        effectiveRevision <= draftVersionTrackerRef.current.consumedRevision
+      ) {
+        return next;
+      }
+      publishScopedDraft(sourceScopeKey, next, effectiveRevision);
       return next;
+    }
+  );
+  const publishLocalScopedDraft = useStableEventCallback(
+    (sourceScopeKey: string, nextDraft: AgentComposerDraft): void => {
+      const revision = recordComposerLocalDraftEdit(
+        draftVersionTrackerRef.current,
+        agentComposerDraftPrompt(nextDraft)
+      );
+      publishScopedDraft(sourceScopeKey, nextDraft, revision);
     }
   );
   const openReferencesForEntityRef = useRef<
@@ -188,14 +215,22 @@ export function useComposerDraftAttachments({
   >(null);
   const handleDraftChange = useStableEventCallback(
     (nextDraft: string): void => {
+      const tracker = draftVersionTrackerRef.current;
       if (isGoalModeActive) {
         const nextGoalPrompt = buildGoalModePrompt(nextDraft);
         draftPromptRef.current = nextGoalPrompt;
+        const revision = recordComposerLocalDraftEdit(tracker, nextGoalPrompt);
         startTransition(() => {
+          if (revision <= tracker.consumedRevision) {
+            return;
+          }
           setPaletteDraftPrompt(nextDraft);
           setIsPaletteOpen(true);
-          updateScopedDraft(draftScopeKey, (currentDraft) =>
-            updateDraftPromptAndReconcileFiles(currentDraft, nextGoalPrompt)
+          updateScopedDraft(
+            draftScopeKey,
+            (currentDraft) =>
+              updateDraftPromptAndReconcileFiles(currentDraft, nextGoalPrompt),
+            revision
           );
         });
         return;
@@ -204,21 +239,35 @@ export function useComposerDraftAttachments({
       if (nextGoalObjective !== null) {
         const nextGoalPrompt = buildGoalModePrompt(nextGoalObjective);
         draftPromptRef.current = nextGoalPrompt;
+        const revision = recordComposerLocalDraftEdit(tracker, nextGoalPrompt);
         startTransition(() => {
+          if (revision <= tracker.consumedRevision) {
+            return;
+          }
           setPaletteDraftPrompt(nextGoalObjective);
           setIsPaletteOpen(true);
-          updateScopedDraft(draftScopeKey, (currentDraft) =>
-            updateDraftPromptAndReconcileFiles(currentDraft, nextGoalPrompt)
+          updateScopedDraft(
+            draftScopeKey,
+            (currentDraft) =>
+              updateDraftPromptAndReconcileFiles(currentDraft, nextGoalPrompt),
+            revision
           );
         });
         return;
       }
       draftPromptRef.current = nextDraft;
+      const revision = recordComposerLocalDraftEdit(tracker, nextDraft);
       startTransition(() => {
+        if (revision <= tracker.consumedRevision) {
+          return;
+        }
         setPaletteDraftPrompt(nextDraft);
         setIsPaletteOpen(true);
-        updateScopedDraft(draftScopeKey, (currentDraft) =>
-          updateDraftPromptAndReconcileFiles(currentDraft, nextDraft)
+        updateScopedDraft(
+          draftScopeKey,
+          (currentDraft) =>
+            updateDraftPromptAndReconcileFiles(currentDraft, nextDraft),
+          revision
         );
       });
     }
@@ -231,8 +280,15 @@ export function useComposerDraftAttachments({
     const nextPrompt = goalDraftObjective ?? "";
     draftPromptRef.current = nextPrompt;
     setPaletteDraftPrompt(nextPrompt);
-    updateScopedDraft(draftScopeKey, (currentDraft) =>
-      updateDraftPromptAndReconcileFiles(currentDraft, nextPrompt)
+    const revision = recordComposerLocalDraftEdit(
+      draftVersionTrackerRef.current,
+      nextPrompt
+    );
+    updateScopedDraft(
+      draftScopeKey,
+      (currentDraft) =>
+        updateDraftPromptAndReconcileFiles(currentDraft, nextPrompt),
+      revision
     );
   }, [draftScopeKey, goalDraftObjective, isGoalModeActive, updateScopedDraft]);
 
@@ -291,7 +347,7 @@ export function useComposerDraftAttachments({
       const nextDraftImages = [...currentDraftImages, ...nextImages];
       draftImagesRef.current = nextDraftImages;
       reportContentEntered("image");
-      publishScopedDraft(
+      publishLocalScopedDraft(
         draftScopeKey,
         buildAgentComposerDraft({
           prompt: draftPromptRef.current,
@@ -318,7 +374,7 @@ export function useComposerDraftAttachments({
       agentActivityRuntime,
       draftScopeKey,
       onPromptImagesUnsupported,
-      publishScopedDraft,
+      publishLocalScopedDraft,
       promptImagesSupported,
       promptAssetLimit,
       reportContentEntered,
@@ -333,7 +389,7 @@ export function useComposerDraftAttachments({
         (image) => image.id !== id
       );
       draftImagesRef.current = nextDraftImages;
-      publishScopedDraft(
+      publishLocalScopedDraft(
         draftScopeKey,
         buildAgentComposerDraft({
           prompt: draftPromptRef.current,
@@ -343,7 +399,7 @@ export function useComposerDraftAttachments({
         })
       );
     },
-    [draftScopeKey, publishScopedDraft]
+    [draftScopeKey, publishLocalScopedDraft]
   );
 
   const addDraftFiles = useCallback(
@@ -384,7 +440,7 @@ export function useComposerDraftAttachments({
         ...preparation.pendingFiles
       ];
       draftFilesRef.current = nextDraftFiles;
-      publishScopedDraft(
+      publishLocalScopedDraft(
         draftScopeKey,
         buildAgentComposerDraft({
           prompt: draftPromptRef.current,
@@ -482,7 +538,7 @@ export function useComposerDraftAttachments({
       prepareExternalPromptFiles,
       promptAssetLimit,
       promptFilesSupported,
-      publishScopedDraft,
+      publishLocalScopedDraft,
       showErrorToast,
       updateScopedDraft,
       workspaceId
@@ -495,7 +551,7 @@ export function useComposerDraftAttachments({
         (item) => item.id !== id
       );
       draftLargeTextsRef.current = nextDraftLargeTexts;
-      publishScopedDraft(
+      publishLocalScopedDraft(
         draftScopeKey,
         buildAgentComposerDraft({
           prompt: draftPromptRef.current,
@@ -505,7 +561,7 @@ export function useComposerDraftAttachments({
         })
       );
     },
-    [draftScopeKey, publishScopedDraft]
+    [draftScopeKey, publishLocalScopedDraft]
   );
 
   // "Show in text field": dissolve a pasted-text chip back into the composer as
@@ -528,7 +584,7 @@ export function useComposerDraftAttachments({
       draftPromptRef.current = nextPrompt;
       draftLargeTextsRef.current = nextDraftLargeTexts;
       setPaletteDraftPrompt(nextPrompt);
-      publishScopedDraft(
+      publishLocalScopedDraft(
         draftScopeKey,
         buildAgentComposerDraft({
           prompt: nextPrompt,
@@ -541,7 +597,7 @@ export function useComposerDraftAttachments({
         editorHandleRef.current?.focusAtEnd();
       });
     },
-    [draftScopeKey, publishScopedDraft]
+    [draftScopeKey, publishLocalScopedDraft]
   );
 
   const handlePastedLargeText = useCallback(
@@ -584,7 +640,7 @@ export function useComposerDraftAttachments({
         }
       ];
       draftLargeTextsRef.current = nextDraftLargeTexts;
-      publishScopedDraft(
+      publishLocalScopedDraft(
         draftScopeKey,
         buildAgentComposerDraft({
           prompt: draftPromptRef.current,
@@ -635,7 +691,7 @@ export function useComposerDraftAttachments({
       draftScopeKey,
       pastedTextStagingSupported,
       promptAssetLimit,
-      publishScopedDraft,
+      publishLocalScopedDraft,
       reportContentEntered,
       updateScopedDraft,
       workspaceId

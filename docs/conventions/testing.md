@@ -221,8 +221,12 @@ inserts four explicit newline rows, waits for the 3.5-line viewport to finish
 expanding, deletes back to one row, and verifies that the action button remains
 bottom-aligned across both transitions. It then injects ordinary text one
 character at a time, drives a real CDP IME composition lifecycle, opens the `@`
-panel, and verifies ArrowDown, Tab, and Escape navigation without submitting
-the draft.
+panel, and verifies ArrowDown, Tab, and Escape navigation. After the mention
+panel closes it types a unique tail and sends immediately, then asserts the
+composer cleared and the unique tail is visible outside the editor (queued
+prompt or transcript). Queue-order and truncation under a busy Turn are
+covered by AgentGUI submit-draft-consistency tests; this scenario records
+input-to-paint and send-to-clear timing.
 
 `workbench-window-lifecycle` measures the internal AgentGUI Workbench node's
 minimize, restore, maximize, unmaximize, close, and reopen mechanics.

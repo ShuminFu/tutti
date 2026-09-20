@@ -545,6 +545,73 @@ describe("existing-session prompt submission", () => {
     ).toBe("");
   });
 
+  it("sends the composer snapshot when the draft table is still a lagging prefix", () => {
+    const goalControl = vi.fn(async () => undefined);
+    const { input, draftByScopeKeyRef, sessionEngine } = createGoalControlInput(
+      goalControl as never
+    );
+    draftByScopeKeyRef.current = {
+      "session:session-1": draft("A")
+    };
+    const submitPrompt = vi
+      .spyOn(sessionEngine, "submitPrompt")
+      .mockReturnValue({ accepted: true, queued: true });
+    const { result } = renderHook(() =>
+      useAgentGUISubmitInteractionActions(input)
+    );
+
+    act(() =>
+      result.current.submitPrompt([{ type: "text", text: "AB" }], undefined, {
+        draftRevision: 2,
+        sourceScopeKey: "session:session-1",
+        submittedDraft: draft("AB")
+      })
+    );
+
+    expect(submitPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: [{ type: "text", text: "AB" }]
+      })
+    );
+    expect(
+      agentComposerDraftPrompt(draftByScopeKeyRef.current["session:session-1"]!)
+    ).toBe("");
+  });
+
+  it("ignores a lagging draft publish after that revision was consumed", () => {
+    const goalControl = vi.fn(async () => undefined);
+    const { input, draftByScopeKeyRef, sessionEngine } = createGoalControlInput(
+      goalControl as never
+    );
+    draftByScopeKeyRef.current = {
+      "session:session-1": draft("AB")
+    };
+    vi.spyOn(sessionEngine, "submitPrompt").mockReturnValue({
+      accepted: true,
+      queued: false
+    });
+    const { result } = renderHook(() =>
+      useAgentGUISubmitInteractionActions(input)
+    );
+
+    act(() =>
+      result.current.submitPrompt([{ type: "text", text: "AB" }], undefined, {
+        draftRevision: 2,
+        sourceScopeKey: "session:session-1",
+        submittedDraft: draft("AB")
+      })
+    );
+    act(() =>
+      result.current.updateDraftContent(draft("AB"), "session:session-1", {
+        revision: 2
+      })
+    );
+
+    expect(
+      agentComposerDraftPrompt(draftByScopeKeyRef.current["session:session-1"]!)
+    ).toBe("");
+  });
+
   it("keeps the draft when the Engine does not admit the submission", () => {
     const goalControl = vi.fn(async () => undefined);
     const { input, draftByScopeKeyRef, sessionEngine, setDraftByScopeKey } =
@@ -577,14 +644,16 @@ describe("host-prepared submit (pair kickoff)", () => {
 
   it("snapshots the draft at submit time and keeps text typed while preparing", async () => {
     const goalControl = vi.fn(async () => undefined);
-    const { input, draftByScopeKeyRef, sessionEngine } =
-      createGoalControlInput(goalControl as never);
+    const { input, draftByScopeKeyRef, sessionEngine } = createGoalControlInput(
+      goalControl as never
+    );
     draftByScopeKeyRef.current = { "session:session-1": draft("修登录页") };
     const submitPrompt = vi
       .spyOn(sessionEngine, "submitPrompt")
       .mockReturnValue({ accepted: true, queued: false });
-    let resolvePreparation: (value: AgentPromptSubmitPreparation) => void =
-      () => {};
+    let resolvePreparation: (
+      value: AgentPromptSubmitPreparation
+    ) => void = () => {};
     const unregister = registerAgentComposerHostExtension({
       prepareSubmit: () =>
         new Promise<AgentPromptSubmitPreparation>((resolve) => {
@@ -618,7 +687,9 @@ describe("host-prepared submit (pair kickoff)", () => {
         })
       );
       // 原本没有 displayPrompt：留空，转录从 content 读（卡 + 原话）。
-      expect(submitPrompt.mock.calls[0]![0]).not.toHaveProperty("displayPrompt");
+      expect(submitPrompt.mock.calls[0]![0]).not.toHaveProperty(
+        "displayPrompt"
+      );
       // 新打的字没被当成「已提交的草稿」清掉。
       expect(
         agentComposerDraftPrompt(

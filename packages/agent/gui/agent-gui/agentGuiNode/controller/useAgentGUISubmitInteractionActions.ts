@@ -108,6 +108,8 @@ interface UseAgentGUISubmitInteractionActionsInput {
         sendNow?: boolean;
         targetTurnId?: AgentComposerSubmitOptions["targetTurnId"];
         sourceScopeKey?: string;
+        submittedDraft?: AgentComposerDraft;
+        draftRevision?: number;
         trackDraft?: boolean;
       }
     ) => void
@@ -201,6 +203,8 @@ export function useAgentGUISubmitInteractionActions(
   } = input;
   // 正在向宿主要开工卡（异步）的会话号：挡同一条会话的重复提交（票 05）。
   const preparingSubmitSessionIdsRef = useRef<Set<string>>(new Set());
+  const draftRevisionByScopeKeyRef = useRef<Record<string, number>>({});
+  const consumedDraftRevisionByScopeKeyRef = useRef<Record<string, number>>({});
   const goalControlSettlementsRef = useRef<
     Record<string, AgentGUIGoalControlPendingSettlement>
   >({});
@@ -246,6 +250,7 @@ export function useAgentGUISubmitInteractionActions(
         sourceScopeKey?: string;
         /** 提交那一刻的草稿快照；不给时现读。异步准备过的提交必须给（见 submitPrompt）。 */
         submittedDraft?: AgentComposerDraft;
+        draftRevision?: number;
         trackDraft?: boolean;
       }
     ) => {
@@ -276,9 +281,13 @@ export function useAgentGUISubmitInteractionActions(
           options.submittedDraft ??
           draftByScopeKeyRef.current[sourceScopeKey] ??
           emptyAgentComposerDraft();
+        const revision =
+          options.draftRevision ??
+          draftRevisionByScopeKeyRef.current[sourceScopeKey];
         submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId] = {
           sourceScopeKey,
           content: snapshotAgentComposerDraft(submittedDraft),
+          ...(revision != null ? { revision } : {}),
           targetAgentSessionId: agentSessionId
         };
       }
@@ -338,8 +347,21 @@ export function useAgentGUISubmitInteractionActions(
       const submittedSnapshot =
         submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId];
       if ((accepted || queued) && submittedSnapshot) {
+        if (submittedSnapshot.revision != null) {
+          const previousConsumed =
+            consumedDraftRevisionByScopeKeyRef.current[
+              submittedSnapshot.sourceScopeKey
+            ] ?? 0;
+          consumedDraftRevisionByScopeKeyRef.current[
+            submittedSnapshot.sourceScopeKey
+          ] = Math.max(previousConsumed, submittedSnapshot.revision);
+        }
         setDraftByScopeKey((current) => {
           const next = clearSubmittedDraftIfUnchanged({
+            currentRevision:
+              draftRevisionByScopeKeyRef.current[
+                submittedSnapshot.sourceScopeKey
+              ],
             drafts: current,
             snapshot: submittedSnapshot
           });
@@ -408,6 +430,8 @@ export function useAgentGUISubmitInteractionActions(
           })
         );
       },
+      readDraftRevision: (sourceScopeKey) =>
+        draftRevisionByScopeKeyRef.current[sourceScopeKey],
       snapshots: submittedDraftSnapshotsRef.current
     });
     return controller.attach();
@@ -433,6 +457,7 @@ export function useAgentGUISubmitInteractionActions(
         targetTurnId?: AgentComposerSubmitOptions["targetTurnId"];
         sourceScopeKey?: string;
         submittedDraft?: AgentComposerDraft;
+        draftRevision?: number;
         trackDraft?: boolean;
       }
     ) => {
@@ -469,6 +494,9 @@ export function useAgentGUISubmitInteractionActions(
           sourceScopeKey: options?.sourceScopeKey,
           ...(options?.submittedDraft
             ? { submittedDraft: options.submittedDraft }
+            : {}),
+          ...(options?.draftRevision != null
+            ? { draftRevision: options.draftRevision }
             : {}),
           trackDraft: options?.trackDraft === true
         }
@@ -549,17 +577,34 @@ export function useAgentGUISubmitInteractionActions(
               {
                 capabilityRefs: options?.capabilityRefs,
                 requiredSettingsPatch: options?.requiredSettingsPatch,
-                sourceScopeKey: resolveAgentComposerDraftScopeKey({}),
+                sourceScopeKey:
+                  options?.sourceScopeKey ??
+                  resolveAgentComposerDraftScopeKey({}),
+                ...(options?.submittedDraft
+                  ? { submittedDraft: options.submittedDraft }
+                  : {}),
+                ...(options?.draftRevision != null
+                  ? { draftRevision: options.draftRevision }
+                  : {}),
                 trackDraft: true
               }
             );
             return;
           }
         }
-        const homeDraftKey = resolveAgentComposerDraftScopeKey({});
+        const homeDraftKey =
+          options?.sourceScopeKey ?? resolveAgentComposerDraftScopeKey({});
         const submittedHomeDraft = snapshotAgentComposerDraft(
-          draftByScopeKeyRef.current[homeDraftKey] ?? emptyAgentComposerDraft()
+          options?.submittedDraft ??
+            draftByScopeKeyRef.current[homeDraftKey] ??
+            emptyAgentComposerDraft()
         );
+        if (options?.draftRevision != null) {
+          consumedDraftRevisionByScopeKeyRef.current[homeDraftKey] = Math.max(
+            consumedDraftRevisionByScopeKeyRef.current[homeDraftKey] ?? 0,
+            options.draftRevision
+          );
+        }
         const activationResult = startConversation(
           normalizedContent,
           displayPromptText,
@@ -569,15 +614,19 @@ export function useAgentGUISubmitInteractionActions(
         );
         if (activationResult) {
           draftByScopeKeyRef.current = clearSubmittedAgentGUIHomeDraft({
+            currentRevision: draftRevisionByScopeKeyRef.current[homeDraftKey],
             draftKey: homeDraftKey,
             drafts: draftByScopeKeyRef.current,
-            submittedDraft: submittedHomeDraft
+            submittedDraft: submittedHomeDraft,
+            submittedRevision: options?.draftRevision
           });
           setDraftByScopeKey((current) =>
             clearSubmittedAgentGUIHomeDraft({
+              currentRevision: draftRevisionByScopeKeyRef.current[homeDraftKey],
               draftKey: homeDraftKey,
               drafts: current,
-              submittedDraft: submittedHomeDraft
+              submittedDraft: submittedHomeDraft,
+              submittedRevision: options?.draftRevision
             })
           );
         }
@@ -593,11 +642,15 @@ export function useAgentGUISubmitInteractionActions(
       }
       // 评审 F：按下发送这一刻就给草稿拍照。结对模式要先异步问宿主要开工卡，这段时间
       // 用户可能已经在输入框里打下一句了；到真正发送时才读草稿，就会把新打的字当成
-      // 「已提交的草稿」清掉，或在被拒时恢复成错的内容。
+      // 「已提交的草稿」清掉，或在被拒时恢复成错的内容。Composer 传入的快照优先：它
+      // 来自发送瞬间的编辑器 refs，不依赖尚未 flush 的界面草稿表。
+      const sourceScopeKey =
+        options?.sourceScopeKey ??
+        resolveAgentComposerDraftScopeKey({ agentSessionId });
       const submittedDraft = snapshotAgentComposerDraft(
-        draftByScopeKeyRef.current[
-          resolveAgentComposerDraftScopeKey({ agentSessionId })
-        ] ?? emptyAgentComposerDraft()
+        options?.submittedDraft ??
+          draftByScopeKeyRef.current[sourceScopeKey] ??
+          emptyAgentComposerDraft()
       );
       const sendExisting = (
         sendContent: AgentPromptContentBlock[],
@@ -610,7 +663,11 @@ export function useAgentGUISubmitInteractionActions(
           {
             capabilityRefs: options?.capabilityRefs,
             requiredSettingsPatch: options?.requiredSettingsPatch,
+            sourceScopeKey,
             submittedDraft,
+            ...(options?.draftRevision != null
+              ? { draftRevision: options.draftRevision }
+              : {}),
             trackDraft: true
           }
         );
@@ -719,6 +776,13 @@ export function useAgentGUISubmitInteractionActions(
           capabilityRefs: options?.capabilityRefs,
           sendNow: true,
           targetTurnId: activeTurnId,
+          sourceScopeKey: options?.sourceScopeKey,
+          ...(options?.submittedDraft
+            ? { submittedDraft: options.submittedDraft }
+            : {}),
+          ...(options?.draftRevision != null
+            ? { draftRevision: options.draftRevision }
+            : {}),
           trackDraft: true
         }
       );
@@ -829,21 +893,43 @@ export function useAgentGUISubmitInteractionActions(
   );
 
   const updateDraftContent = useCallback(
-    (draftContent: AgentComposerDraft, sourceScopeKey?: string) => {
+    (
+      draftContent: AgentComposerDraft,
+      sourceScopeKey?: string,
+      meta?: { revision: number }
+    ) => {
       const agentSessionId = activeConversationIdRef.current;
       const draftKey =
         sourceScopeKey ??
         resolveAgentComposerDraftScopeKey({
           agentSessionId
         });
+      const revision = meta?.revision;
+      if (revision != null) {
+        const consumed =
+          consumedDraftRevisionByScopeKeyRef.current[draftKey] ?? 0;
+        if (revision <= consumed) {
+          return;
+        }
+        draftRevisionByScopeKeyRef.current[draftKey] = revision;
+      }
       draftByScopeKeyRef.current = {
         ...draftByScopeKeyRef.current,
         [draftKey]: draftContent
       };
-      setDraftByScopeKey((current) => ({
-        ...current,
-        [draftKey]: draftContent
-      }));
+      setDraftByScopeKey((current) => {
+        if (revision != null) {
+          const consumed =
+            consumedDraftRevisionByScopeKeyRef.current[draftKey] ?? 0;
+          if (revision <= consumed) {
+            return current;
+          }
+        }
+        return {
+          ...current,
+          [draftKey]: draftContent
+        };
+      });
     },
     []
   );

@@ -1699,6 +1699,17 @@ projections rather than one aggregate Detail prop. The active Timeline
 TipTap treats a controlled value as a local acknowledgement only when its
 draft scope and local edit revision match; a scope change or other external
 replacement may rebuild the document.
+Composer send state is a second live snapshot of the same draft. Local edits
+write the send refs immediately and publish the heavier UI projection through
+`startTransition`. Each local edit has a `scopeKey` plus monotonically
+increasing revision. A later render of an older revision only acknowledges
+that version; it must not rewrite the send refs. One send click captures the
+structured draft and revision from those refs. Message payload, queue
+preview, failure restore, and composer clear all derive from that snapshot
+and `clientSubmitId`. After Engine admission (accepted or queued), the
+Controller consumes that exact session and revision: a lagging prefix is
+cleared, a newer local edit is kept, and a retype of the same characters is
+a new revision. Rejected admission leaves the draft in place.
 
 A virtualized transcript derives message-locator selection from the virtualizer's
 measured turn positions and the actual viewport center. The currently mounted

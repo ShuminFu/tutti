@@ -49,6 +49,8 @@ import { GOAL_MODE_SLASH_COMMAND } from "./AgentComposerChrome";
 import type { AgentComposerProps } from "./AgentComposer.types";
 import { reportAgentComposerDiagnostic } from "./agentComposerDiagnostics";
 import { selectComposerDraftUnavailableAttachments } from "./composerDraftAttachmentReadiness";
+import type { ComposerDraftVersionTracker } from "../model/composerDraftVersion";
+import { consumeComposerSubmittedRevision } from "../model/composerDraftVersion";
 
 type TriggerMatch = ReturnType<typeof getAgentComposerTriggerQueryMatch>;
 
@@ -100,6 +102,8 @@ interface UseComposerSlashActionsInput extends Props {
   draftImagesRef: RefObject<AgentComposerDraftImage[]>;
   draftFilesRef: RefObject<AgentComposerDraftFile[]>;
   draftLargeTextsRef: RefObject<AgentComposerDraftLargeText[]>;
+  draftScopeKey: string;
+  draftVersionTrackerRef: RefObject<ComposerDraftVersionTracker>;
   setPaletteDraftPrompt: Dispatch<SetStateAction<string>>;
   setIsPaletteOpen: Dispatch<SetStateAction<boolean>>;
   setIsReviewPickerOpen: Dispatch<SetStateAction<boolean>>;
@@ -161,6 +165,8 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
     draftImagesRef,
     draftFilesRef,
     draftLargeTextsRef,
+    draftScopeKey,
+    draftVersionTrackerRef,
     setPaletteDraftPrompt,
     setIsPaletteOpen,
     setIsReviewPickerOpen,
@@ -624,26 +630,45 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         source: "agent-gui",
         workspaceId
       });
+      const draftTracker = draftVersionTrackerRef.current;
+      const draftRevision = draftTracker.nextRevision;
+      if (
+        draftTracker.consumedRevision > 0 &&
+        draftRevision <= draftTracker.consumedRevision
+      ) {
+        return;
+      }
+      consumeComposerSubmittedRevision(draftTracker, draftRevision);
+      const submitOptions: NonNullable<Parameters<typeof onSubmit>[2]> = {
+        submittedDraft: nextDraftContent,
+        draftRevision,
+        sourceScopeKey: draftScopeKey
+      };
       if (options?.guidance === true) {
         if (!onSubmitGuidance) {
           return;
         }
         if (submission.displayPrompt) {
-          onSubmitGuidance(submission.content, submission.displayPrompt);
+          onSubmitGuidance(
+            submission.content,
+            submission.displayPrompt,
+            submitOptions
+          );
         } else {
-          onSubmitGuidance(submission.content);
+          onSubmitGuidance(submission.content, undefined, submitOptions);
         }
       } else {
         if (submission.displayPrompt) {
-          onSubmit(submission.content, submission.displayPrompt);
+          onSubmit(submission.content, submission.displayPrompt, submitOptions);
         } else {
-          onSubmit(submission.content);
+          onSubmit(submission.content, undefined, submitOptions);
         }
       }
       // The controller owns draft clearing: an in-session send clears the
       // composer optimistically at hand-off, and a rejected send restores this
       // exact content, so a later edit is never overwritten by an in-flight
-      // submission.
+      // submission. The snapshot and revision above are the only values that
+      // send, queue, and restore may read.
     }
   );
 

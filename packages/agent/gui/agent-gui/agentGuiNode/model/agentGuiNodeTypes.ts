@@ -208,6 +208,12 @@ export type AgentComposerDraft = AgentComposerDraftContent;
 export interface SubmittedDraftSnapshot {
   sourceScopeKey: string;
   content: AgentComposerDraftContent;
+  /**
+   * Composer revision captured at send. Clear and restore consume this exact
+   * version so a later retype of the same text is not treated as the in-flight
+   * submission.
+   */
+  revision?: number;
   /** Existing-session destination; may differ from source after recovery. */
   targetAgentSessionId?: string;
 }

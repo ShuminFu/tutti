@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState
+} from "react";
 import type {
   AgentComposerDraft,
   AgentComposerDraftFile,
@@ -40,9 +46,6 @@ import type { AgentComposerProps } from "./composer/AgentComposer.types";
 import { withAgentComposerTuttiModeSnapshot } from "./composer/agentComposerSubmitOptions";
 import {
   agentComposerDraftAttachmentProjection,
-  agentComposerDraftFiles,
-  agentComposerDraftImages,
-  agentComposerDraftLargeTexts,
   agentComposerDraftHasContent,
   agentComposerDraftPrompt
 } from "./model/agentComposerDraft";
@@ -79,6 +82,8 @@ export type {
   AgentComposerUsage
 } from "./composer/AgentComposer.types";
 import { useSessionWorktreeLaunch } from "./composer/useSessionWorktreeLaunch";
+import { useComposerLiveDraftSync } from "./composer/useComposerLiveDraftSync";
+import { createComposerDraftVersionTracker } from "./model/composerDraftVersion";
 
 export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   "use memo";
@@ -286,7 +291,10 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   const draftByScopeKeyRef = useRef<Record<string, AgentComposerDraft>>({
     [draftScopeKey]: draftContent
   });
-  draftByScopeKeyRef.current[draftScopeKey] = draftContent;
+  const draftVersionTrackerRef = useRef(
+    createComposerDraftVersionTracker(draftScopeKey)
+  );
+  draftByScopeKeyRef.current[draftScopeKey] ??= draftContent;
   const {
     disposeInputHistory,
     onHistoryNavigation,
@@ -411,29 +419,23 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     shouldResetMentionHighlightToFilter
   ]);
 
-  useEffect(() => {
-    draftImagesRef.current = agentComposerDraftImages(draftContent);
-    draftFilesRef.current = agentComposerDraftFiles(draftContent);
-    draftLargeTextsRef.current = agentComposerDraftLargeTexts(draftContent);
-    const isExternalDraftReplacement = draftPromptRef.current !== draftPrompt;
-    draftPromptRef.current = draftPrompt;
-    setPaletteDraftPrompt(goalDraftObjective ?? draftPrompt);
-    settlePendingInputHistory();
-    if (isExternalDraftReplacement && draftPrompt) {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          // Prefer end so continued typing (and shared home drafts after a
-          // project switch) keep the caret after the text, not at the start.
-          editorHandleRef.current?.focusAtEnd();
-        });
-      });
-    }
-  }, [
+  useComposerLiveDraftSync({
     draftContent,
     draftPrompt,
+    draftScopeKey,
+    draftVersionTrackerRef,
+    editorHandleRef,
     goalDraftObjective,
+    refs: {
+      draftByScopeKeyRef,
+      draftFilesRef,
+      draftImagesRef,
+      draftLargeTextsRef,
+      draftPromptRef
+    },
+    setPaletteDraftPrompt,
     settlePendingInputHistory
-  ]);
+  });
 
   useEffect(() => {
     if (
@@ -491,6 +493,8 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     draftImagesRef,
     draftFilesRef,
     draftLargeTextsRef,
+    draftScopeKey,
+    draftVersionTrackerRef,
     setPaletteDraftPrompt,
     setIsPaletteOpen,
     setIsReviewPickerOpen,
@@ -555,6 +559,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     draftImagesRef,
     draftFilesRef,
     draftLargeTextsRef,
+    draftVersionTrackerRef,
     setPaletteDraftPrompt,
     setIsPaletteOpen,
     clearActiveFileMentionTrigger,
@@ -590,7 +595,9 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   const pickerScopeRef = useRef<object | null>(null);
   useLayoutEffect(() => {
     pickerScopeRef.current = {};
-    return () => { pickerScopeRef.current = null; };
+    return () => {
+      pickerScopeRef.current = null;
+    };
   }, [draftScopeKey, slashStatusAgentSessionId]);
   const agentHostApi = useOptionalAgentHostApi();
   const selectLocalPromptFiles = useCallback(async (): Promise<void> => {
@@ -617,9 +624,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     } catch (error) {
       if (pickerScopeRef.current !== scope) return;
       agentHostApi?.toast?.error(
-        error instanceof Error
-          ? error.message
-          : labels.addContent
+        error instanceof Error ? error.message : labels.addContent
       );
     }
   }, [addExternalPromptEntries, agentHostApi, labels.addContent]);

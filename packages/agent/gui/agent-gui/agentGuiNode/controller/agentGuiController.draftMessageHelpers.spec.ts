@@ -104,6 +104,45 @@ describe("submitted composer draft cleanup", () => {
     expect(result[sourceScopeKey]).toEqual([{ type: "text", text: "" }]);
   });
 
+  it("clears a lagging prefix once a newer revision has been submitted", () => {
+    const drafts = {
+      [sourceScopeKey]: buildAgentComposerDraft({ prompt: "A" })
+    };
+    const result = clearSubmittedDraftIfUnchanged({
+      currentRevision: 1,
+      drafts,
+      snapshot: {
+        ...snapshot,
+        content: snapshotAgentComposerDraft(
+          buildAgentComposerDraft({ prompt: "AB" })
+        ),
+        revision: 2
+      }
+    });
+
+    expect(result[sourceScopeKey]).toEqual([{ type: "text", text: "" }]);
+  });
+
+  it("keeps a retyped draft whose revision is newer than the in-flight send", () => {
+    const drafts = {
+      [sourceScopeKey]: buildAgentComposerDraft({ prompt: "Review this" })
+    };
+
+    expect(
+      clearSubmittedDraftIfUnchanged({
+        currentRevision: 3,
+        drafts,
+        snapshot: {
+          ...snapshot,
+          content: snapshotAgentComposerDraft(
+            buildAgentComposerDraft({ prompt: "Review this" })
+          ),
+          revision: 2
+        }
+      })
+    ).toBe(drafts);
+  });
+
   it("retains the entire current draft when text changes during submission", () => {
     const editedDraft = buildAgentComposerDraft({
       prompt: "Review this and the follow-up",

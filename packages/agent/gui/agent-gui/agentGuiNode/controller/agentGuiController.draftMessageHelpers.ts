@@ -404,10 +404,25 @@ export function toRuntimeSendContent(
 
 export function shouldClearSubmittedDraft(input: {
   currentDraft: AgentComposerDraft | undefined;
+  currentRevision?: number;
   submittedDraft: AgentComposerDraft;
+  submittedRevision?: number;
 }): boolean {
   if (!input.currentDraft) {
     return false;
+  }
+  if (input.submittedRevision != null) {
+    // A later local edit, including a retype of the same characters, is a new
+    // draft version and must survive the previous send's clear. An older or
+    // not-yet-versioned table snapshot, including a lagging prefix, still
+    // belongs to this send.
+    if (
+      input.currentRevision != null &&
+      input.currentRevision > input.submittedRevision
+    ) {
+      return false;
+    }
+    return true;
   }
   if (areAgentComposerDraftsEqual(input.currentDraft, input.submittedDraft)) {
     return true;
@@ -445,13 +460,16 @@ function normalizeDraftAttachmentProgress(
 }
 
 export function clearSubmittedDraftIfUnchanged(input: {
+  currentRevision?: number;
   drafts: Record<string, AgentComposerDraft>;
   snapshot: SubmittedDraftSnapshot;
 }): Record<string, AgentComposerDraft> {
   if (
     !shouldClearSubmittedDraft({
       currentDraft: input.drafts[input.snapshot.sourceScopeKey],
-      submittedDraft: input.snapshot.content
+      currentRevision: input.currentRevision,
+      submittedDraft: input.snapshot.content,
+      submittedRevision: input.snapshot.revision
     })
   ) {
     return input.drafts;

@@ -696,7 +696,8 @@ export interface AgentGUINodeViewProps extends AgentGUIComposerExternalPromptPro
     stopBackgroundMonitors: (agentSessionIds: readonly string[]) => void;
     updateDraftContent: (
       draftContent: AgentComposerDraft,
-      sourceScopeKey?: string
+      sourceScopeKey?: string,
+      meta?: { revision: number }
     ) => void;
     updateSelectedProjectPath?: AgentComposerProps["onProjectPathChange"];
     updateComposerSettings: (settings: {

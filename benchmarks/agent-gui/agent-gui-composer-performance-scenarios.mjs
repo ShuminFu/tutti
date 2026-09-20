@@ -31,6 +31,10 @@ const composerInputMarkers = {
   mentionOpened: "tutti-perf:composer-input:mention-opened-observed",
   mentionNavigated: "tutti-perf:composer-input:mention-navigated-observed",
   mentionClosed: "tutti-perf:composer-input:mention-closed-observed",
+  submitAfterInput: "tutti-perf:composer-input:submit-after-input-observed",
+  composerCleared: "tutti-perf:composer-input:composer-cleared-observed",
+  submittedPayloadObserved:
+    "tutti-perf:composer-input:submitted-payload-observed",
   end: "tutti-perf:composer-input:end"
 };
 
@@ -77,13 +81,28 @@ export const composerInputScenario = {
       key: "mentionClosed",
       label: "mention panel closed",
       marker: composerInputMarkers.mentionClosed
+    },
+    {
+      key: "submitAfterInput",
+      label: "send clicked immediately after unique tail",
+      marker: composerInputMarkers.submitAfterInput
+    },
+    {
+      key: "composerCleared",
+      label: "composer cleared after send",
+      marker: composerInputMarkers.composerCleared
+    },
+    {
+      key: "submittedPayloadObserved",
+      label: "submitted unique tail visible outside the composer",
+      marker: composerInputMarkers.submittedPayloadObserved
     }
   ],
   prepareSnapshot: prepareComposerInputSnapshot,
   prepare: prepareComposerInput,
   execute: executeComposerInput,
   describe(prepared) {
-    return `${prepared.sessionID}; ${Array.from(multilineText).length} multiline inserts + shrink + ${Array.from(ordinaryText).length} text inserts + ${imeCandidates.length} IME updates + @ keyboard navigation`;
+    return `${prepared.sessionID}; ${Array.from(multilineText).length} multiline inserts + shrink + ${Array.from(ordinaryText).length} text inserts + ${imeCandidates.length} IME updates + @ keyboard navigation + submit-after-input`;
   },
   summarize(prepared, result) {
     return summary(
@@ -135,7 +154,15 @@ export const composerInputScenario = {
           name: "mention keyboard events observed",
           passed: result.mentionKeys.join(",") === "ArrowDown,Tab,Escape"
         },
-        { name: "mention panel closed", passed: result.mentionClosed }
+        { name: "mention panel closed", passed: result.mentionClosed },
+        {
+          name: "send immediately after input cleared the composer",
+          passed: result.composerCleared === true
+        },
+        {
+          name: "submitted unique tail observed outside the composer",
+          passed: result.submittedPayloadObserved === true
+        }
       ],
       [
         { label: "Session", value: prepared.sessionID },
@@ -159,7 +186,7 @@ export const composerInputScenario = {
           value: result.mentionKeys.join(" -> ")
         }
       ],
-      "CDP expands the composer through explicit newline transactions, deletes back to one line, injects ordinary text character by character, drives one real IME composition lifecycle, then verifies @ keyboard navigation"
+      "CDP expands the composer through explicit newline transactions, deletes back to one line, injects ordinary text character by character, drives one real IME composition lifecycle, verifies @ keyboard navigation, then types a unique tail and sends immediately"
     );
   }
 };
@@ -334,6 +361,23 @@ async function executeComposerInput(context, _prepared, options) {
     "closed mention panel"
   );
   await markRenderer(pageClient, composerInputMarkers.mentionClosed);
+
+  const uniqueTail = `dintal5277-tail-${Date.now()}`;
+  await clearComposerEditor(pageClient);
+  await waitForEditorText(pageClient, "", options.timeoutMs);
+  await pageClient.send("Input.insertText", { text: uniqueTail });
+  await waitForEditorText(pageClient, uniqueTail, options.timeoutMs);
+  await clickComposerSend(pageClient);
+  await markRenderer(pageClient, composerInputMarkers.submitAfterInput);
+  const cleared = await waitForEditorText(pageClient, "", options.timeoutMs);
+  await markRenderer(pageClient, composerInputMarkers.composerCleared);
+  const submittedPayload = await waitForSubmittedTail(
+    pageClient,
+    uniqueTail,
+    options.timeoutMs
+  );
+  await markRenderer(pageClient, composerInputMarkers.submittedPayloadObserved);
+
   const counters = await readAndRemoveComposerInputCounters(pageClient);
   await finishRendererScenario(pageClient, composerInputMarkers.end);
 
@@ -343,13 +387,52 @@ async function executeComposerInput(context, _prepared, options) {
     expandedGeometry,
     shrunkGeometry,
     categoryChanged: navigated.activeCategoryIndex !== initialCategory,
+    composerCleared: cleared.text === "",
     highlightChanged: highlighted.highlightedIndex !== initialHighlight,
     imeCommitted:
       committed.text === `${ordinaryText}${imeCommittedText}` &&
       countOccurrences(committed.text, imeCommittedText) === 1,
     mentionClosed: closed.palettePresent === false,
-    mentionOpened: opened.palettePresent === true
+    mentionOpened: opened.palettePresent === true,
+    submittedPayloadObserved: submittedPayload.observed === true,
+    uniqueTail
   };
+}
+
+async function clickComposerSend(client) {
+  await evaluate(
+    client,
+    `(() => {
+      const button = document.querySelector('[data-testid="agent-gui-composer-send"]');
+      if (!(button instanceof HTMLButtonElement) || button.disabled) {
+        throw new Error('composer send button is unavailable');
+      }
+      button.click();
+      return true;
+    })()`
+  );
+}
+
+async function waitForSubmittedTail(client, uniqueTail, timeoutMs) {
+  return waitForEvaluation(
+    client,
+    `(() => {
+      const editor = document.querySelector(${JSON.stringify(editorSelector)});
+      const editorText = editor
+        ? [...editor.children].map((block) => block.textContent ?? '').join('\\n')
+        : '';
+      const queued = document.querySelector('[data-testid="agent-gui-composer-queued-prompts"]');
+      const body = document.body?.innerText ?? '';
+      const observed =
+        editorText !== ${JSON.stringify(uniqueTail)} &&
+        (queued?.innerText?.includes(${JSON.stringify(uniqueTail)}) === true ||
+          body.includes(${JSON.stringify(uniqueTail)}));
+      return { ready: observed, observed };
+    })()`,
+    timeoutMs,
+    `submitted unique tail ${JSON.stringify(uniqueTail)}`,
+    25
+  );
 }
 
 async function clearComposerEditor(client) {

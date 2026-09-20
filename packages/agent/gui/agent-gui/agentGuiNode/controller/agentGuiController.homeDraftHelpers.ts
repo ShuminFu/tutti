@@ -7,14 +7,18 @@ import type { AgentComposerDraft } from "../model/agentGuiNodeTypes";
 import { shouldClearSubmittedDraft } from "./agentGuiController.draftMessageHelpers";
 
 export function clearSubmittedAgentGUIHomeDraft(input: {
+  currentRevision?: number;
   draftKey: string;
   drafts: Record<string, AgentComposerDraft>;
   submittedDraft: AgentComposerDraft;
+  submittedRevision?: number;
 }): Record<string, AgentComposerDraft> {
   if (
     !shouldClearSubmittedDraft({
       currentDraft: input.drafts[input.draftKey],
-      submittedDraft: input.submittedDraft
+      currentRevision: input.currentRevision,
+      submittedDraft: input.submittedDraft,
+      submittedRevision: input.submittedRevision
     })
   ) {
     return input.drafts;

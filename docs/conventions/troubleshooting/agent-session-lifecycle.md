@@ -826,6 +826,38 @@ session`.
   [composerDraftImageUpload.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/composer/composerDraftImageUpload.ts)
   [composerAssetUploadTimeout.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/composer/composerAssetUploadTimeout.ts)
 
+### Busy-session send truncates the prompt and leaves the composer filled
+
+- **Symptom:** While a Turn is still running and the UI is janky, sending the
+  next prompt queues it, but the queued text is missing its tail and the
+  composer still shows the original draft.
+- **Quick checks:** Compare the editor document, the submit payload, the
+  queued prompt, and the composer draft after Engine admission. If the editor
+  still shows the full text while the payload is a prefix, the send refs were
+  overwritten. If the payload is complete but the composer is not empty, the
+  clear snapshot did not match the live draft.
+- **Root cause:** Local typing writes send refs immediately and publishes the
+  UI draft through `startTransition`. A later render of an older draft wrote
+  those refs back to a prefix. Submit built the payload from the refs, while
+  clear read a different Controller table snapshot, so content-equality clear
+  did not run. Device jank only widened the window.
+- **Fix:** Give each local edit a `scopeKey` and revision. Old echoes only
+  acknowledge that version. One send click captures the structured draft and
+  revision from the live refs; payload, queue, restore, and clear all use that
+  snapshot and `clientSubmitId`. After accepted or queued admission, consume
+  that exact version. A newer local edit, including a retype of the same
+  characters, is kept. Do not clear unconditionally, and do not treat
+  `startTransition` as a delayed callback in tests.
+- **Validation:** Input A, then AB, then a stale A echo, then send: editor
+  stays AB, payload is AB, the matching version clears, and a retype of AB is
+  kept. Cover Enter, the send button, guidance, IME commit then send, and a
+  rejected admission that leaves the draft.
+- **References:**
+  [composerDraftVersion.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/model/composerDraftVersion.ts)
+  [AgentComposer.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/AgentComposer.tsx)
+  [useComposerSlashActions.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/composer/useComposerSlashActions.ts)
+  [useAgentGUISubmitInteractionActions.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUISubmitInteractionActions.ts)
+
 ### A new Tutti conversation briefly reports session not found after submit
 
 - **Symptom:** The optimistic conversation appears after the first submit and

@@ -18,6 +18,7 @@ import type {
   AgentExternalPromptFilePreparer
 } from "../model/agentExternalPromptFiles";
 import { useComposerDraftAttachments } from "./useComposerDraftAttachments";
+import { createComposerDraftVersionTracker } from "../model/composerDraftVersion";
 import { createAgentComposerFileMentionMarkdown } from "../agentRichText/agentMentionMarkdown";
 
 function deferred<T>() {
@@ -60,15 +61,19 @@ describe("useComposerDraftAttachments", () => {
       )
     );
 
-    expect(onDraftContentChange).toHaveBeenCalledWith([
-      { type: "text", text: "" },
-      expect.objectContaining({
-        type: "file",
-        kind: "file",
-        name: "hello.txt",
-        uploading: true
-      })
-    ]);
+    expect(onDraftContentChange).toHaveBeenCalledWith(
+      [
+        { type: "text", text: "" },
+        expect.objectContaining({
+          type: "file",
+          kind: "file",
+          name: "hello.txt",
+          uploading: true
+        })
+      ],
+      undefined,
+      expect.objectContaining({ revision: expect.any(Number) })
+    );
 
     act(() => {
       preparation.resolve([
@@ -85,18 +90,22 @@ describe("useComposerDraftAttachments", () => {
     });
 
     await waitFor(() =>
-      expect(onDraftContentChange).toHaveBeenLastCalledWith([
-        expect.objectContaining({
-          type: "text",
-          text: expect.stringContaining("mention://composer-file/")
-        }),
-        expect.objectContaining({
-          type: "file",
-          kind: "file",
-          path: "/runtime/hello.txt",
-          uploading: false
-        })
-      ])
+      expect(onDraftContentChange).toHaveBeenLastCalledWith(
+        [
+          expect.objectContaining({
+            type: "text",
+            text: expect.stringContaining("mention://composer-file/")
+          }),
+          expect.objectContaining({
+            type: "file",
+            kind: "file",
+            path: "/runtime/hello.txt",
+            uploading: false
+          })
+        ],
+        undefined,
+        expect.objectContaining({ revision: expect.any(Number) })
+      )
     );
   });
 
@@ -127,18 +136,22 @@ describe("useComposerDraftAttachments", () => {
       );
     });
 
-    expect(onDraftContentChange).toHaveBeenLastCalledWith([
-      expect.objectContaining({
-        type: "text",
-        text: expect.stringContaining("mention://composer-file/")
-      }),
-      expect.objectContaining({
-        type: "file",
-        kind: "file",
-        name: "report.pdf",
-        uploading: true
-      })
-    ]);
+    expect(onDraftContentChange).toHaveBeenLastCalledWith(
+      [
+        expect.objectContaining({
+          type: "text",
+          text: expect.stringContaining("mention://composer-file/")
+        }),
+        expect.objectContaining({
+          type: "file",
+          kind: "file",
+          name: "report.pdf",
+          uploading: true
+        })
+      ],
+      undefined,
+      expect.objectContaining({ revision: expect.any(Number) })
+    );
 
     act(() => {
       preparation.resolve([
@@ -155,18 +168,22 @@ describe("useComposerDraftAttachments", () => {
     });
 
     await waitFor(() =>
-      expect(onDraftContentChange).toHaveBeenLastCalledWith([
-        expect.objectContaining({
-          type: "text",
-          text: expect.stringContaining("status=ready")
-        }),
-        expect.objectContaining({
-          type: "file",
-          kind: "file",
-          path: "/runtime/report.pdf",
-          uploading: false
-        })
-      ])
+      expect(onDraftContentChange).toHaveBeenLastCalledWith(
+        [
+          expect.objectContaining({
+            type: "text",
+            text: expect.stringContaining("status=ready")
+          }),
+          expect.objectContaining({
+            type: "file",
+            kind: "file",
+            path: "/runtime/report.pdf",
+            uploading: false
+          })
+        ],
+        undefined,
+        expect.objectContaining({ revision: expect.any(Number) })
+      )
     );
   });
 
@@ -504,6 +521,9 @@ function createInput(input: {
     draftImagesRef: { current: [] },
     draftFilesRef: { current: [] },
     draftLargeTextsRef: { current: [] },
+    draftVersionTrackerRef: {
+      current: createComposerDraftVersionTracker("home")
+    },
     setPaletteDraftPrompt: vi.fn(),
     setIsPaletteOpen: vi.fn(),
     clearActiveFileMentionTrigger: vi.fn(),

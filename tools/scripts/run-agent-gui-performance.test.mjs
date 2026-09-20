@@ -387,6 +387,8 @@ test("composer input summary requires text, IME, and mention keyboard semantics"
       mentionClosed: true,
       mentionKeys: ["ArrowDown", "Tab", "Escape"],
       mentionOpened: true,
+      composerCleared: true,
+      submittedPayloadObserved: true,
       shrunkGeometry: { buttonBottomOffset: 13, height: 56 }
     }
   );
@@ -406,7 +408,9 @@ test("composer input summary requires text, IME, and mention keyboard semantics"
       "mention selection moved",
       "mention category cycled",
       "mention keyboard events observed",
-      "mention panel closed"
+      "mention panel closed",
+      "send immediately after input cleared the composer",
+      "submitted unique tail observed outside the composer"
     ]
   );
 });

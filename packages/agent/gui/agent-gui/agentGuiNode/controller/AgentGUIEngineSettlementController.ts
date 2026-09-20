@@ -34,6 +34,7 @@ interface AgentGUIEngineSettlementControllerInput {
   onGoalControlCleared?(): void;
   onGoalControlFailed?(settlement: SessionGoalControlSettlement): void;
   onPromptSendFailed?(submit: PendingSubmitIntentRecord): void;
+  readDraftRevision?(sourceScopeKey: string): number | undefined;
   snapshots: Record<string, SubmittedDraftSnapshot>;
 }
 
@@ -56,6 +57,9 @@ export class AgentGUIEngineSettlementController {
   private readonly onPromptSendFailed: NonNullable<
     AgentGUIEngineSettlementControllerInput["onPromptSendFailed"]
   >;
+  private readonly readDraftRevision: NonNullable<
+    AgentGUIEngineSettlementControllerInput["readDraftRevision"]
+  >;
   private readonly snapshots: Record<string, SubmittedDraftSnapshot>;
   private unsubscribe: (() => void) | null = null;
 
@@ -67,6 +71,7 @@ export class AgentGUIEngineSettlementController {
     this.onGoalControlCleared = input.onGoalControlCleared ?? (() => undefined);
     this.onGoalControlFailed = input.onGoalControlFailed ?? (() => undefined);
     this.onPromptSendFailed = input.onPromptSendFailed ?? (() => undefined);
+    this.readDraftRevision = input.readDraftRevision ?? (() => undefined);
     this.snapshots = input.snapshots;
   }
 
@@ -99,7 +104,13 @@ export class AgentGUIEngineSettlementController {
       ) {
         this.applyDraftUpdate((drafts) =>
           activation.status === "confirmed"
-            ? clearSubmittedDraftIfUnchanged({ drafts, snapshot })
+            ? clearSubmittedDraftIfUnchanged({
+                currentRevision: this.readDraftRevision(
+                  snapshot.sourceScopeKey
+                ),
+                drafts,
+                snapshot
+              })
             : restoreFailedAgentGUIHomeDraft({
                 draftKey: snapshot.sourceScopeKey,
                 drafts,
@@ -144,7 +155,11 @@ export class AgentGUIEngineSettlementController {
               drafts,
               submittedDraft: snapshot.content
             })
-          : clearSubmittedDraftIfUnchanged({ drafts, snapshot })
+          : clearSubmittedDraftIfUnchanged({
+              currentRevision: this.readDraftRevision(snapshot.sourceScopeKey),
+              drafts,
+              snapshot
+            })
       );
       if (
         submit.status === "failed" &&
@@ -185,6 +200,9 @@ export class AgentGUIEngineSettlementController {
       if (submittedDraftSnapshot) {
         this.applyDraftUpdate((drafts) =>
           clearSubmittedDraftIfUnchanged({
+            currentRevision: this.readDraftRevision(
+              submittedDraftSnapshot.sourceScopeKey
+            ),
             drafts,
             snapshot: submittedDraftSnapshot
           })

@@ -67,6 +67,7 @@ Turn state, loading, cancel, restore, rail projection, event updates, imports, a
 - [AgentGUI rejects a pasted image as unsupported before send](./agent-session-lifecycle.md#agentgui-rejects-a-pasted-image-as-unsupported-before-send)
 - [Existing-session send fails and the composer refills with no error](./agent-session-lifecycle.md#existing-session-send-fails-and-the-composer-refills-with-no-error)
 - [A composer send with an unsettled image silently does nothing](./agent-session-lifecycle.md#a-composer-send-with-an-unsettled-image-silently-does-nothing)
+- [Busy-session send truncates the prompt and leaves the composer filled](./agent-session-lifecycle.md#busy-session-send-truncates-the-prompt-and-leaves-the-composer-filled)
 - [Remote Agent image reaches the provider as an unsupported URL](./agent-session-lifecycle.md#remote-agent-image-reaches-the-provider-as-an-unsupported-url)
 - [Goal banner shows Delete but no Restart action](./agent-session-lifecycle.md#goal-banner-shows-delete-but-no-restart-action)
 - [AgentGUI loading disappears before active turn settles](./agent-session-lifecycle.md#agentgui-loading-disappears-before-active-turn-settles)
