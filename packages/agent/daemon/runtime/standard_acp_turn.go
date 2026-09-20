@@ -24,7 +24,7 @@ func (a *standardACPAdapter) Exec(
 ) ([]activityshared.Event, error) {
 	acpSession := a.getSession(session.AgentSessionID)
 	if acpSession == nil || acpSession.client == nil {
-		return []activityshared.Event{standardACPRootProviderTurnCompletedEvent(
+		return []activityshared.Event{a.rootProviderTurnCompletedEvent(
 			session,
 			turnID,
 			activityshared.TurnOutcomeFailed,
@@ -35,6 +35,7 @@ func (a *standardACPAdapter) Exec(
 	explicitDisplayPrompt, visibleText := explicitAndVisiblePromptText(content, displayPrompt)
 	mentionRoutingApplied, mentionRoutingSkills := tuttiMentionRoutingSkills(visibleText)
 	a.rememberSessionTurn(session.AgentSessionID, turnID)
+	a.clearTurnUsage(session.AgentSessionID)
 	normalizer := newACPTurnNormalizer()
 	var events []activityshared.Event
 	var eventsMu sync.Mutex
@@ -78,7 +79,7 @@ func (a *standardACPAdapter) Exec(
 			outcome = activityshared.TurnOutcomeCanceled
 			terminalEvents = normalizer.FinishInterrupted(session, turnID, "interrupted")
 		}
-		terminalEvents = append(terminalEvents, standardACPRootProviderTurnCompletedEvent(
+		terminalEvents = append(terminalEvents, a.rootProviderTurnCompletedEvent(
 			session,
 			turnID,
 			outcome,
@@ -191,7 +192,7 @@ execLoop:
 			)
 			if errors.Is(err, context.Canceled) || errors.Is(err, errPermissionRequestCanceled) {
 				terminalEvents := normalizer.FinishInterrupted(session, turnID, "interrupted")
-				terminalEvents = append(terminalEvents, standardACPRootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeCanceled, map[string]any{
+				terminalEvents = append(terminalEvents, a.rootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeCanceled, map[string]any{
 					"error": err.Error(),
 				}))
 				terminalEvents = stampProviderInputUnitFromError(err, terminalEvents)
@@ -204,7 +205,7 @@ execLoop:
 					emitEvents([]activityshared.Event{notice})
 				}
 				terminalEvents := normalizer.FinishCompleted(session, turnID)
-				terminalEvents = append(terminalEvents, standardACPRootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeCompleted, map[string]any{
+				terminalEvents = append(terminalEvents, a.rootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeCompleted, map[string]any{
 					"stopReason": "end_turn",
 					"planLimit":  true,
 				}))
@@ -222,7 +223,7 @@ execLoop:
 				)
 			} else {
 				terminalEvents := normalizer.FinishFailed(session, turnID)
-				terminalEvents = append(terminalEvents, standardACPRootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeFailed, map[string]any{
+				terminalEvents = append(terminalEvents, a.rootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeFailed, map[string]any{
 					"error": err.Error(),
 				}))
 				terminalEvents = stampProviderInputUnitFromError(err, terminalEvents)
@@ -282,7 +283,7 @@ execLoop:
 				// The retries were cut short too: surface the turn as failed
 				// instead of a silent "completed" that strands the conversation.
 				terminalEvents := normalizer.FinishFailed(session, turnID)
-				terminalEvents = append(terminalEvents, standardACPRootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeFailed, map[string]any{
+				terminalEvents = append(terminalEvents, a.rootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeFailed, map[string]any{
 					"error":      errLine,
 					"stopReason": firstNonEmpty(stopReason, "end_turn"),
 				}))
@@ -333,7 +334,7 @@ execLoop:
 		switch stopReason {
 		case "canceled":
 			terminalEvents := normalizer.FinishInterrupted(session, turnID, stopReason)
-			terminalEvents = append(terminalEvents, standardACPRootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeCanceled, map[string]any{
+			terminalEvents = append(terminalEvents, a.rootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeCanceled, map[string]any{
 				"stopReason": stopReason,
 			}))
 			emitEvents(terminalEvents)
@@ -357,13 +358,13 @@ execLoop:
 				)
 			}
 			terminalEvents := normalizer.FinishFailed(session, turnID)
-			terminalEvents = append(terminalEvents, standardACPRootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeFailed, metadata))
+			terminalEvents = append(terminalEvents, a.rootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeFailed, metadata))
 			emitEvents(terminalEvents)
 		default:
 			if !normalizer.HasObservableOutput() {
 				const emptyResponseError = "provider_empty_response: ACP agent ended the turn without assistant output or tool activity"
 				terminalEvents := normalizer.FinishFailed(session, turnID)
-				terminalEvents = append(terminalEvents, standardACPRootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeFailed, map[string]any{
+				terminalEvents = append(terminalEvents, a.rootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeFailed, map[string]any{
 					"error":      emptyResponseError,
 					"stopReason": firstNonEmpty(stopReason, "end_turn"),
 				}))
@@ -381,7 +382,7 @@ execLoop:
 				break
 			}
 			terminalEvents := normalizer.FinishCompleted(session, turnID)
-			terminalEvents = append(terminalEvents, standardACPRootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeCompleted, map[string]any{
+			terminalEvents = append(terminalEvents, a.rootProviderTurnCompletedEvent(session, turnID, activityshared.TurnOutcomeCompleted, map[string]any{
 				"stopReason": firstNonEmpty(stopReason, "end_turn"),
 			}))
 			emitEvents(terminalEvents)
@@ -496,6 +497,43 @@ func standardACPRootProviderTurnCompletedEvent(
 	}
 	event := activityshared.NewRootProviderTurnCompleted(ctx, rootTurnID, rootTurnID, outcome)
 	event.Payload.Metadata = clonePayload(metadata)
+	return event
+}
+
+func (a *standardACPAdapter) clearTurnUsage(agentSessionID string) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	session := a.sessions[strings.TrimSpace(agentSessionID)]
+	if session == nil {
+		return
+	}
+	session.usage.lastTurn = nil
+	session.usage.lastTurnID = ""
+}
+
+func (a *standardACPAdapter) rootProviderTurnCompletedEvent(
+	session Session,
+	rootTurnID string,
+	outcome activityshared.TurnOutcome,
+	metadata map[string]any,
+) activityshared.Event {
+	event := standardACPRootProviderTurnCompletedEvent(session, rootTurnID, outcome, metadata)
+	if a == nil || event.Type == "" {
+		return event
+	}
+	a.mu.Lock()
+	acpSession := a.sessions[strings.TrimSpace(session.AgentSessionID)]
+	var usage acpUsageState
+	if acpSession != nil {
+		usage = acpSession.usage
+	}
+	a.mu.Unlock()
+	if binding := acpTurnUsageBindingJSON(usage, rootTurnID); len(binding) > 0 {
+		event.Payload.ProviderTurnBindingJSON = binding
+	}
 	return event
 }
 

@@ -51,7 +51,7 @@ func (a *standardACPAdapter) handleACPMessage(
 		if !a.standardACPUpdateMatchesProviderSession(session, message.Params) {
 			return nil, nil
 		}
-		if snapshot := a.applyACPUpdate(session.AgentSessionID, message.Params); snapshot != nil {
+		if snapshot := a.applyACPUpdate(session.AgentSessionID, turnID, message.Params); snapshot != nil {
 			if emitCommands != nil {
 				emitCommands(*snapshot)
 			} else {
@@ -472,14 +472,14 @@ func (a *standardACPAdapter) SessionCommandSnapshot(session Session) (AgentSessi
 	return snapshot, ok
 }
 
-func (a *standardACPAdapter) applyACPUpdate(agentSessionID string, raw json.RawMessage) *AgentSessionCommandSnapshot {
+func (a *standardACPAdapter) applyACPUpdate(agentSessionID, turnID string, raw json.RawMessage) *AgentSessionCommandSnapshot {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	session := a.sessions[strings.TrimSpace(agentSessionID)]
 	if session == nil {
 		return nil
 	}
-	return applyACPUpdateToLiveState(&session.acpLiveState, agentSessionID, raw)
+	return applyACPUpdateToLiveState(&session.acpLiveState, agentSessionID, turnID, raw)
 }
 
 func (a *standardACPAdapter) storePendingApproval(pending *pendingACPApproval) {
