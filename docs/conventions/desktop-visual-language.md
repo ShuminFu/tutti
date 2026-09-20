@@ -92,6 +92,17 @@ The UI system should optimize for semantic colors such as:
 
 Brand color should not become a substitute for hierarchy.
 
+### Text Selection
+
+Text selection uses opaque neutral colors across DinTalDock conversations and
+the RnDMaster task DM Workbench. Light mode uses `#DFDFDF` with `#1A1C1F` ink;
+dark mode uses `#454545` with `#F5F5F5` ink. The shared Web tokens are
+`--selection-background` and `--selection-foreground`. They remain independent
+of accent palettes and embedded host surface colors, including system dark mode.
+Selected links and syntax-colored code use the selection ink to retain at least
+4.5:1 text contrast. Row selection, search matches and keyboard focus keep their
+existing semantic roles.
+
 ## Typography Strategy
 
 Typography should feel closer to a tool than a campaign page.

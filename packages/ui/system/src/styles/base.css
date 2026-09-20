@@ -12,6 +12,12 @@
     height: 0;
   }
 
+  ::selection {
+    background-color: var(--selection-background);
+    color: var(--selection-foreground);
+    text-shadow: none;
+  }
+
   html {
     color-scheme: light;
   }
