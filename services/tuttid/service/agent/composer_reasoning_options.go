@@ -3,6 +3,7 @@ package agent
 import (
 	"strings"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 	"github.com/tutti-os/tutti/packages/agent/daemon/modelcatalog"
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
@@ -105,7 +106,7 @@ func applyComposerModelPlanReasoningOptions(
 		return options
 	}
 	options.ReasoningOptionsByModel = profiles
-	profile, ok := profiles[strings.TrimSpace(options.EffectiveSettings.Model)]
+	profile, ok := composerReasoningProfileForModel(profiles, options.EffectiveSettings.Model)
 	if !ok {
 		return options
 	}
@@ -127,6 +128,28 @@ func applyComposerModelPlanReasoningOptions(
 		options.RuntimeContext["reasoningEffort"] = nullableString(current)
 	}
 	return options
+}
+
+// composerReasoningProfileForModel looks up the selected Composer value first,
+// then the bare model id. Reasoning is a property of the model, not of the
+// `[1m]` window spelling, and plan/host profiles are keyed by that bare id.
+func composerReasoningProfileForModel(
+	profiles map[string]ComposerReasoningProfile,
+	model string,
+) (ComposerReasoningProfile, bool) {
+	model = strings.TrimSpace(model)
+	if model == "" || len(profiles) == 0 {
+		return ComposerReasoningProfile{}, false
+	}
+	if profile, ok := profiles[model]; ok {
+		return profile, true
+	}
+	if base := contextwindow.Bare(model); base != "" && base != model {
+		if profile, ok := profiles[base]; ok {
+			return profile, true
+		}
+	}
+	return ComposerReasoningProfile{}, false
 }
 
 func composerModelReasoningOptionsByModel(

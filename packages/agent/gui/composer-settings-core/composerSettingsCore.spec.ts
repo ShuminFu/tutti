@@ -88,6 +88,60 @@ describe("ComposerSettingsCore", () => {
     expect(core.getSnapshot().refreshing).toBe(false);
   });
 
+  it("fences a stale bare re-read after a 1M pick", async () => {
+    const { core, fetches } = createHarness();
+    const catalog = [
+      { label: "DeepSeek Flash", value: "deepseek-flash" },
+      { label: "deepseek-flash[1m]", value: "deepseek-flash[1m]" }
+    ];
+    core.refresh();
+    core.setSettings({ model: "deepseek-flash[1m]" });
+    fetches[1]!.resolve(
+      options({
+        models: catalog,
+        effectiveSettings: { model: "deepseek-flash[1m]" }
+      })
+    );
+    await settled();
+    expect(core.getSnapshot().options?.effectiveSettings.model).toBe(
+      "deepseek-flash[1m]"
+    );
+
+    fetches[0]!.resolve(
+      options({
+        models: catalog,
+        effectiveSettings: { model: "deepseek-flash" }
+      })
+    );
+    await settled();
+    expect(core.getSnapshot().options?.effectiveSettings.model).toBe(
+      "deepseek-flash[1m]"
+    );
+    expect(core.getSnapshot().resolvedSettings.model).toBe("deepseek-flash[1m]");
+  });
+
+  it("does not let a stale 1M response stick after switching back to the bare lane", async () => {
+    const { core, fetches } = createHarness();
+    core.setSettings({ model: "deepseek-flash[1m]" });
+    core.setSettings({ model: "deepseek-flash" });
+    fetches[1]!.resolve(
+      options({ effectiveSettings: { model: "deepseek-flash" } })
+    );
+    await settled();
+    expect(core.getSnapshot().options?.effectiveSettings.model).toBe(
+      "deepseek-flash"
+    );
+
+    fetches[0]!.resolve(
+      options({ effectiveSettings: { model: "deepseek-flash[1m]" } })
+    );
+    await settled();
+    expect(core.getSnapshot().options?.effectiveSettings.model).toBe(
+      "deepseek-flash"
+    );
+    expect(core.getSnapshot().resolvedSettings.model).toBe("deepseek-flash");
+  });
+
   it("keeps last good options and reports degraded on refresh failure", async () => {
     const { core, fetches } = createHarness();
     core.refresh();

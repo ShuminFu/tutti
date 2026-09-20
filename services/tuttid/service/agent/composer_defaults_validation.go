@@ -411,8 +411,10 @@ func (s *Service) validateExtensionComposerSettingsForCreate(
 }
 
 func composerReasoningConfigForSelectedModel(options ComposerOptions) ComposerConfigOption {
-	model := strings.TrimSpace(options.EffectiveSettings.Model)
-	if profile, advertised := options.ReasoningOptionsByModel[model]; advertised {
+	if profile, advertised := composerReasoningProfileForModel(
+		options.ReasoningOptionsByModel,
+		options.EffectiveSettings.Model,
+	); advertised {
 		return ComposerConfigOption{
 			Configurable: len(profile.Options) > 0,
 			CurrentValue: strings.TrimSpace(options.EffectiveSettings.ReasoningEffort),

@@ -465,6 +465,21 @@ func (s *Service) applyModelPlanComposerOverlay(ctx context.Context, input Compo
 	return applyResolvedModelPlanComposerOverlay(options, resolution, normalizeComposerLocale(input.Locale))
 }
 
+// composerSelectionModel is the Composer-facing spelling of a resolved choice.
+// SessionModel keeps the user's complete value, including a `[1m]` window
+// request; Endpoint.Model is the runtime id and must not replace it. That
+// overwrite is what dropped every `X[1m]` preference back to the bare catalog
+// row when Composer re-read defaults.
+func composerSelectionModel(resolution modelPlanResolution) string {
+	if sessionModel := strings.TrimSpace(resolution.SessionModel); sessionModel != "" {
+		return sessionModel
+	}
+	if resolution.Endpoint != nil {
+		return strings.TrimSpace(resolution.Endpoint.Model)
+	}
+	return ""
+}
+
 func applyResolvedModelPlanComposerOverlay(
 	options ComposerOptions,
 	resolution modelPlanResolution,
@@ -485,18 +500,19 @@ func applyResolvedModelPlanComposerOverlay(
 			Description: endpoint.PlanName,
 		})
 	}
-	options.EffectiveSettings.Model = endpoint.Model
+	selected := composerSelectionModel(resolution)
+	options.EffectiveSettings.Model = selected
 	options.ModelConfig = ComposerConfigOption{
 		Configurable: len(modelOptions) > 0,
-		CurrentValue: endpoint.Model,
-		DefaultValue: endpoint.Model,
+		CurrentValue: selected,
+		DefaultValue: selected,
 		Options:      modelOptions,
 	}
 	if options.RuntimeContext == nil {
 		options.RuntimeContext = map[string]any{}
 	}
 	options = applyComposerModelPlanReasoningOptions(options, endpoint, locale)
-	options.RuntimeContext["model"] = nullableString(endpoint.Model)
+	options.RuntimeContext["model"] = nullableString(selected)
 	options.RuntimeContext["configOptions"] = composerConfigOptions(
 		options.Provider,
 		options.EffectiveSettings,

@@ -428,6 +428,33 @@ func TestSQLiteStorePatchAgentComposerDefaultsForTargetMergesLatestFieldsAndPres
 	}
 }
 
+func TestSQLiteStorePatchAgentComposerDefaultsPreservesOneMModelWhenPatchingReasoning(t *testing.T) {
+	t.Parallel()
+
+	store := openTestSQLiteStore(t)
+	ctx := context.Background()
+	model := "deepseek-flash[1m]"
+	if _, err := store.PatchAgentComposerDefaultsForTarget(ctx, "local:codex", preferencesbiz.AgentComposerDefaultsPatch{
+		preferencesbiz.AgentComposerDefaultsFieldModel: &model,
+	}); err != nil {
+		t.Fatalf("patch model: %v", err)
+	}
+	reasoning := "max"
+	if _, err := store.PatchAgentComposerDefaultsForTarget(ctx, "local:codex", preferencesbiz.AgentComposerDefaultsPatch{
+		preferencesbiz.AgentComposerDefaultsFieldReasoningEffort: &reasoning,
+	}); err != nil {
+		t.Fatalf("patch reasoning: %v", err)
+	}
+	got, err := store.GetDesktopPreferences(ctx)
+	if err != nil {
+		t.Fatalf("GetDesktopPreferences() error = %v", err)
+	}
+	defaults := got.AgentComposerDefaultsByAgentTarget["local:codex"]
+	if defaults.Model != model || defaults.ReasoningEffort != reasoning {
+		t.Fatalf("defaults = %#v, want model %q reasoning %q", defaults, model, reasoning)
+	}
+}
+
 func TestSQLiteStorePatchAgentComposerDefaultsForTargetInitializesMissingPreferencesRow(t *testing.T) {
 	t.Parallel()
 

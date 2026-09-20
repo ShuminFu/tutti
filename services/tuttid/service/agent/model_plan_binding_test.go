@@ -694,3 +694,195 @@ func TestResolveCreateSessionModelLeavesTheBareLaneBare(t *testing.T) {
 		t.Fatalf("input model = %q, want the bare plan-alt", got)
 	}
 }
+
+func assertComposerSelectedModel(t *testing.T, options ComposerOptions, want string) {
+	t.Helper()
+	if options.EffectiveSettings.Model != want {
+		t.Fatalf("effectiveSettings.model = %q, want %q", options.EffectiveSettings.Model, want)
+	}
+	if options.ModelConfig.CurrentValue != want {
+		t.Fatalf("modelConfig.currentValue = %q, want %q", options.ModelConfig.CurrentValue, want)
+	}
+	if options.RuntimeContext["model"] != want {
+		t.Fatalf("runtimeContext.model = %#v, want %q", options.RuntimeContext["model"], want)
+	}
+	for _, entry := range runtimeConfigOptionsAsMapSlice(options.RuntimeContext["configOptions"]) {
+		if stringFromAny(entry["id"]) != composerModelConfigOptionID(options.Provider) {
+			continue
+		}
+		if entry["currentValue"] != want {
+			t.Fatalf("configOptions model currentValue = %#v, want %q", entry["currentValue"], want)
+		}
+		return
+	}
+	t.Fatalf("configOptions missing model currentValue %q: %#v", want, options.RuntimeContext["configOptions"])
+}
+
+func configurePlanBoundComposerService(service *Service) {
+	service.ConfigureModelPlanBinding(
+		staticBindingSource{binding: modelbindingbiz.Binding{
+			WorkspaceID:   "ws",
+			AgentTargetID: "local:codex",
+			ModelPlanID:   "mp-1",
+			DefaultModel:  "plan-default",
+		}},
+		staticPlanSource{plan: modelplanbiz.Plan{
+			ID:           "mp-1",
+			WorkspaceID:  "ws",
+			Name:         "Volc Coding Plan",
+			Protocol:     modelplanbiz.ProtocolOpenAI,
+			APIKey:       "sk-plan",
+			BaseURL:      "https://relay.example/v1",
+			Enabled:      true,
+			DefaultModel: "plan-default",
+			Models: []modelplanbiz.Model{
+				{ID: "plan-default", Name: "Plan Default"},
+				{ID: "plan-alt", Name: "Plan Alt"},
+			},
+		}},
+	)
+}
+
+// Composer re-read must keep the `[1m]` spelling that SessionModel already
+// carries. Writing Endpoint.Model into CurrentValue / EffectiveSettings /
+// RuntimeContext.model is the preference rollback this ticket covers.
+func TestApplyResolvedModelPlanComposerOverlayKeepsSessionModelSelection(t *testing.T) {
+	t.Parallel()
+
+	resolution := modelPlanResolution{
+		Endpoint: &runtimeprep.ModelEndpointConfig{
+			Model:    "plan-alt",
+			PlanName: "Volc Coding Plan",
+			Protocol: "openai",
+		},
+		Models: []modelplanbiz.Model{
+			{ID: "plan-default", Name: "Plan Default"},
+			{ID: "plan-alt", Name: "Plan Alt"},
+		},
+		SessionModel: "plan-alt[1m]",
+	}
+	options := applyResolvedModelPlanComposerOverlay(ComposerOptions{Provider: "codex"}, resolution, "en")
+	assertComposerSelectedModel(t, options, "plan-alt[1m]")
+}
+
+func TestApplyResolvedModelPlanComposerOverlayFallsBackToEndpointModel(t *testing.T) {
+	t.Parallel()
+
+	resolution := modelPlanResolution{
+		Endpoint: &runtimeprep.ModelEndpointConfig{
+			Model:    "plan-alt",
+			PlanName: "Volc Coding Plan",
+			Protocol: "openai",
+		},
+		Models: []modelplanbiz.Model{{ID: "plan-alt", Name: "Plan Alt"}},
+	}
+	options := applyResolvedModelPlanComposerOverlay(ComposerOptions{Provider: "codex"}, resolution, "en")
+	assertComposerSelectedModel(t, options, "plan-alt")
+}
+
+func TestGetComposerOptionsRereadsPersistedPlanOneMSelection(t *testing.T) {
+	setHostModelEndpointContractWithModelContext(t, "codex", "openai", map[string]int64{
+		"plan-alt": contextwindow.OneMillionTokens,
+	})
+	service := NewService(newFakeRuntime())
+	service.AgentTargetStore = fakeAgentTargetStore{targets: defaultTestAgentTargets()}
+	configurePlanBoundComposerService(service)
+	service.AgentComposerDefaultsReader = fakeAgentComposerDefaultsReader{
+		"local:codex": {Model: "plan-alt[1m]"},
+	}
+	includeCapabilityCatalog := false
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		WorkspaceID:              "ws",
+		AgentTargetID:            "local:codex",
+		IncludeCapabilityCatalog: &includeCapabilityCatalog,
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	assertComposerSelectedModel(t, options, "plan-alt[1m]")
+	if !containsModelOption(options.ModelConfig.Options, "plan-alt[1m]") {
+		t.Fatalf("model options missing marked row: %#v", options.ModelConfig.Options)
+	}
+}
+
+func TestGetComposerOptionsHostSelectionKeepsWindowSpelling(t *testing.T) {
+	setHostModelEndpointContractWithModelContext(t, "codex", "openai", map[string]int64{
+		"gateway-alt": contextwindow.OneMillionTokens,
+	})
+	includeCapabilityCatalog := false
+	for _, tc := range []struct {
+		name      string
+		persisted string
+		want      string
+	}{
+		{name: "1m", persisted: "gateway-alt[1m]", want: "gateway-alt[1m]"},
+		{name: "bare", persisted: "gateway-alt", want: "gateway-alt"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service := newTestService(newFakeRuntime())
+			service.AgentComposerDefaultsReader = fakeAgentComposerDefaultsReader{
+				"local:codex": {Model: tc.persisted},
+			}
+			options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+				WorkspaceID:              "ws",
+				AgentTargetID:            "local:codex",
+				Provider:                 "codex",
+				IncludeCapabilityCatalog: &includeCapabilityCatalog,
+			})
+			if err != nil {
+				t.Fatalf("GetComposerOptions returned error: %v", err)
+			}
+			assertComposerSelectedModel(t, options, tc.want)
+			if !containsModelOption(options.ModelConfig.Options, "gateway-alt[1m]") {
+				t.Fatalf("model options missing marked row: %#v", options.ModelConfig.Options)
+			}
+		})
+	}
+}
+
+func TestGetComposerOptionsKeepsReasoningWhenRestoringOneMSelection(t *testing.T) {
+	none := "none"
+	high := "high"
+	max := "max"
+	path := filepath.Join(t.TempDir(), "host-model-endpoints.json")
+	payload := `{"version":1,"modelContext":{"deepseek-flash":1000000},"providers":{"codex":{` +
+		`"planName":"DinTal Runtime LLM Proxy","protocol":"openai",` +
+		`"baseURL":"http://127.0.0.1:18799/llmproxy/openai/v1","apiKey":"loopback",` +
+		`"wireAPI":"responses","model":"deepseek-flash","models":[` +
+		`{"id":"deepseek-flash","name":"DeepSeek Flash","reasoningEfforts":{` +
+		`"off":"none","high":"high","max":"max"}}]}}}`
+	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(runtimeprep.HostModelEndpointsFileEnv, path)
+
+	includeCapabilityCatalog := false
+	service := newTestService(newFakeRuntime())
+	service.AgentComposerDefaultsReader = fakeAgentComposerDefaultsReader{
+		"local:codex": {
+			Model:           "deepseek-flash[1m]",
+			ReasoningEffort: max,
+		},
+	}
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		WorkspaceID:              "ws",
+		AgentTargetID:            "local:codex",
+		Provider:                 "codex",
+		IncludeCapabilityCatalog: &includeCapabilityCatalog,
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	assertComposerSelectedModel(t, options, "deepseek-flash[1m]")
+	if options.EffectiveSettings.ReasoningEffort != max ||
+		options.ReasoningConfig.CurrentValue != max {
+		t.Fatalf("reasoning selection = %#v, replay = %#v", options.EffectiveSettings, options.ReasoningConfig)
+	}
+	if got := composerConfigOptionModelValues(options.ReasoningConfig.Options); !reflect.DeepEqual(got, []string{none, high, max}) {
+		t.Fatalf("reasoning options = %v, want [none high max]", got)
+	}
+	if _, ok := options.ReasoningOptionsByModel["deepseek-flash[1m]"]; !ok {
+		t.Fatalf("marked model reasoning profile missing: %#v", options.ReasoningOptionsByModel)
+	}
+}

@@ -273,8 +273,8 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		}
 	}
 	planEndpoint := modelPlanResolution.Endpoint
-	if planEndpoint != nil {
-		settings.Model = planEndpoint.Model
+	if selected := composerSelectionModel(modelPlanResolution); selected != "" {
+		settings.Model = selected
 	}
 	var catalogLoad <-chan composerModelCatalogLoadResult
 	if planEndpoint == nil && (composerOptionsProviderUsesModelCatalog(provider) ||
