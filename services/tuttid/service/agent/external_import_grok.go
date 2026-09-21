@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"net/url"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
+	"github.com/tutti-os/tutti/services/tuttid/data/externalimportcatalog"
 )
 
 // grokImportProvider is the import identity for local Grok CLI sessions.
@@ -37,60 +39,111 @@ func grokExternalImportDescriptor() providerregistry.ExternalImportDescriptor {
 	}
 }
 
-func scanGrokProviderSessions(cutoffUnixMS int64) ([]externalImportedSession, ExternalImportProvider, []ExternalImportError) {
+// discoverGrokSessionDirs enumerates local Grok sessions as scan units. Grok
+// stores a session as a directory, so each unit's path is that directory and
+// the rest of the pipeline (catalog, cutoff, dedup, projects) treats it like
+// any other provider's file. seq keeps unit numbering shared with them.
+func discoverGrokSessionDirs(ctx context.Context, seq *int) ([]discoveredExternalFile, []string, []discoveredExternalFile, []ExternalImportError) {
 	roots := grokImportRoots()
-	summary := ExternalImportProvider{Provider: grokImportProvider}
-	if len(roots) > 0 {
-		summary.Root = roots[0]
-	}
-	sessions := make([]externalImportedSession, 0, 8)
+	files := make([]discoveredExternalFile, 0)
+	completedRoots := make([]discoveredExternalFile, 0)
 	errors := make([]ExternalImportError, 0)
-	indexBySessionID := make(map[string]int)
+	descSig := externalImportDescriptorSignature(grokExternalImportDescriptor())
 	for _, root := range roots {
+		if err := ctx.Err(); err != nil {
+			return files, roots, completedRoots, errors
+		}
 		if info, err := os.Stat(root); err != nil || !info.IsDir() {
 			continue
 		}
-		summary.Available = true
-		dirs, err := grokSessionDirs(root)
+		dirs, err := grokSessionDirs(ctx, root)
 		if err != nil {
-			summary.Error = err.Error()
 			errors = append(errors, ExternalImportError{Provider: grokImportProvider, Message: err.Error()})
 			continue
 		}
+		completedRoots = append(completedRoots, discoveredExternalFile{
+			provider: grokImportProvider,
+			root:     root,
+		})
 		for _, dir := range dirs {
-			session, ok, err := parseGrokSessionDir(dir)
+			if err := ctx.Err(); err != nil {
+				return files, roots, completedRoots, errors
+			}
+			sig, err := grokSessionDirSignature(dir)
 			if err != nil {
 				errors = append(errors, ExternalImportError{Provider: grokImportProvider, SourcePath: dir, Message: err.Error()})
 				continue
 			}
-			if !ok {
-				continue
+			sig.DescriptorSig = descSig
+			rel, err := filepath.Rel(root, dir)
+			if err != nil {
+				rel = dir
 			}
-			if cutoffUnixMS > 0 && session.UpdatedAtUnixMS < cutoffUnixMS {
-				continue
-			}
-			if index, exists := indexBySessionID[session.ProviderSessionID]; exists {
-				if session.UpdatedAtUnixMS > sessions[index].UpdatedAtUnixMS {
-					sessions[index] = session
-				}
-				continue
-			}
-			indexBySessionID[session.ProviderSessionID] = len(sessions)
-			sessions = append(sessions, session)
+			rel = filepath.ToSlash(rel)
+			*seq++
+			files = append(files, discoveredExternalFile{
+				seq:            *seq,
+				provider:       grokImportProvider,
+				root:           root,
+				path:           dir,
+				relPath:        rel,
+				signature:      sig,
+				grokSessionDir: true,
+				key: externalimportcatalog.Key{
+					Provider: grokImportProvider,
+					Root:     root,
+					RelPath:  rel,
+				},
+			})
 		}
 	}
-	for _, session := range sessions {
-		summary.SessionCount++
-		summary.MessageCount += len(session.Messages)
+	return files, roots, completedRoots, errors
+}
+
+// grokSessionDirSignatureFiles are every file a parsed Grok session reads.
+var grokSessionDirSignatureFiles = []string{
+	grokUpdatesFileName,
+	grokChatHistoryFileName,
+	grokSummaryFileName,
+	grokUsageFileName,
+}
+
+// grokSessionDirSignature folds those files into one catalog signature. No
+// single file can stand for the session: a new turn grows updates.jsonl while
+// a retitle only rewrites summary.json, and either must invalidate the entry.
+func grokSessionDirSignature(dir string) (externalimportcatalog.Signature, error) {
+	sig := externalimportcatalog.Signature{ParserVersion: externalimportcatalog.ParserVersion}
+	ids := make([]string, 0, len(grokSessionDirSignatureFiles))
+	present := false
+	for _, name := range grokSessionDirSignatureFiles {
+		part, err := externalimportcatalog.InspectPath(filepath.Join(dir, name))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return externalimportcatalog.Signature{}, err
+		}
+		present = true
+		sig.Size += part.Size
+		if part.MtimeNS > sig.MtimeNS {
+			sig.MtimeNS = part.MtimeNS
+		}
+		sig.Symlink = sig.Symlink || part.Symlink
+		ids = append(ids, name+":"+strconv.FormatInt(part.Size, 10)+":"+part.FileID)
 	}
-	return sessions, summary, errors
+	if !present {
+		return externalimportcatalog.Signature{}, os.ErrNotExist
+	}
+	sig.FileID = strings.Join(ids, "|")
+	sig.TargetID = sig.FileID
+	return sig, nil
 }
 
 func grokImportRoots() []string {
 	return externalProviderRoots(grokExternalImportDescriptor())
 }
 
-func grokSessionDirs(root string) ([]string, error) {
+func grokSessionDirs(ctx context.Context, root string) ([]string, error) {
 	sessionsRoot := filepath.Join(root, grokSessionsDirName)
 	info, err := os.Stat(sessionsRoot)
 	if err != nil {
@@ -108,6 +161,9 @@ func grokSessionDirs(root string) ([]string, error) {
 	}
 	dirs := make([]string, 0)
 	for _, group := range groups {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if !group.IsDir() {
 			continue
 		}
@@ -138,7 +194,7 @@ func grokSessionDirHasTranscript(dir string) bool {
 	return false
 }
 
-func parseGrokSessionDir(dir string) (externalImportedSession, bool, error) {
+func parseGrokSessionDir(ctx context.Context, dir string) (externalImportedSession, bool, error) {
 	summary, err := readGrokSummary(dir)
 	if err != nil {
 		return externalImportedSession{}, false, err
@@ -151,14 +207,14 @@ func parseGrokSessionDir(dir string) (externalImportedSession, bool, error) {
 		SummaryTitle:      firstNonEmptyString(summary.generatedTitle, summary.sessionSummary),
 		Model:             summary.model,
 	}
-	if updates, err := parseGrokUpdatesFile(filepath.Join(dir, grokUpdatesFileName)); err != nil {
+	if updates, err := parseGrokUpdatesFile(ctx, filepath.Join(dir, grokUpdatesFileName)); err != nil {
 		return externalImportedSession{}, false, err
 	} else {
 		session.Messages = updates.messages
 		session.Model = firstNonEmptyString(session.Model, updates.model)
 	}
 	if len(session.Messages) == 0 {
-		messages, model, err := parseGrokChatHistoryFile(filepath.Join(dir, grokChatHistoryFileName))
+		messages, model, err := parseGrokChatHistoryFile(ctx, filepath.Join(dir, grokChatHistoryFileName))
 		if err != nil {
 			return externalImportedSession{}, false, err
 		}
@@ -350,7 +406,7 @@ type grokParsedUpdates struct {
 	model    string
 }
 
-func parseGrokUpdatesFile(path string) (grokParsedUpdates, error) {
+func parseGrokUpdatesFile(ctx context.Context, path string) (grokParsedUpdates, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -360,7 +416,7 @@ func parseGrokUpdatesFile(path string) (grokParsedUpdates, error) {
 	}
 	defer file.Close()
 	acc := grokUpdateAccumulator{}
-	err = readJSONLLines(file, func(index int, raw map[string]any) {
+	err = readJSONLLines(ctx, file, func(index int, raw map[string]any) {
 		acc.consume(index, raw)
 	})
 	if err != nil {
@@ -455,7 +511,7 @@ func (acc *grokUpdateAccumulator) flushText() {
 	acc.pendingKind = ""
 }
 
-func parseGrokChatHistoryFile(path string) ([]externalImportedMessage, string, error) {
+func parseGrokChatHistoryFile(ctx context.Context, path string) ([]externalImportedMessage, string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -466,7 +522,7 @@ func parseGrokChatHistoryFile(path string) ([]externalImportedMessage, string, e
 	defer file.Close()
 	messages := make([]externalImportedMessage, 0)
 	model := ""
-	err = readJSONLLines(file, func(index int, raw map[string]any) {
+	err = readJSONLLines(ctx, file, func(index int, raw map[string]any) {
 		message, nextModel, ok := grokChatHistoryMessage(raw, index)
 		if nextModel != "" {
 			model = nextModel

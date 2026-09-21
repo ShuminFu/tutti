@@ -33,6 +33,7 @@ func TestServiceImportExternalSessionsOmitsProjectsWithoutValidSessions(t *testi
 	// has no valid session.
 	t.Setenv("CODEX_HOME", filepath.Join(root, "codex-home"))
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 
 	service := newIsolatedAgentService(newFakeRuntime())
 	projection := NewActivityProjection(store)
@@ -83,6 +84,7 @@ func TestServiceImportExternalSessionsRepairsSelectedNestedProjectRailMembership
 	codexHome := filepath.Join(root, "codex-home")
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "nested.jsonl"),
 		map[string]any{
@@ -165,6 +167,7 @@ func TestServiceImportExternalSessionsOmitsProjectWhenOnlySessionFailsToImport(t
 	codexHome := filepath.Join(root, "codex-home")
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "codex-a.jsonl"),
 		map[string]any{
@@ -229,6 +232,7 @@ func TestServiceExternalImportValidProjectPaths(t *testing.T) {
 	codexHome := filepath.Join(root, "codex-home")
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "codex-a.jsonl"),
 		map[string]any{
 			"timestamp": time.Now().Add(-time.Hour).Format(time.RFC3339),
@@ -272,6 +276,7 @@ func TestServiceExternalImportValidProjectPathsOrdersByLatestSession(t *testing.
 	codexHome := filepath.Join(root, "codex-home")
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	olderTimestamp := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339Nano)
 	newerTimestamp := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "older.jsonl"),
@@ -517,6 +522,7 @@ func TestServiceImportedCodexWorktreeSessionGroupsUnderExistingMainCheckoutProje
 	t.Setenv("HOME", home)
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "worktree-session.jsonl"),
 		map[string]any{
@@ -599,6 +605,7 @@ func TestServiceImportsWorktreeSessionSelectedByTheWorktreePath(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "worktree-selected.jsonl"),
 		map[string]any{
@@ -660,6 +667,7 @@ func TestServiceImportsHomeCwdAsNoProjectWithoutRegisteringUserHome(t *testing.T
 	t.Setenv("HOME", home)
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "no-project.jsonl"),
 		map[string]any{
@@ -719,6 +727,7 @@ func TestServiceImportsCodexScratchCwdAsNoProjectWithoutRegisteringIt(t *testing
 	t.Setenv("HOME", home)
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "codex-scratch.jsonl"),
 		map[string]any{
@@ -776,6 +785,7 @@ func TestServiceImportPreservesLocalCodexModelAndReasoningEffort(t *testing.T) {
 	codexHome := filepath.Join(root, "codex-home")
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "codex-model.jsonl"),
 		map[string]any{
@@ -838,6 +848,7 @@ func TestServiceListsImportedSessionsByExternalActivityTime(t *testing.T) {
 	codexHome := filepath.Join(root, "codex-home")
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	older := time.Date(2026, 6, 20, 10, 0, 0, 0, time.UTC)
 	newer := time.Date(2026, 6, 21, 10, 0, 0, 0, time.UTC)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "a-newer.jsonl"),

@@ -29,6 +29,10 @@ type discoveredExternalFile struct {
 	descriptor providerregistry.ProviderDescriptor
 	signature  externalimportcatalog.Signature
 	key        externalimportcatalog.Key
+	// grokSessionDir marks a unit whose path is a Grok session directory
+	// rather than a transcript file, so it needs the directory parser and a
+	// folded signature instead of one file's stat.
+	grokSessionDir bool
 }
 
 type parsedExternalFile struct {
@@ -313,7 +317,7 @@ func (s *Service) loadExternalImportSummaries(
 	parsedResults := runBoundedIndexed(ctx, s.externalImportConcurrency(), len(toParse), func(ctx context.Context, index int) parsedExternalFile {
 		file := toParse[index]
 		parsed := parsedExternalFile{file: file, parsedBytes: file.signature.Size}
-		session, ok, err := parseExternalProviderJSONL(ctx, file.descriptor, file.path)
+		session, ok, err := parseExternalImportUnit(ctx, file)
 		if err != nil {
 			parsed.err = err
 			return parsed
@@ -322,7 +326,7 @@ func (s *Service) loadExternalImportSummaries(
 			parsed.empty = true
 			return parsed
 		}
-		after, err := externalimportcatalog.InspectPath(file.path)
+		after, err := inspectExternalImportUnit(file)
 		if err != nil {
 			parsed.err = err
 			return parsed
@@ -420,6 +424,14 @@ func discoverExternalImportFiles(ctx context.Context, providers []string) ([]dis
 	for _, provider := range normalizeExternalImportProviders(providers) {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, nil, err
+		}
+		if provider == grokImportProvider {
+			grokFiles, grokRoots, grokCompleted, grokErrors := discoverGrokSessionDirs(ctx, &seq)
+			providerRoots[provider] = grokRoots
+			files = append(files, grokFiles...)
+			completedRoots = append(completedRoots, grokCompleted...)
+			errors = append(errors, grokErrors...)
+			continue
 		}
 		descriptor, ok := providerregistry.Find(provider)
 		if !ok || !descriptor.ExternalImport.Enabled {
@@ -618,6 +630,26 @@ func reprojectExternalImportSession(session *externalImportedSession, memo map[s
 		session.RawCwd = raw
 	}
 	memo[raw] = resolved
+}
+
+// parseExternalImportUnit parses one discovered unit into a session summary.
+// Most providers keep one session per JSONL file; Grok keeps one per session
+// directory, so that unit needs its own parser.
+func parseExternalImportUnit(ctx context.Context, file discoveredExternalFile) (externalImportedSession, bool, error) {
+	if file.grokSessionDir {
+		return parseGrokSessionDir(ctx, file.path)
+	}
+	return parseExternalProviderJSONL(ctx, file.descriptor, file.path)
+}
+
+// inspectExternalImportUnit re-reads a unit's signature. It must match what
+// discovery recorded, or the post-parse change check would compare a folded
+// directory signature against a single stat and always report a change.
+func inspectExternalImportUnit(file discoveredExternalFile) (externalimportcatalog.Signature, error) {
+	if file.grokSessionDir {
+		return grokSessionDirSignature(file.path)
+	}
+	return externalimportcatalog.InspectPath(file.path)
 }
 
 func externalImportDescriptorSignature(descriptor providerregistry.ExternalImportDescriptor) string {

@@ -27,6 +27,7 @@ func TestServiceScanSkipsDanglingTranscriptLinks(t *testing.T) {
 	claudeHome := filepath.Join(root, "claude-home")
 	t.Setenv("CODEX_HOME", filepath.Join(root, "codex-home"))
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeHome)
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	t.Setenv(testClaudeExtraRootsEnv, filepath.Join(root, "user-claude"))
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)

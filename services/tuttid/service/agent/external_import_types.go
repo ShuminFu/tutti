@@ -123,9 +123,9 @@ type externalImportedSession struct {
 	// RawCwd is the transcript cwd before worktree/project projection. Catalog
 	// stores this and re-projects on every request because .git and path
 	// existence can change without the JSONL changing.
-	RawCwd            string
-	Cwd               string
-	Title             string
+	RawCwd string
+	Cwd    string
+	Title  string
 	// SummaryTitle holds an authoritative, provider-supplied conversation title
 	// (e.g. Claude `custom-title`/`ai-title`/`summary` transcript lines or the
 	// Codex app-server `threads.title`). When present it wins over

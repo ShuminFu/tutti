@@ -27,6 +27,7 @@ func TestServiceReimportRepairsLegacyTurnlessExternalMessages(t *testing.T) {
 	codexHome := filepath.Join(root, "codex-home")
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	sourcePath := filepath.Join(codexHome, "sessions", "legacy-turnless.jsonl")
 	writeAgentServiceJSONL(t, sourcePath,
 		map[string]any{

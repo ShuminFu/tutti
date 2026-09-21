@@ -48,7 +48,7 @@ func TestParseGrokSessionDirUsesUpdatesAndSummary(t *testing.T) {
 		},
 	})
 
-	session, ok, err := parseGrokSessionDir(dir)
+	session, ok, err := parseGrokSessionDir(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("parseGrokSessionDir error = %v", err)
 	}
@@ -102,7 +102,7 @@ func TestParseGrokSessionDirSkipsUserInfoAndFallsBackToChatHistory(t *testing.T)
 		},
 	})
 
-	session, ok, err := parseGrokSessionDir(dir)
+	session, ok, err := parseGrokSessionDir(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("parseGrokSessionDir error = %v", err)
 	}
@@ -290,7 +290,7 @@ func TestParseGrokSessionDirMapsUsageJSONOntoLastAssistantMessage(t *testing.T) 
 		usage: grokUsageSnapshot(sessionID),
 	})
 
-	session, ok, err := parseGrokSessionDir(dir)
+	session, ok, err := parseGrokSessionDir(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("parseGrokSessionDir error = %v", err)
 	}
@@ -343,7 +343,7 @@ func TestParseGrokSessionDirLeavesUsageEmptyWithoutUsageJSON(t *testing.T) {
 		t.Fatalf("write grok signals error = %v", err)
 	}
 
-	session, ok, err := parseGrokSessionDir(dir)
+	session, ok, err := parseGrokSessionDir(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("parseGrokSessionDir error = %v", err)
 	}

@@ -2561,7 +2561,7 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   Run
   `pnpm --filter @tutti-os/agent-gui test -- agent-gui/agentGuiNode/model/agentGuiConversationModel.spec.ts`,
   `cd packages/agent/daemon && go test ./runtime`,
-  `cd services/tuttid && go test ./service/agent ./api -run 'ExternalImport|ParseCodex|ParseClaude'`,
+  `cd services/tuttid && go test ./service/agent ./api -run 'ExternalImport|ParseCodex|ParseClaude|ParseGrok'`,
   `go test ./packages/agent/store-sqlite -run 'ImportedRail|ClassifiesRail'`,
   `node --import ./test/register-asset-stub.mjs --test --experimental-strip-types ./src/renderer/src/features/workspace-user-project/services/internal/desktopWorkspaceUserProjectService.test.ts`
   from `apps/desktop`, then run `pnpm check:changed`.
@@ -2574,6 +2574,7 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   [external_import_parse.go](../../../services/tuttid/service/agent/external_import_parse.go)
   [external_import_projects.go](../../../services/tuttid/service/agent/external_import_projects.go)
   [external_import.go](../../../services/tuttid/service/agent/external_import.go)
+  [external_import_grok.go](../../../services/tuttid/service/agent/external_import_grok.go)
   [external_import_scan.go](../../../services/tuttid/service/agent/external_import_scan.go)
   [store.go](../../../services/tuttid/data/externalimportcatalog/store.go)
   [rail.go](../../../packages/agent/store-sqlite/rail.go)
@@ -3394,6 +3395,29 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   [external_import.go](../../../services/tuttid/service/agent/external_import.go)
   [activity_historical_import_turns.go](../../../packages/agent/store-sqlite/activity_historical_import_turns.go)
   [agent-gui-node.md](../../architecture/agent-gui-node.md)
+
+### An imported Grok session has transcript text but no token usage
+
+- Symptom:
+  A local Grok conversation imports into Tutti with messages and timestamps,
+  but sessionarchive / assistant `payload.usage` stays empty.
+- Quick checks:
+  Confirm the source is `$GROK_HOME/sessions/<cwd>/<session-id>/` (or
+  `~/.grok/sessions`) and that `updates.jsonl` or `chat_history.jsonl` has
+  user/assistant text. Then check whether that directory holds a `usage.json`:
+  it is the only token source. Do not expect counts from `signals.json`.
+- Root cause:
+  Grok ACP emits no live token snapshot, so the importer copies counts only
+  from `usage.json` when the CLI wrote one, and never derives them from
+  message text. A session recorded before Grok wrote that file has none.
+- Fix:
+  Keep usage absent when `usage.json` is missing. Resume still uses the Grok
+  session UUID as `provider_session_id` with target `extension:grok`.
+- Validation:
+  Run `cd services/tuttid && go test ./service/agent -run 'ParseGrok|ScanAndImportGrok'`.
+- References:
+  [external_import_grok.go](../../../services/tuttid/service/agent/external_import_grok.go)
+  [agent-extensions.md](../../architecture/agent-extensions.md)
 
 ### A completed Turn's reply is hidden inside the collapsed work section
 

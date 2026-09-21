@@ -128,10 +128,18 @@ func (s *Service) ImportExternalSessions(ctx context.Context, workspaceID string
 func normalizeExternalImportProviders(input []string) []string {
 	if len(input) == 0 {
 		out := make([]string, 0)
+		seen := map[string]struct{}{}
 		for _, descriptor := range providerregistry.Migrated() {
-			if descriptor.ExternalImport.Enabled {
-				out = append(out, descriptor.Identity.ID)
+			if !descriptor.ExternalImport.Enabled {
+				continue
 			}
+			out = append(out, descriptor.Identity.ID)
+			seen[descriptor.Identity.ID] = struct{}{}
+		}
+		// Grok has no registry descriptor but its sessions sit on this machine
+		// like any other local CLI's, so a default scan must still reach them.
+		if _, ok := seen[grokImportProvider]; !ok {
+			out = append(out, grokImportProvider)
 		}
 		return out
 	}
@@ -140,7 +148,7 @@ func normalizeExternalImportProviders(input []string) []string {
 	for _, provider := range input {
 		normalized := agentproviderbiz.Normalize(provider)
 		if normalized == "" {
-			// Import-only archive providers (e.g. the ChatGPT data export) are
+			// Import-only sources (ChatGPT archive, local Grok CLI) are
 			// deliberately not runnable registry providers, so they never
 			// resolve through providerregistry. Preserve their identity here so
 			// import selections that reference them survive normalization.
@@ -163,13 +171,15 @@ func normalizeExternalImportProviders(input []string) []string {
 	return out
 }
 
-// normalizeExternalArchiveImportProvider recognizes import-only archive
-// providers that have no runnable providerregistry descriptor. Returns the
-// canonical identity, or "" if the value is not a known archive-only provider.
+// normalizeExternalArchiveImportProvider recognizes import-only sources that
+// have no runnable providerregistry descriptor. Returns the canonical
+// identity, or "" if the value is not a known import-only provider.
 func normalizeExternalArchiveImportProvider(provider string) string {
 	switch strings.TrimSpace(strings.ToLower(provider)) {
 	case chatgptExportProvider:
 		return chatgptExportProvider
+	case grokImportProvider, "grok":
+		return grokImportProvider
 	default:
 		return ""
 	}
@@ -243,6 +253,9 @@ func externalImportedSessionSettings(session externalImportedSession) map[string
 }
 
 func externalImportAgentTargetID(provider string) string {
+	if normalizeExternalArchiveImportProvider(provider) == grokImportProvider {
+		return grokImportTargetID
+	}
 	normalized := agentproviderbiz.Normalize(provider)
 	if descriptor, ok := providerregistry.Find(normalized); ok {
 		return descriptor.Target.ID
@@ -294,26 +307,28 @@ func (s *Service) loadExternalImportBody(
 		}
 		return externalImportedSession{}, fmt.Errorf("selected session %s was not found in the archive", summary.ProviderSessionID)
 	}
+	grokSource := normalizeExternalArchiveImportProvider(summary.Provider) == grokImportProvider
+	if !grokSource {
+		if _, ok := providerregistry.Find(summary.Provider); !ok {
+			return externalImportedSession{}, fmt.Errorf("provider %q is not importable", summary.Provider)
+		}
+	}
 	const attempts = 3
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return externalImportedSession{}, err
 		}
-		before, err := inspectExternalImportSource(summary.SourcePath)
+		before, err := externalImportBodySignature(summary.Provider, summary.SourcePath)
 		if err != nil {
 			return externalImportedSession{}, err
 		}
-		descriptor, ok := providerregistry.Find(summary.Provider)
-		if !ok {
-			return externalImportedSession{}, fmt.Errorf("provider %q is not importable", summary.Provider)
-		}
-		session, parsed, err := parseExternalProviderJSONL(ctx, descriptor, summary.SourcePath)
+		session, parsed, err := parseExternalImportBody(ctx, summary.Provider, summary.SourcePath)
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		after, err := inspectExternalImportSource(summary.SourcePath)
+		after, err := externalImportBodySignature(summary.Provider, summary.SourcePath)
 		if err != nil {
 			return externalImportedSession{}, err
 		}
@@ -337,6 +352,29 @@ func (s *Service) loadExternalImportBody(
 
 func inspectExternalImportSource(path string) (externalimportcatalog.Signature, error) {
 	return externalimportcatalog.InspectPath(path)
+}
+
+// externalImportBodySignature re-reads one import source's signature for the
+// changed-while-reading check. A Grok source is a session directory, so it is
+// folded the same way discovery folds it; every other source is one file.
+func externalImportBodySignature(provider string, sourcePath string) (externalimportcatalog.Signature, error) {
+	if normalizeExternalArchiveImportProvider(provider) == grokImportProvider {
+		return grokSessionDirSignature(sourcePath)
+	}
+	return inspectExternalImportSource(sourcePath)
+}
+
+// parseExternalImportBody re-parses one import source with message bodies
+// attached, routing Grok session directories to the directory parser.
+func parseExternalImportBody(ctx context.Context, provider string, sourcePath string) (externalImportedSession, bool, error) {
+	if normalizeExternalArchiveImportProvider(provider) == grokImportProvider {
+		return parseGrokSessionDir(ctx, sourcePath)
+	}
+	descriptor, ok := providerregistry.Find(provider)
+	if !ok {
+		return externalImportedSession{}, false, fmt.Errorf("provider %q is not importable", provider)
+	}
+	return parseExternalProviderJSONL(ctx, descriptor, sourcePath)
 }
 
 // normalizeExternalImportArchiveKind resolves a request archive kind, defaulting

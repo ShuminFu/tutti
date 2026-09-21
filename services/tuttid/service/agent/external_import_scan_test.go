@@ -21,6 +21,7 @@ func TestScanExternalImportsReusesCatalogWithoutReparsing(t *testing.T) {
 	}
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	recent := time.Now().UTC().Add(-time.Hour)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "one.jsonl"),
 		map[string]any{
@@ -110,6 +111,7 @@ func TestImportExternalSessionsParsesOnlySelectedBodies(t *testing.T) {
 	}
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	recent := time.Now().UTC().Add(-time.Hour)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "keep.jsonl"),
 		map[string]any{
@@ -185,6 +187,7 @@ func TestScanExternalImportsDropsBodiesFromScanResult(t *testing.T) {
 	}
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
 	recent := time.Now().UTC().Add(-time.Hour)
 	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "one.jsonl"),
 		map[string]any{
