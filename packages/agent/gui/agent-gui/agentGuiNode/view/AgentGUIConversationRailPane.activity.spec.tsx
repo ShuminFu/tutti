@@ -28,6 +28,7 @@ describe("AgentGUIConversationRailPane Activity capability", () => {
     const engine = createTestAgentSessionEngine("workspace-1");
     const deadline = 30 * 86_400_000;
     const archivedAtUnixMs = Date.now() - deadline;
+    expect(archiveRemainingDays(1000, 999)).toBe(30);
     expect(archiveRemainingDays(1000, 1000 + deadline - 1)).toBe(1);
     expect(archiveRemainingDays(1000, 1000 + deadline)).toBe(0);
     const archived = normalizeAgentActivitySession({
@@ -118,6 +119,24 @@ describe("AgentGUIConversationRailPane Activity capability", () => {
     });
     engine.dispose();
   });
+  it("does not report an empty archive when loading failed", async () => {
+    const engine = createTestAgentSessionEngine("workspace-1");
+    renderPane({
+      capability: false,
+      runtimeOverrides: {
+        getSessionEngine: () => engine,
+        listSessionSectionPage: vi.fn(async () => {
+          throw new Error("offline");
+        }),
+        setSessionArchived: vi.fn()
+      }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await screen.findByRole("button", { name: "Retry" });
+    expect(screen.queryByText("No archived sessions")).toBeNull();
+    engine.dispose();
+  });
+
   it("fails closed when the host does not opt in", () => {
     renderPane({ capability: false });
 

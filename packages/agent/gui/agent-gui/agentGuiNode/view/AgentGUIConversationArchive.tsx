@@ -167,7 +167,9 @@ function ArchiveContents(
           {props.labels.retryConversations}
         </Button>
       ) : null}
-      {!query.runtimeRailSectionsPending && !items.length ? (
+      {!query.runtimeRailSectionsPending &&
+      !query.runtimeRailFailed &&
+      !items.length ? (
         <p className="p-3 text-sm text-muted-foreground">
           {t("agentHost.agentGui.archiveEmpty")}
         </p>
@@ -228,8 +230,11 @@ export function archiveRemainingDays(
   archivedAtUnixMs: number,
   nowUnixMs: number
 ): number {
-  return Math.max(
-    0,
-    Math.ceil((archivedAtUnixMs + 30 * 86_400_000 - nowUnixMs) / 86_400_000)
+  return Math.min(
+    30,
+    Math.max(
+      0,
+      Math.ceil((archivedAtUnixMs + 30 * 86_400_000 - nowUnixMs) / 86_400_000)
+    )
   );
 }
