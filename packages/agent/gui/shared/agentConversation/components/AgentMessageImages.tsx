@@ -259,6 +259,16 @@ function useAgentMessageImageSources(
   const visibleLoadingIds = new Set(loadingIds);
   for (const image of missingImages) visibleLoadingIds.add(image.id);
 
+  // DINTAL-5328：发送→回复窗口内会话快照不断落地，父级对同一批图片反复重投影。
+  // effect 不能依赖数组身份，否则每次快照都会取消并重启在途附件读取，占位态只能
+  // 等回合落定（事件风暴停止）才收敛，表现为图片气泡长期「加载中」。这里只依赖
+  // 内容签名（id + 定位符 + 重试轮次），内容不变就复用同一趟在途读取。
+  const missingSignature = missingImages
+    .map((image) => imageLoadSignature(image, retryCounts.get(image.id) ?? 0))
+    .join("|");
+  const unavailableSignature = unavailableImages
+    .map((image) => imageLoadSignature(image, retryCounts.get(image.id) ?? 0))
+    .join("|");
   useEffect(() => {
     let canceled = false;
     if (
@@ -320,11 +330,10 @@ function useAgentMessageImageSources(
     };
   }, [
     markFailed,
-    missingImages,
+    missingSignature,
     reportFailure,
-    retryCounts,
     runtime,
-    unavailableImages
+    unavailableSignature
   ]);
 
   return {
@@ -432,6 +441,25 @@ function reportImageLoadDiagnosticFailure(
       }
     })
   );
+}
+
+/**
+ * Stable content identity of one image read: two renders that describe the
+ * same image (same locator, same retry round) must produce the same
+ * signature so the read effect survives identity-only re-renders.
+ */
+function imageLoadSignature(
+  image: AgentMessageImageVM,
+  attempt: number
+): string {
+  return [
+    image.id,
+    image.workspaceId ?? "",
+    image.agentSessionId,
+    image.attachmentId ?? "",
+    image.path ?? "",
+    String(attempt)
+  ].join("\u0000");
 }
 
 function imageDataUrl(image: AgentMessageImageVM): string | null {
