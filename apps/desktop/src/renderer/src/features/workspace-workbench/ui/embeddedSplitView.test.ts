@@ -8,6 +8,7 @@ import {
 import type { ConversationRailSplitDragSession } from "@tutti-os/agent-gui/conversation-rail-projection";
 import { activateEmbeddedDintalDockSession } from "./embeddedDintalDock.ts";
 import {
+  createAgentGuiNodeSessionSource,
   createEmbeddedSplitViewController,
   embeddedSplitViewPaneDescriptor,
   parseEmbeddedSplitViewPaneDescriptor,
@@ -456,18 +457,53 @@ test("hitting new session in a pane clears its stale identity without collapsing
   // （agent-gui 的 handleCreateConversation 把 lastActiveAgentSessionId 抹成 null，
   // 我们原来「读到空就 continue」，于是一直留着旧的那条）。
   const fake = createFakeHost({ seed: ["agent-left"] });
-  const observedByNode = new Map<string, string>([["agent-left", "session-a"]]);
+  const observedByNode = new Map<string, string | null>();
   const listeners = new Set<() => void>();
   const controller = makeController(fake, {
-    sessions: {
-      read: (node) => observedByNode.get(node.id) ?? null,
-      subscribe: (listener: () => void) => {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      }
-    }
+    host: {
+      ...fake.host,
+      getSnapshot: () => ({
+        ...fake.host.getSnapshot(),
+        nodes: fake.host.getSnapshot().nodes.map((node) => ({
+          ...node,
+          data: {
+            ...node.data,
+            snapshotNodeState:
+              node.id === "agent-left"
+                ? { lastActiveAgentSessionId: "session-a" }
+                : undefined
+          }
+        }))
+      })
+    },
+    sessions: createAgentGuiNodeSessionSource({
+      externalStateSource: {
+        getNodeState: ({ nodeId }) =>
+          observedByNode.has(nodeId)
+            ? { lastActiveAgentSessionId: observedByNode.get(nodeId) }
+            : null,
+        subscribeNodeState: (_request, listener) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        }
+      },
+      workspaceId: "ws-1"
+    })
   });
+  // Before the authoritative state arrives, the node snapshot still restores it.
   await controller.adopt(["agent-left"]);
+  assert.equal(controller.getSnapshot().panes.left?.sessionId, "session-a");
+  observedByNode.set("agent-left", "session-a");
+  fake.notify();
+  conversationRailSplitHost()?.describeSession?.(dragSession("session-a"));
+  assert.equal(
+    controller.getSnapshot().panes.left?.session?.title,
+    "session-a"
+  );
+  assert.equal(
+    conversationRailSplitHost()?.getShownSessionIds().has("session-a"),
+    true
+  );
   await controller.dropSession(dragSession("session-b"), "right");
   const rightNodeId = fake.launched[0] as string;
 
@@ -480,12 +516,18 @@ test("hitting new session in a pane clears its stale identity without collapsing
   fake.notify();
   fake.calls.length = 0;
 
-  observedByNode.delete("agent-left");
-  fake.notify();
+  // Home is an explicit null in the authoritative state; the old node snapshot
+  // still contains session-a after the rail focused that session.
+  observedByNode.set("agent-left", null);
+  for (const listener of listeners) listener();
 
   const fresh = controller.getSnapshot();
   assert.equal(fresh.panes.left?.sessionId, null);
   assert.equal(fresh.panes.left?.session, null);
+  assert.equal(
+    conversationRailSplitHost()?.getShownSessionIds().has("session-a"),
+    false
+  );
   assert.equal(fresh.panes.right?.sessionId, "session-b");
   // 分栏不许塌：右栏窗口一个都不能关。
   assert.deepEqual(

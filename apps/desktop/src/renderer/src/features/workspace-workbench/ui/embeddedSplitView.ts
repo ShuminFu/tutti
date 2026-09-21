@@ -325,6 +325,8 @@ export function createAgentGuiNodeSessionSource(input: {
         | null
         | undefined;
       const value = state?.lastActiveAgentSessionId;
+      // Explicit Home selection is authoritative, not a missing snapshot.
+      if (value === null) return null;
       if (typeof value === "string" && value.trim()) {
         return value.trim();
       }

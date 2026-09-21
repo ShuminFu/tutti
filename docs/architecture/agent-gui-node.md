@@ -2981,6 +2981,10 @@ same node state again. A standalone surface may use the callback as its sole
 Rail state writer because it has no Workbench node-state source. The callback
 contract contains no Tutti Desktop preference or product policy, so other hosts
 such as TSH may persist their own Rail state without adopting Desktop behavior.
+Embedded pane identity reads must preserve an explicit null
+`lastActiveAgentSessionId` as Home. Only absent selection state may fall back to
+an older node snapshot; otherwise a new conversation resurrects the old pane
+title and Rail shown-session marker.
 
 Attention state preserves explicit user intent: marking the currently selected
 Session unread keeps its unread indicator while that selection remains open.
