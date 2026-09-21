@@ -7,6 +7,8 @@ import type {
 } from "./types.ts";
 
 const SESSION_ACTIVATION_CONFIRMATION_TIMEOUT_MS = 120_000;
+// Host-mediated new session creation can outlive the ordinary activation window.
+const NEW_SESSION_ACTIVATION_CONFIRMATION_TIMEOUT_MS = 210_000;
 
 interface SessionActivationOperationContext {
   clock: EngineClock;
@@ -48,7 +50,10 @@ export function requestSessionActivation(
       : {}),
     ...(input.cwd !== undefined ? { cwd: input.cwd.trim() } : {}),
     expiresAtUnixMs:
-      requestedAtUnixMs + SESSION_ACTIVATION_CONFIRMATION_TIMEOUT_MS,
+      requestedAtUnixMs +
+      (input.mode === "new"
+        ? NEW_SESSION_ACTIVATION_CONFIRMATION_TIMEOUT_MS
+        : SESSION_ACTIVATION_CONFIRMATION_TIMEOUT_MS),
     ...(initialDisplayPrompt ? { initialDisplayPrompt } : {}),
     ...(input.initialTurnExpected !== undefined
       ? { initialTurnExpected: input.initialTurnExpected }

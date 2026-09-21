@@ -86,7 +86,7 @@ test("semantic new-Session activation owns scope, confirmation window, and comma
     content: [{ text: "display instructions", type: "text" }],
     cwd: "/workspace",
     isolation: "worktree",
-    expiresAtUnixMs: 120_100,
+    expiresAtUnixMs: 210_100,
     initialDisplayPrompt: "/browser",
     initialGoalControl: { action: "set", objective: "ship it" },
     initialTurnExpected: false,
@@ -144,7 +144,7 @@ test("semantic new-Session activation owns scope, confirmation window, and comma
       },
       settings: { model: "model-1" },
       submitDiagnostics: { source: "test", submittedAtUnixMs: 100 },
-      timeoutMs: 90_000,
+      timeoutMs: 180_000,
       title: "New session",
       type: "session/activate",
       visible: true,
@@ -153,7 +153,7 @@ test("semantic new-Session activation owns scope, confirmation window, and comma
   ]);
   assert.deepEqual(
     harness.scheduled.map((task) => task.delayMs),
-    [120_000, 90_000]
+    [210_000, 180_000]
   );
 });
 
@@ -221,7 +221,7 @@ test("semantic activation does not admit changed input under a reused request id
       cwd: "",
       errorCode: null,
       errorMessage: null,
-      expiresAtUnixMs: 120_100,
+      expiresAtUnixMs: 210_100,
       initialPromptRetracted: false,
       initialTurnExpected: true,
       mode: "new",
@@ -234,7 +234,7 @@ test("semantic activation does not admit changed input under a reused request id
   );
   assert.deepEqual(
     harness.scheduled.map((task) => task.delayMs),
-    [120_000, 90_000]
+    [210_000, 180_000]
   );
 });
 

@@ -50,7 +50,9 @@ const EXISTING_SESSION_ACTIVATION_COMMAND_TIMEOUT_MS = 30_000;
 // Keep the outer command alive long enough for session/new to receive its own
 // full 30-second protocol timeout instead of inheriting a partially spent UI
 // deadline.
-const NEW_SESSION_ACTIVATION_COMMAND_TIMEOUT_MS = 90_000;
+// Embedded host can wait up to 120s for task/session readiness and its bridge
+// up to 150s. The outer command must not expire first and drop a valid reply.
+const NEW_SESSION_ACTIVATION_COMMAND_TIMEOUT_MS = 180_000;
 
 export function createInitialPendingIntentsState(): PendingIntentsState {
   return {
