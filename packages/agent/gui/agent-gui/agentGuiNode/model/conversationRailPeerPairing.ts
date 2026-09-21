@@ -42,8 +42,23 @@ export interface ConversationRailPeerPairLink {
   /** 本条会话在这条配对里那一头的 taskId：deletePeerPair 要用它。 */
   ownTaskId: string;
   pairId: string;
+  /**
+   * 这条配对此刻的模式，原样抄自配对行。徽标要分「正在结对」与「只是还拴着」
+   * 两态（DINTAL-5331），靠的就是它。老宿主的行上没有这个字段 → `undefined`，
+   * 徽标退回单态，不凭空画出「未结对」的样子。
+   */
+  pairMode?: ConversationRailPeerPairMode;
   peer: ConversationRailPeerPairEndpoint;
 }
+
+/**
+ * 徽标两态（DINTAL-5331）：
+ *   `pair`    至少有一条配对正在结对编程 → 实心。
+ *   `solo`    配对都还在，但一条都没在结对（切了独立模式 / 关了分栏）→ 空心。
+ *   `unknown` 老宿主没报 pairMode，分不出来 → 沿用改造前的单态外观。
+ * 一条会话可能同时挂着好几条配对，所以「有一条是 pair 就算 pair」。
+ */
+export type ConversationRailPeerPairBadgeMode = "pair" | "solo" | "unknown";
 
 export type ConversationRailPeerPairIndex = ReadonlyMap<
   string,
@@ -94,18 +109,25 @@ export function conversationRailPeerPairIndex(
   const push = (
     own: ConversationRailPeerPairEndpoint,
     peer: ConversationRailPeerPairEndpoint,
-    pairId: string
+    pairId: string,
+    pairMode: ConversationRailPeerPairMode | undefined
   ): void => {
     const sessionId = own.sessionId?.trim() ?? "";
     if (!sessionId) return;
     const links = index.get(sessionId) ?? [];
-    links.push({ ownTaskId: own.taskId?.trim() ?? "", pairId, peer });
+    links.push({
+      ownTaskId: own.taskId?.trim() ?? "",
+      pairId,
+      ...(pairMode ? { pairMode } : {}),
+      peer
+    });
     index.set(sessionId, links);
   };
   for (const pair of pairs) {
     if (!pair?.a || !pair?.b) continue;
-    push(pair.a, pair.b, pair.pairId);
-    push(pair.b, pair.a, pair.pairId);
+    const pairMode = normalizePairMode(pair.pairMode);
+    push(pair.a, pair.b, pair.pairId, pairMode);
+    push(pair.b, pair.a, pair.pairId, pairMode);
   }
   return index;
 }
@@ -117,12 +139,32 @@ export function conversationRailPeerPairLinks(
   return index.get((sessionId ?? "").trim()) ?? [];
 }
 
+/** 只认契约里那两个词；老宿主的 undefined 与任何脏值一律当「没报过」。 */
+function normalizePairMode(
+  value: unknown
+): ConversationRailPeerPairMode | undefined {
+  return value === "pair" || value === "solo" ? value : undefined;
+}
+
 /** 徽标数 = 该条会话未撤销的配对数；0 时不画徽标。 */
 export function conversationRailPeerPairCount(
   index: ConversationRailPeerPairIndex,
   sessionId: string | null | undefined
 ): number {
   return conversationRailPeerPairLinks(index, sessionId).length;
+}
+
+/** 徽标画哪一态；无配对时也返回 `unknown`（此时压根不画徽标）。 */
+export function conversationRailPeerPairBadgeMode(
+  index: ConversationRailPeerPairIndex,
+  sessionId: string | null | undefined
+): ConversationRailPeerPairBadgeMode {
+  const links = conversationRailPeerPairLinks(index, sessionId);
+  if (links.length === 0) return "unknown";
+  if (links.some((link) => link.pairMode === "pair")) return "pair";
+  // 只要还有一条说不清（老宿主 / 混连），就不敢断言「没在结对」。
+  if (links.some((link) => link.pairMode === undefined)) return "unknown";
+  return "solo";
 }
 
 export interface ConversationRailPeerPairAdjacency<T> {

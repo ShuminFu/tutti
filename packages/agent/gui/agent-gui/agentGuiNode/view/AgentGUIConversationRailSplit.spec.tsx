@@ -317,6 +317,7 @@ const LABELS = {
   peerPairUnmanaged: "Unmanaged sessions cannot be paired",
   peerPairUnmark: "Clear pairing mark",
   peerPairUnpair: (count: number) => `Unpair (${count})`,
+  peerPairUnpairSolo: (count: number) => `Paired, solo (${count})`,
   peerPairWith: (title: string) => `Pair with “${title}”`,
   peerPairWithRelaunch: (title: string) =>
     `Pair with “${title}” (reopens it first)`,

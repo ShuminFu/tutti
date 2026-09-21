@@ -22,6 +22,7 @@ export const enAgentGuiSessionActions = {
   peerPairUnmanaged: "Unmanaged sessions cannot be paired",
   peerPairPending: "Pending pair",
   peerPairUnpair: "Unpair ({{count}})",
+  peerPairUnpairSolo: "Paired, not pairing now · Unpair ({{count}})",
   peerPairPaired: "Paired: {{from}} ↔ {{to}}",
   peerPairFailed: "Pairing failed",
   peerUnpaired: "Unpaired: “{{title}}”",

@@ -3,6 +3,7 @@ import {
   applyConversationRailPeerPairAdjacency,
   conversationRailPeerAliasPreview,
   conversationRailPeerDisplayTitle,
+  conversationRailPeerPairBadgeMode,
   conversationRailPeerPairCount,
   conversationRailPeerPairIndex,
   type ConversationRailPeerPair
@@ -162,5 +163,70 @@ describe("conversationRailPeerDisplayTitle · 单行标题只剩小节标题", (
     expect(got).not.toBe("");
     expect(got.startsWith("补充说明 你是驱动会话 DRV7")).toBe(true);
     expect([...got].length).toBeLessThanOrEqual(41);
+  });
+});
+
+// DINTAL-5331：配对行还在 ≠ 还在结对编程。切独立模式、关掉分栏都只动
+// pairMode / 布局，行原样留着——徽标必须能把这两件事分开画。
+describe("conversationRailPeerPairBadgeMode", () => {
+  const pair = (pairMode?: "pair" | "solo"): ConversationRailPeerPair => ({
+    a: endpoint("session-a", "task-a", "claude", "会话 A"),
+    b: endpoint("session-c", "task-c", "codex", "会话 C"),
+    pairId: "pair-ac",
+    ...(pairMode ? { pairMode } : {})
+  });
+
+  it("结对模式 → pair（两头都是）", () => {
+    const index = conversationRailPeerPairIndex([pair("pair")]);
+    expect(conversationRailPeerPairBadgeMode(index, "session-a")).toBe("pair");
+    expect(conversationRailPeerPairBadgeMode(index, "session-c")).toBe("pair");
+  });
+
+  it("切成独立模式 → solo：配对数不变，只有外观变", () => {
+    const index = conversationRailPeerPairIndex([pair("solo")]);
+    expect(conversationRailPeerPairBadgeMode(index, "session-a")).toBe("solo");
+    expect(conversationRailPeerPairCount(index, "session-a")).toBe(1);
+  });
+
+  it("老宿主没报 pairMode → unknown：外观退回改造前的单态", () => {
+    const index = conversationRailPeerPairIndex([pair()]);
+    expect(conversationRailPeerPairBadgeMode(index, "session-a")).toBe(
+      "unknown"
+    );
+  });
+
+  it("一条会话挂多对时，有一条在结对就算 pair", () => {
+    const index = conversationRailPeerPairIndex([
+      pair("solo"),
+      {
+        a: endpoint("session-a", "task-a", "claude", "会话 A"),
+        b: endpoint("session-b", "task-b", "codex", "会话 B"),
+        pairId: "pair-ab",
+        pairMode: "pair"
+      }
+    ]);
+    expect(conversationRailPeerPairBadgeMode(index, "session-a")).toBe("pair");
+    expect(conversationRailPeerPairBadgeMode(index, "session-c")).toBe("solo");
+  });
+
+  it("solo 与老宿主行混在一起时不敢断言「没在结对」，退回 unknown", () => {
+    const index = conversationRailPeerPairIndex([
+      pair("solo"),
+      {
+        a: endpoint("session-a", "task-a", "claude", "会话 A"),
+        b: endpoint("session-b", "task-b", "codex", "会话 B"),
+        pairId: "pair-ab"
+      }
+    ]);
+    expect(conversationRailPeerPairBadgeMode(index, "session-a")).toBe(
+      "unknown"
+    );
+  });
+
+  it("没有配对时返回 unknown（此时压根不画徽标）", () => {
+    const index = conversationRailPeerPairIndex([pair("pair")]);
+    expect(conversationRailPeerPairBadgeMode(index, "session-x")).toBe(
+      "unknown"
+    );
   });
 });

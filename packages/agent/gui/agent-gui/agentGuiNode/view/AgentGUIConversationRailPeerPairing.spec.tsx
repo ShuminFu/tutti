@@ -83,9 +83,7 @@ describe("conversation rail peer pairing menu", () => {
       { button: 0 }
     );
 
-    await waitFor(() =>
-      expect(host.createPeerPair).toHaveBeenCalledTimes(1)
-    );
+    await waitFor(() => expect(host.createPeerPair).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(host.listPeerPairs).toHaveBeenCalledTimes(2));
     // 标记清空的判据：同一条上重新出现「标记为待配对」而不是「取消标记」。
     await openMenu("session-a");
@@ -184,7 +182,9 @@ describe("conversation rail peer pairing menu", () => {
         })
       );
       await waitFor(() =>
-        expect(toast.success).toHaveBeenCalledWith("Unpaired: “Session B prompt”")
+        expect(toast.success).toHaveBeenCalledWith(
+          "Unpaired: “Session B prompt”"
+        )
       );
     } finally {
       resetAgentHostApiForTests();
@@ -200,7 +200,9 @@ describe("conversation rail peer pairing menu dismissal", () => {
   it("still closes on Escape and on an outside pointer down while the unpair submenu exists", async () => {
     const host = pairingHostStub([PAIR_AB]);
     renderPairingRail({ host });
-    await screen.findByTestId("agent-gui-conversation-peer-pair-badge-session-a");
+    await screen.findByTestId(
+      "agent-gui-conversation-peer-pair-badge-session-a"
+    );
 
     await openMenu("session-a");
     fireEvent.keyDown(document, { key: "Escape" });
@@ -227,11 +229,49 @@ describe("conversation rail peer pairing item presentation", () => {
     ).toHaveAttribute("data-peer-pair-slot", "badge");
   });
 
+  // DINTAL-5331：切独立模式 / 关掉分栏都不解配对，行还在。徽标要能分出
+  // 「正在结对」与「只是还拴着」，否则用户只会读成「取消了但没生效」。
+  it("画实心徽标当这一对正在结对编程", async () => {
+    const host = pairingHostStub([{ ...PAIR_AB, pairMode: "pair" }]);
+    renderPairingRail({ host });
+
+    const badge = await screen.findByTestId(
+      "agent-gui-conversation-peer-pair-badge-session-a"
+    );
+    expect(badge).toHaveAttribute("data-pair-mode", "pair");
+    expect(badge).toHaveAttribute("title", "Unpair (1)");
+  });
+
+  it("切成独立模式后徽标转空心，配对数照旧是 1", async () => {
+    const host = pairingHostStub([{ ...PAIR_AB, pairMode: "solo" }]);
+    renderPairingRail({ host });
+
+    const badge = await screen.findByTestId(
+      "agent-gui-conversation-peer-pair-badge-session-a"
+    );
+    expect(badge).toHaveAttribute("data-pair-mode", "solo");
+    expect(badge).toHaveTextContent("1");
+    expect(badge).toHaveAttribute("title", "Paired, solo (1)");
+  });
+
+  it("老宿主没报 pairMode 时不落 data-pair-mode：外观与改造前一致", async () => {
+    const host = pairingHostStub([PAIR_AB]);
+    renderPairingRail({ host });
+
+    const badge = await screen.findByTestId(
+      "agent-gui-conversation-peer-pair-badge-session-a"
+    );
+    expect(badge).not.toHaveAttribute("data-pair-mode");
+    expect(badge).toHaveAttribute("title", "Unpair (1)");
+  });
+
   // T2：标记态 = 虚线描边 + 「待配对」chip，chip 优先占槽位。
   it("marks the pending conversation with a chip that wins the slot", async () => {
     const host = pairingHostStub([PAIR_AB]);
     renderPairingRail({ host });
-    await screen.findByTestId("agent-gui-conversation-peer-pair-badge-session-a");
+    await screen.findByTestId(
+      "agent-gui-conversation-peer-pair-badge-session-a"
+    );
 
     await mark("session-a");
 
@@ -317,9 +357,7 @@ async function openMenu(sessionId: string): Promise<void> {
   await screen.findAllByRole("menuitem");
 }
 
-function pairingHostStub(
-  pairs: ConversationRailPeerPair[] = []
-): {
+function pairingHostStub(pairs: ConversationRailPeerPair[] = []): {
   createPeerPair: ReturnType<typeof vi.fn>;
   deletePeerPair: ReturnType<typeof vi.fn>;
   listPeerPairs: ReturnType<typeof vi.fn>;
@@ -368,7 +406,9 @@ function PairingRail({
   );
 }
 
-function railItem(overrides: Partial<AgentGUIConversationSummary> & { id: string }) {
+function railItem(
+  overrides: Partial<AgentGUIConversationSummary> & { id: string }
+) {
   return (
     <AgentGUIConversationRailItem
       key={overrides.id}
@@ -442,6 +482,7 @@ const RAIL_ITEM_LABELS = {
   peerPairUnmanaged: "Unmanaged sessions cannot be paired",
   peerPairUnmark: "Clear pairing mark",
   peerPairUnpair: (count: number) => `Unpair (${count})`,
+  peerPairUnpairSolo: (count: number) => `Paired, solo (${count})`,
   peerPairWith: (title: string) => `Pair with “${title}”`,
   peerPairWithRelaunch: (title: string) =>
     `Pair with “${title}” (reopens it first)`,

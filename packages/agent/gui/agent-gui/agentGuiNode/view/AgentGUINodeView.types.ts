@@ -326,6 +326,8 @@ export interface AgentGUIViewLabels extends AgentGUIProviderReadinessLabels {
   peerPairUnmanaged: string;
   peerPairUnmark: string;
   peerPairUnpair: (count: number) => string;
+  /** 独立模式下的徽标 tooltip：先说清「还拴着但没在结对」。 */
+  peerPairUnpairSolo: (count: number) => string;
   peerPairWith: (title: string) => string;
   peerPairWithRelaunch: (title: string) => string;
   peerUnpaired: (title: string) => string;
@@ -540,6 +542,7 @@ export type AgentGUIConversationRailLabels = Pick<
   | "peerPairUnmanaged"
   | "peerPairUnmark"
   | "peerPairUnpair"
+  | "peerPairUnpairSolo"
   | "peerPairWith"
   | "peerPairWithRelaunch"
   | "peerUnpaired"

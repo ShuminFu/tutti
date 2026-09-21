@@ -35,7 +35,10 @@ import {
   useConversationActionGroups
 } from "./AgentGUIConversationActionsMenu";
 import { useAgentGUIConversationRailPeerPairing } from "./agentGUIConversationRailPeerPairingContext";
-import { conversationRailPeerPairCount } from "../model/conversationRailPeerPairing";
+import {
+  conversationRailPeerPairBadgeMode,
+  conversationRailPeerPairCount
+} from "../model/conversationRailPeerPairing";
 import { useConversationRailItemDrag } from "./useConversationRailItemDrag";
 import { conversationRailSplitHost } from "../model/conversationRailSplitHost";
 
@@ -146,6 +149,12 @@ export const AgentGUIConversationRailItem = memo(
     const peerPairCount = peerPairing.supported
       ? conversationRailPeerPairCount(peerPairing.index, item.id)
       : 0;
+    // 两态（DINTAL-5331）：配对行还在不等于还在结对编程。切独立模式、关掉分栏
+    // 都只改 pairMode / 布局，配对行原样留着——徽标据此画实心 / 空心。
+    // `unknown`（老宿主没报 pairMode）不落 data 属性，外观与改造前一模一样。
+    const peerPairBadgeMode = peerPairing.supported
+      ? conversationRailPeerPairBadgeMode(peerPairing.index, item.id)
+      : "unknown";
     // 「待配对」标记：虚线描边 + 右槽的 chip，chip 优先于徽标显示（T2）。
     const peerPairMarked =
       peerPairing.supported && peerPairing.marked?.sessionId === item.id;
@@ -470,8 +479,15 @@ export const AgentGUIConversationRailItem = memo(
         ) : peerPairSlot === "badge" ? (
           <span
             className={styles.conversationPeerPairBadge}
+            data-pair-mode={
+              peerPairBadgeMode === "unknown" ? undefined : peerPairBadgeMode
+            }
             data-testid={`agent-gui-conversation-peer-pair-badge-${item.id}`}
-            title={labels.peerPairUnpair(peerPairCount)}
+            title={
+              peerPairBadgeMode === "solo"
+                ? labels.peerPairUnpairSolo(peerPairCount)
+                : labels.peerPairUnpair(peerPairCount)
+            }
           >
             <Link2 aria-hidden="true" />
             <span>{peerPairCount}</span>

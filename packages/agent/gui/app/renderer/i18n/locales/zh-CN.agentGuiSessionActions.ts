@@ -20,6 +20,7 @@ export const zhCNAgentGuiSessionActions = {
   peerPairUnmanaged: "未托管会话不能配对",
   peerPairPending: "待配对",
   peerPairUnpair: "解除配对 {{count}}",
+  peerPairUnpairSolo: "已配对（当前独立模式）· 解除配对 {{count}}",
   peerPairPaired: "已配对：{{from}} ↔ {{to}}",
   peerPairFailed: "配对失败",
   peerUnpaired: "已解除配对：「{{title}}」",

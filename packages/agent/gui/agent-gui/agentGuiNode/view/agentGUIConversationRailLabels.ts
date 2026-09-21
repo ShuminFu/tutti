@@ -89,6 +89,8 @@ export function agentGUIConversationRailLabels(
     peerPairUnmark: t("agentHost.agentGui.peerPairUnmark"),
     peerPairUnpair: (count: number) =>
       t("agentHost.agentGui.peerPairUnpair", { count }),
+    peerPairUnpairSolo: (count: number) =>
+      t("agentHost.agentGui.peerPairUnpairSolo", { count }),
     peerPairWith: (title: string) =>
       t("agentHost.agentGui.peerPairWith", { title }),
     peerPairWithRelaunch: (title: string) =>

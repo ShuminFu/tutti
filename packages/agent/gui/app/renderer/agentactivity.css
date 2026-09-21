@@ -7008,6 +7008,25 @@ button.agent-gui-node__conversation-section-toggle:hover
   height: 12px;
 }
 
+/* 徽标两态（DINTAL-5331）。配对行在 ≠ 正在结对编程：切独立模式、关掉分栏都只
+   改 pairMode / 布局，行还留着，单态徽标于是看着像「没解开」。
+   实心 = 正在结对；空心 = 还拴着但没在结对（拖回来就能继续）。
+   老宿主没报 pairMode 时不落 data-pair-mode，外观与改造前完全一致。 */
+.agent-gui-node__conversation-peer-pair-badge[data-pair-mode="pair"] {
+  background-color: var(--agent-gui-accent-bg, transparent);
+  color: var(--agent-gui-accent, currentColor);
+}
+
+.agent-gui-node__conversation-peer-pair-badge[data-pair-mode="solo"] {
+  /* 用 box-shadow 描边而不是 border：徽标高度已被 line-height 钉死，
+     加 border 会把它顶高 1px，两态之间行高就会跳。 */
+  box-shadow: inset 0 0 0 0.5px currentColor;
+  color: var(
+    --agent-gui-text-tertiary,
+    var(--agent-gui-text-secondary, currentColor)
+  );
+}
+
 /* 「待配对」chip：与 pin/删除按钮一样，悬停时一起退场，不跟它们抢位置。 */
 .agent-gui-node__conversation-peer-pair-chip {
   display: inline-flex;
