@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
+import { TooltipProvider } from "@tutti-os/ui-system";
 import {
   afterEach,
   beforeAll,
@@ -14,6 +15,7 @@ import {
   AgentModelReasoningDropdown,
   AgentPermissionModeDropdown
 } from "./AgentComposerSettingsMenus";
+import { AgentModelReasoningDropdown as AlternateModelDropdown } from "./AgentModelReasoningDropdown";
 import type { AgentGUIComposerSettingsVM } from "./model/agentGuiNodeTypes";
 import type { AgentComposerSettingsMenuLabels } from "./model/composerSettingsMenuModel";
 import {
@@ -200,6 +202,87 @@ describe("AgentModelReasoningDropdown", () => {
     fireEvent.click(retryButton);
 
     expect(onRetryComposerOptions).not.toHaveBeenCalled();
+  });
+});
+
+describe.each([
+  ["composer", AgentModelReasoningDropdown],
+  ["alternate", AlternateModelDropdown]
+] as const)("%s model hover journey", (_name, ModelDropdown) => {
+  it("keeps long model names hint-free and still selects from the menu", async () => {
+    const onSettingsChange = vi.fn();
+    const longLabel =
+      "GPT Model With An Intentionally Long Truncated Display Name";
+    render(
+      <ModelDropdown
+        composerSettings={{
+          ...composerModelSettings(),
+          availableModels: [
+            {
+              label: longLabel,
+              value: "gpt-5.5",
+              description: "Detailed model description"
+            },
+            { label: "GPT-5.4", value: "gpt-5.4" }
+          ]
+        }}
+        labels={modelSettingsLabels}
+        onSettingsChange={onSettingsChange}
+      />,
+      { wrapper: TooltipProvider }
+    );
+    const trigger = screen.getByRole("button", { name: "Model / Reasoning" });
+    expect(trigger).toHaveTextContent(longLabel);
+    expect(trigger).not.toHaveAttribute("title");
+    fireEvent.focus(trigger);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    fireEvent.pointerDown(trigger, {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse"
+    });
+    const options = await screen.findAllByRole("menuitem");
+    const option = options.find((item) =>
+      item.textContent?.includes(longLabel)
+    )!;
+    expect(option).not.toHaveAttribute("title");
+    expect(option).not.toHaveAttribute(
+      "data-agent-model-option-tooltip-trigger"
+    );
+    fireEvent.focus(option);
+    fireEvent.pointerMove(option, { pointerType: "mouse" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    const nextModel = options.find((item) =>
+      item.textContent?.includes("GPT-5.4")
+    )!;
+    fireEvent.click(nextModel);
+    expect(onSettingsChange).toHaveBeenCalledExactlyOnceWith({
+      model: "gpt-5.4"
+    });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("shows loading inline without a hover wrapper or selectable menu", () => {
+    render(
+      <ModelDropdown
+        composerSettings={{
+          ...composerModelSettings(),
+          isSettingsLoading: true,
+          isModelOptionsLoading: true
+        }}
+        labels={modelSettingsLabels}
+        onSettingsChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider }
+    );
+    const trigger = screen.getByRole("button", { name: "Model / Reasoning" });
+    expect(trigger).toHaveTextContent("Loading…");
+    expect(trigger).toBeDisabled();
+    expect(trigger.parentElement).not.toHaveAttribute("data-state", "closed");
+    fireEvent.focus(trigger.parentElement!);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 });
 

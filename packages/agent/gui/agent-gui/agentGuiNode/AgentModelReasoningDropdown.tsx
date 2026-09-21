@@ -2,13 +2,7 @@
 // favorites chrome state. Extracted from AgentComposerSettingsMenus.tsx to
 // keep both files under the 800-line budget.
 import { CheckIcon, ChevronDown, Star, ZapIcon } from "lucide-react";
-import {
-  Fragment,
-  cloneElement,
-  useState,
-  type HTMLAttributes,
-  type ReactElement
-} from "react";
+import { Fragment, useState } from "react";
 import { translate } from "../../i18n/index";
 import styles from "./AgentGUINode.styles";
 import {
@@ -21,9 +15,6 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
   cn
 } from "@tutti-os/ui-system";
 import type { AgentGUIComposerSettingsVM } from "./model/agentGuiNodeTypes";
@@ -88,9 +79,6 @@ export function AgentModelReasoningDropdown({
     searchQuery: modelSearchQuery
   });
   const menuDisabled = disabled || menu.disabled;
-  // While the model list is still loading the trigger shows a placeholder
-  // ("Default") that reads like a real selection. Surface a hover hint so the
-  // user knows the list is still loading rather than already resolved.
   const isModelLoading =
     composerSettings.isModelOptionsLoading ||
     composerSettings.isSettingsLoading;
@@ -141,7 +129,9 @@ export function AgentModelReasoningDropdown({
             strokeWidth={2.5}
           />
         ) : null}
-        {menu.trigger.showCombined ? (
+        {isModelLoading ? (
+          <span className="min-w-0 truncate">{labels.loadingOptions}</span>
+        ) : menu.trigger.showCombined ? (
           <span className="min-w-0 truncate">{menu.trigger.combinedLabel}</span>
         ) : (
           <>
@@ -156,25 +146,9 @@ export function AgentModelReasoningDropdown({
 
   return (
     <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
-      {isModelLoading ? (
-        // The trigger is disabled while loading, so pointer events never reach
-        // it. Target the tooltip at a focusable wrapper span (Radix's pattern
-        // for disabled triggers) so hover/focus reliably surfaces the hint.
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex" tabIndex={0}>
-              <DropdownMenuTrigger asChild disabled={menuDisabled}>
-                {trigger}
-              </DropdownMenuTrigger>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top">{labels.loadingOptions}</TooltipContent>
-        </Tooltip>
-      ) : (
-        <DropdownMenuTrigger asChild disabled={menuDisabled}>
-          {trigger}
-        </DropdownMenuTrigger>
-      )}
+      <DropdownMenuTrigger asChild disabled={menuDisabled}>
+        {trigger}
+      </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
         side="top"
@@ -409,7 +383,10 @@ function ComposerMenuOptionItems({
         const hasDescription = Boolean(option.description);
         const showInlineDescription =
           descriptionPresentation === "inline" && hasDescription;
-        const showModelTooltip = descriptionPresentation === "model-tooltip";
+        // The model list uses a compact summary row for this presentation. The
+        // description stays out of the row; it is not re-exposed as a hover
+        // hint on the option itself.
+        const showSummaryRow = descriptionPresentation === "model-tooltip";
         const showTooltipDescription =
           descriptionPresentation === "tooltip" && hasDescription;
         const isFavorite = favoriteValues?.has(option.value) ?? false;
@@ -455,11 +432,11 @@ function ComposerMenuOptionItems({
             className={cn(
               styles.composerMenuItem,
               "group/composer-option",
-              showModelTooltip &&
+              showSummaryRow &&
                 "min-h-[40px] max-w-full items-center px-3 py-2",
               showInlineDescription && "items-start"
             )}
-            data-agent-model-option={showModelTooltip ? "true" : undefined}
+            data-agent-model-option={showSummaryRow ? "true" : undefined}
             onPointerDown={(event) => {
               if (event.button === 0 && !event.ctrlKey) {
                 event.preventDefault();
@@ -470,7 +447,7 @@ function ComposerMenuOptionItems({
               onSelect(option.value);
             }}
           >
-            {showModelTooltip ? (
+            {showSummaryRow ? (
               <span className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden">
                 <span className="min-w-0 truncate leading-[1.15]">
                   {option.label}
@@ -523,64 +500,8 @@ function ComposerMenuOptionItems({
             />
           </DropdownMenuItem>
         );
-        return showModelTooltip ? (
-          <ComposerModelOptionTooltip
-            key={option.value}
-            option={option}
-            tooltipsEnabled={tooltipsEnabled}
-          >
-            {item}
-          </ComposerModelOptionTooltip>
-        ) : (
-          item
-        );
+        return item;
       })}
     </>
-  );
-}
-
-function ComposerModelOptionTooltip({
-  children,
-  option,
-  tooltipsEnabled = true
-}: {
-  children: ReactElement<HTMLAttributes<HTMLElement>>;
-  option: ComposerMenuOption;
-  tooltipsEnabled?: boolean;
-}): React.JSX.Element {
-  if (!tooltipsEnabled || !option.tooltip) {
-    return children;
-  }
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {cloneElement(children, {
-          "data-agent-model-option-tooltip-trigger": "true"
-        } as Partial<HTMLAttributes<HTMLElement>> &
-          Record<"data-agent-model-option-tooltip-trigger", string>)}
-      </TooltipTrigger>
-      <TooltipContent
-        side="right"
-        align="start"
-        sideOffset={8}
-        className="flex w-[320px] max-w-[calc(100vw-32px)] flex-col items-start gap-0 whitespace-normal rounded-lg border border-[var(--line-2)] bg-[var(--background-fronted)] px-4 py-3 text-[13px] leading-[1.3] text-[var(--text-primary)] shadow-lg"
-        data-agent-model-option-tooltip="true"
-      >
-        <span className="block text-[15px] font-semibold leading-[1.2]">
-          {option.tooltip.title}
-        </span>
-        {option.tooltip.description ? (
-          <span className="mt-1.5 block text-[13px] leading-[1.35] text-[var(--text-tertiary)]">
-            {option.tooltip.description}
-          </span>
-        ) : null}
-        {option.tooltip.contextWindow ? (
-          <span className="mt-4 block">{option.tooltip.contextWindow}</span>
-        ) : null}
-        {option.tooltip.version ? (
-          <span className="mt-4 block italic">{option.tooltip.version}</span>
-        ) : null}
-      </TooltipContent>
-    </Tooltip>
   );
 }

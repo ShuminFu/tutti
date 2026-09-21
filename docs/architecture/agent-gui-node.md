@@ -72,6 +72,11 @@ mutable settings.
 
 Use the closed-surface test when assigning ownership: if state must survive or continue progressing after every Agent GUI surface closes, it belongs to Host/store or the workspace engine. State that should disappear with the surface belongs to UI.
 
+Composer model selectors and model rows do not expose hover hints, even when
+the displayed name is truncated. Loading copy is rendered inside the trigger.
+Explicit action/help controls retain their descriptions; this presentation rule
+does not change selection, favorites, reasoning, or Session settings ownership.
+
 Composer model favorites and recent choices are per-Agent-Target preferences,
 not Session settings. Both model menus consume the same model-history store.
 The optional `composer-model-history` host port owns durable persistence in
