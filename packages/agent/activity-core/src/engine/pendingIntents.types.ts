@@ -34,6 +34,7 @@ interface PendingActivationIntentRecordBase {
   agentSessionId: string;
   capabilityRefs?: readonly AgentActivityCapabilityReference[];
   content: readonly AgentPromptContentBlock[];
+  runtimeContent?: readonly AgentPromptContentBlock[];
   displayPrompt?: string;
   cwd: string;
   errorCode: string | null;

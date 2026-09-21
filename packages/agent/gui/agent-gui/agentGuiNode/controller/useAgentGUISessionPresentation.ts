@@ -470,13 +470,23 @@ export function useAgentGUISessionPresentation(
           )));
     const isResumeNotLocalRecovery =
       providerSessionMissing || activeConversationResumeUnavailable;
+    const failedNewHostActivation =
+      input.activeLiveState === "failed" &&
+      input.activePendingActivation?.mode === "new" &&
+      input.activePendingActivation.status === "failed" &&
+      input.agentActivityRuntime.resolveNewSessionId?.(
+        input.activePendingActivation.clientSubmitId
+      ) === input.activeConversationId;
     const recoveryMessage = isResumeNotLocalRecovery
       ? translate(
           input.activeConversation?.isImported === true
             ? "messages.agentImportedSessionResumeUnavailable"
             : "messages.agentResumeSessionNotLocal"
         )
-      : normalizedError;
+      : normalizedError ||
+        (failedNewHostActivation
+          ? translate("agentHost.agentGui.sessionActivationFailed")
+          : "");
     return {
       auth: providerSessionMissing
         ? null
@@ -503,7 +513,7 @@ export function useAgentGUISessionPresentation(
               : {
                   kind: "failed",
                   message: recoveryMessage,
-                  canRetry: false
+                  canRetry: failedNewHostActivation
                 }
             : null,
       rawState: sessionChromeRawState
@@ -517,7 +527,8 @@ export function useAgentGUISessionPresentation(
     input.activeEngineActiveTurn,
     input.activeLiveState,
     input.activeSessionState,
-    input.activePendingActivation?.mode,
+    input.activePendingActivation,
+    input.agentActivityRuntime,
     input.ownerDeviceLabel,
     input.selectedAgentTargetOwnerLabel,
     input.selectedAgentTargetUnavailable,
@@ -531,6 +542,8 @@ export function useAgentGUISessionPresentation(
     sessionChromeRawState
   ]);
   const hasNonRetryableRecoveryFailure =
+    (input.activeLiveState === "failed" &&
+      input.activePendingActivation?.mode === "new") ||
     (sessionChrome.recovery?.kind === "failed" &&
       sessionChrome.recovery.canRetry === false) ||
     sessionChrome.recovery?.kind === "resume-unavailable";

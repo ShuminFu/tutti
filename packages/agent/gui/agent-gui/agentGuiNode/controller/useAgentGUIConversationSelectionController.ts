@@ -221,7 +221,18 @@ export function useAgentGUIConversationSelectionController(
       previousAttentionActiveConversationIdRef.current = null;
     };
 
+    const failedHostActivation = selectLatestActivationForSession(
+      sessionEngine.getSnapshot(),
+      activeConversationIdRef.current
+    );
+    const retainFailedHostSelection =
+      failedHostActivation?.mode === "new" &&
+      failedHostActivation.status === "failed" &&
+      agentActivityRuntime.resolveNewSessionId?.(
+        failedHostActivation.clientSubmitId
+      ) === activeConversationIdRef.current;
     if (
+      !retainFailedHostSelection &&
       activeConversationIdRef.current ===
         activePendingActivation?.agentSessionId &&
       selectFailedNewActivationResolution(
@@ -239,6 +250,7 @@ export function useAgentGUIConversationSelectionController(
       return;
     }
     if (
+      !retainFailedHostSelection &&
       shouldClearMissingAgentGUISelection({
         activeConversationId,
         currentActiveConversationId: activeConversationIdRef.current,
@@ -322,6 +334,20 @@ export function useAgentGUIConversationSelectionController(
     if (externalId === (activeConversationIdRef.current ?? "")) return;
     if (!externalId) {
       const previous = activeConversationIdRef.current;
+      const failedHostActivation = selectLatestActivationForSession(
+        sessionEngine.getSnapshot(),
+        previous
+      );
+      if (
+        intent.tag === "active" &&
+        failedHostActivation?.mode === "new" &&
+        failedHostActivation.status === "failed" &&
+        agentActivityRuntime.resolveNewSessionId?.(
+          failedHostActivation.clientSubmitId
+        ) === previous
+      ) {
+        return;
+      }
       if (!previous && isComposerHomeRef.current && intent.tag === "home") {
         return;
       }

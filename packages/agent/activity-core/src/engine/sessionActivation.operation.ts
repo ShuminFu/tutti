@@ -1,4 +1,7 @@
-import { selectPendingActivationByRequestId } from "./pendingIntents.selectors.ts";
+import {
+  selectLatestActivationForSession,
+  selectPendingActivationByRequestId
+} from "./pendingIntents.selectors.ts";
 import type {
   AgentSessionActivationInput,
   AgentSessionEngineStateBase,
@@ -35,7 +38,20 @@ export function requestSessionActivation(
   ) {
     return false;
   }
-  const requestedAtUnixMs = context.clock.nowUnixMs();
+  const nowUnixMs = context.clock.nowUnixMs();
+  const previous = selectLatestActivationForSession(
+    context.getSnapshot(),
+    agentSessionId
+  );
+  // An idempotent replay may find the session created before this retry.
+  // Keep the first request's identity window, but give the retry a fresh deadline.
+  const requestedAtUnixMs =
+    input.mode === "new" &&
+    previous?.mode === "new" &&
+    previous.status === "failed" &&
+    previous.clientSubmitId === clientSubmitId
+      ? previous.requestedAtUnixMs
+      : nowUnixMs;
   const sharedIntent = {
     agentSessionId,
     ...(input.capabilityRefs?.length
@@ -50,7 +66,7 @@ export function requestSessionActivation(
       : {}),
     ...(input.cwd !== undefined ? { cwd: input.cwd.trim() } : {}),
     expiresAtUnixMs:
-      requestedAtUnixMs +
+      nowUnixMs +
       (input.mode === "new"
         ? NEW_SESSION_ACTIVATION_CONFIRMATION_TIMEOUT_MS
         : SESSION_ACTIVATION_CONFIRMATION_TIMEOUT_MS),

@@ -8,7 +8,7 @@ import type {
   EngineScheduler
 } from "./types.ts";
 
-function createHarness() {
+function createHarness(clockNow: () => number = () => 100) {
   const commands: EngineExternalCommand[] = [];
   const observedIntents: EngineIntent[] = [];
   const scheduled: Array<{ canceled: boolean; delayMs: number }> = [];
@@ -28,7 +28,7 @@ function createHarness() {
     }
   };
   const engine = createAgentSessionEngine({
-    clock: { nowUnixMs: () => 100 },
+    clock: { nowUnixMs: clockNow },
     commandPort,
     identity: { origin: "test", workspaceId: "workspace-1" },
     intentObserver: (intent) => {
@@ -157,6 +157,56 @@ test("semantic new-Session activation owns scope, confirmation window, and comma
   );
 });
 
+test("new-session idempotent retry keeps the first confirmation timestamp and a fresh deadline", () => {
+  let now = 100;
+  const harness = createHarness(() => now);
+  const first = {
+    mode: "new" as const,
+    agentSessionId: "session-new",
+    agentTargetId: "local:codex",
+    clientSubmitId: "submit-1",
+    initialContent: [{ type: "text" as const, text: "hello" }],
+    requestId: "activation-1"
+  };
+  assert.equal(harness.engine.activateSession(first), true);
+  harness.engine.dispatch({
+    type: "engine/intentExpired",
+    expiryId: "activation:activation-1",
+    dueAtUnixMs: 210_100
+  });
+  now = 300_000;
+  assert.equal(
+    harness.engine.activateSession({ ...first, requestId: "activation-retry" }),
+    true
+  );
+  const records =
+    harness.engine.getSnapshot().pendingIntents.activationsByRequestId;
+  assert.deepEqual(Object.keys(records), ["activation-retry"]);
+  assert.equal(records["activation-retry"]?.requestedAtUnixMs, 100);
+  assert.equal(records["activation-retry"]?.expiresAtUnixMs, 510_000);
+  assert.equal(records["activation-retry"]?.clientSubmitId, "submit-1");
+  harness.engine.dispatch({
+    type: "session/upserted",
+    session: {
+      activeTurnId: null,
+      agentSessionId: "session-new",
+      cwd: "/workspace",
+      createdAtUnixMs: 200,
+      provider: "codex",
+      latestTurnInteractions: [],
+      pendingInteractions: [],
+      title: "Session",
+      workspaceId: "workspace-1"
+    }
+  });
+  assert.equal(
+    harness.engine.getSnapshot().pendingIntents.activationsByRequestId[
+      "activation-retry"
+    ]?.status,
+    "confirmed"
+  );
+});
+
 test("semantic existing-Session activation uses the shared confirmation window", () => {
   const harness = createHarness();
 
@@ -218,6 +268,7 @@ test("semantic activation does not admit changed input under a reused request id
       agentTargetId: "target-1",
       clientSubmitId: "submit-1",
       content: [{ text: "first prompt", type: "text" }],
+      runtimeContent: [{ text: "first prompt", type: "text" }],
       cwd: "",
       errorCode: null,
       errorMessage: null,

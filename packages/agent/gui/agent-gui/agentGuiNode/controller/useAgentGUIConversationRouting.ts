@@ -1,5 +1,6 @@
 import {
   selectFailedNewActivationResolution,
+  selectLatestActivationForSession,
   selectEngineSessionReconcile,
   selectWorkspaceAgentConsumerSession,
   type AgentSessionEngine
@@ -27,6 +28,7 @@ interface UseAgentGUIConversationRoutingInput {
   intent: ConversationIntent;
   openSessionRequest: AgentGUIOpenSessionRequest | null | undefined;
   pendingOpenSessionRequestRef: RefObject<AgentGUIOpenSessionRequest | null>;
+  resolveNewSessionId?: (clientSubmitId: string) => string | null;
   selectConversation(
     agentSessionId: string,
     options?: AgentGUIConversationSelectionOptions
@@ -50,6 +52,7 @@ export function useAgentGUIConversationRouting(
     intent,
     openSessionRequest,
     pendingOpenSessionRequestRef,
+    resolveNewSessionId,
     selectConversation,
     sessionEngine,
     setIntent,
@@ -134,7 +137,18 @@ export function useAgentGUIConversationRouting(
     }
 
     if (intent.tag !== "home") {
+      const failedHostActivation = selectLatestActivationForSession(
+        sessionEngine.getSnapshot(),
+        intent.id
+      );
       if (
+        !(
+          failedHostActivation?.mode === "new" &&
+          failedHostActivation.status === "failed" &&
+          activeConversationIdRef.current === intent.id &&
+          resolveNewSessionId?.(failedHostActivation.clientSubmitId) ===
+            intent.id
+        ) &&
         selectFailedNewActivationResolution(
           sessionEngine.getSnapshot(),
           intent.id,
@@ -180,6 +194,7 @@ export function useAgentGUIConversationRouting(
     hasLoadedConversations,
     intent,
     openSessionRequest,
+    resolveNewSessionId,
     selectConversation,
     transientConversation
   ]);

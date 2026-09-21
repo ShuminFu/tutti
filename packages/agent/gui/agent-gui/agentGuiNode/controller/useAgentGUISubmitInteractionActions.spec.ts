@@ -51,6 +51,7 @@ function createGoalControlInput(
     commandPort: {
       kind: "typed",
       effects: {
+        activateSession: async () => new Promise(() => undefined),
         controlGoal: async (
           effectInput: AgentSessionGoalControlEffectInput,
           options?: EngineEffectOptions
@@ -149,6 +150,52 @@ function createGoalControlInput(
     setGoalClearNoticeSequence
   };
 }
+
+describe("embedded new-session retry", () => {
+  it("reuses the failed activation's submit and session ids", () => {
+    const { input, sessionEngine } = createGoalControlInput(
+      vi.fn(async () => ({}) as never)
+    );
+    sessionEngine.dispatch({
+      type: "activation/requested",
+      agentSessionId: "session-1",
+      agentTargetId: "local:codex",
+      clientSubmitId: "submit-1",
+      content: [{ type: "text", text: "first prompt" }],
+      cwd: "/workspace",
+      expiresAtUnixMs: 210,
+      requestedAtUnixMs: 1,
+      requestId: "first-activation",
+      settings: { model: "gpt-5" },
+      mode: "new",
+      workspaceId: "workspace-1"
+    });
+    sessionEngine.dispatch({
+      type: "engine/intentExpired",
+      dueAtUnixMs: 210,
+      expiryId: "activation:first-activation"
+    });
+    input.agentActivityRuntime = {
+      resolveNewSessionId: () => "session-1"
+    } as never;
+    input.activation.clearFailure = vi.fn();
+    const { result } = renderHook(() =>
+      useAgentGUISubmitInteractionActions(input)
+    );
+
+    act(() => result.current.retryActivation());
+
+    expect(input.activation.activate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "new",
+        agentSessionId: "session-1",
+        clientSubmitId: "submit-1",
+        initialContent: [{ type: "text", text: "first prompt" }],
+        settings: { model: "gpt-5" }
+      })
+    );
+  });
+});
 
 describe("new-conversation home draft lifecycle", () => {
   it("clears only the draft that still matches the submitted content", () => {

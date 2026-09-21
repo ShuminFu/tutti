@@ -254,148 +254,164 @@ describe("clearRolledBackAgentGUISelection", () => {
     ).toBe(false);
   });
 
-  it("does not reinterpret the failed selection persistence echo as a new request", async () => {
-    const failedAgentSessionId = "session-failed";
-    const data: AgentGUINodeData = {
-      provider: "codex",
-      lastActiveAgentSessionId: failedAgentSessionId
-    };
-    const onDataChange = vi.fn();
-    const routeSelections = vi.fn();
-    const transientConversation = {
-      id: failedAgentSessionId
-    } as AgentGUIConversationSummary;
-    const failedActivationSnapshot = {
-      pendingIntents: {
-        activationsByRequestId: {
-          "activation-1": {
-            agentSessionId: failedAgentSessionId,
-            agentTargetId: "target-1",
-            clientSubmitId: "submit-1",
-            content: [],
-            cwd: "/workspace",
-            errorCode: null,
-            errorMessage: "create failed",
-            expiresAtUnixMs: 45_001,
-            initialPromptRetracted: false,
-            initialTurnExpected: false,
-            mode: "new",
-            requestId: "activation-1",
-            requestedAtUnixMs: 1,
-            status: "failed",
-            title: null,
-            workspaceId: "workspace-1"
-          }
-        }
-      },
-      sessionLifecycle: { sessionsById: {} }
-    };
-
-    const { result } = renderHook(() => {
-      const [activeConversationId, setActiveConversationId] = useState<
-        string | null
-      >(failedAgentSessionId);
-      const [intent, setIntent] = useState<ConversationIntent>({
-        tag: "active",
+  it.each([false, true])(
+    "failed selection remains retryable only for embedded host: %s",
+    async (embedded) => {
+      const failedAgentSessionId = "session-failed";
+      const data: AgentGUINodeData = {
+        provider: "codex",
+        lastActiveAgentSessionId: failedAgentSessionId
+      };
+      const onDataChange = vi.fn();
+      const routeSelections = vi.fn();
+      const transientConversation = {
         id: failedAgentSessionId
-      });
-      const [isComposerHome, setIsComposerHome] = useState(false);
-      const activeConversationIdRef = useRef<string | null>(
-        failedAgentSessionId
-      );
-      const isComposerHomeRef = useRef(false);
-      const dataRef = useRef(data);
+      } as AgentGUIConversationSummary;
+      const failedActivationSnapshot = {
+        pendingIntents: {
+          activationsByRequestId: {
+            "activation-1": {
+              agentSessionId: failedAgentSessionId,
+              agentTargetId: "target-1",
+              clientSubmitId: "submit-1",
+              content: [],
+              cwd: "/workspace",
+              errorCode: null,
+              errorMessage: "create failed",
+              expiresAtUnixMs: 45_001,
+              initialPromptRetracted: false,
+              initialTurnExpected: false,
+              mode: "new",
+              requestId: "activation-1",
+              requestedAtUnixMs: 1,
+              status: "failed",
+              title: null,
+              workspaceId: "workspace-1"
+            }
+          }
+        },
+        sessionLifecycle: { sessionsById: {} }
+      };
 
-      useAgentGUIConversationSelectionController({
-        activation: {
-          clearFailure: vi.fn(),
-          unactivate: vi.fn(() => Promise.resolve())
-        } as unknown as ReturnType<typeof useAgentGUIActivation>,
-        activeConversationId,
-        activeConversationIdRef,
-        activePendingActivation:
-          activeConversationId === failedAgentSessionId
+      const { result } = renderHook(() => {
+        const [activeConversationId, setActiveConversationId] = useState<
+          string | null
+        >(failedAgentSessionId);
+        const [intent, setIntent] = useState<ConversationIntent>({
+          tag: "active",
+          id: failedAgentSessionId
+        });
+        const [isComposerHome, setIsComposerHome] = useState(false);
+        const activeConversationIdRef = useRef<string | null>(
+          failedAgentSessionId
+        );
+        const isComposerHomeRef = useRef(false);
+        const dataRef = useRef(data);
+
+        useAgentGUIConversationSelectionController({
+          activation: {
+            clearFailure: vi.fn(),
+            unactivate: vi.fn(() => Promise.resolve())
+          } as unknown as ReturnType<typeof useAgentGUIActivation>,
+          activeConversationId,
+          activeConversationIdRef,
+          activePendingActivation:
+            activeConversationId === failedAgentSessionId
+              ? {
+                  agentSessionId: failedAgentSessionId,
+                  agentTargetId: "target-1",
+                  errorMessage: "create failed",
+                  mode: "new",
+                  requestId: "activation-1",
+                  status: "failed"
+                }
+              : null,
+          activeSessionReconcileErrorCode: null,
+          agentActivityRuntime: (embedded
+            ? { resolveNewSessionId: () => failedAgentSessionId }
+            : {}) as AgentGUIRuntime,
+          attentionReadRecordsBySessionId: {},
+          conversationIdsRef: { current: new Set() },
+          conversationsRef: { current: [transientConversation] },
+          conversationListQuery: {},
+          currentUserId: null,
+          data,
+          dataRef,
+          intent,
+          isComposerHomeRef,
+          isMountedRef: { current: true },
+          loadDraftComposerOptions: vi.fn(),
+          loadSelectedConversationMessages: vi.fn(async () => undefined),
+          loadSessionState: vi.fn(),
+          markSelectedConversationDetailPending: vi.fn(() => null),
+          onDataChangeRef: { current: onDataChange },
+          sessionEngine: {
+            dispatch: vi.fn(),
+            getSnapshot: vi.fn(() => failedActivationSnapshot)
+          } as unknown as AgentSessionEngine,
+          setActiveConversationId,
+          setDetailError: vi.fn(),
+          setIntent,
+          setIsComposerHome: (next) => {
+            setIsComposerHome(next);
+          },
+          setIsLoadingMessages: vi.fn(),
+          setActiveMessageSession: vi.fn(),
+          clearRailRevealRequest: vi.fn(),
+          requestRailReveal: vi.fn(),
+          transientConversation,
+          workspaceId: "workspace-1"
+        });
+        useAgentGUIConversationRouting({
+          activeConversationIdRef,
+          conversationListQuery: {},
+          conversations: [],
+          conversationsRef: { current: [] },
+          handledOpenSessionSequenceRef: { current: null },
+          hasLoadedConversations: true,
+          intent,
+          openSessionRequest: null,
+          pendingOpenSessionRequestRef: { current: null },
+          resolveNewSessionId: embedded
+            ? () => failedAgentSessionId
+            : undefined,
+          selectConversation: (agentSessionId) => {
+            routeSelections(agentSessionId);
+            activeConversationIdRef.current = agentSessionId;
+            setActiveConversationId(agentSessionId);
+            setIntent({ tag: "active", id: agentSessionId });
+          },
+          sessionEngine: {
+            dispatch: vi.fn(),
+            getSnapshot: vi.fn(() => failedActivationSnapshot)
+          } as unknown as AgentSessionEngine,
+          setIntent,
+          transientConversation,
+          workspaceId: "workspace-1"
+        });
+
+        return { activeConversationId, intent, isComposerHome };
+      });
+
+      await waitFor(() => {
+        expect(result.current).toEqual(
+          embedded
             ? {
-                agentSessionId: failedAgentSessionId,
-                agentTargetId: "target-1",
-                errorMessage: "create failed",
-                mode: "new",
-                requestId: "activation-1",
-                status: "failed"
+                activeConversationId: failedAgentSessionId,
+                intent: { tag: "active", id: failedAgentSessionId },
+                isComposerHome: false
               }
-            : null,
-        activeSessionReconcileErrorCode: null,
-        agentActivityRuntime: {} as AgentGUIRuntime,
-        attentionReadRecordsBySessionId: {},
-        conversationIdsRef: { current: new Set() },
-        conversationsRef: { current: [transientConversation] },
-        conversationListQuery: {},
-        currentUserId: null,
-        data,
-        dataRef,
-        intent,
-        isComposerHomeRef,
-        isMountedRef: { current: true },
-        loadDraftComposerOptions: vi.fn(),
-        loadSelectedConversationMessages: vi.fn(async () => undefined),
-        loadSessionState: vi.fn(),
-        markSelectedConversationDetailPending: vi.fn(() => null),
-        onDataChangeRef: { current: onDataChange },
-        sessionEngine: {
-          dispatch: vi.fn(),
-          getSnapshot: vi.fn(() => failedActivationSnapshot)
-        } as unknown as AgentSessionEngine,
-        setActiveConversationId,
-        setDetailError: vi.fn(),
-        setIntent,
-        setIsComposerHome: (next) => {
-          setIsComposerHome(next);
-        },
-        setIsLoadingMessages: vi.fn(),
-        setActiveMessageSession: vi.fn(),
-        clearRailRevealRequest: vi.fn(),
-        requestRailReveal: vi.fn(),
-        transientConversation,
-        workspaceId: "workspace-1"
+            : {
+                activeConversationId: null,
+                intent: { tag: "home" },
+                isComposerHome: true
+              }
+        );
       });
-      useAgentGUIConversationRouting({
-        activeConversationIdRef,
-        conversationListQuery: {},
-        conversations: [],
-        conversationsRef: { current: [] },
-        handledOpenSessionSequenceRef: { current: null },
-        hasLoadedConversations: true,
-        intent,
-        openSessionRequest: null,
-        pendingOpenSessionRequestRef: { current: null },
-        selectConversation: (agentSessionId) => {
-          routeSelections(agentSessionId);
-          activeConversationIdRef.current = agentSessionId;
-          setActiveConversationId(agentSessionId);
-          setIntent({ tag: "active", id: agentSessionId });
-        },
-        sessionEngine: {
-          dispatch: vi.fn(),
-          getSnapshot: vi.fn(() => failedActivationSnapshot)
-        } as unknown as AgentSessionEngine,
-        setIntent,
-        transientConversation,
-        workspaceId: "workspace-1"
-      });
-
-      return { activeConversationId, intent, isComposerHome };
-    });
-
-    await waitFor(() => {
-      expect(result.current).toEqual({
-        activeConversationId: null,
-        intent: { tag: "home" },
-        isComposerHome: true
-      });
-    });
-    expect(onDataChange).toHaveBeenCalledOnce();
-    expect(routeSelections).not.toHaveBeenCalled();
-  });
+      expect(onDataChange).toHaveBeenCalledTimes(embedded ? 0 : 1);
+      expect(routeSelections).not.toHaveBeenCalled();
+    }
+  );
 });
 
 describe("conversation reload ownership", () => {

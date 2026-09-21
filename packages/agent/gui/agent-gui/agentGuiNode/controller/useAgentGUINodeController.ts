@@ -581,6 +581,7 @@ export function useAgentGUINodeController({
     intent,
     openSessionRequest,
     pendingOpenSessionRequestRef,
+    resolveNewSessionId: agentActivityRuntime.resolveNewSessionId,
     selectConversation,
     sessionEngine,
     setIntent,

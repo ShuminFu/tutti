@@ -534,6 +534,29 @@ describe("useAgentGUISessionPresentation", () => {
       message: "Provider rejected the initial request",
       canRetry: false
     });
+
+    input.agentActivityRuntime = {
+      resolveNewSessionId: () => "session-rejected"
+    } as never;
+    rendered.rerender();
+    expect(rendered.result.current.sessionChrome.recovery).toEqual({
+      kind: "failed",
+      message: "Provider rejected the initial request",
+      canRetry: true
+    });
+
+    input.activationError = null;
+    input.activePendingActivation = {
+      ...input.activePendingActivation!,
+      errorMessage: null,
+      errorCode: "activation_confirmation_expired"
+    };
+    rendered.rerender();
+    expect(rendered.result.current.sessionChrome.recovery).toEqual({
+      kind: "failed",
+      message: expect.any(String),
+      canRetry: true
+    });
   });
 
   it("makes a shared Agent composer editable in the same snapshot that its target connects", () => {

@@ -260,7 +260,11 @@ function requestActivation(
   const supersededRequestIds = Object.values(state.activationsByRequestId)
     .filter(
       (record) =>
-        record.agentSessionId === agentSessionId && record.status !== "failed"
+        record.agentSessionId === agentSessionId &&
+        (record.status !== "failed" ||
+          (intent.mode === "new" &&
+            record.mode === "new" &&
+            record.clientSubmitId === clientSubmitId))
     )
     .map((record) => record.requestId);
   const baseState = supersededRequestIds.reduce(deleteActivation, state);
@@ -268,6 +272,7 @@ function requestActivation(
     agentSessionId,
     ...(capabilityRefs.length > 0 ? { capabilityRefs } : {}),
     content,
+    ...(intent.mode === "new" ? { runtimeContent } : {}),
     cwd: intent.cwd?.trim() ?? "",
     ...(displayPrompt ? { displayPrompt } : {}),
     errorCode: null,

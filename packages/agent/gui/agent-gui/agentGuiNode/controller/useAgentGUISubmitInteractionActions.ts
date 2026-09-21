@@ -1,5 +1,6 @@
 import {
   parseAgentActivityGoalControlText,
+  selectLatestActivationForSession,
   type AgentActivityGoalControlAction,
   type AgentActivityInteraction,
   type AgentActivityTurn,
@@ -227,12 +228,66 @@ export function useAgentGUISubmitInteractionActions(
       return;
     }
     setDetailError(null);
+    const failed = selectLatestActivationForSession(
+      sessionEngine.getSnapshot(),
+      agentSessionId
+    );
+    if (
+      failed?.mode === "new" &&
+      failed.status === "failed" &&
+      agentActivityRuntime.resolveNewSessionId?.(failed.clientSubmitId) ===
+        agentSessionId
+    ) {
+      // Reuse the original task key and first-turn intent. A lost response must
+      // reconcile with the queued task, never enqueue a second session.
+      activation.activate({
+        mode: "new",
+        agentSessionId,
+        agentTargetId: failed.agentTargetId,
+        clientSubmitId: failed.clientSubmitId,
+        cwd: failed.cwd,
+        initialContent: failed.content,
+        runtimeContent:
+          failed.runtimeContent ?? toRuntimeSendContent(failed.content),
+        initialDisplayPrompt: failed.displayPrompt,
+        initialTurnExpected: failed.initialTurnExpected,
+        ...(failed.initialGoalControl
+          ? { initialGoalControl: failed.initialGoalControl }
+          : {}),
+        ...(failed.capabilityRefs
+          ? { capabilityRefs: failed.capabilityRefs }
+          : {}),
+        ...(failed.isolation ? { isolation: failed.isolation } : {}),
+        ...(failed.railPlacement
+          ? { railPlacement: failed.railPlacement }
+          : {}),
+        ...(failed.railSectionKey
+          ? { railSectionKey: failed.railSectionKey }
+          : {}),
+        ...(failed.settings ? { settings: failed.settings } : {}),
+        ...(failed.submitDiagnostics
+          ? { submitDiagnostics: failed.submitDiagnostics }
+          : {}),
+        ...(failed.initialTuttiModeActivation
+          ? { initialTuttiModeActivation: failed.initialTuttiModeActivation }
+          : {}),
+        ...(failed.tuttiModeDraftKey
+          ? { tuttiModeDraftKey: failed.tuttiModeDraftKey }
+          : {}),
+        ...(failed.optimisticTitle
+          ? { optimisticTitle: failed.optimisticTitle }
+          : {}),
+        ...(failed.title ? { title: failed.title } : {})
+      });
+      return;
+    }
     activation.activate({ mode: "existing", agentSessionId });
   }, [
     agentActivityRuntime,
     activation,
     isCurrentConversation,
     isSessionMarkedNonResumable,
+    sessionEngine,
     workspaceId
   ]);
 
