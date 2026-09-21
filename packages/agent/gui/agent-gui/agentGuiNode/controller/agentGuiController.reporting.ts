@@ -572,6 +572,7 @@ export function scheduleAgentSubmitTracePaint(input: {
 
 export function createAgentSubmitTraceState(input: {
   agentSessionId: string;
+  clientSubmitId?: string;
   content: readonly AgentPromptContentBlock[];
   prompt: string;
   queued: boolean;
@@ -580,7 +581,7 @@ export function createAgentSubmitTraceState(input: {
   return {
     agentSessionId: input.agentSessionId,
     blockCount: input.content.length,
-    clientSubmitId: createAgentSubmitTraceId(),
+    clientSubmitId: input.clientSubmitId ?? createAgentSubmitTraceId(),
     hasImage: agentPromptContentHasImage(input.content),
     promptLength: input.prompt.length,
     queued: input.queued,

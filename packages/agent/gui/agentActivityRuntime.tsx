@@ -363,6 +363,8 @@ export interface AgentGUIRuntime {
    * always false-positive. Absent/false (default) => local, legacy behaviour.
    * Only that one guard is gated; project selection/listing is unaffected.
    */
+  /** Maps a new-session submit identity to a host-owned session id when creation is asynchronous. */
+  resolveNewSessionId?(clientSubmitId: string): string | null;
   projectPathIsRemote?: boolean;
   promptContentUploadSupport?: {
     file?: boolean;

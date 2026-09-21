@@ -13,6 +13,7 @@ import { AgentSettingsProjectChangedReporter } from "../../analytics/reporters/a
 import { createOptionalReporterService } from "./internal/agentMessageSentAnalytics.ts";
 import { resolveDesktopAgentGUIProvider } from "./internal/desktopAgentHostProjection.ts";
 import { isEmbeddedHostCreatedSession } from "./internal/embeddedHostCreatedSessionRegistry.ts";
+import { resolveEmbeddedHostCreatedSessionId } from "./internal/embeddedHostCreateAgentSession.ts";
 import { reportAgentSessionSettingsChanges } from "./internal/agentSessionSettingsAnalytics.ts";
 import type { IWorkspaceAgentActivityService } from "./workspaceAgentActivityService.interface";
 import {
@@ -131,6 +132,7 @@ export function createDesktopAgentActivityRuntime(
     conversationActivityViewEnabled: true,
     isLocallyCreatedSession: isEmbeddedHostCreatedSession,
     origin: AGENT_SESSION_ENGINE_LOCAL_ORIGIN,
+    resolveNewSessionId: resolveEmbeddedHostCreatedSessionId,
     promptContentUploadSupport: {
       file: Boolean(archiveAgentPromptFile),
       image: Boolean(archiveAgentPromptFile)

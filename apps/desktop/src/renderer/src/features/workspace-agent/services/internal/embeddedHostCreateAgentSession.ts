@@ -8,12 +8,21 @@ import {
   type HostCreateAgentSessionResult
 } from "../../../../platform/desktop/web/webHostBridgeClient.ts";
 import { isEmbeddedDintalDock } from "../../../workspace-workbench/ui/embeddedDintalDock.ts";
+import { embeddedHostCreatedSessionId } from "./embeddedHostCreatedSessionId.ts";
 
 // 回退看红保留这个符号：adapter 用 `if (shouldAskHostCreateAgentSession())`
 // 包住前置钩子；改成 `if (false && shouldAskHostCreateAgentSession())` 后
 // 「宿主成功不调用原 create」必须转红。
 export function shouldAskHostCreateAgentSession(): boolean {
   return isEmbeddedDintalDock();
+}
+
+export function resolveEmbeddedHostCreatedSessionId(
+  clientSubmitId: string
+): string | null {
+  return isEmbeddedDintalDock() && clientSubmitId.trim()
+    ? embeddedHostCreatedSessionId(clientSubmitId)
+    : null;
 }
 
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
@@ -30,6 +39,9 @@ export function hostCreateAgentSessionArgsFromCreateInput(
     resolveAgentGUIProviderCatalogIdentity(input.agentTargetId)?.providerId ??
     providerFromAgentTargetId(input.agentTargetId);
   const args: HostCreateAgentSessionArgs = {
+    ...(input.clientSubmitId?.trim()
+      ? { clientSubmitId: input.clientSubmitId.trim() }
+      : {}),
     provider,
     cwd: input.cwd?.trim() ?? "",
     prompt: promptFromCreateInput(input)

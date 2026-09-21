@@ -266,19 +266,40 @@ export function createDesktopAgentActivityAdapter({
       try {
         // 钩子放在这里：调用链上已经有 provider/cwd/prompt（及可选 model /
         // thinkingLevel），且还没 POST tuttid。仅嵌入态先问宿主
-        // createAgentSession；成功则走 0076 打开返回的 agentSessionId，
+        // createAgentSession；宿主返回同一 agentSessionId 后只回填数据，
         // 不再 create、也不把首句 prompt 再发一遍（后端已当 initialContent）。
         if (shouldAskHostCreateAgentSession()) {
           const hosted = await requestEmbeddedHostCreateAgentSession(input);
           if (hosted) {
-            // 宿主铸了自己的 id，本次激活的 pending 记录（input.agentSessionId）
-            // 作废。先登记再打开：打开会立刻把它设为当前会话，而「当前会话」正是
-            // 会话栏用来判定「这是选中后拉详情、不是新成员」的那条依据。
-            noteEmbeddedHostCreatedSession(hosted.agentSessionId);
-            openEmbeddedHostCreatedAgentSession(hosted.agentSessionId);
+            const hostedSessionId = hosted.agentSessionId.trim();
+            const requestedSessionId = input.agentSessionId?.trim() ?? "";
+            const preservesOptimisticIdentity =
+              Boolean(input.clientSubmitId?.trim()) &&
+              requestedSessionId.length > 0;
+            if (
+              preservesOptimisticIdentity &&
+              hostedSessionId !== requestedSessionId
+            ) {
+              throw Object.assign(
+                new Error(
+                  "Embedded host returned a different agent session identity."
+                ),
+                { code: "host_create_session_identity_mismatch" }
+              );
+            }
+            // 新路径的 AgentGUI 已经在发送瞬间选中了这个会话。宿主完成创建只回填
+            // 同一身份，不能再次导航；否则延迟完成会抢回用户当前焦点。
+            // 没有提交关联信息的旧调用方保留原来的打开行为。
+            noteEmbeddedHostCreatedSession(hostedSessionId);
+            if (!preservesOptimisticIdentity) {
+              openEmbeddedHostCreatedAgentSession(hostedSessionId);
+            }
+            const sessionId = preservesOptimisticIdentity
+              ? requestedSessionId
+              : hostedSessionId;
             const detail = await tuttidClient.getWorkspaceAgentSession(
               input.workspaceId,
-              hosted.agentSessionId,
+              sessionId,
               undefined,
               agentCommandRequestOptions(options, input.signal)
             );

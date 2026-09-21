@@ -735,6 +735,8 @@ export interface HostAgentRailPlacement {
 }
 
 export interface HostCreateAgentSessionArgs {
+  /** Stable idempotency key shared with AgentGUI's optimistic session identity. */
+  clientSubmitId?: string;
   provider: string;
   cwd: string;
   /** 首轮文本；纯图片首轮可以为空串（内容由 initialContent 承担）。 */

@@ -39,6 +39,7 @@ import {
 } from "./agentGuiController.promptHelpers";
 import {
   agentSubmitTraceDiagnostics,
+  createAgentSubmitTraceId,
   createAgentSubmitTraceState,
   reportAgentSubmitTraceDiagnostic
 } from "./agentGuiController.reporting";
@@ -301,13 +302,17 @@ export function useAgentGUINewConversationActivation(
         requiredSettingsPatch: submitOptions?.requiredSettingsPatch,
         codexSaverModeEntryEnabled
       });
+      const clientSubmitId = createAgentSubmitTraceId();
       const prewarmedSessionId =
         normalizedInitialContent.length > 0 &&
         snapshotComposerOptions?.behavior?.prewarmDraftSession === true
           ? draftAgentSessionIdFromComposerOptions(snapshotComposerOptions)
           : null;
+      const hostOwnedSessionId =
+        agentActivityRuntime.resolveNewSessionId?.(clientSubmitId) ?? null;
       const agentSessionId =
-        prewarmedSessionId &&
+        hostOwnedSessionId ??
+        (prewarmedSessionId &&
         activation.stateFor(prewarmedSessionId) === "inactive" &&
         isPendingActivationViable(
           selectLatestActivationForSession(
@@ -316,9 +321,10 @@ export function useAgentGUINewConversationActivation(
           )
         )
           ? prewarmedSessionId
-          : createAgentGUIConversationId();
+          : createAgentGUIConversationId());
       const submitTrace = createAgentSubmitTraceState({
         agentSessionId,
+        clientSubmitId,
         content: normalizedInitialContent,
         prompt: normalizedInitialPrompt,
         queued: false,
