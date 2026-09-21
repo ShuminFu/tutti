@@ -30,6 +30,7 @@ import {
 import { AgentGUIConfigMenu } from "./view/AgentGUIAccountConfig";
 import { AgentGUIProviderRail } from "./view/AgentGUIProviderRail";
 import { type AgentGUIConversationRailState } from "./view/AgentGUIConversationRailPane";
+import { AgentGUIConversationArchive } from "./view/AgentGUIConversationArchive";
 import { AgentGUIConversationRailController } from "./controller/AgentGUIConversationRailController";
 import { AgentGUIConversationRailToggleButton } from "./view/AgentGUIConversationRailToggleButton";
 import {
@@ -423,6 +424,7 @@ export function AgentGUINodeView({
       provider: effectiveRailConfigProvider ?? undefined
     });
   }, [effectiveRailConfigProvider]);
+  const [isArchiveViewOpen, setIsArchiveViewOpen] = useState(false);
   const [renameConversationTarget, setRenameConversationTarget] = useState<
     AgentGUINodeViewModel["rail"]["conversations"][number] | null
   >(null);
@@ -649,12 +651,34 @@ export function AgentGUINodeView({
                   onAgentConfigMenuClose={onAgentConfigMenuClose}
                   onAgentConfigMenuOpen={onAgentConfigMenuOpen}
                   onAgentUsageRefresh={onAgentUsageRefresh}
+                  onOpenArchiveView={() => setIsArchiveViewOpen(true)}
                   onOpenAgentEnvSetup={openAgentEnvSetup}
                   onOpenAgentSettings={openAgentSettings}
                 />
               </div>
             ) : null}
           </aside>
+          <AgentGUIConversationArchive
+            {...{
+              workspaceId: viewModel.shell.workspaceId,
+              activeConversationId: viewModel.rail.activeConversationId,
+              labels,
+              uiLanguage,
+              pendingDeleteConversationId:
+                viewModel.operations.pendingDeleteConversation?.id ?? null,
+              isDeletingConversation:
+                viewModel.operations.isDeletingConversation,
+              onSelectConversation: selectConversation,
+              onRequestDeleteConversation: requestDeleteConversation,
+              onCancelDeleteConversation: cancelDeleteConversation,
+              onConfirmDeleteConversation: confirmDeleteConversation,
+              onRequestRenameConversation: requestRenameConversation,
+              onToggleConversationPinned: toggleConversationPinned,
+              onMarkConversationUnread: actions.markConversationUnread,
+              open: isArchiveViewOpen,
+              onOpenChange: setIsArchiveViewOpen
+            }}
+          />
           <aside
             id="agent-gui-conversation-rail"
             className={`${styles.railPanel}${

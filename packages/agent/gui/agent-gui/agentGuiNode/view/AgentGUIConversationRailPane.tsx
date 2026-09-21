@@ -2,7 +2,6 @@ import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollArea } from "@tutti-os/ui-system/components";
 import { ConfirmationDialog } from "@tutti-os/ui-system";
 import { useTranslation } from "../../../i18n";
-import { AgentGUIConversationArchive } from "./AgentGUIConversationArchive";
 import { useOptionalAgentHostApi } from "../../../agentActivityHost";
 import type { AgentGUINodeViewModel } from "../model/agentGuiNodeTypes";
 import { matchesAgentGUIConversationSummaryFilter } from "../model/agentGuiConversationFilter";
@@ -490,25 +489,6 @@ export const AgentGUIConversationRailPane = memo(
           aria-hidden={isCollapsed ? "true" : undefined}
         >
           <AgentGUIConversationRailToolbar
-            archiveAccessory={
-              <AgentGUIConversationArchive
-                {...{
-                  workspaceId,
-                  activeConversationId,
-                  labels,
-                  uiLanguage,
-                  pendingDeleteConversationId,
-                  isDeletingConversation,
-                  onSelectConversation,
-                  onRequestDeleteConversation,
-                  onCancelDeleteConversation,
-                  onConfirmDeleteConversation,
-                  onRequestRenameConversation,
-                  onToggleConversationPinned,
-                  onMarkConversationUnread
-                }}
-              />
-            }
             activityView={activityView}
             conversationQuery={conversationQuery}
             createConversationDisabled={createConversationDisabled}

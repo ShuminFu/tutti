@@ -1,7 +1,5 @@
-import { useMemo, useState } from "react";
-import { Archive } from "lucide-react";
+import { useMemo } from "react";
 import {
-  BareIconButton,
   Button,
   Dialog,
   DialogContent,
@@ -41,47 +39,41 @@ export type ArchiveProps = Pick<
   | "onMarkConversationUnread"
 >;
 
-export function AgentGUIConversationArchive(props: ArchiveProps) {
+export function AgentGUIConversationArchive(
+  props: ArchiveProps & {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+  }
+) {
   const runtime = useOptionalAgentGUIRuntime();
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
   if (!runtime?.setSessionArchived || !runtime.listSessionSectionPage)
     return null;
   return (
-    <>
-      <BareIconButton
-        size="md"
-        aria-label={t("agentHost.agentGui.archiveView")}
-        title={t("agentHost.agentGui.archiveView")}
-        onClick={() => setOpen(true)}
-      >
-        <Archive aria-hidden="true" />
-      </BareIconButton>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg nodrag [-webkit-app-region:no-drag]">
-          <DialogHeader>
-            <DialogTitle>{t("agentHost.agentGui.archiveView")}</DialogTitle>
-            <DialogDescription>
-              {t("agentHost.agentGui.archiveRetention")}
-            </DialogDescription>
-          </DialogHeader>
-          {open ? (
-            <ArchiveContents
-              {...props}
-              runtime={runtime}
-              onRequestDeleteConversation={(id) => {
-                setOpen(false);
-                props.onRequestDeleteConversation(id);
-              }}
-              onOpenSession={(id) => {
-                setOpen(false);
-                props.onSelectConversation(id);
-              }}
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
-    </>
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent className="max-w-lg nodrag [-webkit-app-region:no-drag]">
+        <DialogHeader>
+          <DialogTitle>{t("agentHost.agentGui.archiveView")}</DialogTitle>
+          <DialogDescription>
+            {t("agentHost.agentGui.archiveRetention")}
+          </DialogDescription>
+        </DialogHeader>
+        {props.open ? (
+          <ArchiveContents
+            {...props}
+            runtime={runtime}
+            onRequestDeleteConversation={(id) => {
+              props.onOpenChange(false);
+              props.onRequestDeleteConversation(id);
+            }}
+            onOpenSession={(id) => {
+              props.onOpenChange(false);
+              props.onSelectConversation(id);
+            }}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 

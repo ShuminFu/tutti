@@ -46,6 +46,7 @@ export function agentGUIConversationRailLabels(
     batchDeleteProjectSessionsTitle: t(
       "agentHost.agentGui.batchDeleteProjectSessionsTitle"
     ),
+    archiveView: t("agentHost.agentGui.archiveView"),
     cancel: t("common.cancel"),
     conversationUnavailable: t("agentHost.agentGui.conversationUnavailable"),
     conversationsSectionMoreActions: t(

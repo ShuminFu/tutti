@@ -15,7 +15,6 @@ export function AgentGUIConversationRailToolbar({
   createConversationDisabled,
   labels,
   leadingAccessory,
-  archiveAccessory,
   onConversationQueryChange,
   onCreateConversation
 }: {
@@ -29,14 +28,12 @@ export function AgentGUIConversationRailToolbar({
    * row is the single top row of the rail.
    */
   leadingAccessory?: React.ReactNode;
-  archiveAccessory?: React.ReactNode;
   onConversationQueryChange: (query: string) => void;
   onCreateConversation: () => void;
 }): React.JSX.Element {
   return (
     <div className={styles.railToolbar}>
       {leadingAccessory}
-      {archiveAccessory}
       <TaskSearchField
         value={conversationQuery}
         placeholder={labels.searchPlaceholder}

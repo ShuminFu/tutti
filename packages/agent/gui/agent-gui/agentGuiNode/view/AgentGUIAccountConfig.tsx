@@ -1,5 +1,5 @@
 import { isValidElement, useState, type ReactNode } from "react";
-import { Gauge, Wrench } from "lucide-react";
+import { Archive, Gauge, Wrench } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@tutti-os/ui-system";
 import { MoreHorizontalIcon } from "@tutti-os/ui-system/icons";
 import { AgentProbeUsageFreshness } from "../AgentProbeUsageFreshness";
@@ -30,6 +30,7 @@ interface AgentGUIConfigMenuProps {
   onAgentConfigMenuOpen?: () => void;
   onAgentConfigMenuClose?: () => void;
   onAgentUsageRefresh?: () => void;
+  onOpenArchiveView: () => void;
   onOpenAgentEnvSetup: () => void;
   onOpenAgentSettings: () => void;
 }
@@ -58,6 +59,7 @@ export function AgentGUIConfigMenu({
   onAgentConfigMenuOpen,
   onAgentConfigMenuClose,
   onAgentUsageRefresh,
+  onOpenArchiveView,
   onOpenAgentEnvSetup,
   onOpenAgentSettings
 }: AgentGUIConfigMenuProps): React.JSX.Element {
@@ -244,6 +246,15 @@ export function AgentGUIConfigMenu({
             </>
           ) : null}
           <div className="flex min-w-0 flex-col gap-1">
+            <button
+              type="button"
+              data-testid="agent-gui-config-archive-view"
+              className="nodrag flex h-7 w-full items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] transition-colors hover:bg-[var(--transparency-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] disabled:text-[var(--text-tertiary)] [-webkit-app-region:no-drag]"
+              onClick={() => onOpenArchiveView()}
+            >
+              <Archive aria-hidden="true" size={16} strokeWidth={1.8} />
+              <span>{labels.archiveView}</span>
+            </button>
             {providerScopedActionsVisible && environmentSetupVisible ? (
               <button
                 type="button"

@@ -11,6 +11,7 @@ afterEach(cleanup);
 
 const labels = {
   agentConfig: "More",
+  archiveView: "Archive",
   slashStatusProviderAccount: (provider: string) => `${provider} account`,
   slashStatusAccount: "Account",
   slashStatusLimits: "Limits",
@@ -44,6 +45,7 @@ describe("AgentGUIConfigMenu", () => {
         slashStatusUsageDidFail={false}
         slashStatusUsageAttempted
         onAgentConfigMenuOpen={onOpen}
+        onOpenArchiveView={vi.fn()}
         onOpenAgentEnvSetup={vi.fn()}
         onOpenAgentSettings={vi.fn()}
       />
@@ -56,6 +58,32 @@ describe("AgentGUIConfigMenu", () => {
     expect(screen.queryByText("provider@example.test")).not.toBeInTheDocument();
     expect(screen.queryByText("Limits")).not.toBeInTheDocument();
     expect(screen.getByText("Settings")).toBeInTheDocument();
+  });
+
+  it("opens the controlled archive dialog from the More menu", () => {
+    const onOpenArchiveView = vi.fn();
+    render(
+      <AgentGUIConfigMenu
+        environmentSetupVisible={false}
+        labels={labels}
+        providerScopedActionsVisible={false}
+        slashStatusLimits={[]}
+        slashStatusLimitsLoading={false}
+        slashStatusLimitsResolvedEmpty={false}
+        slashStatusUsageCapturedAtUnixMs={null}
+        slashStatusUsageDidFail={false}
+        slashStatusUsageAttempted={false}
+        onOpenArchiveView={onOpenArchiveView}
+        onOpenAgentEnvSetup={vi.fn()}
+        onOpenAgentSettings={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.click(screen.getByTestId("agent-gui-config-archive-view"));
+
+    expect(onOpenArchiveView).toHaveBeenCalledOnce();
+    expect(screen.getByText("Archive")).toBeInTheDocument();
   });
 
   it("preserves the provider account and quota fallback without Host content", () => {
@@ -81,6 +109,7 @@ describe("AgentGUIConfigMenu", () => {
         slashStatusUsageDidFail={false}
         slashStatusUsageAttempted
         onAgentConfigMenuOpen={vi.fn()}
+        onOpenArchiveView={vi.fn()}
         onOpenAgentEnvSetup={vi.fn()}
         onOpenAgentSettings={vi.fn()}
       />
@@ -111,6 +140,7 @@ describe("AgentGUIConfigMenu", () => {
         slashStatusUsageDidFail={false}
         slashStatusUsageAttempted
         onAgentConfigMenuOpen={vi.fn()}
+        onOpenArchiveView={vi.fn()}
         onOpenAgentEnvSetup={vi.fn()}
         onOpenAgentSettings={vi.fn()}
       />
@@ -147,6 +177,7 @@ describe("AgentGUIConfigMenu", () => {
         slashStatusUsageCapturedAtUnixMs={null}
         slashStatusUsageDidFail={false}
         slashStatusUsageAttempted
+        onOpenArchiveView={vi.fn()}
         onOpenAgentEnvSetup={vi.fn()}
         onOpenAgentSettings={vi.fn()}
       />
@@ -173,6 +204,7 @@ describe("AgentGUIConfigMenu", () => {
         slashStatusUsageDidFail
         slashStatusUsageErrorMessage="Configure an API key or sign in"
         slashStatusUsageAttempted
+        onOpenArchiveView={vi.fn()}
         onOpenAgentEnvSetup={vi.fn()}
         onOpenAgentSettings={vi.fn()}
       />
@@ -214,6 +246,7 @@ describe("AgentGUIConfigMenu", () => {
           slashStatusUsageDidFail={false}
           slashStatusUsageAttempted
           onAgentConfigMenuOpen={vi.fn()}
+          onOpenArchiveView={vi.fn()}
           onOpenAgentEnvSetup={vi.fn()}
           onOpenAgentSettings={vi.fn()}
         />
@@ -243,6 +276,7 @@ describe("AgentGUIConfigMenu", () => {
         slashStatusUsageDidFail
         slashStatusUsageAttempted
         onAgentConfigMenuOpen={vi.fn()}
+        onOpenArchiveView={vi.fn()}
         onOpenAgentEnvSetup={vi.fn()}
         onOpenAgentSettings={vi.fn()}
       />
@@ -274,6 +308,7 @@ describe("AgentGUIConfigMenu", () => {
         slashStatusUsageErrorMessage="Coding Plan required"
         slashStatusUsageAttempted
         onAgentConfigMenuOpen={vi.fn()}
+        onOpenArchiveView={vi.fn()}
         onOpenAgentEnvSetup={vi.fn()}
         onOpenAgentSettings={vi.fn()}
       />

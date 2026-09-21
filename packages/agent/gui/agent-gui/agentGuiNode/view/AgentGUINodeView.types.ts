@@ -181,6 +181,7 @@ export interface AgentGUIViewLabels extends AgentGUIProviderReadinessLabels {
   homeSuggestionsClose?: string;
   conversations: string;
   newConversation: string;
+  archiveView: string;
   agentConfig: string;
   agentSettingsMenu: string;
   agentEnvSetup: string;
@@ -515,6 +516,7 @@ export type AgentGUIConversationRailLabels = Pick<
   | "cancel"
   | "conversationUnavailable"
   | "conversationsSectionMoreActions"
+  | "archiveView"
   | "copyAsMarkdown"
   | "copyAsReference"
   | "conversationCopyFile"

@@ -21,7 +21,10 @@ import { AgentGUIConversationRailPane } from "./AgentGUIConversationRailPane";
 import { createAgentGUIConversationActivityController } from "../controller/agentGUIConversationActivityController";
 import { createTestAgentSessionEngine } from "../../../shared/testing/createTestAgentSessionEngine";
 import { normalizeAgentActivitySession } from "@tutti-os/agent-activity-core";
-import { archiveRemainingDays } from "./AgentGUIConversationArchive";
+import {
+  AgentGUIConversationArchive,
+  archiveRemainingDays
+} from "./AgentGUIConversationArchive";
 
 describe("AgentGUIConversationRailPane Activity capability", () => {
   it("pages and opens expired archives, restores through the engine, and confirms menu-only deletion", async () => {
@@ -74,7 +77,7 @@ describe("AgentGUIConversationRailPane Activity capability", () => {
       onSelectConversation,
       onConfirmDeleteConversation
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    fireEvent.click(screen.getByTestId("test-open-archive"));
     const row = await screen.findByTestId(
       "agent-gui-conversation-item-expired"
     );
@@ -85,7 +88,8 @@ describe("AgentGUIConversationRailPane Activity capability", () => {
     fireEvent.click(row.querySelector("button")!);
     expect(onSelectConversation).toHaveBeenCalledWith("expired");
     fireEvent.animationEnd(screen.getByRole("dialog"));
-    fireEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(screen.getByTestId("test-open-archive"));
     fireEvent.contextMenu(
       await screen.findByTestId("agent-gui-conversation-item-expired")
     );
@@ -102,7 +106,9 @@ describe("AgentGUIConversationRailPane Activity capability", () => {
     ).toBe(archivedAtUnixMs);
     for (const dialog of screen.queryAllByRole("dialog"))
       fireEvent.animationEnd(dialog);
-    fireEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(screen.getByTestId("test-open-archive"));
+    await screen.findByRole("dialog", { name: "Archive" });
     fireEvent.pointerEnter(
       await screen.findByTestId("agent-gui-conversation-item-expired")
     );
@@ -131,7 +137,7 @@ describe("AgentGUIConversationRailPane Activity capability", () => {
         setSessionArchived: vi.fn()
       }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    fireEvent.click(screen.getByTestId("test-open-archive"));
     await screen.findByRole("button", { name: "Retry" });
     expect(screen.queryByText("No archived sessions")).toBeNull();
     engine.dispose();
@@ -398,65 +404,97 @@ function renderPane({
     subscribe: () => () => {},
     ...runtimeOverrides
   } as unknown as AgentGUIRuntime;
-  function PaneHarness(): React.JSX.Element {
+  function Harness(): React.JSX.Element {
     const [conversationQuery, setConversationQuery] = useState("");
     const [pendingDeleteConversationId, setPendingDeleteConversationId] =
       useState<string | null>(null);
+    const [archiveViewOpen, setArchiveViewOpen] = useState(false);
     return (
-      <AgentGUIConversationRailPane
-        activeConversation={null}
-        activeConversationId={null}
-        agentTargets={[]}
-        agentTargetsLoading={false}
-        conversationFilter={{ kind: "all" }}
-        conversationQuery={conversationQuery}
-        conversations={conversations}
-        createConversationDisabled={false}
-        isCollapsed={false}
-        isDeletingConversation={false}
-        isDeletingProjectConversations={false}
-        isLoadingConversations={false}
-        labels={LABELS}
-        pendingDeleteConversationId={pendingDeleteConversationId}
-        railQuery={{
-          ...RAIL_QUERY,
-          activityController,
-          activityConversations,
-          runtimeRailConversations,
-          runtimeRailFailed,
-          runtimeRailMemberships,
-          runtimeRailSectionsPending,
-          runtimeSectionsEnabled,
-          retryRuntimeRail
-        }}
-        revealRequest={null}
-        uiLanguage="en"
-        userProjects={[]}
-        workspaceId="workspace-1"
-        workspaceUserProjectI18n={PROJECT_I18N}
-        onCancelDeleteConversation={() => setPendingDeleteConversationId(null)}
-        onConfirmDeleteConversation={onConfirmDeleteConversation}
-        onConfirmDeleteConversations={() => {}}
-        onConfirmDeleteProjectConversations={async () => []}
-        onConversationQueryChange={setConversationQuery}
-        onCreateConversation={() => {}}
-        onMarkConversationUnread={() => {}}
-        onMoveProject={async () => {}}
-        onRemoveProject={() => {}}
-        onRequestDeleteConversation={setPendingDeleteConversationId}
-        onRequestRenameConversation={() => {}}
-        onSelectConversation={onSelectConversation}
-        onSelectConversationFilterTarget={() => {}}
-        onToggleConversationPinned={() => {}}
-        onToggleProjectPinned={async () => {}}
-        onUpdateConversationFilter={() => {}}
-      />
+      <>
+        <AgentGUIConversationRailPane
+          activeConversation={null}
+          activeConversationId={null}
+          agentTargets={[]}
+          agentTargetsLoading={false}
+          conversationFilter={{ kind: "all" }}
+          conversationQuery={conversationQuery}
+          conversations={conversations}
+          createConversationDisabled={false}
+          isCollapsed={false}
+          isDeletingConversation={false}
+          isDeletingProjectConversations={false}
+          isLoadingConversations={false}
+          labels={LABELS}
+          pendingDeleteConversationId={pendingDeleteConversationId}
+          railQuery={{
+            ...RAIL_QUERY,
+            activityController,
+            activityConversations,
+            runtimeRailConversations,
+            runtimeRailFailed,
+            runtimeRailMemberships,
+            runtimeRailSectionsPending,
+            runtimeSectionsEnabled,
+            retryRuntimeRail
+          }}
+          revealRequest={null}
+          uiLanguage="en"
+          userProjects={[]}
+          workspaceId="workspace-1"
+          workspaceUserProjectI18n={PROJECT_I18N}
+          onCancelDeleteConversation={() =>
+            setPendingDeleteConversationId(null)
+          }
+          onConfirmDeleteConversation={onConfirmDeleteConversation}
+          onConfirmDeleteConversations={() => {}}
+          onConfirmDeleteProjectConversations={async () => []}
+          onConversationQueryChange={setConversationQuery}
+          onCreateConversation={() => {}}
+          onMarkConversationUnread={() => {}}
+          onMoveProject={async () => {}}
+          onRemoveProject={() => {}}
+          onRequestDeleteConversation={setPendingDeleteConversationId}
+          onRequestRenameConversation={() => {}}
+          onSelectConversation={onSelectConversation}
+          onSelectConversationFilterTarget={() => {}}
+          onToggleConversationPinned={() => {}}
+          onToggleProjectPinned={async () => {}}
+          onUpdateConversationFilter={() => {}}
+        />
+        <button
+          type="button"
+          data-testid="test-open-archive"
+          onClick={() => setArchiveViewOpen(true)}
+        >
+          Open archive
+        </button>
+        <AgentGUIConversationArchive
+          {...{
+            workspaceId: "workspace-1",
+            activeConversationId: null,
+            labels: LABELS,
+            uiLanguage: "en",
+            pendingDeleteConversationId,
+            isDeletingConversation: false,
+            onSelectConversation,
+            onRequestDeleteConversation: setPendingDeleteConversationId,
+            onCancelDeleteConversation: () =>
+              setPendingDeleteConversationId(null),
+            onConfirmDeleteConversation,
+            onRequestRenameConversation: () => {},
+            onToggleConversationPinned: () => {},
+            onMarkConversationUnread: () => {},
+            open: archiveViewOpen,
+            onOpenChange: setArchiveViewOpen
+          }}
+        />
+      </>
     );
   }
   return render(
     <AgentGUIRuntimeProvider runtime={runtime}>
       <TooltipProvider>
-        <PaneHarness />
+        <Harness />
       </TooltipProvider>
     </AgentGUIRuntimeProvider>
   );
