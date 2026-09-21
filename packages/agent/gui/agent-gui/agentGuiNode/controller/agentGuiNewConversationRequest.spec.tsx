@@ -15,7 +15,10 @@ import type { AgentGUIConversationSummary } from "../model/agentGuiConversationM
 import type { AgentComposerDraft } from "../model/agentGuiNodeTypes";
 import type { AgentGUIComposerTargetData } from "./agentGuiController.composerPresentation";
 import { nodeDefaultDraftKey } from "./agentGuiController.composerHelpers";
-import { requestAgentGUINewConversation } from "./agentGuiNewConversationRequest";
+import {
+  requestAgentGUINewConversation,
+  type AgentGUINewConversationRequestOptions
+} from "./agentGuiNewConversationRequest";
 import { useAgentGUIActivation } from "./useAgentGUIActivation";
 import { useAgentGUIConversationHome } from "./useAgentGUIConversationHome";
 import { useAgentGUINewConversationActivation } from "./useAgentGUINewConversationActivation";
@@ -69,7 +72,7 @@ describe("P0 new-conversation placement scenarios", () => {
     expect(activation.cwd).not.toBe(previousSessionCwd);
   });
 
-  it("keeps canonical project placement when starting from a project session", async () => {
+  it("clears the previous project on global new conversation", async () => {
     const projectPath = "/workspace/project-a";
     const sectionKey = "project:workspace-1:/workspace/project-a";
     const scenario = renderNewConversationScenario({
@@ -77,7 +80,7 @@ describe("P0 new-conversation placement scenarios", () => {
         cwd: projectPath,
         railSectionKey: sectionKey
       }),
-      initialHomeProjectPath: null,
+      initialHomeProjectPath: projectPath,
       userProjects: [
         {
           id: "project-a",
@@ -90,18 +93,18 @@ describe("P0 new-conversation placement scenarios", () => {
     });
 
     act(() => scenario.requestNewConversation());
+    expect(scenario.selectedProjectPath()).toBeNull();
     act(() =>
-      scenario.submitPrompt([{ type: "text", text: "continue in project" }])
+      scenario.submitPrompt([{ type: "text", text: "start without a project" }])
     );
 
     expect(await scenario.waitForActivation()).toMatchObject({
-      cwd: projectPath,
-      initialContent: [{ type: "text", text: "continue in project" }],
+      cwd: "",
+      initialContent: [{ type: "text", text: "start without a project" }],
       railPlacement: {
         version: 1,
-        kind: "project",
-        projectPath,
-        sectionKey
+        kind: "conversations",
+        sectionKey: "conversations"
       }
     });
   });
@@ -181,19 +184,19 @@ describe("P0 new-conversation placement scenarios", () => {
     });
   });
 
-  it("keeps the logical project when the active session runs in an isolated worktree", async () => {
-    const projectPath = "/workspace/project-a";
-    const sectionKey = "project:workspace-1:/workspace/project-a";
+  it("uses the project row explicit target instead of the old session project", async () => {
+    const projectPath = "/workspace/project-b";
+    const sectionKey = "project:workspace-1:/workspace/project-b";
     const scenario = renderNewConversationScenario({
       activeConversation: conversationSummary({
         cwd: "/state/task-worktrees/issue/task-run",
-        railSectionKey: sectionKey
+        railSectionKey: "project:workspace-1:/workspace/project-a"
       }),
-      initialHomeProjectPath: null,
+      initialHomeProjectPath: "/workspace/project-a",
       userProjects: [
         {
-          id: "project-a",
-          label: "Project A",
+          id: "project-b",
+          label: "Project B",
           path: projectPath,
           pinnedAtUnixMs: 0,
           sectionKey
@@ -201,7 +204,13 @@ describe("P0 new-conversation placement scenarios", () => {
       ]
     });
 
-    act(() => scenario.requestNewConversation());
+    act(() =>
+      scenario.requestNewConversation({
+        projectPath,
+        source: "project_section"
+      })
+    );
+    expect(scenario.selectedProjectPath()).toBe(projectPath);
     act(() =>
       scenario.submitPrompt([{ type: "text", text: "continue from worktree" }])
     );
@@ -218,7 +227,7 @@ describe("P0 new-conversation placement scenarios", () => {
   });
 
   it.each(["codex", "claude-code", "opencode"] as const)(
-    "preserves an explicit project selection already made on %s Home",
+    "global new clears an explicit project selection already made on %s Home",
     async (provider) => {
       const projectPath = "/workspace/project-a";
       const sectionKey = "project:workspace-1:/workspace/project-a";
@@ -237,19 +246,21 @@ describe("P0 new-conversation placement scenarios", () => {
         ]
       });
 
-      act(() => scenario.requestNewConversation());
+      act(() =>
+        scenario.requestNewConversation({ source: "external_request" })
+      );
+      expect(scenario.selectedProjectPath()).toBeNull();
       act(() =>
         scenario.submitPrompt([{ type: "text", text: "start in my project" }])
       );
 
       expect(await scenario.waitForActivation()).toMatchObject({
-        cwd: projectPath,
+        cwd: "",
         initialContent: [{ type: "text", text: "start in my project" }],
         railPlacement: {
           version: 1,
-          kind: "project",
-          projectPath,
-          sectionKey
+          kind: "conversations",
+          sectionKey: "conversations"
         }
       });
     }
@@ -472,13 +483,11 @@ function renderNewConversationScenario(input: {
 
   return {
     activateSession,
-    requestNewConversation() {
+    selectedProjectPath: () => selectedProjectPathRef.current,
+    requestNewConversation(options?: AgentGUINewConversationRequestOptions) {
       requestAgentGUINewConversation({
-        activeConversationId: activeConversationIdRef.current,
-        conversations: conversationsRef.current,
         createConversation: result.current.createConversation,
-        transientConversation: null,
-        userProjects: input.userProjects
+        options
       });
     },
     persistActiveConversation,

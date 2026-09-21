@@ -2809,18 +2809,16 @@ selected Session is absent returns typed `session.not_found`; the activity
 engine retains that code, and AgentGUI clears only the matching global and
 per-target navigation memories before returning Home. Timeout, transport, and
 other reconcile failures preserve the remembered selection.
-The controller's new-conversation command must distinguish rail placement from
-the active Session's runtime working directory before entering the home
-composer. A Session in the Chats section may have a generated `cwd`, but that
-path is not a selected user project and must be cleared. A Session in a
-canonical project section resolves that section key back to the registered
-project root; its runtime `cwd` may instead be a nested directory or isolated
-worktree and is never reused as project identity. “Continue in new
-conversation” uses the same resolution before moving the mention draft to
-Home. A command already on the home composer preserves the user's explicit
-project selection. Views only forward new-conversation intent; unresolved
-active rail membership fails closed rather than guessing from composer
-presentation fields.
+The global new-conversation command enters Home with no selected project,
+regardless of the previous Session's runtime directory, canonical project
+placement, or an earlier Home project selection. A project-section creation
+action instead supplies an explicit `projectPath`, which is preserved. Selecting
+a project on Home and submitting directly also preserves that explicit choice;
+it is a different action from requesting another global new conversation.
+“Continue in new conversation” retains its source-placement resolution: Chats
+clears the runtime `cwd`, while a canonical project section resolves to its
+registered project root rather than a nested directory or isolated worktree.
+Only this continuation path fails closed on unresolved source membership.
 For delegated/shared execution, the initiating caller remains the placement
 authority: the adapter forwards that caller-selected `RailPlacement` through
 the binding to the owner Host. The owner persists the same section key and does
@@ -2984,7 +2982,10 @@ such as TSH may persist their own Rail state without adopting Desktop behavior.
 Embedded pane identity reads must preserve an explicit null
 `lastActiveAgentSessionId` as Home. Only absent selection state may fall back to
 an older node snapshot; otherwise a new conversation resurrects the old pane
-title and Rail shown-session marker.
+title and Rail shown-session marker. A Home pane with a null Session ID has no
+conversation title, including no untitled fallback; its existing pane and
+layout/close controls remain mounted. The untitled fallback is only for an
+existing Session whose title is not yet available.
 
 Attention state preserves explicit user intent: marking the currently selected
 Session unread keeps its unread indicator while that selection remains open.

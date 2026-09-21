@@ -140,8 +140,13 @@ export function buildEmbeddedSplitPaneHeaders(
       provider: pane.session?.provider ?? null,
       sessionId: pane.sessionId,
       side,
-      // 标题拿不到时用兜底文案，绝不把会话号糊在栏头上（那对用户没有意义）。
-      title: pane.session?.title?.trim() ? pane.session.title : labels.untitled,
+      // Home 没有会话标题；仅已存在但缺摘要的会话使用兜底文案。
+      title:
+        pane.sessionId === null
+          ? ""
+          : pane.session?.title?.trim()
+            ? pane.session.title
+            : labels.untitled,
       widthFraction: geometry.widthFraction
     };
   });

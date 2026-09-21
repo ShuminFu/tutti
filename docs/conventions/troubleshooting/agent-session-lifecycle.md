@@ -2609,18 +2609,17 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   project section.
 - Fix:
   Normalize default project selection at the AgentGUI controller's
-  new-conversation command. Explicit section actions remain authoritative; an
-  active Chats Session replaces the home selection with no project, an active
-  project Session resolves its immutable section key back to the canonical
-  registered project path, and an action already on Home preserves the user's
-  explicit selection. The continuation action shares this resolver before it
-  moves the source mention draft to Home. Views forward the intent without
-  interpreting composer presentation fields.
+  new-conversation command. Global new clears the previous project, including
+  when already on Home; project-section actions preserve their explicit target
+  path. The separate continuation action still resolves the source section to
+  its canonical registered project before moving the mention draft to Home.
+  Views forward the intent without interpreting composer presentation fields.
 - Validation:
-  Cover the command through final `session/activate` for three P0 scenarios:
-  active Chats clears a generated cwd, active Project with a nested/worktree
-  cwd preserves its canonical placement, Continue uses that same project, and
-  Home preserves an explicit project selection.
+  Cover the command through final `session/activate`: global new clears both a
+  generated Chats cwd and a selected project, explicit project-section creation
+  uses its target rather than the old session project, and Continue retains its
+  source project. Selecting a project on Home and sending directly is not a
+  global new-conversation action.
 - References:
   [agentGuiNewConversationRequest.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/agentGuiNewConversationRequest.ts)
   [useAgentGUIOperationActions.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUIOperationActions.ts)

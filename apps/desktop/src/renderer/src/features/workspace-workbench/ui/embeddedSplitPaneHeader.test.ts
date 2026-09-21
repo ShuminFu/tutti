@@ -111,6 +111,27 @@ test("没有摘要时退回兜底标题，不写会话号", () => {
   assert.equal(headers[0]?.projectLabel, null);
 });
 
+test("新建 Home 清空会话标题，单栏和分栏的关闭/布局控件仍保留", () => {
+  for (const split of [false, true]) {
+    const current = snapshot();
+    if (!split) current.panes.right = null;
+    const before = buildEmbeddedSplitPaneHeaders(current, labels);
+    assert.equal(before[0]?.title, "改栏头");
+
+    current.panes.left = {
+      nodeId: "node-session-a",
+      sessionId: null,
+      session: null
+    };
+    const home = buildEmbeddedSplitPaneHeaders(current, labels);
+    assert.equal(home.length, before.length);
+    assert.equal(home[0]?.title, "");
+    assert.equal(home[0]?.closeLabel, before[0]?.closeLabel);
+    assert.deepEqual(home[0]?.menuItems, before[0]?.menuItems);
+    if (split) assert.deepEqual(home[1], before[1]);
+  }
+});
+
 test("链条：已配对给「解除」，配对能力不可用时整枚不画，忙的时候不可点", () => {
   const unpaired = buildEmbeddedSplitPaneHeaders(snapshot(), labels);
   assert.equal(unpaired[0]?.pairingState, "unpaired");

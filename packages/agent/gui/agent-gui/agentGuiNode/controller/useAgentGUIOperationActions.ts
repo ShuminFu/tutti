@@ -1,6 +1,5 @@
 import { selectEngineSession } from "@tutti-os/agent-activity-core";
 import { useCallback, useRef } from "react";
-import { translate } from "../../../i18n/index";
 import { textPromptContent } from "../model/agentComposerDraft";
 import {
   requestAgentGUINewConversation,
@@ -78,29 +77,12 @@ export function useAgentGUIOperationActions(
     });
   const createConversation = useCallback(
     (options?: AgentGUINewConversationRequestOptions) => {
-      if (
-        requestAgentGUINewConversation({
-          activeConversationId: input.activeConversationIdRef.current,
-          conversations: input.conversationsRef.current,
-          createConversation: enterConversationHome,
-          options,
-          transientConversation: input.transientConversation,
-          userProjects: input.userProjectsRef.current
-        })
-      ) {
-        return;
-      }
-      input.setDetailError(
-        translate("agentHost.agentGui.sessionActivationFailed")
-      );
+      requestAgentGUINewConversation({
+        createConversation: enterConversationHome,
+        options
+      });
     },
-    [
-      enterConversationHome,
-      input.activeConversationIdRef,
-      input.conversationsRef,
-      input.setDetailError,
-      input.transientConversation
-    ]
+    [enterConversationHome]
   );
 
   const continueInNewConversation = useAgentGUIContinueConversation(input);

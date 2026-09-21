@@ -14,34 +14,12 @@ export type AgentGUINewConversationProjectSelection =
 
 export function requestAgentGUINewConversation(input: {
   createConversation(options: AgentGUINewConversationRequestOptions): void;
-  activeConversationId: string | null;
-  conversations: readonly AgentGUIConversationSummary[];
-  transientConversation: AgentGUIConversationSummary | null;
-  userProjects: readonly AgentGUIConversationUserProject[];
   options?: AgentGUINewConversationRequestOptions;
-}): boolean {
-  if (input.options && "projectPath" in input.options) {
-    input.createConversation(input.options);
-    return true;
-  }
-  const selection = resolveAgentGUINewConversationProjectSelection({
-    activeConversationId: input.activeConversationId,
-    conversations: input.conversations,
-    transientConversation: input.transientConversation,
-    userProjects: input.userProjects
-  });
-  if (selection.kind === "unresolved") {
-    return false;
-  }
-  if (selection.kind === "preserve_home") {
-    input.createConversation(input.options ?? {});
-    return true;
-  }
+}): void {
   input.createConversation({
     ...input.options,
-    projectPath: selection.projectPath
+    projectPath: input.options?.projectPath ?? null
   });
-  return true;
 }
 
 export function resolveAgentGUINewConversationProjectSelection(input: {
