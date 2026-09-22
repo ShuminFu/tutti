@@ -620,6 +620,9 @@ func mapRuntimeError(err error) error {
 	if errors.Is(err, agentruntime.ErrActiveTurnTargetMismatch) {
 		return errors.Join(host.ErrActiveTurnTargetMismatch, err)
 	}
+	if errors.Is(err, agentruntime.ErrSessionActiveTurn) {
+		return errors.Join(host.ErrSessionTurnSlotBusy, err)
+	}
 	if errors.Is(err, agentruntime.ErrEffectiveHistoryUnsupported) {
 		return host.ErrRuntimeHistoryUnsupported
 	}

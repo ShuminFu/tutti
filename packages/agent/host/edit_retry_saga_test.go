@@ -432,6 +432,10 @@ type hostEditRetryRuntime struct {
 	execNotDispatchedBeforeTurn bool
 	guidanceMismatch            bool
 	guidanceTransportFailure    bool
+	// turnSlotBusy makes ordinary Exec answer the way the runtime does while
+	// another canonical turn owns the session's turn slot. Tests clear it to
+	// simulate that turn settling.
+	turnSlotBusy bool
 	reconcileAcceptanceCalls    int
 	reconcileAcceptanceInput    agenthost.RuntimeProviderTurnAcceptanceInput
 	goalControlCalls            int
@@ -457,6 +461,10 @@ func (*hostEditRetryRuntime) CanResume(agenthost.RuntimeResumeInput) bool { retu
 func (r *hostEditRetryRuntime) Exec(ctx context.Context, input agenthost.RuntimeExecInput) (agenthost.RuntimeExecResult, error) {
 	r.mu.Lock()
 	r.execCalls++
+	if r.turnSlotBusy && !input.Guidance {
+		r.mu.Unlock()
+		return agenthost.RuntimeExecResult{}, fmt.Errorf("%w", agenthost.ErrSessionTurnSlotBusy)
+	}
 	r.content = append([]agenthost.PromptContentBlock(nil), input.Content...)
 	providerTurnID := "provider-" + input.TurnID
 	outcomeUnknown := r.execOutcomeUnknown

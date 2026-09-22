@@ -2737,8 +2737,20 @@ export type SendWorkspaceAgentSessionInputResponse =
       kind: "turn";
     } & SendWorkspaceAgentSessionInputTurnResponse)
   | ({
+      kind: "queued";
+    } & SendWorkspaceAgentSessionInputQueuedResponse)
+  | ({
       kind: "goalControl";
     } & SendWorkspaceAgentSessionInputGoalControlResponse);
+
+/**
+ * The submission was accepted but not dispatched: the session's one canonical turn slot was still running another turn. The daemon owns the wait and starts this prompt when the slot frees, so clients must not resend it and must not surface a send failure. turnId is the canonical turn this prompt will occupy once it starts.
+ */
+export type SendWorkspaceAgentSessionInputQueuedResponse = {
+  session: WorkspaceAgentSession;
+  kind: "queued";
+  turnId: string;
+};
 
 export type SendWorkspaceAgentSessionInputTurnResponse = {
   session: WorkspaceAgentSession;

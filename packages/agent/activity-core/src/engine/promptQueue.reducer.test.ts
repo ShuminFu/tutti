@@ -1053,6 +1053,82 @@ test("contract: guidance send-now stays blocked while availability is blocked by
   });
 });
 
+// The daemon can accept a prompt without starting it: another writer owned
+// the session's one turn slot, so it parked the prompt and promised it the
+// canonical turn it had already allocated. The queue must keep showing the
+// user's message until that turn shows up — dropping it here is what makes a
+// sent message look lost — and must never send it a second time.
+test("a queued send keeps the prompt visible and waits for its promised turn", () => {
+  const available = canonicalLifecycle("settled", 1, "turn-0");
+  const sent = reduce(
+    createInitialPromptQueueState(),
+    enqueue("prompt-1"),
+    available
+  );
+  const accepted = reduce(
+    sent.state,
+    commandResult(commandId(sent.commands[0]), "queue/sendPrompt", "succeeded"),
+    available,
+    { sendValidation: queuedSend("turn-9") }
+  );
+  const record = accepted.state.recordsBySessionId["session-1"];
+  assert.equal(record?.prompts[0]?.id, "prompt-1");
+  assert.equal(record?.prompts[0]?.acceptedTurnId, "turn-9");
+  assert.equal(record?.inFlight, null);
+  assert.equal(record?.failedPromptId, null);
+  assert.equal(record?.deliveryBarrierTurnId, "turn-9");
+
+  // Nothing drains while the promised turn is unseen, not even after another
+  // prompt joins the queue.
+  const withSecond = reduce(accepted.state, enqueue("prompt-2"), available);
+  assert.deepEqual(withSecond.commands, []);
+  assert.deepEqual(
+    withSecond.state.recordsBySessionId["session-1"]?.prompts.map(
+      (prompt) => prompt.id
+    ),
+    ["prompt-1", "prompt-2"]
+  );
+
+  // The daemon dispatches it: the promised turn appears and now carries the
+  // message, so the queue entry retires without a second send.
+  const dispatched = reduce(
+    withSecond.state,
+    turnUpserted(runningTurn("turn-9", 5)),
+    canonicalLifecycle("running", 5, "turn-9")
+  );
+  assert.deepEqual(dispatched.commands, []);
+  assert.deepEqual(
+    dispatched.state.recordsBySessionId["session-1"]?.prompts.map(
+      (prompt) => prompt.id
+    ),
+    ["prompt-2"]
+  );
+});
+
+// Once the parked turn has settled, the prompt behind it drains normally: the
+// wait must not outlive the turn it was waiting for.
+test("the prompt behind a queued send drains once the promised turn settles", () => {
+  const available = canonicalLifecycle("settled", 1, "turn-0");
+  const sent = reduce(
+    createInitialPromptQueueState(),
+    enqueue("prompt-1"),
+    available
+  );
+  let state = reduce(
+    sent.state,
+    commandResult(commandId(sent.commands[0]), "queue/sendPrompt", "succeeded"),
+    available,
+    { sendValidation: queuedSend("turn-9") }
+  ).state;
+  state = reduce(state, enqueue("prompt-2"), available).state;
+  const settled = reduce(
+    state,
+    turnUpserted(settledTurn("turn-9", 6)),
+    canonicalLifecycle("settled", 6, "turn-9")
+  );
+  assert.equal(send(settled.commands[0]).promptId, "prompt-2");
+});
+
 function reduce(
   state: ReturnType<typeof createInitialPromptQueueState>,
   intent: Parameters<typeof promptQueueReducer>[1],
@@ -1153,6 +1229,17 @@ function validSend(
   return {
     kind: "valid",
     result: { session, turn: session.latestTurn!, turnId }
+  };
+}
+
+function queuedSend(turnId: string): SendInputResultValidation {
+  return {
+    kind: "valid",
+    result: {
+      kind: "queued",
+      session: activitySession("running", 2, "turn-0"),
+      turnId
+    }
   };
 }
 

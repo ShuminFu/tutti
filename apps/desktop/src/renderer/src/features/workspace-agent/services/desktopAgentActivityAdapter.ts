@@ -437,6 +437,25 @@ export function createDesktopAgentActivityAdapter({
           )
         };
       }
+      if (result.kind === "queued") {
+        reportDesktopAgentSubmitTrace(runtimeApi, {
+          agentSessionId: input.agentSessionId,
+          clientSubmitId: input.clientSubmitId,
+          event: "renderer_adapter.send.queued",
+          provider: result.session.provider,
+          submitDiagnostics: input.submitDiagnostics,
+          workspaceId: input.workspaceId,
+          fields: { turnId: result.turnId }
+        });
+        return {
+          kind: "queued",
+          session: agentActivitySessionFromTuttidSession(
+            input.workspaceId,
+            result.session
+          ),
+          turnId: result.turnId
+        };
+      }
       if (!result.turn || !result.turnId) {
         throw new Error("workspace_agent.send_response_turn_required");
       }

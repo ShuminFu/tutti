@@ -55,7 +55,7 @@ func (c *Controller) rollbackSubmittedTurn(session Session, turnID string) {
 	if !ok || strings.TrimSpace(turn.turnID) != strings.TrimSpace(turnID) {
 		return
 	}
-	delete(c.turns, key)
+	c.releaseTurnSlotLocked(key)
 	c.sessions[key] = session
 }
 

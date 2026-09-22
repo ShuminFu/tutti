@@ -110,6 +110,9 @@ type Host struct {
 	goalActor              *SessionActor
 	sessionMutationActor   *SessionActor
 	editRetryDisabled      bool
+	// submitAdmission parks ordinary prompts that arrived while the session's
+	// one canonical turn slot was busy (submit_admission.go).
+	submitAdmission submitAdmissionQueue
 	goalFencesRestored     sync.Map
 }
 

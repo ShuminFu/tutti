@@ -176,3 +176,60 @@ function emptyRecord(
     workspaceId: "workspace-1"
   };
 }
+
+// A prompt the daemon already accepted and parked behind the running turn is
+// no longer ours to send, and that stays true once the delivery barrier is
+// gone: a guidance steer into the running turn moves the barrier onto its own
+// turn, which then settles, and the parked head would otherwise be sent a
+// second time. Deleting the accepted rule turns this red.
+test("contract: an accepted head awaiting its turn blocks drain even with no barrier", () => {
+  const record = emptyRecord([prompt("head-1", false)]);
+  const decision = resolveQueueDrainDecision(
+    record,
+    availabilityFor("available"),
+    false,
+    false,
+    true
+  );
+  assert.deepEqual(decision, {
+    kind: "blocked",
+    reason: "accepted_awaiting_turn"
+  });
+});
+
+// It is a wait, not a failure: a head that already failed still reports its
+// own reason, and an in-flight send still wins, so the priority order holds.
+test("contract: accepted head ranks below in-flight and above suspension", () => {
+  const suspended = {
+    ...emptyRecord([prompt("head-1", false)]),
+    suspendReason: "user_stop" as const
+  };
+  assert.deepEqual(
+    resolveQueueDrainDecision(
+      suspended,
+      availabilityFor("available"),
+      false,
+      false,
+      true
+    ),
+    { kind: "blocked", reason: "accepted_awaiting_turn" }
+  );
+  const inFlight = {
+    ...emptyRecord([prompt("head-1", false)]),
+    inFlight: {
+      commandId: "queue:send:session-1:1",
+      kind: "send" as const,
+      promptId: "head-1"
+    }
+  };
+  assert.deepEqual(
+    resolveQueueDrainDecision(
+      inFlight,
+      availabilityFor("available"),
+      false,
+      false,
+      true
+    ),
+    { kind: "blocked", reason: "in_flight" }
+  );
+});

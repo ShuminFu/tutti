@@ -17,6 +17,12 @@ var (
 	ErrSubmitDeliveryUnknown             = errors.New("agent submit delivery is still being confirmed")
 	ErrActiveTurnTargetRequired          = errors.New("active-turn guidance requires an exact target turn")
 	ErrActiveTurnTargetMismatch          = errors.New("active-turn guidance target is no longer active")
+	// ErrSessionTurnSlotBusy is the runtime's answer when a session already has
+	// a canonical turn running. It never reaches a caller: ordinary prompts park
+	// in the host admission queue and are replayed when the slot frees
+	// (submit_admission.go).
+	ErrSessionTurnSlotBusy               = errors.New("agent session already has an active turn")
+	ErrSubmitAdmissionQueueFull          = errors.New("agent session has too many prompts waiting for the current turn")
 	ErrSessionTitleTooLong               = errors.New("agent session title is too long")
 	ErrRuntimeSessionDisconnected        = errors.New("agent runtime session is disconnected")
 	ErrRuntimeSessionPublishUnavailable  = errors.New("agent runtime session initialization publication is unavailable")

@@ -31,6 +31,7 @@ type Controller struct {
 	providerObservationMu       sync.RWMutex
 	goalControlObserverMu       sync.RWMutex
 	mcpAppResolverMu            sync.RWMutex
+	turnSlotObserverMu          sync.RWMutex
 	sessions                    map[string]Session
 	sessionAvailabilityWaiters  map[string]*sessionAvailabilityWaiter
 	adapters                    map[string]Adapter
@@ -55,6 +56,9 @@ type Controller struct {
 	goalControlObserver         GoalControlLifecycleObserver
 	// mcpAppResolver annotates MCP App tool calls (see mcp_app.go); nil disables it.
 	mcpAppResolver MCPAppResolver
+	// turnSlotObserver is told when a session's one canonical turn slot frees
+	// up, so parked ordinary prompts can be admitted (controller_turn_slot.go).
+	turnSlotObserver TurnSlotObserver
 }
 
 // RuntimeStreamEventObserver receives the ordered precommit stream projection

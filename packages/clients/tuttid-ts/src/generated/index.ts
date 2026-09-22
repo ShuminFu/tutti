@@ -1741,6 +1741,7 @@ export type {
   SendWorkspaceAgentSessionInputError,
   SendWorkspaceAgentSessionInputErrors,
   SendWorkspaceAgentSessionInputGoalControlResponse,
+  SendWorkspaceAgentSessionInputQueuedResponse,
   SendWorkspaceAgentSessionInputRequest,
   SendWorkspaceAgentSessionInputResponse,
   SendWorkspaceAgentSessionInputResponse2,

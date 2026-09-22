@@ -461,13 +461,41 @@ func (h *Host) ensureRuntimeSessionLocked(ctx context.Context, ref SessionRef) (
 // SendInput reports at most one aggregated TerminalFailure for a failed
 // command. Guidance target binding and goal control own their own emissions.
 func (h *Host) SendInput(ctx context.Context, ref SessionRef, input SendInput) (SendInputResult, error) {
+	return h.sendInputWithAdmission(ctx, ref, input, admissionPark)
+}
+
+// sendInputAdmitted replays a prompt that is already parked in the admission
+// queue. It must never park again: the drain loop owns that queue entry and
+// reads a queued result as "the slot was taken again, stay put".
+func (h *Host) sendInputAdmitted(ctx context.Context, ref SessionRef, input SendInput) (SendInputResult, error) {
+	return h.sendInputWithAdmission(ctx, ref, input, admissionReplay)
+}
+
+func (h *Host) sendInputWithAdmission(
+	ctx context.Context,
+	ref SessionRef,
+	input SendInput,
+	admission submitAdmissionMode,
+) (SendInputResult, error) {
 	ctx, command := h.beginCommand(ctx, "message_send", ref.WorkspaceID, ref.AgentSessionID)
-	result, err := h.sendInput(ctx, ref, input)
+	result, err := h.sendInput(ctx, ref, input, admission)
+	if result.Kind == SubmitKindQueued {
+		// A parked prompt is an accepted command whose dispatch is still
+		// ahead of it; finishing the command as a failure would report a
+		// terminal failure for a message that is going to run.
+		command.finish(ctx, h, nil)
+		return result, err
+	}
 	command.finish(ctx, h, err)
 	return result, err
 }
 
-func (h *Host) sendInput(ctx context.Context, ref SessionRef, input SendInput) (SendInputResult, error) {
+func (h *Host) sendInput(
+	ctx context.Context,
+	ref SessionRef,
+	input SendInput,
+	admission submitAdmissionMode,
+) (SendInputResult, error) {
 	ref.WorkspaceID, ref.AgentSessionID = strings.TrimSpace(ref.WorkspaceID), strings.TrimSpace(ref.AgentSessionID)
 	if h == nil || h.runtime == nil || h.store == nil || ref.WorkspaceID == "" || ref.AgentSessionID == "" {
 		return SendInputResult{}, ErrInvalidArgument
@@ -514,7 +542,7 @@ func (h *Host) sendInput(ctx context.Context, ref SessionRef, input SendInput) (
 	var result SendInputResult
 	err = h.withSessionMutationActor(ctx, ref.WorkspaceID, ref.AgentSessionID, func(actorCtx context.Context) error {
 		var sendErr error
-		result, sendErr = h.sendInputSerialized(actorCtx, ref, input, normalized, promptText, metadata)
+		result, sendErr = h.sendInputSerialized(actorCtx, ref, input, normalized, promptText, metadata, admission)
 		return sendErr
 	})
 	return result, err
@@ -527,6 +555,7 @@ func (h *Host) sendInputSerialized(
 	normalized []PromptContentBlock,
 	promptText string,
 	metadata map[string]any,
+	admission submitAdmissionMode,
 ) (SendInputResult, error) {
 	var err error
 	if err := h.requireSendAllowedByEffectiveHistory(ctx, ref); err != nil {
@@ -604,6 +633,12 @@ func (h *Host) sendInputSerialized(
 			RequireProviderAcceptance: !input.Guidance,
 		})
 	}()
+	if err != nil && !input.Guidance && errors.Is(err, ErrSessionTurnSlotBusy) {
+		// The runtime owns the one canonical turn slot and it was taken. This
+		// is not a user-visible failure: park the prompt and let the slot's
+		// release signal replay it (submit_admission.go).
+		return h.admitLater(ref, input, session, admission)
+	}
 	if err != nil {
 		// Only an explicit target verdict is a guidance-target failure. Any
 		// other undispatched guidance is an ordinary runtime_exec failure that

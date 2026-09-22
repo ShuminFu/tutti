@@ -453,6 +453,18 @@ export type AgentActivitySendInputResult =
       turn: AgentActivityTurn;
     }
   | {
+      /**
+       * The daemon accepted the prompt but has not started it: the session's
+       * one canonical turn slot was still running another turn. The daemon
+       * owns the wait and dispatches this prompt when the slot frees, so the
+       * engine keeps the prompt in the visible queue and must never resend it
+       * or report a send failure.
+       */
+      kind: "queued";
+      session: AgentActivitySession;
+      turnId: string;
+    }
+  | {
       kind: "goalControl";
       session: AgentActivitySession;
       goal?: AgentActivitySessionGoal | null;

@@ -61,7 +61,7 @@ func (c *Controller) ReconcileRootTurnSettlement(settlement RootTurnSettlement) 
 		return
 	}
 	if hasActive {
-		delete(c.turns, key)
+		c.releaseTurnSlotLocked(key)
 	}
 	outcome := strings.TrimSpace(settlement.Outcome)
 	session.TurnLifecycle = &TurnLifecycle{Phase: "settled", Outcome: stringPointer(outcome)}

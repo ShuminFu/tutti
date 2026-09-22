@@ -204,7 +204,7 @@ func (c *Controller) clearActiveTurnIfMatches(roomID, agentSessionID, turnID str
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if active, ok := c.turns[key]; ok && strings.TrimSpace(active.turnID) == turnID {
-		delete(c.turns, key)
+		c.releaseTurnSlotLocked(key)
 	}
 }
 

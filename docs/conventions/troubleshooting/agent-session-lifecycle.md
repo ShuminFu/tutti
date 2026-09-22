@@ -1579,6 +1579,47 @@ inline data URL instead`. Claude or standard ACP may instead receive no
   [codex_appserver_adapter.go](../../../packages/agent/daemon/runtime/codex_appserver_adapter.go)
   [codex_appserver_adapter_test.go](../../../packages/agent/daemon/runtime/codex_appserver_adapter_test.go)
 
+### Two writers race one session and the loser sees a send failure
+
+- Symptom:
+  A composer send fails with `agent session already has an active turn` even
+  though the user was not obviously mid-turn, and the typed text stays in the
+  box. `tuttid.log` shows two `api.send.received` traces seconds apart for the
+  same `agent_session_id`, one carrying `client_submitted_at_unix_ms` (the
+  renderer) and one without it (a host-side writer such as the RnDMaster peer
+  deliverer or pair kickoff), followed by one `api.send.completed` and one
+  `api.send.failed`.
+- Quick checks:
+  Count the `api.send.received` traces for that session around the failure. Two
+  admissions inside the same turn window means two writers, not a stale
+  projection. Cross-check the host log for a delivery at the same second.
+- Root cause:
+  "Can this session start a turn?" had three copies — the AgentGUI prompt
+  queue, the host deliverer's observed session status, and the controller's
+  `c.turns` — and only the controller's is authoritative. Each writer decided
+  from its own copy, so both could believe the session was idle and both start
+  a turn. No amount of projection freshness closes that window; the decision
+  simply lived in the wrong place.
+- Fix:
+  Admission belongs to the runtime. `Controller.releaseTurnSlotLocked` is now
+  the only place a `c.turns` entry is removed and it notifies a
+  `TurnSlotObserver`. The Host parks an ordinary prompt that the runtime
+  refuses with `ErrSessionTurnSlotBusy`, answers `kind: "queued"` with the
+  preallocated canonical turn id, and replays the verbatim `SendInput` when the
+  slot frees. Clients keep their local queues for affordances only; neither the
+  renderer nor a host deliverer may gate a send on its own copy of the busy
+  flag.
+- Validation:
+  `packages/agent/host/submit_admission_test.go` (parked prompt runs only after
+  the release signal, and runs once) and
+  `packages/agent/daemon/runtime/controller_turn_slot_test.go` (the signal
+  fires on settle and only once the slot is actually free). Removing the park
+  branch in `sendInputSerialized` must turn the Host tests red.
+- References:
+  [submit_admission.go](../../../packages/agent/host/submit_admission.go)
+  [controller_turn_slot.go](../../../packages/agent/daemon/runtime/controller_turn_slot.go)
+  [lifecycle.go](../../../packages/agent/host/lifecycle.go)
+
 ### AgentGUI loading disappears before active turn settles
 
 - Symptom:

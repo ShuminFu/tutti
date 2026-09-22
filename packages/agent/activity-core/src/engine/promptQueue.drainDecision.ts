@@ -32,6 +32,7 @@ export type QueueDrainDecision =
         | "no_head"
         | "in_flight"
         | "uncertain_delivery"
+        | "accepted_awaiting_turn"
         | "suspended"
         | "failed_head"
         | "settings_update_pending"
@@ -52,6 +53,8 @@ export type QueueDrainDecision =
  *  1. no head prompt queued
  *  2. a send is already in flight
  *  3. the previous send's delivery is uncertain (timed out, exact turn unknown)
+ *  3b. the head was already accepted by the daemon and is waiting for the
+ *      Turn it was promised (a parked prompt: ours to show, not ours to send)
  *  4. the queue is suspended (explicit user stop)
  *  5. the head previously failed and hasn't been retried
  *  6. a user/activation settings write is still unsettled (not waitingForPromptSend)
@@ -79,7 +82,8 @@ export function resolveQueueDrainDecision(
   record: PromptQueueRecord,
   availability: CanonicalSubmitAvailability,
   barrierPending: boolean,
-  settingsUpdatePending = false
+  settingsUpdatePending = false,
+  acceptedHeadAwaitingTurn = false
 ): QueueDrainDecision {
   const head = record.prompts[0];
   if (!head) {
@@ -90,6 +94,11 @@ export function resolveQueueDrainDecision(
   }
   if (record.uncertainDelivery) {
     return { kind: "blocked", reason: "uncertain_delivery" };
+  }
+  // The daemon owns this prompt already; re-sending it would duplicate the
+  // user's message.
+  if (acceptedHeadAwaitingTurn) {
+    return { kind: "blocked", reason: "accepted_awaiting_turn" };
   }
   if (record.suspendReason) {
     return { kind: "blocked", reason: "suspended" };

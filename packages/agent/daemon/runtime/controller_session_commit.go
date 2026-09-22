@@ -104,7 +104,7 @@ func (c *Controller) commitTurnExecSessionLocked(key, turnID string, update Sess
 		return Session{}, false
 	}
 	if settle {
-		delete(c.turns, key)
+		c.releaseTurnSlotLocked(key)
 	}
 	current, ok := c.sessions[key]
 	if !ok {

@@ -128,6 +128,14 @@ export function validateSendInputResult(
   if (value.kind === "goalControl") {
     return { kind: "valid", result: value };
   }
+  if (value.kind === "queued") {
+    // Accepted without a turn to read back: the daemon parked the prompt
+    // behind the running turn and owns dispatching it. The canonical turn id
+    // is already allocated, so it can still serialize the next send.
+    return value.turnId.trim()
+      ? { kind: "valid", result: value }
+      : { kind: "invalid", reason: "send_result_turn_scope_mismatch" };
+  }
   const turnSessionId = value.turn.agentSessionId.trim();
   const turnId = value.turnId.trim();
   if (!turnId || value.turn.turnId.trim() !== turnId) {
@@ -152,6 +160,15 @@ function isSendInputResult(
     turn?: Partial<AgentActivityTurn>;
     turnId?: unknown;
   };
+  if (
+    result.kind === "queued" &&
+    result.session &&
+    typeof result.turnId === "string" &&
+    typeof result.session.agentSessionId === "string" &&
+    typeof result.session.workspaceId === "string"
+  ) {
+    return true;
+  }
   if (
     result.kind === "goalControl" &&
     result.session &&

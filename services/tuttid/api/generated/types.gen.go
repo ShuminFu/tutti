@@ -2806,6 +2806,21 @@ func (e SendWorkspaceAgentSessionInputGoalControlResponseKind) Valid() bool {
 	}
 }
 
+// Defines values for SendWorkspaceAgentSessionInputQueuedResponseKind.
+const (
+	SendWorkspaceAgentSessionInputQueuedResponseKindQueued SendWorkspaceAgentSessionInputQueuedResponseKind = "queued"
+)
+
+// Valid indicates whether the value is a known member of the SendWorkspaceAgentSessionInputQueuedResponseKind enum.
+func (e SendWorkspaceAgentSessionInputQueuedResponseKind) Valid() bool {
+	switch e {
+	case SendWorkspaceAgentSessionInputQueuedResponseKindQueued:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SendWorkspaceAgentSessionInputTurnResponseKind.
 const (
 	SendWorkspaceAgentSessionInputTurnResponseKindTurn SendWorkspaceAgentSessionInputTurnResponseKind = "turn"
@@ -8001,6 +8016,16 @@ type SendWorkspaceAgentSessionInputGoalControlResponse struct {
 // SendWorkspaceAgentSessionInputGoalControlResponseKind defines model for SendWorkspaceAgentSessionInputGoalControlResponse.Kind.
 type SendWorkspaceAgentSessionInputGoalControlResponseKind string
 
+// SendWorkspaceAgentSessionInputQueuedResponse The submission was accepted but not dispatched: the session's one canonical turn slot was still running another turn. The daemon owns the wait and starts this prompt when the slot frees, so clients must not resend it and must not surface a send failure. turnId is the canonical turn this prompt will occupy once it starts.
+type SendWorkspaceAgentSessionInputQueuedResponse struct {
+	Kind    SendWorkspaceAgentSessionInputQueuedResponseKind `json:"kind"`
+	Session WorkspaceAgentSession                            `json:"session"`
+	TurnId  string                                           `json:"turnId"`
+}
+
+// SendWorkspaceAgentSessionInputQueuedResponseKind defines model for SendWorkspaceAgentSessionInputQueuedResponse.Kind.
+type SendWorkspaceAgentSessionInputQueuedResponseKind string
+
 // SendWorkspaceAgentSessionInputRequest defines model for SendWorkspaceAgentSessionInputRequest.
 type SendWorkspaceAgentSessionInputRequest struct {
 	// CapabilityRefs Structured capability references attached to this submission. They are persisted on the turn but never converted into provider prompt text.
@@ -11261,6 +11286,34 @@ func (t *SendWorkspaceAgentSessionInputResponse) MergeSendWorkspaceAgentSessionI
 	return err
 }
 
+// AsSendWorkspaceAgentSessionInputQueuedResponse returns the union data inside the SendWorkspaceAgentSessionInputResponse as a SendWorkspaceAgentSessionInputQueuedResponse
+func (t SendWorkspaceAgentSessionInputResponse) AsSendWorkspaceAgentSessionInputQueuedResponse() (SendWorkspaceAgentSessionInputQueuedResponse, error) {
+	var body SendWorkspaceAgentSessionInputQueuedResponse
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSendWorkspaceAgentSessionInputQueuedResponse overwrites any union data inside the SendWorkspaceAgentSessionInputResponse as the provided SendWorkspaceAgentSessionInputQueuedResponse
+func (t *SendWorkspaceAgentSessionInputResponse) FromSendWorkspaceAgentSessionInputQueuedResponse(v SendWorkspaceAgentSessionInputQueuedResponse) error {
+	v.Kind = "queued"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSendWorkspaceAgentSessionInputQueuedResponse performs a merge with any union data inside the SendWorkspaceAgentSessionInputResponse, using the provided SendWorkspaceAgentSessionInputQueuedResponse
+func (t *SendWorkspaceAgentSessionInputResponse) MergeSendWorkspaceAgentSessionInputQueuedResponse(v SendWorkspaceAgentSessionInputQueuedResponse) error {
+	v.Kind = "queued"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsSendWorkspaceAgentSessionInputGoalControlResponse returns the union data inside the SendWorkspaceAgentSessionInputResponse as a SendWorkspaceAgentSessionInputGoalControlResponse
 func (t SendWorkspaceAgentSessionInputResponse) AsSendWorkspaceAgentSessionInputGoalControlResponse() (SendWorkspaceAgentSessionInputGoalControlResponse, error) {
 	var body SendWorkspaceAgentSessionInputGoalControlResponse
@@ -11305,6 +11358,8 @@ func (t SendWorkspaceAgentSessionInputResponse) ValueByDiscriminator() (interfac
 	switch discriminator {
 	case "goalControl":
 		return t.AsSendWorkspaceAgentSessionInputGoalControlResponse()
+	case "queued":
+		return t.AsSendWorkspaceAgentSessionInputQueuedResponse()
 	case "turn":
 		return t.AsSendWorkspaceAgentSessionInputTurnResponse()
 	default:

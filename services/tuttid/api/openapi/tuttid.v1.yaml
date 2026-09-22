@@ -13282,12 +13282,39 @@ components:
     SendWorkspaceAgentSessionInputResponse:
       oneOf:
         - $ref: "#/components/schemas/SendWorkspaceAgentSessionInputTurnResponse"
+        - $ref: "#/components/schemas/SendWorkspaceAgentSessionInputQueuedResponse"
         - $ref: "#/components/schemas/SendWorkspaceAgentSessionInputGoalControlResponse"
       discriminator:
         propertyName: kind
         mapping:
           turn: "#/components/schemas/SendWorkspaceAgentSessionInputTurnResponse"
+          queued: "#/components/schemas/SendWorkspaceAgentSessionInputQueuedResponse"
           goalControl: "#/components/schemas/SendWorkspaceAgentSessionInputGoalControlResponse"
+    SendWorkspaceAgentSessionInputQueuedResponse:
+      type: object
+      additionalProperties: false
+      description: >-
+        The submission was accepted but not dispatched: the session's one
+        canonical turn slot was still running another turn. The daemon owns the
+        wait and starts this prompt when the slot frees, so clients must not
+        resend it and must not surface a send failure. turnId is the canonical
+        turn this prompt will occupy once it starts.
+      required:
+        - session
+        - kind
+        - turnId
+      properties:
+        session:
+          $ref: "#/components/schemas/WorkspaceAgentSession"
+        kind:
+          type: string
+          enum:
+            - queued
+          x-enum-varnames:
+            - SendWorkspaceAgentSessionInputQueuedResponseKindQueued
+        turnId:
+          type: string
+          minLength: 1
     SendWorkspaceAgentSessionInputTurnResponse:
       type: object
       additionalProperties: false

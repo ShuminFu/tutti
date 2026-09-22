@@ -27,19 +27,36 @@ export function settleQueueCommand(
   const [agentSessionId, current] = entry;
   const inFlight = current.inFlight!;
   if (intent.outcome === "succeeded" && validation?.kind === "valid") {
+    // A queued result still names the canonical turn this prompt will occupy,
+    // so the barrier keeps the next new-turn send behind it exactly as a
+    // dispatched one would.
     const deliveryBarrierTurnId =
       validation.result.kind === "goalControl"
         ? null
         : validation.result.turnId;
+    // A dispatched prompt leaves the queue because its Turn now carries the
+    // user's message. A queued one has no Turn yet — the daemon parked it
+    // behind the running one — so it stays in the queue, stamped with the
+    // Turn it is waiting for. Dropping it here would blank the message off
+    // the screen for the entire wait, which is the failure this whole path
+    // exists to prevent.
+    const accepted =
+      validation.result.kind === "queued" ? validation.result.turnId : null;
     const record = compactQueueRecord({
       ...current,
       deliveryBarrierTurnId,
       failedPromptId: null,
       failureMessage: null,
       inFlight: null,
-      prompts: current.prompts.filter(
-        (prompt) => prompt.id !== inFlight.promptId
-      ),
+      prompts: accepted
+        ? current.prompts.map((prompt) =>
+            prompt.id === inFlight.promptId
+              ? { ...prompt, acceptedTurnId: accepted }
+              : prompt
+          )
+        : current.prompts.filter(
+            (prompt) => prompt.id !== inFlight.promptId
+          ),
       pendingSendNowByPromptId: setPendingSendNowForPrompt(
         current.pendingSendNowByPromptId,
         inFlight.promptId,

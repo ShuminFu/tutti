@@ -109,6 +109,26 @@ func (s *Service) SendInput(ctx context.Context, workspaceID string, agentSessio
 		}
 		return SendInputResult{Session: session, Kind: "goalControl", GoalControl: &goal}, nil
 	}
+	if hostResult.Kind == agenthost.SubmitKindQueued {
+		// The session's one canonical turn slot was busy. The Host parked the
+		// prompt and will dispatch it when the slot frees, so there is no turn
+		// to read back yet — reporting a failure here is exactly the red banner
+		// this queue exists to remove.
+		logAgentSubmitTrace("service.send.queued", workspaceID, agentSessionID, input.ClientSubmitID, input.Metadata, map[string]any{
+			"turn_id": hostResult.TurnID,
+		})
+		session, getErr := s.Get(ctx, workspaceID, agentSessionID)
+		if getErr != nil {
+			return SendInputResult{}, getErr
+		}
+		return SendInputResult{
+			Session:            session,
+			Kind:               agenthost.SubmitKindQueued,
+			TurnID:             strings.TrimSpace(hostResult.TurnID),
+			TurnLifecycle:      hostResult.TurnLifecycle,
+			SubmitAvailability: hostResult.SubmitAvailability,
+		}, nil
+	}
 	if preparedTurnID != "" && strings.TrimSpace(hostResult.TurnID) != preparedTurnID {
 		return SendInputResult{}, ErrSubmitDeliveryUnknown
 	}

@@ -259,6 +259,14 @@ export function sessionLifecycleReducer(
             upsertCanonicalSession(state, sendResult.session, initialOperation)
           );
         }
+        if (sendResult.kind === "queued") {
+          // No turn exists yet: the daemon parked this prompt behind the
+          // running turn. Only the session snapshot is news; the turn shows up
+          // through the ordinary activity stream once it starts.
+          return result(
+            upsertCanonicalSession(state, sendResult.session, initialOperation)
+          );
+        }
         const { session, turn } = sendResult;
         const projected = upsertCanonicalTurn(
           upsertCanonicalSession(state, session, initialOperation),

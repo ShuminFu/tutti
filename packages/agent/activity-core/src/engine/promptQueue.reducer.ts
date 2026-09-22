@@ -567,6 +567,37 @@ function drainSession(
       if (!compacted) return result(state);
     }
   }
+  // A prompt the daemon parked waits here, visible, until the Turn it was
+  // promised shows up — that Turn then carries the user's message, so the
+  // queue entry has done its job and goes. Until then the head is not ours to
+  // send.
+  let acceptedHeadAwaitingTurn = false;
+  const acceptedTurnId = record.prompts[0]?.acceptedTurnId?.trim();
+  if (acceptedTurnId) {
+    const acceptedPromptId = record.prompts[0]!.id;
+    if (lifecycle.turnsById[canonicalTurnKey(agentSessionId, acceptedTurnId)]) {
+      const compacted = compactQueueRecord({
+        ...record,
+        pendingSendNowByPromptId: setPendingSendNowForPrompt(
+          record.pendingSendNowByPromptId,
+          acceptedPromptId,
+          null
+        ),
+        prompts: record.prompts.slice(1),
+        sendNextPromptId:
+          record.sendNextPromptId === acceptedPromptId
+            ? null
+            : record.sendNextPromptId
+      });
+      state = compacted
+        ? replaceRecord(state, agentSessionId, compacted)
+        : deleteRecord(state, agentSessionId);
+      if (!compacted) return result(state);
+      record = compacted;
+    } else {
+      acceptedHeadAwaitingTurn = true;
+    }
+  }
   const availability = deriveCanonicalSubmitAvailability(
     lifecycle,
     agentSessionId
@@ -599,7 +630,8 @@ function drainSession(
     record,
     availability,
     barrierPending,
-    isSettingsUpdateBlockingDrain(lifecycle, agentSessionId)
+    isSettingsUpdateBlockingDrain(lifecycle, agentSessionId),
+    acceptedHeadAwaitingTurn
   );
   if (decision.kind === "blocked") {
     return state === originalState ? unchanged(state) : result(state);

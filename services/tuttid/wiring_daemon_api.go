@@ -458,6 +458,10 @@ func buildDaemonAPI(
 		return tuttiapi.DaemonAPI{}, nil, nil, nil, fmt.Errorf("compose agent host")
 	}
 	configureAgentProviderGoalAdoption(agentRuntime.Controller(), agentHost)
+	// One owner for "is this session's turn slot free?": the runtime tells the
+	// Host, and the Host admits the prompts parked behind it. Without this the
+	// admission queue never drains and a busy-session prompt hangs forever.
+	agentRuntime.Controller().SetTurnSlotObserver(agentHost)
 	agentActivityProjection.SetTurnForkabilityResolver(agentHost)
 	agentSessionConfig.Host = agentservice.ServiceHostConfig{
 		ApplicationHost: agentHost,

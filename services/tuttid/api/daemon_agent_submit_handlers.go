@@ -330,6 +330,22 @@ func (api DaemonAPI) SendWorkspaceAgentSessionInput(ctx context.Context, request
 		return tuttigenerated.SendWorkspaceAgentSessionInput200JSONResponse(response), nil
 	}
 	turnID := strings.TrimSpace(result.TurnID)
+	if result.Kind == agenthost.SubmitKindQueued {
+		// Accepted, not dispatched. There is no durable turn to hand back yet;
+		// the daemon starts this prompt when the session's turn slot frees.
+		if turnID == "" {
+			return writeSendWorkspaceAgentSessionInputError(agentservice.ErrSubmitDeliveryUnknown), nil
+		}
+		queuedResponse := tuttigenerated.SendWorkspaceAgentSessionInputQueuedResponse{
+			Kind:    tuttigenerated.SendWorkspaceAgentSessionInputQueuedResponseKindQueued,
+			Session: generatedSession,
+			TurnId:  turnID,
+		}
+		if err := response.FromSendWorkspaceAgentSessionInputQueuedResponse(queuedResponse); err != nil {
+			return nil, err
+		}
+		return tuttigenerated.SendWorkspaceAgentSessionInput200JSONResponse(response), nil
+	}
 	if turnID == "" || result.Turn == nil || strings.TrimSpace(result.Turn.TurnID) != turnID {
 		return writeSendWorkspaceAgentSessionInputError(agentservice.ErrSubmitDeliveryUnknown), nil
 	}

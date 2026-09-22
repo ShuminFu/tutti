@@ -6,6 +6,14 @@ import type {
 } from "../types.ts";
 
 export interface EngineQueuedPrompt {
+  /**
+   * Set once the daemon accepted this prompt but parked it behind the
+   * session's running turn: it names the canonical Turn the daemon already
+   * allocated for it. The prompt is no longer ours to send — it stays visible
+   * so the user still sees their message waiting, and leaves the queue when
+   * that Turn is observed.
+   */
+  acceptedTurnId?: string;
   capabilityRefs?: readonly AgentActivityCapabilityReference[];
   clientSubmitId?: string;
   content: readonly AgentPromptContentBlock[];
