@@ -87,6 +87,8 @@ type Service struct {
 	providerAvailabilityCache      *providerAvailabilityCache
 	capabilityCatalogCache         *composerCapabilityCatalogCache
 	liveModelCache                 *composerLiveModelCache
+	liveModelCacheStore            composerLiveModelCacheStore
+	liveModelCacheMissLogged       map[string]struct{}
 	claudeStartupLock              *claudecodeservice.StartupGate
 	liveModelDiscoveryMu           sync.Mutex
 	liveModelDiscoveryAttempted    map[string]struct{}

@@ -149,6 +149,15 @@ export interface AgentActivityComposerOptions {
   } | null;
   /** Authoritative model default identity for the selected agent target. */
   modelConfiguration?: AgentActivityComposerModelConfiguration | null;
+  /**
+   * Daemon-owned model-list cache. `missing` means the dropdown should ask
+   * the user to refresh instead of looking blank.
+   */
+  modelListCache?: {
+    state: "missing" | "fresh" | "stale";
+    lastError?: string | null;
+    fetchedAtUnixMs?: number | null;
+  };
   loadedAtUnixMs: number;
 }
 

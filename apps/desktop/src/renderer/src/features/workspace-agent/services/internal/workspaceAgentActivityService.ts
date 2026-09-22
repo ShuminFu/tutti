@@ -922,6 +922,25 @@ export class WorkspaceAgentActivityService
     });
   }
 
+  async refreshComposerModels(input: {
+    agentTargetId: string;
+    cwd?: string | null;
+    force?: boolean;
+    provider?: string;
+    settings?: Parameters<typeof normalizeComposerSettings>[0] | null;
+    workspaceId: string;
+  }): Promise<AgentActivityComposerOptions> {
+    const provider = resolveDesktopAgentGUIProvider(input.provider);
+    await this.dependencies.tuttidClient.refreshComposerModelList(provider, {
+      agentTargetId: input.agentTargetId,
+      cwd: input.cwd ?? undefined,
+      force: input.force,
+      settings: normalizeComposerSettings(input.settings),
+      workspaceId: input.workspaceId
+    });
+    return this.getComposerOptions({ ...input, force: true });
+  }
+
   async updateSessionSettings(input: {
     agentSessionId: string;
     signal?: AbortSignal;

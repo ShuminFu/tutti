@@ -57,7 +57,27 @@ export function agentActivityComposerOptionsFromTuttidResult(
     modelConfiguration: composerModelConfigurationFromValue(
       runtimeContext.modelConfiguration
     ),
+    ...composerModelListCacheFields(runtimeContext.composerModelListCache),
     loadedAtUnixMs: Date.now()
+  };
+}
+
+function composerModelListCacheFields(
+  value: unknown
+): Pick<AgentActivityComposerOptions, "modelListCache"> {
+  const record = recordValue(value);
+  const state = record.state;
+  if (state !== "missing" && state !== "fresh" && state !== "stale") {
+    return {};
+  }
+  const fetchedAtUnixMs =
+    typeof record.fetchedAtUnixMs === "number" ? record.fetchedAtUnixMs : null;
+  return {
+    modelListCache: {
+      state,
+      lastError: normalizeText(record.lastError) ?? null,
+      fetchedAtUnixMs
+    }
   };
 }
 

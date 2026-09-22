@@ -1091,7 +1091,8 @@ function createDependenciesStub(): {
       cancelWorkspaceIssueExecution: fail,
       setCollaborationRunAdoption: fail,
       cancelTuttiModeExecution: fail,
-      readWorkspaceIssueAttachment: fail
+      readWorkspaceIssueAttachment: fail,
+      refreshComposerModelList: fail
     },
     platformApi: {
       homeDirectory: "/Users/local",

@@ -20,6 +20,7 @@ import {
   withoutAcknowledgedComposerDefaults
 } from "./agentGuiController.providerHelpers";
 import type { AgentGUIComposerDefaultsAuthorityReconciler } from "./agentGuiComposerDefaultsReconciliation";
+import { setComposerModelListProbe } from "./composerModelListProbe";
 
 export function useAgentGUIComposerOptionsSync(input: {
   activeConversationId: string | null;
@@ -55,23 +56,17 @@ export function useAgentGUIComposerOptionsSync(input: {
   const previousIsCreatingConversationRef = useRef(
     input.isCreatingConversation
   );
-  const loadComposerOptionsForTarget = useCallback(
+  // 挂载和下拉刷新必须共用这一份 settings。扩展模型缓存的键含它的签名，
+  // 只在一边带上会写成另一条记录，重启后读不回，打开下拉又会再探测。
+  const resolveComposerRequest = useCallback(
     (
       targetData: AgentGUIComposerTargetData,
       options?: {
-        allowWhileCreating?: boolean;
         excludePersistentDefaults?: boolean;
-        force?: boolean;
         reconcileAcknowledgedDefaults?: boolean;
         settings?: AgentSessionComposerSettings;
       }
-    ): Promise<void> => {
-      if (
-        (input.isCreatingConversation && !options?.allowWhileCreating) ||
-        !targetData.agentTargetId
-      ) {
-        return Promise.resolve();
-      }
+    ) => {
       const localSettings =
         options?.settings ??
         readNodeDefaultDraftSettings({
@@ -98,6 +93,37 @@ export function useAgentGUIComposerOptionsSync(input: {
         input.selectedProjectPathRef.current?.trim() ||
         input.workspacePath.trim() ||
         "";
+      return { authorityRead, cwd, requestSettings };
+    },
+    [
+      input.defaultReasoningEffort,
+      input.draftSettingsBySessionIdRef,
+      input.onComposerDefaultsAuthorityReloadedRef,
+      input.selectedProjectPathRef,
+      input.workspacePath
+    ]
+  );
+  const loadComposerOptionsForTarget = useCallback(
+    (
+      targetData: AgentGUIComposerTargetData,
+      options?: {
+        allowWhileCreating?: boolean;
+        excludePersistentDefaults?: boolean;
+        force?: boolean;
+        reconcileAcknowledgedDefaults?: boolean;
+        settings?: AgentSessionComposerSettings;
+      }
+    ): Promise<void> => {
+      if (
+        (input.isCreatingConversation && !options?.allowWhileCreating) ||
+        !targetData.agentTargetId
+      ) {
+        return Promise.resolve();
+      }
+      const { authorityRead, cwd, requestSettings } = resolveComposerRequest(
+        targetData,
+        options
+      );
       return Promise.resolve(
         input.agentActivityRuntime.getComposerOptions({
           workspaceId: input.workspaceId,
@@ -127,10 +153,9 @@ export function useAgentGUIComposerOptionsSync(input: {
     },
     [
       input.agentActivityRuntime,
-      input.defaultReasoningEffort,
       input.isCreatingConversation,
       input.workspaceId,
-      input.workspacePath
+      resolveComposerRequest
     ]
   );
   const loadDraftComposerOptions = useCallback(
@@ -176,6 +201,46 @@ export function useAgentGUIComposerOptionsSync(input: {
     [loadComposerOptionsForTarget]
   );
   input.loadDraftComposerOptionsRef.current = loadDraftComposerOptions;
+
+  useEffect(() => {
+    // 挂载和切 provider 走上面的 getComposerOptions，不在这里探测。
+    // 下拉打开或点「刷新」才调用这一支。
+    setComposerModelListProbe((force) => {
+      const refresh = input.agentActivityRuntime.refreshComposerModels;
+      if (!refresh) return;
+      const target = composerTargetDataForConversation({
+        activeConversationId: input.activeConversationIdRef.current,
+        activeSessionTarget: input.activeSessionTarget,
+        data: input.dataRef.current,
+        optimisticTarget: null,
+        selectedTarget: input.selectedComposerTargetDataRef.current
+      });
+      if (!target.agentTargetId) return;
+      const { cwd, requestSettings } = resolveComposerRequest(target, {
+        reconcileAcknowledgedDefaults:
+          input.activeConversationIdRef.current === null &&
+          input.isComposerHomeRef.current
+      });
+      void refresh({
+        workspaceId: input.workspaceId,
+        cwd,
+        force,
+        provider: target.provider,
+        agentTargetId: target.agentTargetId,
+        settings: requestSettings
+      });
+    });
+    return () => setComposerModelListProbe(null);
+  }, [
+    input.activeConversationIdRef,
+    input.activeSessionTarget,
+    input.agentActivityRuntime,
+    input.dataRef,
+    input.isComposerHomeRef,
+    input.selectedComposerTargetDataRef,
+    input.workspaceId,
+    resolveComposerRequest
+  ]);
 
   useEffect(() => {
     const disposeModelCatalog = subscribeCoalesced(

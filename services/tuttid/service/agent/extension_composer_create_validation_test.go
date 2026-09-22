@@ -163,7 +163,7 @@ func TestServiceGetComposerOptionsIgnoresStalePersistedPermissionDefault(t *test
 		},
 	}
 
-	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+	options, err := service.OpenComposerModelDropdown(context.Background(), ComposerOptionsInput{
 		AgentTargetID: extensionComposerValidationTargetID,
 		WorkspaceID:   "workspace-extension",
 		Cwd:           cwd,
@@ -214,7 +214,7 @@ func TestServiceGetComposerOptionsUsesRuntimeCurrentBeforeSemanticProfileDefault
 			},
 		},
 	}
-	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+	options, err := service.OpenComposerModelDropdown(context.Background(), ComposerOptionsInput{
 		AgentTargetID: extensionComposerValidationTargetID,
 		WorkspaceID:   "workspace-extension",
 		Cwd:           t.TempDir(),

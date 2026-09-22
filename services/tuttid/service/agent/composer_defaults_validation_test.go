@@ -27,7 +27,7 @@ func TestValidateAgentComposerDefaultsPatchUsesObservedExtensionTargetCatalog(t 
 		{cwd: cwdA, model: "gemini-project-a", workspace: "workspace-a"},
 		{cwd: cwdB, model: "gemini-project-b", workspace: "workspace-b"},
 	} {
-		options, err := service.GetComposerOptions(ctx, ComposerOptionsInput{
+		options, err := service.OpenComposerModelDropdown(ctx, ComposerOptionsInput{
 			AgentTargetID: extensionComposerValidationTargetID,
 			Provider:      "acp:gemini",
 			WorkspaceID:   input.workspace,
@@ -97,7 +97,7 @@ func TestServiceCreateResolvesObservedExtensionDefaultForActualCwd(t *testing.T)
 		cwdA: "gemini-project-a",
 		cwdB: "gemini-project-b",
 	})
-	if _, err := service.GetComposerOptions(ctx, ComposerOptionsInput{
+	if _, err := service.OpenComposerModelDropdown(ctx, ComposerOptionsInput{
 		AgentTargetID: extensionComposerValidationTargetID,
 		Provider:      "acp:gemini",
 		WorkspaceID:   "workspace-menu-a",

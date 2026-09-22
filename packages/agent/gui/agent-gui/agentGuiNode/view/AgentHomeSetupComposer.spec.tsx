@@ -68,7 +68,7 @@ describe("home setup composer", () => {
             presentationEditorDisabled: false,
             presentationSubmitDisabled: false,
             onSubmit
-          } as AgentComposerProps)}
+          } as unknown as AgentComposerProps)}
         />
       </AgentTargetSetupControllerProvider>
     );

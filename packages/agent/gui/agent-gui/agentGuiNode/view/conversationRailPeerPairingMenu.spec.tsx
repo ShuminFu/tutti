@@ -52,9 +52,13 @@ describe("peer pairing menu title", () => {
     const entry = pairWithEntry({
       marked: mark({ title: `${BOILERPLATE}\n\n侧栏自己的那句` }),
       pairs: [
-        pair("pair-xa", endpoint("session-x"), endpoint("session-a", {
-          title: "后端剥好的标题"
-        }))
+        pair(
+          "pair-xa",
+          endpoint("session-x"),
+          endpoint("session-a", {
+            title: "后端剥好的标题"
+          })
+        )
       ]
     });
 
@@ -76,9 +80,9 @@ describe("peer pairing menu title", () => {
       "Session A",
       "长".repeat(200)
     ]) {
-      expect(titleOf(pairWithEntry({ marked: mark({ title }) }).label)).not.toBe(
-        ""
-      );
+      expect(
+        titleOf(pairWithEntry({ marked: mark({ title }) }).label)
+      ).not.toBe("");
     }
   });
 });
@@ -151,24 +155,25 @@ describe("peer pairing menu on an unmanaged conversation", () => {
     });
 
     const first = entries[0];
+    if (!first) {
+      throw new Error("missing pairing entry");
+    }
     expect(first.label).toBe(LABELS.peerPairUnmanaged);
     expect(first.disabled).toBe(true);
     // 反向：既不给「标记」也不给「与…配对」，点不出任何写操作。
     expect(entries.map((entry) => entry.label)).not.toContain(
       LABELS.peerPairMark
     );
-    expect(
-      entries.some((entry) => entry.label.startsWith("Pair with"))
-    ).toBe(false);
+    expect(entries.some((entry) => entry.label.startsWith("Pair with"))).toBe(
+      false
+    );
   });
 });
 
 // 验收项 5：老宿主（没注册 list/pair/unpair 这三个能力）里整组配对项不出现。
 describe("peer pairing menu on a host without the capability", () => {
   it("renders no pairing entries at all when the capability is missing", () => {
-    expect(
-      buildEntries({ marked: mark({}), supported: false })
-    ).toEqual([]);
+    expect(buildEntries({ marked: mark({}), supported: false })).toEqual([]);
     // 有对端记录也一样：整组消失，不是只灰掉。
     expect(
       buildEntries({
@@ -232,7 +237,8 @@ function pairWithEntry(input: {
 }): ConversationRailPeerPairingMenuEntry {
   const entries = buildEntries(input);
   const entry = entries.find((candidate) => candidate.id === "peer-pair-with");
-  if (!entry) throw new Error(`no pair-with entry in ${entries.map((e) => e.id)}`);
+  if (!entry)
+    throw new Error(`no pair-with entry in ${entries.map((e) => e.id)}`);
   return entry;
 }
 

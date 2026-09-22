@@ -184,6 +184,14 @@ export interface IWorkspaceAgentActivityService {
     settings?: AgentHostAgentSessionComposerSettings | null;
     workspaceId: string;
   }): Promise<AgentActivityComposerOptions>;
+  refreshComposerModels?(input: {
+    agentTargetId: string;
+    cwd?: string | null;
+    force?: boolean;
+    provider?: string;
+    settings?: AgentHostAgentSessionComposerSettings | null;
+    workspaceId: string;
+  }): Promise<AgentActivityComposerOptions>;
   updateSessionSettings(input: {
     agentSessionId: string;
     signal?: AbortSignal;

@@ -180,6 +180,7 @@ func TestExtensionPersistedModelFallbackRequiresExactRuntimeIdentity(t *testing.
 	}}
 	input := extensionComposerDiscoveryInput(project)
 	input.providerTargetRef = currentRef
+	input.modelListProbe = composerModelListProbeIfStale
 
 	options, err := service.mergeLiveComposerModelsForComposerOptions(
 		context.Background(),
@@ -628,7 +629,7 @@ func TestHostEndpointExtensionDiscoversReasoningBeforeFirstCreate(t *testing.T) 
 	if started.PermissionModeID != permission || started.ReasoningEffort != reasoning || started.Model != model {
 		t.Fatalf("start settings = permission %q reasoning %q model %q", started.PermissionModeID, started.ReasoningEffort, started.Model)
 	}
-	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+	options, err := service.OpenComposerModelDropdown(context.Background(), ComposerOptionsInput{
 		AgentTargetID: "extension:example", Provider: "acp:example", WorkspaceID: "workspace-1",
 		Cwd: started.Cwd, Settings: ComposerSettings{Model: model, ReasoningEffort: reasoning, PermissionModeID: permission},
 	})
@@ -671,6 +672,7 @@ func TestExtensionComposerDiscoveryFailureIsNotMissingCapability(t *testing.T) {
 	}
 	service := newIsolatedAgentService(runtime)
 	input := extensionComposerDiscoveryInput(t.TempDir())
+	input.modelListProbe = composerModelListProbeIfStale
 	_, err := service.mergeLiveComposerModelsForComposerOptions(context.Background(), input, ComposerSettings{}, ComposerOptions{})
 	if !errors.Is(err, errLiveModelDiscoverySessionFailed) {
 		t.Fatalf("composer error = %v, want actual discovery failure", err)
@@ -693,6 +695,7 @@ func TestExtensionComposerRuntimeStartFailureIsNotMissingCapability(t *testing.T
 	runtime.startErr = failure
 	service := newIsolatedAgentService(runtime)
 	input := extensionComposerDiscoveryInput(t.TempDir())
+	input.modelListProbe = composerModelListProbeIfStale
 	_, err := service.mergeLiveComposerModelsForComposerOptions(context.Background(), input, ComposerSettings{}, ComposerOptions{})
 	if !errors.Is(err, errLiveModelDiscoverySessionFailed) || !errors.Is(err, failure) {
 		t.Fatalf("composer error = %v, want original runtime start failure", err)

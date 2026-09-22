@@ -144,6 +144,17 @@ export function createDesktopAgentActivityRuntime(
       workspaceAgentActivityService.deleteSession(input),
     getComposerOptions: (input) =>
       workspaceAgentActivityService.getComposerOptions(input),
+    ...(workspaceAgentActivityService.refreshComposerModels
+      ? {
+          refreshComposerModels: (
+            input: Parameters<
+              NonNullable<
+                IWorkspaceAgentActivityService["refreshComposerModels"]
+              >
+            >[0]
+          ) => workspaceAgentActivityService.refreshComposerModels!(input)
+        }
+      : {}),
     getSession: (workspaceId, agentSessionId) =>
       workspaceAgentActivityService.getSession(workspaceId, agentSessionId),
     getSnapshot(workspaceId) {
