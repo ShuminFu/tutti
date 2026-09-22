@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor
+} from "@testing-library/react";
 import { useState } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createDefaultWorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
@@ -189,7 +195,7 @@ describe("WorkspaceUserProjectSelect render budget", () => {
       pinnedAtUnixMs: 0
     };
     let projects = [project];
-    let notifyProjectsChanged = () => undefined;
+    let notifyProjectsChanged: () => void = () => undefined;
     const rememberDefaultSelection = vi.fn(async () => undefined);
     const api = {
       list: vi.fn(async () => ({ projects })),
@@ -220,9 +226,9 @@ describe("WorkspaceUserProjectSelect render budget", () => {
     act(() => notifyProjectsChanged());
 
     await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "Project" })).toHaveTextContent(
-        "No project"
-      )
+      expect(
+        screen.getByRole("combobox", { name: "Project" })
+      ).toHaveTextContent("No project")
     );
     expect(rememberDefaultSelection).toHaveBeenCalledWith({ path: null });
   });

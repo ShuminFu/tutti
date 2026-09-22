@@ -17,7 +17,7 @@ func TestGetLiveComposerModelOptionsClaudeExpiresForRediscovery(t *testing.T) {
 		{Value: "claude-fable-5[1m]", Label: "Fable"},
 	})
 
-	if _, ok := service.getLiveComposerModelOptions("claude-code", "ws-1", "/repo", cachedAt.Add(24*time.Hour)); ok {
+	if _, ok := service.getLiveComposerModelOptions("claude-code", "ws-1", "/repo", cachedAt.Add(25*time.Hour)); ok {
 		t.Fatal("claude live model cache did not expire")
 	}
 }

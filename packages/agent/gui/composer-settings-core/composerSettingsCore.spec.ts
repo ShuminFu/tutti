@@ -103,7 +103,7 @@ describe("ComposerSettingsCore", () => {
       })
     );
     await settled();
-    expect(core.getSnapshot().options?.effectiveSettings.model).toBe(
+    expect(core.getSnapshot().options?.effectiveSettings?.model).toBe(
       "deepseek-flash[1m]"
     );
 
@@ -114,10 +114,12 @@ describe("ComposerSettingsCore", () => {
       })
     );
     await settled();
-    expect(core.getSnapshot().options?.effectiveSettings.model).toBe(
+    expect(core.getSnapshot().options?.effectiveSettings?.model).toBe(
       "deepseek-flash[1m]"
     );
-    expect(core.getSnapshot().resolvedSettings.model).toBe("deepseek-flash[1m]");
+    expect(core.getSnapshot().resolvedSettings.model).toBe(
+      "deepseek-flash[1m]"
+    );
   });
 
   it("does not let a stale 1M response stick after switching back to the bare lane", async () => {
@@ -128,7 +130,7 @@ describe("ComposerSettingsCore", () => {
       options({ effectiveSettings: { model: "deepseek-flash" } })
     );
     await settled();
-    expect(core.getSnapshot().options?.effectiveSettings.model).toBe(
+    expect(core.getSnapshot().options?.effectiveSettings?.model).toBe(
       "deepseek-flash"
     );
 
@@ -136,7 +138,7 @@ describe("ComposerSettingsCore", () => {
       options({ effectiveSettings: { model: "deepseek-flash[1m]" } })
     );
     await settled();
-    expect(core.getSnapshot().options?.effectiveSettings.model).toBe(
+    expect(core.getSnapshot().options?.effectiveSettings?.model).toBe(
       "deepseek-flash"
     );
     expect(core.getSnapshot().resolvedSettings.model).toBe("deepseek-flash");

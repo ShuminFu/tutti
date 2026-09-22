@@ -130,7 +130,7 @@ func TestServiceGetComposerOptionsPreservesGenericExtensionTargetAndProjectsSign
 		},
 	}
 
-	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+	options, err := service.OpenComposerModelDropdown(context.Background(), ComposerOptionsInput{
 		AgentTargetID: "extension:example",
 		Provider:      "acp:example",
 		WorkspaceID:   "workspace-1",

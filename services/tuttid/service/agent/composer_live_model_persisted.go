@@ -70,7 +70,10 @@ func (s *Service) liveModelOptionsFromPersistedSessionsForScope(scope composerLi
 // session row in the workspace (unbounded SQLite query plus per-row JSON
 // decoding), so an unmemoized miss would rerun it on every composer-options
 // fetch for workspaces that have nothing to restore.
-const persistedLiveModelScanMissTTL = defaultLiveModelCacheTTL
+// Kept at the old 10 minute window. The model-list TTL moved to 24 hours;
+// stretching this memo the same way would hide a newly persisted session
+// from the fallback scan for a day.
+const persistedLiveModelScanMissTTL = 10 * time.Minute
 
 // persistedLiveModelFallback restores the most recent model list a past
 // provider session persisted, seeding the live-model cache on a hit so later

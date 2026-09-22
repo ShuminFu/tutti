@@ -93,7 +93,19 @@ type ComposerOptionsInput struct {
 	// rather than the provider registry's static profile. Extension targets
 	// only — see applyTargetRuntimeEvidence.
 	IncludeTargetRuntimeEvidence bool
+	// modelListProbe is set only by the dropdown-open and manual-refresh
+	// entry points. A plain composer-options read, including the client's
+	// existing force reload, must leave this zero so it never forks a CLI.
+	modelListProbe composerModelListProbeMode
 }
+
+type composerModelListProbeMode int
+
+const (
+	composerModelListProbeNone composerModelListProbeMode = iota
+	composerModelListProbeIfStale
+	composerModelListProbeForce
+)
 
 type ComposerSkillOption struct {
 	Name        string
@@ -472,6 +484,7 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		if err != nil {
 			return ComposerOptions{}, err
 		}
+		options = s.attachComposerModelListCache(ctx, input, effectiveSettings, options)
 	}
 	if providerTargetRefKind(input.providerTargetRef) == "agent_extension" {
 		var err error

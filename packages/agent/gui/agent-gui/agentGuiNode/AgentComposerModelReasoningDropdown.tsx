@@ -27,6 +27,7 @@ import {
 } from "./model/composerSettingsMenuModel";
 import { useComposerModelHistory } from "../../shared/composerModelHistory/useComposerModelHistory";
 import { translate } from "../../i18n/index";
+import { requestComposerModelListProbe } from "./controller/composerModelListProbe";
 import styles from "./AgentGUINode.styles";
 
 export function ComposerOptionInfoTooltip({
@@ -72,6 +73,7 @@ export function AgentModelReasoningDropdown({
   labels,
   modelHistoryTargetId = null,
   onRetryComposerOptions,
+  onRequestModelList,
   onSettingsChange
 }: {
   composerSettings: AgentGUIComposerSettingsVM;
@@ -85,6 +87,7 @@ export function AgentModelReasoningDropdown({
    */
   modelHistoryTargetId?: string | null;
   onRetryComposerOptions?: () => void;
+  onRequestModelList?: (input: { force: boolean }) => void;
   onSettingsChange: (patch: {
     model?: string;
     reasoningEffort?: string;
@@ -105,9 +108,26 @@ export function AgentModelReasoningDropdown({
     recordRecent,
     toggleFavorite
   } = useComposerModelHistory(modelHistoryTargetId);
+  const requestModelList = (force: boolean): void => {
+    if (onRequestModelList) {
+      onRequestModelList({ force });
+      return;
+    }
+    requestComposerModelListProbe(force);
+  };
+  const modelListMissing =
+    composerSettings.modelListState === "missing" &&
+    composerSettings.availableModels.length === 0;
   const handleMenuOpenChange = (open: boolean): void => {
     if (open) {
       refreshEmbeddedModelCatalog();
+      // 只有缓存缺失或过期才探测。新鲜缓存打开下拉不再 fork CLI。
+      if (
+        composerSettings.modelListState === "missing" ||
+        composerSettings.modelListState === "stale"
+      ) {
+        requestModelList(false);
+      }
       // Re-read the authoritative history (host record or localStorage). This
       // also picks up another menu's or window's writes, retries a failed read or
       // write, and clears the previous filter.
@@ -121,7 +141,11 @@ export function AgentModelReasoningDropdown({
     recentModelIds,
     searchQuery: modelSearchQuery
   });
-  const menuDisabled = disabled || menu.disabled;
+  const menuDisabled =
+    disabled ||
+    (menu.disabled &&
+      !modelListMissing &&
+      !composerSettings.modelListLastError);
   const isModelLoading =
     composerSettings.isModelOptionsLoading ||
     composerSettings.isSettingsLoading;
@@ -221,7 +245,9 @@ export function AgentModelReasoningDropdown({
                 strokeWidth={2.5}
               />
             ) : null}
-            {isModelLoading ? (
+            {modelListMissing && !isModelLoading ? (
+              <span className="min-w-0 truncate">点击刷新</span>
+            ) : isModelLoading ? (
               <span className="min-w-0 truncate">{labels.loadingOptions}</span>
             ) : menu.trigger.showCombined ? (
               <span className="min-w-0 truncate">
@@ -278,6 +304,20 @@ export function AgentModelReasoningDropdown({
         )}
         data-agent-composer-settings-layout="model-primary"
       >
+        {composerSettings.modelListLastError ? (
+          <div
+            data-agent-model-list-last-error="true"
+            className="px-2 pb-1 text-[11px] text-[var(--state-warning)]"
+          >
+            上次刷新失败
+          </div>
+        ) : null}
+        <DropdownMenuItem
+          data-agent-model-list-refresh="true"
+          onSelect={() => requestModelList(true)}
+        >
+          刷新
+        </DropdownMenuItem>
         {menu.model.show ? (
           <>
             <DropdownMenuLabel className="flex min-w-0 items-center gap-2">

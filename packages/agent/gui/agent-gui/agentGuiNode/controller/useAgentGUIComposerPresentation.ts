@@ -307,6 +307,9 @@ export function useAgentGUIComposerPresentation(
       modelSwitchTakesEffectNextTurn:
         input.activeConversationId !== null &&
         input.composerSupport.modelSwitch,
+      modelListState: input.providerComposerOptions?.modelListCache?.state,
+      modelListLastError:
+        input.providerComposerOptions?.modelListCache?.lastError ?? null,
       availableModels:
         input.composerSupport.model &&
         hasOptionsSource &&

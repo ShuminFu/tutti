@@ -382,6 +382,13 @@ export interface AgentGUIRuntime {
   getComposerOptions(
     input: AgentActivityRuntimeGetComposerOptionsInput
   ): Promise<AgentActivityComposerOptions>;
+  /**
+   * Asks tuttid to probe the model list. `force` bypasses the cache TTL.
+   * Mount and provider switches must keep using getComposerOptions instead.
+   */
+  refreshComposerModels?(
+    input: AgentActivityRuntimeGetComposerOptionsInput & { force?: boolean }
+  ): Promise<AgentActivityComposerOptions>;
   getSnapshot(workspaceId: string): AgentActivitySnapshot;
   getSessionEngine(workspaceId: string): AgentSessionEngine;
   listSessionMessages(

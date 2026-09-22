@@ -346,6 +346,10 @@ func (s *Service) validateExtensionComposerSettingsForCreate(
 		Cwd:                      cwd,
 		Settings:                 settings,
 		IncludeCapabilityCatalog: boolPointer(false),
+		// Creating a session still has to learn an extension's live catalog the
+		// first time. Composer mount must not do this; only a missing cache
+		// reaches the hidden probe here.
+		modelListProbe: composerModelListProbeIfStale,
 	})
 	if err != nil {
 		return err

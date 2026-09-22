@@ -18,7 +18,9 @@ function installHost(host: MonitorAutomationHost): void {
   unregister = registerMonitorAutomationHost(host);
 }
 
-function automation(over: Partial<HostMonitorAutomation> = {}): HostMonitorAutomation {
+function automation(
+  over: Partial<HostMonitorAutomation> = {}
+): HostMonitorAutomation {
   return {
     id: "auto_1",
     name: "盯 grok-8014",
@@ -39,6 +41,10 @@ function Probe({
   return null;
 }
 
+function resultBox(): { current: HostMonitorAutomationsResult | null } {
+  return { current: null };
+}
+
 describe("useHostMonitorAutomations", () => {
   afterEach(() => {
     unregister?.();
@@ -52,31 +58,45 @@ describe("useHostMonitorAutomations", () => {
       .mockResolvedValue({ monitors: [automation()] });
     installHost({ queryMonitorAutomations });
 
-    let latest: HostMonitorAutomationsResult | null = null;
-    render(<Probe agentSessionId="sess-a" onResult={(r) => (latest = r)} />);
+    const latest = resultBox();
+    render(
+      <Probe
+        agentSessionId="sess-a"
+        onResult={(result) => {
+          latest.current = result;
+        }}
+      />
+    );
 
     await waitFor(() => {
-      expect(latest?.monitors).toHaveLength(1);
+      expect(latest.current?.monitors).toHaveLength(1);
     });
     expect(queryMonitorAutomations).toHaveBeenCalledWith({
       creatorSessionIds: ["sess-a"]
     });
     // 只有查询没有停用能力：胶囊照常显示，但不给「停用」按钮。
-    expect(latest?.canStop).toBe(false);
+    expect(latest.current?.canStop).toBe(false);
   });
 
   it("never asks when there is no conversation open", async () => {
     const queryMonitorAutomations = vi.fn().mockResolvedValue({ monitors: [] });
     installHost({ queryMonitorAutomations });
 
-    let latest: HostMonitorAutomationsResult | null = null;
-    render(<Probe agentSessionId={null} onResult={(r) => (latest = r)} />);
+    const latest = resultBox();
+    render(
+      <Probe
+        agentSessionId={null}
+        onResult={(result) => {
+          latest.current = result;
+        }}
+      />
+    );
 
     await waitFor(() => {
-      expect(latest).not.toBeNull();
+      expect(latest.current).not.toBeNull();
     });
     expect(queryMonitorAutomations).not.toHaveBeenCalled();
-    expect(latest?.monitors).toEqual([]);
+    expect(latest.current?.monitors).toEqual([]);
   });
 
   it("stops polling for good once the host says unsupported", async () => {
@@ -98,17 +118,26 @@ describe("useHostMonitorAutomations", () => {
   it("disables every automation it is showing, then refreshes without waiting for the next tick", async () => {
     const monitors = [automation(), automation({ id: "auto_2" })];
     const queryMonitorAutomations = vi.fn().mockResolvedValue({ monitors });
-    const setMonitorAutomationsEnabled = vi.fn().mockResolvedValue({ updated: 2 });
+    const setMonitorAutomationsEnabled = vi
+      .fn()
+      .mockResolvedValue({ updated: 2 });
     installHost({ queryMonitorAutomations, setMonitorAutomationsEnabled });
 
-    let latest: HostMonitorAutomationsResult | null = null;
-    render(<Probe agentSessionId="sess-a" onResult={(r) => (latest = r)} />);
+    const latest = resultBox();
+    render(
+      <Probe
+        agentSessionId="sess-a"
+        onResult={(result) => {
+          latest.current = result;
+        }}
+      />
+    );
 
     await waitFor(() => {
-      expect(latest?.canStop).toBe(true);
+      expect(latest.current?.canStop).toBe(true);
     });
     const callsBefore = queryMonitorAutomations.mock.calls.length;
-    latest?.stopAll();
+    latest.current?.stopAll();
 
     await waitFor(() => {
       expect(setMonitorAutomationsEnabled).toHaveBeenCalledWith({
@@ -129,14 +158,21 @@ describe("useHostMonitorAutomations", () => {
     const setMonitorAutomationsEnabled = vi.fn();
     installHost({ queryMonitorAutomations, setMonitorAutomationsEnabled });
 
-    let latest: HostMonitorAutomationsResult | null = null;
-    render(<Probe agentSessionId="sess-a" onResult={(r) => (latest = r)} />);
+    const latest = resultBox();
+    render(
+      <Probe
+        agentSessionId="sess-a"
+        onResult={(result) => {
+          latest.current = result;
+        }}
+      />
+    );
 
     await waitFor(() => {
-      expect(latest?.monitors).toEqual([]);
+      expect(latest.current?.monitors).toEqual([]);
     });
-    expect(latest?.canStop).toBe(false);
-    latest?.stopAll();
+    expect(latest.current?.canStop).toBe(false);
+    latest.current?.stopAll();
     expect(setMonitorAutomationsEnabled).not.toHaveBeenCalled();
   });
 });

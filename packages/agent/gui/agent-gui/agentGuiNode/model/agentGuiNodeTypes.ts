@@ -358,6 +358,10 @@ export interface AgentGUIComposerSettingsVM {
   // a new model pick applies from the next request, so the model menu shows
   // the switch-effect footer hint.
   modelSwitchTakesEffectNextTurn?: boolean;
+  /** Daemon model-list cache. `missing` renders 点击刷新 instead of a blank menu. */
+  modelListState?: "missing" | "fresh" | "stale";
+  /** Set when the last probe failed and the previous list is still shown. */
+  modelListLastError?: string | null;
   availableModels: AgentGUIComposerSettingOption[];
   availableReasoningEfforts: AgentGUIComposerSettingOption[];
   availableSpeeds: AgentGUIComposerSettingOption[];

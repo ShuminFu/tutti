@@ -21,6 +21,7 @@ type Routes interface {
 	HandleManagedModelProviderModels(http.ResponseWriter, *http.Request, string, string)
 	HandleManagedModelProviderTest(http.ResponseWriter, *http.Request, string, string)
 	HandleManagedModelProviders(http.ResponseWriter, *http.Request, string)
+	HandleComposerModelList(http.ResponseWriter, *http.Request)
 }
 
 func RegisterRoutes(mux *http.ServeMux, routes Routes) {
@@ -213,6 +214,14 @@ func RegisterRoutes(mux *http.ServeMux, routes Routes) {
 			return
 		}
 		routes.AttachEventStreamWebSocket(w, r)
+	})
+
+	mux.HandleFunc("/v1/agent-providers/{provider}/composer-model-list", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			tuttitypes.WriteMethodNotAllowed(w)
+			return
+		}
+		routes.HandleComposerModelList(w, r)
 	})
 
 	mux.HandleFunc("/v1/agent-providers/{provider}/composer-options", func(w http.ResponseWriter, r *http.Request) {

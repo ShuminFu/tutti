@@ -6,6 +6,7 @@ import {
   runAgentProviderAction,
   setAgentProviderRuntimeSelection
 } from "./generated/index.ts";
+import type { AgentProviderComposerOptionsResponse } from "./generated/types.gen.ts";
 import type { Client } from "./generated/client/index.ts";
 import { unwrapData } from "./tuttidClientResponse.ts";
 import type { TuttidClient } from "./tuttidClientTypes.ts";
@@ -13,6 +14,7 @@ import type { TuttidClient } from "./tuttidClientTypes.ts";
 type AgentProvidersClient = Pick<
   TuttidClient,
   | "getAgentProviderComposerOptions"
+  | "refreshComposerModelList"
   | "getAgentProviderRuntimeCandidates"
   | "getAgentProviderStatuses"
   | "probeAgentProvider"
@@ -39,6 +41,18 @@ export function createAgentProvidersClient(
         response,
         "Get agent provider composer options request failed."
       );
+    },
+    async refreshComposerModelList(provider, request = {}, requestOptions) {
+      const response = await client.post<AgentProviderComposerOptionsResponse>({
+        ...requestOptions,
+        body: request,
+        path: { provider },
+        url: "/v1/agent-providers/{provider}/composer-model-list"
+      });
+      return unwrapData(
+        response,
+        "Refresh composer model list request failed."
+      ) as AgentProviderComposerOptionsResponse;
     },
     async getAgentProviderStatuses(request = {}) {
       const response = await getAgentProviderStatuses({

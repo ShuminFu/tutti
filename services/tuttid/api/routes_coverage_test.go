@@ -46,6 +46,7 @@ func (coverageStubRoutes) HandleManagedModelProviderTest(http.ResponseWriter, *h
 }
 func (coverageStubRoutes) HandleManagedModelProviders(http.ResponseWriter, *http.Request, string) {
 }
+func (coverageStubRoutes) HandleComposerModelList(http.ResponseWriter, *http.Request) {}
 
 // RegisterRoutes wires generated handlers into the daemon mux by hand, route
 // by route. A route that exists in the generated OpenAPI surface but is never

@@ -5,7 +5,9 @@ import type { AgentGUIProvider, AgentGUINodeData } from "../../../types";
 import { setAgentHostApiForTests } from "../../../agentActivityHost";
 import type { AgentHostRuntimeApi } from "../../../host/agentHostApi";
 import type { AgentGUIComposerTargetData } from "./agentGuiController.composerPresentation";
+import { nodeDefaultDraftKey } from "./agentGuiController.composerHelpers";
 import type { AgentGUIComposerDefaultsAuthorityReconciler } from "./agentGuiComposerDefaultsReconciliation";
+import { requestComposerModelListProbe } from "./composerModelListProbe";
 import { useAgentGUIComposerOptionsSync } from "./useAgentGUIComposerOptionsSync";
 
 describe("useAgentGUIComposerOptionsSync", () => {
@@ -622,6 +624,112 @@ describe("useAgentGUIComposerOptionsSync", () => {
     await waitFor(() => expect(getComposerOptions).toHaveBeenCalled());
     expect(authorityReconcilerRef.current.prepareRead).not.toHaveBeenCalled();
     expect(authorityReconcilerRef.current.reloaded).not.toHaveBeenCalled();
+  });
+
+  it("does not probe on mount or provider switch, and probes only from the dropdown action", async () => {
+    const getComposerOptions = vi.fn(async () => ({}));
+    const refreshComposerModels = vi.fn(async () => ({}));
+    const dataRef = { current: targetData("codex") };
+    const selectedTargetRef = { current: composerTarget("codex") };
+    const draftSettingsBySessionIdRef = {
+      current: {
+        [nodeDefaultDraftKey("claude-code", "local:claude-code")]: {
+          model: "opus",
+          reasoningEffort: "high" as const
+        }
+      }
+    };
+    const prepareRead = vi.fn((_target, settings) => ({
+      force: false,
+      receipt: null,
+      settings: {
+        ...settings,
+        model: settings.model
+          ? `${settings.model}-from-authority`
+          : settings.model
+      }
+    }));
+    const authorityReconcilerRef = {
+      current: {
+        prepareRead,
+        reconcileHomeDefaults: vi.fn(),
+        reloaded: vi.fn()
+      }
+    };
+    const expectedSettings = {
+      model: "opus-from-authority",
+      reasoningEffort: "high"
+    };
+    const { rerender } = renderHook(
+      ({ provider }) => {
+        const target = composerTarget(provider);
+        dataRef.current = target.data;
+        selectedTargetRef.current = target;
+        return useAgentGUIComposerOptionsSync({
+          activeSessionTarget: null,
+          activeConversationId: null,
+          activeConversationIdRef: { current: null },
+          agentActivityRuntime: {
+            getComposerOptions,
+            refreshComposerModels,
+            getSnapshot: () => ({})
+          } as unknown as AgentGUIRuntime,
+          composerTargetData: target,
+          conversationFilter: null,
+          currentUserId: "user-1",
+          data: target.data,
+          dataRef,
+          defaultReasoningEffort: "high",
+          draftSettingsBySessionIdRef,
+          isComposerHome: true,
+          isComposerHomeRef: { current: true },
+          isCreatingConversation: false,
+          loadDraftComposerOptionsRef: { current: () => {} },
+          loadSessionState: vi.fn(),
+          onComposerDefaultsAuthorityReloadedRef: authorityReconcilerRef,
+          providerComposerOptions: null,
+          selectedComposerTargetDataRef: selectedTargetRef,
+          selectedProjectPath: "/workspace/project",
+          selectedProjectPathRef: { current: "/workspace/project" },
+          syncConversationListProjection: vi.fn(async () => {}),
+          workspaceId: "workspace-1",
+          workspacePath: "/workspace"
+        });
+      },
+      { initialProps: { provider: "codex" as AgentGUIProvider } }
+    );
+
+    await waitFor(() => expect(getComposerOptions).toHaveBeenCalledTimes(1));
+    expect(refreshComposerModels).not.toHaveBeenCalled();
+
+    rerender({ provider: "claude-code" });
+    await waitFor(() => expect(getComposerOptions).toHaveBeenCalledTimes(2));
+    expect(getComposerOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        provider: "claude-code",
+        settings: expect.objectContaining(expectedSettings)
+      })
+    );
+    expect(refreshComposerModels).not.toHaveBeenCalled();
+
+    act(() => requestComposerModelListProbe(false));
+    expect(refreshComposerModels).toHaveBeenCalledTimes(1);
+    expect(refreshComposerModels).toHaveBeenCalledWith(
+      expect.objectContaining({
+        force: false,
+        provider: "claude-code",
+        settings: expect.objectContaining(expectedSettings)
+      })
+    );
+
+    act(() => requestComposerModelListProbe(true));
+    expect(refreshComposerModels).toHaveBeenCalledTimes(2);
+    expect(refreshComposerModels).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        force: true,
+        settings: expect.objectContaining(expectedSettings)
+      })
+    );
   });
 });
 

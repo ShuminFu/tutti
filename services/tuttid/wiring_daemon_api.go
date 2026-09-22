@@ -468,6 +468,9 @@ func buildDaemonAPI(
 		Components:      agentServiceComponents,
 	}
 	agentSessionService := agentservice.NewService(agentRuntimeController, agentSessionConfig)
+	if sqliteStore, ok := store.(*workspacedata.SQLiteStore); ok {
+		agentSessionService.UseComposerLiveModelCacheStore(sqliteStore)
+	}
 	agentStatusService.OnProviderStatusInvalidated = agentSessionService.InvalidateProviderAvailabilityCache
 	// A replaced extension runtime may advertise a different composer option
 	// set (models, reasoning levels), so a (re)install must drop the provider's

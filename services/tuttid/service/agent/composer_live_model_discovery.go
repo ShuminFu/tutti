@@ -498,6 +498,79 @@ func staticClaudeComposerModelOptions(selectedModel string) []ComposerConfigOpti
 	})
 }
 
+// OpenComposerModelDropdown probes only when the cached list is missing or
+// older than the effective TTL. A fresh cache returns without a hidden session.
+func (s *Service) OpenComposerModelDropdown(ctx context.Context, input ComposerOptionsInput) (ComposerOptions, error) {
+	input.modelListProbe = composerModelListProbeIfStale
+	return s.GetComposerOptions(ctx, input)
+}
+
+// RefreshComposerModelList forces one hidden probe and ignores the TTL.
+func (s *Service) RefreshComposerModelList(ctx context.Context, input ComposerOptionsInput) (ComposerOptions, error) {
+	input.modelListProbe = composerModelListProbeForce
+	return s.GetComposerOptions(ctx, input)
+}
+
+func (s *Service) probeComposerModelList(
+	ctx context.Context,
+	input ComposerOptionsInput,
+	settings ComposerSettings,
+	scope composerLiveModelScope,
+	previous composerModelListSnapshot,
+) ([]ComposerConfigOptionValue, error) {
+	s.clearLiveModelDiscoveryAttempt(scope.key())
+	discovered, err := s.discoverLiveComposerModelsUncachedForScope(
+		ctx,
+		scope,
+		input.providerTargetRef,
+		settings,
+	)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return nil, err
+	}
+	if err != nil {
+		// 探测失败留下旧列表。没有旧列表的扩展仍把错误交回去，避免被当成「没有这个能力」。
+		s.rememberComposerModelListFailure(scope, previous, err)
+		if providerTargetRefKind(input.providerTargetRef) == "agent_extension" && len(previous.Options) == 0 {
+			if errors.Is(err, errLiveModelDiscoveryPending) {
+				return nil, fmt.Errorf("extension capability discovery did not finish: %w", context.DeadlineExceeded)
+			}
+			return nil, err
+		}
+		return cloneComposerConfigOptionValues(previous.Options), nil
+	}
+	if len(discovered) == 0 {
+		return cloneComposerConfigOptionValues(previous.Options), nil
+	}
+	s.setLiveComposerModelOptionsForScope(scope, time.Now().UTC(), discovered)
+	return discovered, nil
+}
+
+func (s *Service) attachComposerModelListCache(
+	ctx context.Context,
+	input ComposerOptionsInput,
+	settings ComposerSettings,
+	options ComposerOptions,
+) ComposerOptions {
+	if strings.TrimSpace(input.WorkspaceID) == "" {
+		return options
+	}
+	scope := newComposerLiveModelScopeForInput(input, settings)
+	snapshot := s.readComposerModelList(ctx, scope, time.Now().UTC())
+	if options.RuntimeContext == nil {
+		options.RuntimeContext = map[string]any{}
+	}
+	payload := map[string]any{"state": string(snapshot.State)}
+	if snapshot.LastError != "" {
+		payload["lastError"] = snapshot.LastError
+	}
+	if !snapshot.FetchedAt.IsZero() {
+		payload["fetchedAtUnixMs"] = snapshot.FetchedAt.UnixMilli()
+	}
+	options.RuntimeContext["composerModelListCache"] = payload
+	return options
+}
+
 func (s *Service) mergeLiveComposerModelsForComposerOptions(
 	ctx context.Context,
 	input ComposerOptionsInput,
@@ -532,62 +605,59 @@ func (s *Service) mergeLiveComposerModelsForComposerOptions(
 			// A real session exists but has not advertised models yet. Prefer the
 			// last-known-good cache over the static fallback, but never spawn a
 			// hidden discovery session next to a live session.
-			if cached, ok := s.getLiveComposerModelOptionsForScope(scope, now); ok {
-				liveModels = cached
+			snapshot := s.readComposerModelList(ctx, scope, now)
+			if len(snapshot.Options) > 0 {
+				liveModels = snapshot.Options
 				modelSource = runtimeLiveModelCatalogSource
 				logClaudeModelCatalogInvalidationDebug("composer_options_cache_hit_with_running_session", map[string]any{
 					"workspaceId":       input.WorkspaceID,
 					"provider":          provider,
 					"cwd":               input.Cwd,
-					"modelOptionCount":  len(cached),
-					"modelOptionValues": composerConfigOptionValuesDebugValues(cached),
+					"modelOptionCount":  len(snapshot.Options),
+					"modelOptionValues": composerConfigOptionValuesDebugValues(snapshot.Options),
 					"checkedAtUnixMs":   now.UnixMilli(),
 				})
 			} else if persisted, ok := s.persistedLiveModelFallbackForScope(scope, now); ok {
 				liveModels = persisted
 				modelSource = runtimeLiveModelCatalogSource
+			} else if input.modelListProbe == composerModelListProbeNone {
+				s.logComposerModelListMiss(scope)
 			}
 		default:
-			// No running session: prefer the cache, then the last catalog a
-			// persisted session advertised. Only bootstrap a hidden discovery
-			// session when neither source can populate the first composer.
-			if cached, ok := s.getLiveComposerModelOptionsForScope(scope, now); ok {
-				liveModels = cached
+			// 挂载和切 provider 只读缓存。隐藏探测会 fork 真实 CLI，只能等用户打开下拉或点刷新。
+			snapshot := s.readComposerModelList(ctx, scope, now)
+			if snapshot.State == composerModelListFresh && input.modelListProbe != composerModelListProbeForce {
+				liveModels = snapshot.Options
 				modelSource = runtimeLiveModelCatalogSource
 				logClaudeModelCatalogInvalidationDebug("composer_options_cache_hit", map[string]any{
 					"workspaceId":       input.WorkspaceID,
 					"provider":          provider,
 					"cwd":               input.Cwd,
-					"modelOptionCount":  len(cached),
-					"modelOptionValues": composerConfigOptionValuesDebugValues(cached),
+					"modelOptionCount":  len(snapshot.Options),
+					"modelOptionValues": composerConfigOptionValuesDebugValues(snapshot.Options),
 					"checkedAtUnixMs":   now.UnixMilli(),
 				})
-			} else if persisted, ok := s.persistedLiveModelFallbackForScope(scope, now); ok {
-				liveModels = persisted
-				modelSource = runtimeLiveModelCatalogSource
-			} else {
-				discovered, err := s.discoverLiveComposerModels(ctx, input, effectiveSettings)
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					return ComposerOptions{}, err
-				}
-				if providerTargetRefKind(input.providerTargetRef) == "agent_extension" {
-					if errors.Is(err, errLiveModelDiscoveryPending) {
-						return ComposerOptions{}, fmt.Errorf("extension capability discovery did not finish: %w", context.DeadlineExceeded)
-					}
-					if errors.Is(err, errLiveModelDiscoverySessionFailed) {
-						return ComposerOptions{}, err
-					}
-				}
-				if err == nil && len(discovered) > 0 {
-					liveModels = discovered
+				break
+			}
+			if input.modelListProbe == composerModelListProbeNone {
+				if len(snapshot.Options) > 0 {
+					liveModels = snapshot.Options
 					modelSource = runtimeLiveModelCatalogSource
 				} else if persisted, ok := s.persistedLiveModelFallbackForScope(scope, now); ok {
-					// Discovery may persist a scoped catalog before returning an
-					// error. Re-read it so the picker does not collapse to only
-					// the selected model.
 					liveModels = persisted
 					modelSource = runtimeLiveModelCatalogSource
+				} else {
+					s.logComposerModelListMiss(scope)
 				}
+				break
+			}
+			probed, probeErr := s.probeComposerModelList(ctx, input, effectiveSettings, scope, snapshot)
+			if probeErr != nil {
+				return ComposerOptions{}, probeErr
+			}
+			if len(probed) > 0 {
+				liveModels = probed
+				modelSource = runtimeLiveModelCatalogSource
 			}
 		}
 	}

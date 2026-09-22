@@ -526,6 +526,11 @@ export interface TuttidClient
     request?: GetAgentProviderComposerOptionsRequest,
     requestOptions?: TuttidRequestOptions
   ): Promise<AgentProviderComposerOptionsResponse>;
+  refreshComposerModelList(
+    provider: WorkspaceAgentProvider,
+    request?: GetAgentProviderComposerOptionsRequest & { force?: boolean },
+    requestOptions?: TuttidRequestOptions
+  ): Promise<AgentProviderComposerOptionsResponse>;
   getAgentProviderStatuses(request?: {
     providers?: WorkspaceAgentProvider[];
     /**

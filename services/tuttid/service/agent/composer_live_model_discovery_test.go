@@ -195,6 +195,18 @@ func TestGetComposerOptionsStartsHiddenProbeBeforeFirstCursorSession(t *testing.
 	if err != nil {
 		t.Fatalf("GetComposerOptions: %v", err)
 	}
+	if len(runtime.startCalls) != 0 {
+		t.Fatalf("start calls = %#v, want no hidden probe on composer mount", runtime.startCalls)
+	}
+	options, err = service.OpenComposerModelDropdown(context.Background(), ComposerOptionsInput{
+		AgentTargetID: agenttarget.IDLocalCursor,
+		Provider:      "cursor",
+		WorkspaceID:   "ws-1",
+		Cwd:           "/repo",
+	})
+	if err != nil {
+		t.Fatalf("OpenComposerModelDropdown: %v", err)
+	}
 	if len(runtime.startCalls) != 1 {
 		t.Fatalf("start calls = %#v, want one hidden cursor discovery session", runtime.startCalls)
 	}
