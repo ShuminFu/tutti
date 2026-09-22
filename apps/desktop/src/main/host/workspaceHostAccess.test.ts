@@ -623,6 +623,9 @@ function createTransportClient(
     },
     async readWorkspaceIssueAttachment() {
       throw new Error("not used");
+    },
+    async refreshComposerModelList() {
+      throw new Error("not used");
     }
   };
   return Object.assign(client, overrides);
