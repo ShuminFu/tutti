@@ -914,9 +914,12 @@ AgentGUI must not place `canSubmit`, target-connection blocking, or
 Session-runtime blocking in independent memoized view slices and recombine them
 later. The editor, send action, keyboard submit paths, Stop availability, and
 Interaction submission consume that same gate snapshot. Busy work may project
-queue submission while keeping the editor editable. Draft emptiness, upload
-progress/failure, project existence, and other draft-local conditions may
-disable submission, but must not change editor editability.
+queue submission while keeping the editor editable. Draft emptiness, project
+existence, and other draft-local conditions may disable submission, but must
+not change editor editability. Attachment upload progress or failure is not
+one of those conditions: it never disables submission (see "Attachment
+readiness is not a submit gate" below); unready attachments are dropped from
+the submission with an explicit notice instead.
 
 Engine submitting and unconfirmed-submit selectors remain busy facts after a
 canonical Session first appears. Session existence or an `available` runtime

@@ -45,3 +45,9 @@ rndmaster 直读 `tuttid.db` 的 `workspace_agent_*` 表并复刻 `GetLatestTurn
 ## 下一步
 
 挑一个候选进入 grilling；命名加深后的模块时把新词写进 `CONTEXT.md`；若否决且理由长期成立，记一条 ADR。
+
+## 2026-09-22 已落地的顺手项（同分支）
+
+- 删除零调用的 `runtimeprep.HostModelContextWindow`（db283da 引入）；`contextwindow.go` 包注释改写为「两个载体」的真实情况（Claude 路径保留 `[1m]` 拼写，其余运行时走类型化窗口）。
+- `docs/architecture/agent-gui-node.md`：Composer 门禁段落不再说「上传进度 / 失败可以禁止发送」，与「Attachment readiness is not a submit gate」一致。
+- 验证：`go vet` + `go test ./daemon/contextwindow/ ./runtimeprep/ -run 'HostModel|Split|Bare|Marker|Window'` 绿。`gofmt -l` 报的 `runtimeprep/tutti_agent.go` 是既有漂移，本次未动。

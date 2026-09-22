@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/tutti-os/tutti/packages/agent/daemon/contextwindow"
 )
 
 // HostModelEndpointsEnv carries daemon-owned default model endpoints. A
@@ -128,29 +126,6 @@ func HostModelContextWindows() map[string]int64 {
 		return nil
 	}
 	return windows
-}
-
-// HostModelContextWindow looks up one model's window. The lookup tolerates a
-// `[1m]`-suffixed request because callers hold user spellings: the table itself
-// is keyed by bare id.
-func HostModelContextWindow(id string) (int64, bool) {
-	windows := HostModelContextWindows()
-	if len(windows) == 0 {
-		return 0, false
-	}
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return 0, false
-	}
-	if window, ok := windows[id]; ok {
-		return window, true
-	}
-	if base, marked := contextwindow.Split(id); marked {
-		if window, ok := windows[base]; ok {
-			return window, true
-		}
-	}
-	return 0, false
 }
 
 func hostModelEndpointsPayload() []byte {

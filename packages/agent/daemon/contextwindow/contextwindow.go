@@ -1,9 +1,16 @@
-// Package contextwindow carries the "[1m]" model-id marker: the convention a
-// user asks for a 1M-token context window with. The marker rides the model
-// value itself so every provider agrees on one carrier, and each runtime
-// decides how to consume it — Claude Code strips it outbound and adds the
-// context-1m beta, the Codex app-server takes the window as thread config, and
-// an ACP agent that has no such knob simply gets the bare model id.
+// Package contextwindow carries the "[1m]" model-id marker: the spelling the
+// composer uses when a user asks for a 1M-token context window.
+//
+// The marker is one of two carriers, not the only one. It is the wire spelling
+// Claude Code itself understands (claude-agent-acp / the SDK strip it and add
+// the context-1m beta), so the Claude paths keep it on the model value. Every
+// other runtime takes the window as a typed number instead — the Codex
+// app-server as thread config (`model_context_window`), standard ACP
+// extensions via ModelEndpointConfig.ContextWindow written into the harness
+// JSON — and receives the bare model id. Host-side code therefore splits the
+// spelling into (bare id, window) as early as it can and only re-spells it on
+// the Claude seam; see composer_context_window_options.go and
+// standard_acp_settings.go for the two ends of that path.
 package contextwindow
 
 import "strings"
