@@ -1474,14 +1474,17 @@ export function createEmbeddedSplitViewController(
               memory: pairSelectMemory
             })
           : { kind: "single" as const, id: observed };
+      // 左栏这一下重写的是**整个**布局，右栏窗口这一拍还报着旧会话号（它要等
+      // applyLayout 去关/去换）。这时继续看右栏，会把刚被收掉的那条当成「用户在
+      // 右栏切了会话」再塞回来——真机上表现为「点没结对的会话收不成单列」。
       if (resolved.kind === "group") {
         panes = { left: resolved.left, right: resolved.right };
-        continue;
+        break;
       }
       if (resolved.kind === "single" && side === "left") {
         // 没结对（含空心徽标）→ 收成单列全宽；右栏窗口由 applyLayout 关掉。
         panes = { left: observed, right: null };
-        continue;
+        break;
       }
       // swap-left / 右栏自己换了会话：原地顶替这一栏，另一栏不动。
       panes = { ...panes, [side]: observed };

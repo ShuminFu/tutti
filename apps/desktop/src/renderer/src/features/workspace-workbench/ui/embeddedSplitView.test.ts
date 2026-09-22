@@ -1597,6 +1597,30 @@ test("票02：双列时点没结对的会话 → 收成单列全宽", async () =
   controller.dispose();
 });
 
+test("票02：右栏窗口还报着旧会话号时，点没结对的会话照样收成单列", async () => {
+  // 真机上右栏那个窗口每一拍都报自己的会话号（它要等 applyLayout 去关）。
+  // 左栏这一下已经把布局改写成单列，如果还接着看右栏，就会把刚收掉的那条当成
+  // 「用户在右栏切了会话」塞回来 —— 表现为「点没结对的会话收不成单列」。
+  const { controller, fake, observed, panes, switchTo } =
+    await railController();
+  await switchTo("session-a");
+  assert.deepEqual(panes(), { left: "session-a", right: "session-b" });
+  const rightNodeId = fake.launched[0] as string;
+  observed.set(rightNodeId, "session-b");
+  fake.notify();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  fake.calls.length = 0;
+
+  await switchTo("session-d");
+
+  assert.deepEqual(panes(), { left: "session-d", right: null });
+  assert.deepEqual(
+    fake.calls.filter((call) => call.kind === "close").map((call) => call.args),
+    [[rightNodeId]]
+  );
+  controller.dispose();
+});
+
 test("票02：双列时点和右栏也结对的会话 → 只换左栏", async () => {
   const { controller, fake, panes, switchTo } = await railController();
   await switchTo("session-a");
