@@ -27,6 +27,7 @@ var allowedNativeCapabilities = map[string]struct{}{
 	"agent_cursor.state":                      {},
 	"app.launch":                              {},
 	"app.list":                                {},
+	"input.delivery_mode":                     {},
 	"input.keyboard.hotkey":                   {},
 	"input.keyboard.press":                    {},
 	"input.keyboard.type":                     {},

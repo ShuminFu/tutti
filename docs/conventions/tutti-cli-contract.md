@@ -232,6 +232,10 @@ capability allowlist in `service/computer`. `tool list` and `tool describe`
 retain the complete live catalog and annotate every tool with the Tutti-owned
 `allowed` decision and `denialReason`; `tool call` enforces the same policy.
 MCP effect annotations are descriptive hints and never grant authority. Both
+background and explicit foreground input delivery are recognized through the
+`input.delivery_mode` capability; this does not authorize unrelated browser,
+clipboard, or unknown capabilities on the same tool. Input delivery results
+still require observation as described above. Both
 the catalog `schema_version` and `capability_version` are breaking-contract
 boundaries; missing or unknown versions fail closed before any tool is listed,
 described, or invoked. Every advertised capability must be explicitly

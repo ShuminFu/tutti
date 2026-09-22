@@ -22,6 +22,24 @@ stable CLI and authorization contracts in
 [Tutti CLI Contract](../tutti-cli-contract.md); keep symptom-driven diagnosis
 and recovery here.
 
+## Native input tools are denied for input.delivery_mode
+
+Newer cua-driver catalogs attach `input.delivery_mode` to pointer and keyboard
+tools. Tutti must recognize this capability for native `click`, `type_text`,
+`press_key`, `hotkey`, and `scroll` to remain callable. A daemon built without
+that allowlist entry reports `allowed: false` with
+`tool has denied or unknown capabilities: input.delivery_mode`.
+
+Update the daemon to a build that recognizes the capability and recheck
+`computer tool describe --name type_text --json`. A source-only fix does not
+update an installed or running daemon. Other unknown capabilities, missing
+metadata, and unsupported catalog versions must still be rejected.
+
+The capability permits the driver's explicit background/foreground delivery
+selection; it does not prove input reached the target. Follow the observation
+and retry procedure below. Do not automatically retry in foreground or treat
+dispatch success as a verified UI change.
+
 ## A computer click reports success but the UI does not change
 
 ### Symptom

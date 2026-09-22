@@ -52,6 +52,44 @@ func TestNativeToolPolicyRejectsUnknownOrMissingCatalogVersions(t *testing.T) {
 	}
 }
 
+func TestNativeInputDeliveryModeAuthorization(t *testing.T) {
+	tests := []struct {
+		name         string
+		capabilities []string
+		allowed      bool
+	}{
+		{"click", []string{"input.pointer.click", "input.delivery_mode"}, true},
+		{"type_text", []string{"input.keyboard.type", "input.delivery_mode"}, true},
+		{"press_key", []string{"input.keyboard.press", "input.delivery_mode"}, true},
+		{"hotkey", []string{"input.keyboard.hotkey", "input.delivery_mode"}, true},
+		{"scroll", []string{"input.pointer.scroll", "input.delivery_mode"}, true},
+		{"future_input", []string{"input.keyboard.type", "input.delivery_mode", "future.privileged"}, false},
+		{"browser_dialog", []string{"browser.dialog", "input.delivery_mode"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			catalog := ToolCatalog{
+				SchemaVersion: "1", CapabilityVersion: "1",
+				Tools: []ToolDefinition{{Name: tt.name, Capabilities: tt.capabilities}},
+			}
+			annotated, err := annotateNativeToolCatalog(catalog)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := annotated.Tools[0]; got.Allowed != tt.allowed || (got.DenialReason == "") != tt.allowed {
+				t.Fatalf("discovery authorization = %#v, want allowed=%v", got, tt.allowed)
+			}
+			_, err = requireAllowedNativeTool(catalog, tt.name)
+			if tt.allowed && err != nil {
+				t.Fatalf("invocation authorization: %v", err)
+			}
+			if !tt.allowed && !errors.Is(err, ErrNativeToolNotAllowed) {
+				t.Fatalf("invocation error = %v, want ErrNativeToolNotAllowed", err)
+			}
+		})
+	}
+}
+
 func TestRequireAllowedNativeToolRejectsUnknownAndDeniedCapabilities(t *testing.T) {
 	for _, tool := range []ToolDefinition{
 		{Name: "mixed_future", Capabilities: []string{"screen.capture", "future.privileged"}},
