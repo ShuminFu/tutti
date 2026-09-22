@@ -146,6 +146,10 @@ type reportRequest struct {
 	done             chan error
 }
 
+// defaultLiveSessionEvictionGrace 是超限回收的默认护身符：刚说完话不到一分钟的
+// 会话不会被挤掉。一分钟足够盖住「回完一轮、用户正在打字」这段。
+const defaultLiveSessionEvictionGrace = time.Minute
+
 type ReleaseIdleLiveSessionsInput struct {
 	// IdleAfter 是所有会话的默认空闲阈值；IdleAfterFor 为某条会话另行表态时以后者为准。
 	IdleAfter time.Duration
@@ -158,8 +162,23 @@ type ReleaseIdleLiveSessionsInput struct {
 	// 返回值语义：>0 = 空闲这么久之后回收；0 = 只要不在跑回合就立刻回收；
 	// <0 = 这条会话不回收（用户选了常驻）。留 nil 则所有会话都用 IdleAfter。
 	IdleAfterFor func(session Session) time.Duration
-	Now          time.Time
-	Limit        int
+	// MaxLiveSessions 是常驻进程的条数上限（DINTAL-5308）。
+	//
+	// 光有 TTL 挡不住这种情况：半小时里开了几十条会话、每条都刚聊过所以都没到
+	// TTL，于是几十个 provider 进程一起常驻。按 TTL 它们全都「还新鲜」，按内存
+	// 它们已经把机器吃光了。所以再加一道按条数的闸：超出上限时，从**最久没说话
+	// 的那条**开始回收，直到回到上限以内（LRU）。
+	//
+	// 0 表示不限条数。
+	MaxLiveSessions int
+	// EvictionGrace 是超限回收的护身符：只有「安静超过这么久」的会话才会被挤掉。
+	// 防的是刚回完一轮、用户正要接着打字就被掐掉进程。留 0 用
+	// defaultLiveSessionEvictionGrace。
+	//
+	// 注意它只管超限回收这一档；TTL 那档本来就有自己的阈值。
+	EvictionGrace time.Duration
+	Now           time.Time
+	Limit         int
 }
 
 type ReleaseIdleLiveSessionsResult struct {
@@ -173,7 +192,13 @@ type ReleaseIdleLiveSessionsResult struct {
 	// SkippedRetained 是策略明说「这条不回收」的会话（IdleAfterFor 返回负数），
 	// 与 SkippedFresh（还没到阈值）分开记：前者是用户的选择，后者只是还没轮到。
 	SkippedRetained int
-	Failed          int
+	// EvictedOverCap 是因为超出 MaxLiveSessions 而被挤掉的会话数（LRU 那一档），
+	// 与 Released（到点回收）分开记：一个说明上限太紧，一个说明 TTL 到了。
+	EvictedOverCap int
+	// SkippedOverCapProtected 是超限了、但因为刚说完话还在护身符里而没动的会话。
+	// 它不为 0 却还在超限，说明上限设得比「同时在用的会话数」还小。
+	SkippedOverCapProtected int
+	Failed                  int
 }
 
 // CloseAllLiveSessionsResult reports the outcome of CloseAllLiveSessions.

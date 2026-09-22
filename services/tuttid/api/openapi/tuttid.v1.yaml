@@ -8236,6 +8236,15 @@ components:
             0 means never release it while the app runs. Only consulted when
             agentRuntimeKeepAliveEnabled is true. Optional on write; omitting it keeps the
             current value.
+        agentRuntimeMaxResident:
+          type: integer
+          minimum: 0
+          maximum: 100
+          default: 10
+          description: >-
+            How many agent processes may stay resident at once. When the count exceeds this,
+            the least recently used sessions are released first. 0 means unlimited.
+            Optional on write; omitting it keeps the current value.
         agentComposerDefaultsByProvider:
           $ref: "#/components/schemas/DesktopAgentComposerDefaultsByProvider"
         agentComposerDefaultsByAgentTarget:

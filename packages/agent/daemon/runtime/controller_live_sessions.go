@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
+	"time"
 
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
 )
@@ -86,6 +88,88 @@ func (c *Controller) ReleaseIdleLiveSessions(ctx context.Context, input ReleaseI
 			idleAfterMS = idleAfter.Milliseconds()
 		}
 		result.add(c.releaseIdleLiveSession(ctx, candidate.session, candidate.adapter, nowUnixMS, idleAfterMS))
+	}
+	if input.MaxLiveSessions > 0 {
+		result.add(c.evictLiveSessionsOverCap(ctx, input.MaxLiveSessions, input.EvictionGrace, nowUnixMS))
+	}
+	return result
+}
+
+// evictLiveSessionsOverCap 在常驻进程条数超过上限时，从最久没说话的那条开始挤掉。
+//
+// 为什么 TTL 之外还要这一道：半小时里开了几十条会话、每条都刚聊过，按 TTL 它们
+// 全都「还新鲜」，可几十个 provider 进程已经把内存吃光了。TTL 管的是「这条闲了多久」，
+// 上限管的是「一共留了多少条」，两个问题，两道闸。
+//
+// 「防止误杀」由三层保证：正在跑回合的不动（它根本不在候选里）、适配器说忙的不动
+// （ReleaseLiveSession 回 ErrLiveSessionBusy）、刚说完话不到护身符时长的不动。
+// 再加上释放本身是非破坏的——会话身份与续聊能力都留着，最坏结果只是下次说话冷启动一次。
+func (c *Controller) evictLiveSessionsOverCap(
+	ctx context.Context,
+	maxLive int,
+	grace time.Duration,
+	nowUnixMS int64,
+) ReleaseIdleLiveSessionsResult {
+	var result ReleaseIdleLiveSessionsResult
+	if c == nil || maxLive <= 0 {
+		return result
+	}
+	if grace <= 0 {
+		grace = defaultLiveSessionEvictionGrace
+	}
+	graceMS := grace.Milliseconds()
+
+	type candidate struct {
+		session Session
+		adapter Adapter
+	}
+	live := 0
+	evictable := make([]candidate, 0)
+	c.mu.Lock()
+	for key, session := range c.sessions {
+		adapter := c.adapterForSessionLocked(session)
+		_, probe, ok := liveSessionReleaseAdapter(adapter)
+		if !ok || strings.TrimSpace(session.ProviderSessionID) == "" || !probe.HasLiveSession(session) {
+			continue
+		}
+		// 占着进程的都算进「一共留了多少条」，包括正在跑回合的那些 ——
+		// 上限是内存口径，不是空闲口径。但它们不进候选。
+		live++
+		if _, hasActiveTurn := c.turns[key]; hasActiveTurn {
+			continue
+		}
+		evictable = append(evictable, candidate{session: session, adapter: adapter})
+	}
+	c.mu.Unlock()
+
+	overflow := live - maxLive
+	if overflow <= 0 {
+		return result
+	}
+	// 最久没说话的排前面：这就是 LRU。UpdatedAtUnixMS 是会话最后一次有动静的时刻。
+	sort.SliceStable(evictable, func(i, j int) bool {
+		return evictable[i].session.UpdatedAtUnixMS < evictable[j].session.UpdatedAtUnixMS
+	})
+	for _, item := range evictable {
+		if overflow <= 0 {
+			break
+		}
+		if !sessionIdleFor(item.session, nowUnixMS, graceMS) {
+			// 刚说完话，用户很可能正要接着打字。宁可超限一会儿。
+			result.SkippedOverCapProtected++
+			continue
+		}
+		// 复用 TTL 那条路径的全部守卫（重新取一次会话、再确认没有在飞的回合、
+		// 适配器喊忙就放弃）；阈值传 0，因为「该不该走」已经由上面的护身符判完了。
+		single := c.releaseIdleLiveSession(ctx, item.session, item.adapter, nowUnixMS, 0)
+		if single.Released > 0 {
+			result.EvictedOverCap += single.Released
+			overflow -= single.Released
+			continue
+		}
+		// 没放成的原因（忙 / 已经不在了 / 不支持）照原样并进结果，别吞掉。
+		single.Released = 0
+		result.add(single)
 	}
 	return result
 }
@@ -246,6 +330,8 @@ func (r *ReleaseIdleLiveSessionsResult) add(next ReleaseIdleLiveSessionsResult) 
 	r.SkippedNotLive += next.SkippedNotLive
 	r.SkippedBusy += next.SkippedBusy
 	r.SkippedRetained += next.SkippedRetained
+	r.EvictedOverCap += next.EvictedOverCap
+	r.SkippedOverCapProtected += next.SkippedOverCapProtected
 	r.Failed += next.Failed
 }
 

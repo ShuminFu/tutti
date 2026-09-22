@@ -103,6 +103,8 @@ type PutInput struct {
 	// nil 一律沿用库里已有的值。
 	AgentRuntimeKeepAliveEnabled *bool
 	AgentRuntimeIdleMinutes      *int
+	// AgentRuntimeMaxResident 同理：0 是「不限条数」的合法取值，不能被「没填」冒充。
+	AgentRuntimeMaxResident *int
 	// AgentComposerDefaultsByProvider is accepted for wire compatibility but
 	// ignored on write: the legacy provider-keyed defaults are frozen after
 	// the one-time migration onto AgentComposerDefaultsByAgentTarget.
@@ -318,6 +320,7 @@ func (s Service) Put(ctx context.Context, input PutInput) (preferencesbiz.Deskto
 		AgentCLIUpdateCheckEnabled:   input.AgentCLIUpdateCheckEnabled,
 		AgentRuntimeKeepAliveEnabled: resolveAgentRuntimeKeepAlive(stored, input.AgentRuntimeKeepAliveEnabled),
 		AgentRuntimeIdleMinutes:      resolveAgentRuntimeIdleMinutes(stored, input.AgentRuntimeIdleMinutes),
+		AgentRuntimeMaxResident:      resolveAgentRuntimeMaxResident(stored, input.AgentRuntimeMaxResident),
 		// The legacy provider-keyed defaults are frozen: client input is
 		// ignored so nothing writes the old field anymore; the stored value
 		// is only kept for downgrade compatibility and should pass through
@@ -424,6 +427,13 @@ func resolveAgentRuntimeIdleMinutes(stored preferencesbiz.DesktopPreferences, in
 		return preferencesbiz.NormalizeDesktopAgentRuntimeIdleMinutes(stored.AgentRuntimeIdleMinutes)
 	}
 	return preferencesbiz.NormalizeDesktopAgentRuntimeIdleMinutes(*input)
+}
+
+func resolveAgentRuntimeMaxResident(stored preferencesbiz.DesktopPreferences, input *int) int {
+	if input == nil {
+		return preferencesbiz.NormalizeDesktopAgentRuntimeMaxResident(stored.AgentRuntimeMaxResident)
+	}
+	return preferencesbiz.NormalizeDesktopAgentRuntimeMaxResident(*input)
 }
 
 func resolveWindowSnapping(stored preferencesbiz.DesktopPreferences, input *DesktopWindowSnappingInput) DesktopWindowSnappingInput {

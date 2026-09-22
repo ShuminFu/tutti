@@ -19,6 +19,7 @@ func GeneratedDesktopPreferencesFromBiz(value preferencesbiz.DesktopPreferences)
 		AgentCliUpdateCheckEnabled:                  value.AgentCLIUpdateCheckEnabled,
 		AgentRuntimeKeepAliveEnabled:                &value.AgentRuntimeKeepAliveEnabled,
 		AgentRuntimeIdleMinutes:                     agentRuntimeIdleMinutesPointer(value.AgentRuntimeIdleMinutes),
+		AgentRuntimeMaxResident:                     agentRuntimeMaxResidentPointer(value.AgentRuntimeMaxResident),
 		AgentComposerDefaultsByProvider:             generatedAgentComposerDefaultsByProvider(value.AgentComposerDefaultsByProvider),
 		AgentComposerDefaultsByAgentTarget:          generatedAgentComposerDefaultsByAgentTarget(value.AgentComposerDefaultsByAgentTarget),
 		AgentGuiConversationRailCollapsedByProvider: generatedAgentGUIConversationRailCollapsedByProvider(value.AgentGUIConversationRailCollapsedByProvider),
@@ -158,5 +159,11 @@ func optionalBoolPointerFromMap(value map[string]bool, key string) *bool {
 // （比如别的版本写进去的）不该原样让界面显示成一个它自己都不接受的数。
 func agentRuntimeIdleMinutesPointer(value int) *int {
 	normalized := preferencesbiz.NormalizeDesktopAgentRuntimeIdleMinutes(value)
+	return &normalized
+}
+
+// agentRuntimeMaxResidentPointer 同上：读出去也归一化。
+func agentRuntimeMaxResidentPointer(value int) *int {
+	normalized := preferencesbiz.NormalizeDesktopAgentRuntimeMaxResident(value)
 	return &normalized
 }

@@ -76,6 +76,15 @@ type LiveSessionReaperConfig struct {
 	// 语义见 agentruntime.ReleaseIdleLiveSessionsInput.IdleAfterFor：
 	// >0 等这么久、0 不在跑回合就立刻放、<0 不回收。
 	IdleAfterFor func(session Session) time.Duration
+	// MaxLiveSessions 是常驻会话数的上限（DINTAL-5308 的 LRU 那一档）。
+	//
+	// 为什么光有 TTL 不够：半小时里开二十条会话、每条都刚聊过，按 TTL 它们全都
+	// 「还新鲜」，可二十个 CLI 进程已经把内存吃光了。上限管的是「一共留了多少条」，
+	// 超了就从最久没说话的那条开始挤（LRU）。0 = 不限。
+	MaxLiveSessions int
+	// EvictionGrace 是挤人时的护身符：刚说过话的会话即使超限也不动，
+	// 因为用户很可能正要接着打字。留 0 用默认一分钟。只对上限这一档生效。
+	EvictionGrace time.Duration
 }
 
 type Runtime struct {
@@ -248,9 +257,11 @@ func (r *Runtime) startLiveSessionReaper(config LiveSessionReaperConfig, load fu
 				idleAfter = defaultLiveSessionReaperIdleAfter
 			}
 			result := r.controller.ReleaseIdleLiveSessions(ctx, agentruntime.ReleaseIdleLiveSessionsInput{
-				IdleAfter:    idleAfter,
-				IdleAfterFor: current.IdleAfterFor,
-				Now:          time.Now(),
+				IdleAfter:       idleAfter,
+				IdleAfterFor:    current.IdleAfterFor,
+				MaxLiveSessions: current.MaxLiveSessions,
+				EvictionGrace:   current.EvictionGrace,
+				Now:             time.Now(),
 			})
 			if result.Scanned == 0 {
 				continue
@@ -265,6 +276,8 @@ func (r *Runtime) startLiveSessionReaper(config LiveSessionReaperConfig, load fu
 				"skipped_not_live", result.SkippedNotLive,
 				"skipped_busy", result.SkippedBusy,
 				"skipped_retained", result.SkippedRetained,
+				"evicted_over_cap", result.EvictedOverCap,
+				"skipped_over_cap_protected", result.SkippedOverCapProtected,
 				"failed", result.Failed,
 			)
 		}

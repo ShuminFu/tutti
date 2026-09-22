@@ -906,6 +906,7 @@ func TestServicePutKeepsAgentRuntimeRetentionWhenFieldsAreOmitted(t *testing.T) 
 	store := &preferencesStoreStub{getResult: preferencesbiz.DesktopPreferences{
 		AgentRuntimeKeepAliveEnabled: false,
 		AgentRuntimeIdleMinutes:      5,
+		AgentRuntimeMaxResident:      3,
 	}}
 	service := Service{Store: store}
 
@@ -917,6 +918,35 @@ func TestServicePutKeepsAgentRuntimeRetentionWhenFieldsAreOmitted(t *testing.T) 
 	}
 	if store.putInput.AgentRuntimeIdleMinutes != 5 {
 		t.Fatalf("idle minutes = %d, want the stored 5 preserved", store.putInput.AgentRuntimeIdleMinutes)
+	}
+	if store.putInput.AgentRuntimeMaxResident != 3 {
+		t.Fatalf("max resident = %d, want the stored 3 preserved", store.putInput.AgentRuntimeMaxResident)
+	}
+}
+
+// 条数上限同一条口径：0 是合法的「不限」，越界收回默认而不是夹边界。
+func TestServicePutAcceptsUnlimitedAndRejectsOutOfRangeMaxResident(t *testing.T) {
+	t.Parallel()
+
+	unlimited := 0
+	store := &preferencesStoreStub{getResult: preferencesbiz.DesktopPreferences{
+		AgentRuntimeMaxResident: preferencesbiz.DefaultDesktopAgentRuntimeMaxResident,
+	}}
+	service := Service{Store: store}
+	if _, err := service.Put(context.Background(), PutInput{AgentRuntimeMaxResident: &unlimited}); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+	if store.putInput.AgentRuntimeMaxResident != 0 {
+		t.Fatalf("max resident = %d, want 0 (unlimited) to survive", store.putInput.AgentRuntimeMaxResident)
+	}
+
+	tooLarge := preferencesbiz.MaxDesktopAgentRuntimeMaxResident + 1
+	if _, err := service.Put(context.Background(), PutInput{AgentRuntimeMaxResident: &tooLarge}); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+	if store.putInput.AgentRuntimeMaxResident != preferencesbiz.DefaultDesktopAgentRuntimeMaxResident {
+		t.Fatalf("max resident = %d, want the out-of-range value normalized back to the default",
+			store.putInput.AgentRuntimeMaxResident)
 	}
 }
 

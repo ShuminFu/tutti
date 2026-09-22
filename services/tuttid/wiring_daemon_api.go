@@ -919,15 +919,20 @@ func agentLiveSessionReaperLoader(
 	return func() agentdaemon.LiveSessionReaperConfig {
 		keepAlive := preferencesbiz.DefaultDesktopAgentRuntimeKeepAliveEnabled
 		idleMinutes := preferencesbiz.DefaultDesktopAgentRuntimeIdleMinutes
+		maxResident := preferencesbiz.DefaultDesktopAgentRuntimeMaxResident
 		if preferences != nil {
 			if current, err := preferences.Get(context.Background()); err == nil {
 				keepAlive = current.AgentRuntimeKeepAliveEnabled
 				idleMinutes = preferencesbiz.NormalizeDesktopAgentRuntimeIdleMinutes(current.AgentRuntimeIdleMinutes)
+				maxResident = preferencesbiz.NormalizeDesktopAgentRuntimeMaxResident(current.AgentRuntimeMaxResident)
 			}
 		}
 		idleAfter := time.Duration(idleMinutes) * time.Minute
 		return agentdaemon.LiveSessionReaperConfig{
 			IdleAfter: idleAfter,
+			// 条数上限是 TTL 之外的第二道闸：TTL 拦不住「半小时里开一堆、每条都刚聊过」，
+			// 那种情况下所有会话都还「新鲜」，内存却已经见底。超了就挤最久没说话的那条。
+			MaxLiveSessions: maxResident,
 			// 扫描频率定得比默认密，是因为「回合结束即放」这一档的时效由它决定：
 			// 机器派工的会话等一整个默认间隔才被收走，就不叫「即放」了。
 			// 单次扫描只是内存里过一遍 + 问适配器进程在不在，代价可以忽略。

@@ -371,6 +371,18 @@ func (api DaemonAPI) PutDesktopPreferences(ctx context.Context, request tuttigen
 			),
 		}, nil
 	}
+	if maxResident := request.Body.Preferences.AgentRuntimeMaxResident; maxResident != nil &&
+		!preferencesbiz.IsDesktopAgentRuntimeMaxResident(*maxResident) {
+		return tuttigenerated.PutDesktopPreferences400JSONResponse{
+			InvalidRequestErrorJSONResponse: invalidRequestError(
+				apierrors.InvalidRequest(
+					apierrors.ReasonUnsupportedAgentRuntimeMaxResident,
+					apierrors.WithDeveloperMessage("agent runtime max resident must be 0 (unlimited) or 1..100"),
+					apierrors.WithParams(map[string]any{"field": "preferences.agentRuntimeMaxResident"}),
+				),
+			),
+		}, nil
+	}
 	deletedAgentConversationRetentionDays := int(request.Body.Preferences.DeletedAgentConversationRetentionDays)
 	if deletedAgentConversationRetentionDays == 0 {
 		deletedAgentConversationRetentionDays = preferencesbiz.DefaultDeletedAgentConversationRetentionDays
@@ -423,6 +435,7 @@ func (api DaemonAPI) PutDesktopPreferences(ctx context.Context, request tuttigen
 		AgentCLIUpdateCheckEnabled:   request.Body.Preferences.AgentCliUpdateCheckEnabled,
 		AgentRuntimeKeepAliveEnabled: request.Body.Preferences.AgentRuntimeKeepAliveEnabled,
 		AgentRuntimeIdleMinutes:      request.Body.Preferences.AgentRuntimeIdleMinutes,
+		AgentRuntimeMaxResident:      request.Body.Preferences.AgentRuntimeMaxResident,
 		AgentComposerDefaultsByProvider: agentComposerDefaultsByProviderFromGenerated(
 			request.Body.Preferences.AgentComposerDefaultsByProvider,
 		),

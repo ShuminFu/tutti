@@ -382,6 +382,10 @@ func validateDesktopPreferencesUpdateRequestedPayload(payload []byte) error {
 		!preferencesbiz.IsDesktopAgentRuntimeIdleMinutes(*minutes) {
 		return fmt.Errorf("preferences.agentRuntimeIdleMinutes is unsupported")
 	}
+	if maxResident := decoded.AgentRuntimeMaxResident; maxResident != nil &&
+		!preferencesbiz.IsDesktopAgentRuntimeMaxResident(*maxResident) {
+		return fmt.Errorf("preferences.agentRuntimeMaxResident is unsupported")
+	}
 	if !preferencesbiz.IsDeletedAgentConversationRetentionDays(decoded.DeletedAgentConversationRetentionDays) {
 		return fmt.Errorf("preferences.deletedAgentConversationRetentionDays is unsupported")
 	}

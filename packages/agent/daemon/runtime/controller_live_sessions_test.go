@@ -577,3 +577,91 @@ func TestControllerReleaseIdleLiveSessionsHonoursPerSessionIdleAfter(t *testing.
 		t.Fatalf("released session lost its identity: ok=%v stored=%#v", ok, stored)
 	}
 }
+
+// DINTAL-5308（LRU 那一档）：半小时里开了一堆会话、每条都刚聊过所以都没到 TTL，
+// 按 TTL 它们全都「还新鲜」，可进程已经把内存吃光了。上限管的是「一共留了多少条」，
+// 超了就从最久没说话的那条开始挤。
+func TestControllerReleaseIdleLiveSessionsEvictsLeastRecentlyUsedOverCap(t *testing.T) {
+	t.Parallel()
+
+	adapter := newReleasableAdapter()
+	controller := NewController([]Adapter{adapter}, nil)
+	oldest := startReleasableSession(t, controller, "oldest-session")
+	middle := startReleasableSession(t, controller, "middle-session")
+	newest := startReleasableSession(t, controller, "newest-session")
+
+	// 三条都安静了 10 分钟：远没到 30 分钟 TTL，但都过了护身符。
+	quiet := time.Now().Add(-10 * time.Minute)
+	setSessionUpdatedAt(t, controller, oldest.Session, quiet.Add(-2*time.Minute))
+	setSessionUpdatedAt(t, controller, middle.Session, quiet.Add(-time.Minute))
+	setSessionUpdatedAt(t, controller, newest.Session, quiet)
+
+	result := controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
+		IdleAfter:       30 * time.Minute,
+		MaxLiveSessions: 1,
+		Now:             time.Now(),
+	})
+
+	// TTL 那一档一个都不该放（都还新鲜），全部由上限这一档挤掉。
+	if result.Released != 0 {
+		t.Fatalf("released = %d, want 0: TTL 没到，不该由 TTL 放: %#v", result.Released, result)
+	}
+	if result.EvictedOverCap != 2 {
+		t.Fatalf("evicted = %d, want 2 to get back to the cap of 1: %#v", result.EvictedOverCap, result)
+	}
+	if adapter.hasLiveSession(oldest.Session.AgentSessionID) ||
+		adapter.hasLiveSession(middle.Session.AgentSessionID) {
+		t.Fatal("oldest/middle still live: eviction must start from the least recently used")
+	}
+	if !adapter.hasLiveSession(newest.Session.AgentSessionID) {
+		t.Fatal("newest session was evicted: the most recently used one must survive")
+	}
+}
+
+// 防止误杀：刚说完话的会话即使超限也不挤 —— 用户很可能正要接着打字。
+func TestControllerReleaseIdleLiveSessionsKeepsJustActiveSessionsOverCap(t *testing.T) {
+	t.Parallel()
+
+	adapter := newReleasableAdapter()
+	controller := NewController([]Adapter{adapter}, nil)
+	stale := startReleasableSession(t, controller, "stale-session")
+	justSpoke := startReleasableSession(t, controller, "just-spoke-session")
+	setSessionUpdatedAt(t, controller, stale.Session, time.Now().Add(-10*time.Minute))
+	setSessionUpdatedAt(t, controller, justSpoke.Session, time.Now())
+
+	result := controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
+		IdleAfter:       30 * time.Minute,
+		MaxLiveSessions: 0, // 关掉上限先确认基线：一个都不动
+		Now:             time.Now(),
+	})
+	if result.Released != 0 || result.EvictedOverCap != 0 {
+		t.Fatalf("cap off should touch nothing: %#v", result)
+	}
+
+	// 上限压到 0 条可留？上限是 1：超出 1 条，最久没说话的是 stale，它该走；
+	// 再压到 0 条时 justSpoke 也超限，但它在护身符里，必须留下。
+	result = controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
+		IdleAfter:       30 * time.Minute,
+		MaxLiveSessions: 1,
+		EvictionGrace:   time.Minute,
+		Now:             time.Now(),
+	})
+	if result.EvictedOverCap != 1 || !adapter.hasLiveSession(justSpoke.Session.AgentSessionID) {
+		t.Fatalf("want only the stale one evicted: %#v", result)
+	}
+
+	result = controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
+		IdleAfter:       30 * time.Minute,
+		MaxLiveSessions: 1,
+		EvictionGrace:   time.Minute,
+		Now:             time.Now(),
+	})
+	// 现在只剩 justSpoke 一条，正好等于上限，不该有人被挤；
+	// 就算上限更小，它也该落进 SkippedOverCapProtected 而不是被掐掉。
+	if result.EvictedOverCap != 0 {
+		t.Fatalf("evicted = %d, want 0 once back at the cap: %#v", result.EvictedOverCap, result)
+	}
+	if !adapter.hasLiveSession(justSpoke.Session.AgentSessionID) {
+		t.Fatal("the session that just spoke was evicted")
+	}
+}

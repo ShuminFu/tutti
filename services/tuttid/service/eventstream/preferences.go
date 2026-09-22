@@ -102,6 +102,7 @@ func (p DesktopPreferencesPublisher) PublishDesktopPreferencesUpdated(ctx contex
 			AgentCLIUpdateCheckEnabled:   preferences.AgentCLIUpdateCheckEnabled,
 			AgentRuntimeKeepAliveEnabled: &preferences.AgentRuntimeKeepAliveEnabled,
 			AgentRuntimeIdleMinutes:      &preferences.AgentRuntimeIdleMinutes,
+			AgentRuntimeMaxResident:      &preferences.AgentRuntimeMaxResident,
 			AgentComposerDefaultsByProvider: desktopAgentComposerDefaultsByProviderPayloadFromBiz(
 				preferences.AgentComposerDefaultsByProvider,
 			),
@@ -252,6 +253,7 @@ func NewPreferencesDesktopUpdateRequestedHandler(mutator PreferencesMutator) Int
 			AgentCLIUpdateCheckEnabled:                  decoded.AgentCLIUpdateCheckEnabled,
 			AgentRuntimeKeepAliveEnabled:                decoded.AgentRuntimeKeepAliveEnabled,
 			AgentRuntimeIdleMinutes:                     decoded.AgentRuntimeIdleMinutes,
+			AgentRuntimeMaxResident:                     decoded.AgentRuntimeMaxResident,
 			AgentComposerDefaultsByProvider:             decoded.AgentComposerDefaultsByProvider,
 			AgentComposerDefaultsByAgentTarget:          decoded.AgentComposerDefaultsByAgentTarget,
 			AgentGUIConversationRailCollapsedByProvider: decoded.AgentGUIConversationRailCollapsedByProvider,
@@ -287,6 +289,7 @@ type decodedDesktopPreferencesMutationPayload struct {
 	AgentCLIUpdateCheckEnabled                  bool
 	AgentRuntimeKeepAliveEnabled                *bool
 	AgentRuntimeIdleMinutes                     *int
+	AgentRuntimeMaxResident                     *int
 	AgentComposerDefaultsByProvider             map[string]preferencesbiz.AgentComposerDefaults
 	AgentComposerDefaultsByAgentTarget          map[string]preferencesbiz.AgentComposerDefaults
 	AgentGUIConversationRailCollapsedByProvider map[string]bool
@@ -333,6 +336,7 @@ func decodeDesktopPreferencesMutationPayload(payload []byte) (decodedDesktopPref
 		AgentCLIUpdateCheckEnabled:   decoded.Preferences.AgentCLIUpdateCheckEnabled,
 		AgentRuntimeKeepAliveEnabled: decoded.Preferences.AgentRuntimeKeepAliveEnabled,
 		AgentRuntimeIdleMinutes:      decoded.Preferences.AgentRuntimeIdleMinutes,
+		AgentRuntimeMaxResident:      decoded.Preferences.AgentRuntimeMaxResident,
 		AgentComposerDefaultsByProvider: agentComposerDefaultsByProviderFromPayload(
 			decoded.Preferences.AgentComposerDefaultsByProvider,
 		),

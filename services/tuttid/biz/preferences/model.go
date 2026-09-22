@@ -30,9 +30,16 @@ const (
 	// AgentRuntimeIdleMinutes = 0 表示**永不回收**（只在退出应用时清），
 	// 给那些宁可吃内存也要秒回的人。上限 1440 分钟（一天），再长与「永不」
 	// 没有实际区别，却会让人以为还会被收。
+	//
+	// AgentRuntimeMaxResident 是第二道闸：TTL 管「一条会话留多久」，它管
+	// 「一共留几条」。半小时里开二十条、每条都刚聊过，按 TTL 全都还新鲜，
+	// 内存却已经见底。默认 10 条（实测每个 provider 进程约 180MB，10 条 ≈ 1.8G），
+	// 超了从最久没说话的那条开始挤；0 = 不限。
 	DefaultDesktopAgentRuntimeKeepAliveEnabled = true
 	DefaultDesktopAgentRuntimeIdleMinutes      = 30
 	MaxDesktopAgentRuntimeIdleMinutes          = 1440
+	DefaultDesktopAgentRuntimeMaxResident      = 10
+	MaxDesktopAgentRuntimeMaxResident          = 100
 	DefaultDesktopBrowserUseConnectionMode     = "isolated"
 	DefaultDesktopLocale                       = "en"
 	DefaultDesktopMinimizeAnimation            = "scale"
@@ -72,6 +79,7 @@ type DesktopPreferences struct {
 	// 恒按「回合结束即放」走，不看这里 —— 它没有「下一句话」，留着纯占内存。
 	AgentRuntimeKeepAliveEnabled                bool
 	AgentRuntimeIdleMinutes                     int
+	AgentRuntimeMaxResident                     int
 	AgentComposerDefaultsByProvider             map[string]AgentComposerDefaults
 	AgentComposerDefaultsByAgentTarget          map[string]AgentComposerDefaults
 	AgentGUIConversationRailCollapsedByProvider map[string]bool
@@ -147,6 +155,7 @@ func DefaultDesktopPreferences() DesktopPreferences {
 		AgentCLIUpdateCheckEnabled:                  DefaultDesktopAgentCLIUpdateCheckEnabled,
 		AgentRuntimeKeepAliveEnabled:                DefaultDesktopAgentRuntimeKeepAliveEnabled,
 		AgentRuntimeIdleMinutes:                     DefaultDesktopAgentRuntimeIdleMinutes,
+		AgentRuntimeMaxResident:                     DefaultDesktopAgentRuntimeMaxResident,
 		AgentComposerDefaultsByProvider:             map[string]AgentComposerDefaults{},
 		AgentComposerDefaultsByAgentTarget:          map[string]AgentComposerDefaults{},
 		AgentGUIConversationRailCollapsedByProvider: map[string]bool{},
@@ -193,6 +202,19 @@ func NormalizeDesktopAgentRuntimeIdleMinutes(value int) int {
 // IsDesktopAgentRuntimeIdleMinutes：0 = 永不回收，1..1440 = 空闲这么多分钟后回收。
 func IsDesktopAgentRuntimeIdleMinutes(value int) bool {
 	return value >= 0 && value <= MaxDesktopAgentRuntimeIdleMinutes
+}
+
+// NormalizeDesktopAgentRuntimeMaxResident 同样把越界值收回默认，理由见上。
+func NormalizeDesktopAgentRuntimeMaxResident(value int) int {
+	if IsDesktopAgentRuntimeMaxResident(value) {
+		return value
+	}
+	return DefaultDesktopAgentRuntimeMaxResident
+}
+
+// IsDesktopAgentRuntimeMaxResident：0 = 不限条数，1..100 = 最多常驻这么多条。
+func IsDesktopAgentRuntimeMaxResident(value int) bool {
+	return value >= 0 && value <= MaxDesktopAgentRuntimeMaxResident
 }
 
 func NormalizeDeletedAgentConversationRetentionDays(value int) int {

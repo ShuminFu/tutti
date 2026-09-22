@@ -5,6 +5,7 @@ type desktopPreferencesMutationPayload struct {
 		AgentCLIUpdateCheckEnabled                  bool                                                      `json:"agentCliUpdateCheckEnabled"`
 		AgentRuntimeKeepAliveEnabled                *bool                                                     `json:"agentRuntimeKeepAliveEnabled,omitempty"`
 		AgentRuntimeIdleMinutes                     *int                                                      `json:"agentRuntimeIdleMinutes,omitempty"`
+		AgentRuntimeMaxResident                     *int                                                      `json:"agentRuntimeMaxResident,omitempty"`
 		AgentComposerDefaultsByProvider             desktopAgentComposerDefaultsByProviderPayload             `json:"agentComposerDefaultsByProvider"`
 		AgentComposerDefaultsByAgentTarget          desktopAgentComposerDefaultsByAgentTargetPayload          `json:"agentComposerDefaultsByAgentTarget,omitempty"`
 		AgentGUIConversationRailCollapsedByProvider desktopAgentGUIConversationRailCollapsedByProviderPayload `json:"agentGuiConversationRailCollapsedByProvider"`
@@ -40,6 +41,7 @@ type desktopPreferencesSettingsPayload struct {
 	AgentCLIUpdateCheckEnabled                  bool                                                      `json:"agentCliUpdateCheckEnabled"`
 	AgentRuntimeKeepAliveEnabled                *bool                                                     `json:"agentRuntimeKeepAliveEnabled,omitempty"`
 	AgentRuntimeIdleMinutes                     *int                                                      `json:"agentRuntimeIdleMinutes,omitempty"`
+	AgentRuntimeMaxResident                     *int                                                      `json:"agentRuntimeMaxResident,omitempty"`
 	AgentComposerDefaultsByProvider             desktopAgentComposerDefaultsByProviderPayload             `json:"agentComposerDefaultsByProvider"`
 	AgentComposerDefaultsByAgentTarget          desktopAgentComposerDefaultsByAgentTargetPayload          `json:"agentComposerDefaultsByAgentTarget,omitempty"`
 	AgentGUIConversationRailCollapsedByProvider desktopAgentGUIConversationRailCollapsedByProviderPayload `json:"agentGuiConversationRailCollapsedByProvider"`
