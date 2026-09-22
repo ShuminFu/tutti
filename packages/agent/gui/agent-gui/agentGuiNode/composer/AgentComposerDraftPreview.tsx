@@ -81,12 +81,16 @@ export function AgentComposerDraftImagePreview({
       )}
       {image.uploading ? (
         <div
-          className="absolute inset-0 grid place-items-center bg-[color-mix(in_srgb,var(--background-fronted)_62%,transparent)]"
+          className={
+            image.previewUrl
+              ? "absolute bottom-1 left-1 z-[2] grid size-5 place-items-center rounded-full bg-[color-mix(in_srgb,var(--background-fronted)_88%,transparent)]"
+              : "absolute inset-0 grid place-items-center bg-[color-mix(in_srgb,var(--background-fronted)_62%,transparent)]"
+          }
           data-testid="agent-gui-composer-image-uploading"
         >
           <Spinner
             className="text-[var(--text-primary)]"
-            size={18}
+            size={image.previewUrl ? 12 : 18}
             strokeWidth={2.4}
             trackColor="var(--transparency-hover)"
             testId="agent-gui-composer-image-upload-spinner"

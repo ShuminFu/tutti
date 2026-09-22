@@ -25,8 +25,9 @@ import {
   readWorkspaceFileDropEntries
 } from "../../terminalNode/workspaceFileDrop";
 import {
-  readAgentRichTextPromptImages,
+  deliverClipboardPromptImages,
   routeAgentRichTextExternalFiles,
+  stageAgentRichTextPromptImages,
   systemFileDragInfoFromDataTransfer
 } from "./agentRichTextPromptImages";
 import type {
@@ -416,29 +417,22 @@ export const AgentRichTextEditor = forwardRef<
           return true;
         },
         paste: (_view, event) => {
-          const { externalFiles, imageFiles, imagesHandledAsFiles } =
-            routeAgentRichTextExternalFiles(event.clipboardData, {
+          if (
+            deliverClipboardPromptImages(event.clipboardData, {
               externalFilesSupported: Boolean(onPasteFilesRef.current),
-              promptImagesSupported: promptImagesSupportedRef.current
-            });
-          if (imageFiles.length > 0 || externalFiles.length > 0) {
-            event.preventDefault();
-            if (externalFiles.length > 0) {
-              onPasteFilesRef.current?.(externalFiles);
-            }
-            if (imageFiles.length > 0 && !imagesHandledAsFiles) {
-              if (!promptImagesSupportedRef.current) {
+              promptImagesSupported: promptImagesSupportedRef.current,
+              onFiles: (files) => {
+                onPasteFilesRef.current?.(files);
+              },
+              onImages: (images) => {
+                onPasteImagesRef.current?.(images);
+              },
+              onUnsupported: () => {
                 onPromptImagesUnsupportedRef.current?.();
-              } else {
-                void readAgentRichTextPromptImages(imageFiles).then(
-                  (images) => {
-                    if (images.length > 0) {
-                      onPasteImagesRef.current?.(images);
-                    }
-                  }
-                );
               }
-            }
+            })
+          ) {
+            event.preventDefault();
             return true;
           }
           const html = event.clipboardData?.getData("text/html") ?? "";
@@ -580,11 +574,10 @@ export const AgentRichTextEditor = forwardRef<
               onPromptImagesUnsupportedRef.current?.();
               return true;
             }
-            void readAgentRichTextPromptImages(imageFiles).then((images) => {
-              if (images.length > 0) {
-                onPasteImagesRef.current?.(images);
-              }
-            });
+            const stagedImages = stageAgentRichTextPromptImages(imageFiles);
+            if (stagedImages.length > 0) {
+              onPasteImagesRef.current?.(stagedImages);
+            }
             return true;
           }
           if (!hasWorkspaceFileDropData(dataTransfer)) {

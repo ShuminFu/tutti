@@ -6,7 +6,7 @@ import type {
 import {
   imageFilesFromDataTransfer,
   nonImageFilesFromDataTransfer,
-  readAgentRichTextPromptImages,
+  stageAgentRichTextPromptImages,
   systemFileDragInfoFromDataTransfer
 } from "../agentRichText/agentRichTextPromptImages";
 import { hasWorkspaceFileDropData } from "../../terminalNode/workspaceFileDrop";
@@ -184,13 +184,11 @@ export function useComposerFileDrop({
         onPromptImagesUnsupported?.();
         return;
       }
-      void readAgentRichTextPromptImages(drop.imageFiles).then((images) => {
-        if (isDisposed || images.length === 0) {
-          return;
-        }
-        addDraftImages(images);
+      const stagedImages = stageAgentRichTextPromptImages(drop.imageFiles);
+      if (!isDisposed && stagedImages.length > 0) {
+        addDraftImages(stagedImages);
         scheduleComposerFocus();
-      });
+      }
     };
 
     // `dragleave` is unreliable across nested children, so mirror the file

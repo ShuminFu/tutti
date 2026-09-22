@@ -2309,6 +2309,19 @@ The empty-home carousel may measure its placeholder synchronously when live
 alignment first activates. Later React updates coalesce alignment into the next
 animation frame; ResizeObserver and MutationObserver keep layout roots current.
 
+Pasted prompt images paint before their bytes are archived. The paste handler
+publishes a composer chip in the paste turn from clipboard item kind and type
+only, then yields one task before reading clipboard bytes. The chip shows a
+blob preview as soon as the file is in hand. Base64 encoding and host archival
+run after that preview and must not replace it with a data URL. An empty,
+generic, or non-SVG `image/*` clipboard type still takes this path; the
+provider payload is sniffed or transcoded to png, jpeg, or webp. A file that
+is not an image leaves the chip and uses the existing file attachment path.
+A full-bleed spinner covers only the still-empty chip. Once the preview is
+visible, upload progress stays a corner mark so the picture is not hidden
+until archival finishes. Sending still omits an image that is encoding or
+uploading.
+
 Composer text transactions may publish the current draft, but the draft value
 must not drive synchronous pre-paint geometry reads or an urgent AgentGUI tree
 render. The rich-text editor DOM owns the urgent input transaction. The latest
