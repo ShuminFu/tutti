@@ -10,6 +10,7 @@ export const zhCNAgentGuiRuntimeNotices = {
   visibleErrorSubscriptionRequired:
     "{{provider}} 需要有效订阅，或当前套餐不支持此请求",
   visibleErrorModelNotAllowed: "{{provider}} 当前账号无法使用所选模型",
+  visibleErrorModelNotRecognized: "{{provider}} 不认识所选模型，请换一个模型",
   visibleErrorPluginUnavailable: "{{provider}} 暂时无法使用可选集成",
   visibleErrorSessionInterrupted: "{{provider}} 在完成前意外停止，请重试",
   visibleErrorDetails: "查看详情",

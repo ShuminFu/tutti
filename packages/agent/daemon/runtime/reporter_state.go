@@ -520,6 +520,9 @@ func statePatchLastError(event activityshared.Event) string {
 	switch code {
 	case FailureCodeInsufficientCredits,
 		FailureCodeModelNotAllowed,
+		// 模型 id 不被认识，和「模型对本账号不可用」一样要让用户看见，
+		// 否则界面上只剩一句泛泛的启动失败。
+		FailureCodeModelNotRecognized,
 		FailureCodeQuotaOrRateLimit,
 		FailureCodeSubscriptionRequired,
 		"provider_concurrency_limit",

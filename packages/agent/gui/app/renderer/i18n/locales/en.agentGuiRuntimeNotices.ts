@@ -14,6 +14,8 @@ export const enAgentGuiRuntimeNotices = {
     "{{provider}} requires an active subscription or an eligible plan for this request",
   visibleErrorModelNotAllowed:
     "{{provider}} cannot use the selected model with the current account",
+  visibleErrorModelNotRecognized:
+    "{{provider}} does not recognize the selected model. Choose another model.",
   visibleErrorPluginUnavailable:
     "{{provider}} could not use an optional integration that is currently unavailable",
   visibleErrorSessionInterrupted:

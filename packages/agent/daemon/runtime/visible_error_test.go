@@ -588,3 +588,36 @@ func failedTurnEvent(eventID string, detail string) activityshared.Event {
 func reportTestSource() canonical.EventSource {
 	return canonical.EventSource{Provider: ProviderClaudeCode}
 }
+
+// grok 收到别的 provider 的模型名（工作流节点里写着 claude 的 id）时，ACP 的
+// session/set_model 回 -32602 "unknown model id"，进程随即被关掉。修复前整条链
+// 兜底成「Agent failed to start.」，把人引去查运行时；真正该说的是「换个模型」。
+func TestVisibleFailureCodeClassifiesUnknownModelID(t *testing.T) {
+	tests := map[string]string{
+		`acp session/set_model failed: Invalid params (code -32602, data: "unknown model id")`: FailureCodeModelNotRecognized,
+		`acp session/set_model failed: Invalid params (code -32602)`:                           FailureCodeModelNotRecognized,
+		// 别的方法回 invalid params 不归这一档，免得把无关失败都吞进来。
+		`acp session/new failed: Invalid params (code -32602)`: "provider_error",
+	}
+	for detail, want := range tests {
+		if got := visibleFailureCode(detail); got != want {
+			t.Fatalf("visibleFailureCode(%q) = %q, want %q", detail, got, want)
+		}
+	}
+}
+
+// 它不是账号态失败：扩展探测那条路不该因为模型名写错就把账号标成有问题。
+func TestUnknownModelIDIsNotAnAccountFailure(t *testing.T) {
+	err := errors.New(`acp session/set_model failed: Invalid params (code -32602, data: "unknown model id")`)
+	if got := ClassifyAccountFailure(err); got != "" {
+		t.Fatalf("ClassifyAccountFailure() = %q, want empty", got)
+	}
+}
+
+func TestVisibleFailureContentDescribesUnknownModelID(t *testing.T) {
+	got := visibleFailureContent(ProviderTuttiAgent, "start", FailureCodeModelNotRecognized)
+	want := "DinTalDock Agent could not start because it does not recognize the selected model. Choose another model and try again."
+	if got != want {
+		t.Fatalf("visibleFailureContent() = %q, want %q", got, want)
+	}
+}

@@ -22,6 +22,7 @@ export type AgentRunErrorCode =
   | "provider_protocol_incompatible"
   | "insufficient_credits"
   | "model_not_allowed"
+  | "model_not_recognized"
   | "plugin_unavailable"
   | "quota_or_rate_limit"
   | "session_interrupted"
@@ -145,6 +146,13 @@ const PRESENTATIONS: Record<AgentRunErrorCode, AgentErrorPresentation> = {
     messageKey: "agentHost.agentGui.visibleErrorModelNotAllowed",
     ...NO_CTA
   },
+  // 「这个账号用不了这个模型」之外的另一档：模型 id 本身就不被该 provider 认识
+  // （常见于把别家的模型名填进节点）。两者的动作都是换模型，但原因不同，
+  // 混成一条会让人去查账号。
+  model_not_recognized: {
+    messageKey: "agentHost.agentGui.visibleErrorModelNotRecognized",
+    ...NO_CTA
+  },
   plugin_unavailable: {
     messageKey: "agentHost.agentGui.visibleErrorPluginUnavailable",
     ...NO_CTA
@@ -220,6 +228,7 @@ const FAILED_MESSAGE_CODE_MARKERS: ReadonlyArray<
     ]
   ],
   ["model_not_allowed", ["model_not_allowed"]],
+  ["model_not_recognized", ["unknown model id", "unknown model_id"]],
   ["request_timed_out", ["api error: 522", "error 522: connection timed out"]],
   [
     "auth_required",

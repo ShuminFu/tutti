@@ -37,6 +37,7 @@ const (
 
 	FailureCodeInsufficientCredits  = "insufficient_credits"
 	FailureCodeModelNotAllowed      = "model_not_allowed"
+	FailureCodeModelNotRecognized   = "model_not_recognized"
 	FailureCodeQuotaOrRateLimit     = "quota_or_rate_limit"
 	FailureCodeSubscriptionRequired = "subscription_required"
 )
@@ -260,6 +261,14 @@ func visibleFailureCode(detail string) string {
 		return "plugin_unavailable"
 	case strings.Contains(normalized, "provider_empty_response"):
 		return "provider_empty_response"
+	// The adapter reached the agent and the agent rejected the model id itself
+	// (ACP `session/set_model` answering -32602 with "unknown model id"). The
+	// process started fine, so bucketing this as a startup crash sends the user
+	// looking at the runtime instead of at the model they picked. It is NOT an
+	// account-state failure either — the id simply is not one this provider
+	// knows, typically a model name carried over from another provider.
+	case detailIsUnknownModelID(normalized):
+		return FailureCodeModelNotRecognized
 	// An endpoint that cannot represent a tool declaration the Agent sent
 	// answers with a structured declaration error naming the offending slot
 	// (see ProviderToolProtocolIncompatible). That is a protocol mismatch the
@@ -347,6 +356,20 @@ func containsFailureMarker(normalized string, markers []string) bool {
 		}
 	}
 	return false
+}
+
+// detailIsUnknownModelID reports whether the failure is the agent refusing the
+// model id we sent. The narrow form is the literal payload ACP agents answer
+// with; the broader form only fires when the failing call is `session/set_model`
+// itself, so an "invalid params" from any other method keeps its own bucket.
+func detailIsUnknownModelID(normalized string) bool {
+	if strings.Contains(normalized, "unknown model id") ||
+		strings.Contains(normalized, "unknown model_id") {
+		return true
+	}
+	return strings.Contains(normalized, acpMethodSetModel) &&
+		(strings.Contains(normalized, "invalid params") ||
+			strings.Contains(normalized, "invalid_params"))
 }
 
 // ClassifyAccountFailure returns a stable account-state code without exposing
@@ -494,6 +517,8 @@ func visibleFailureContent(provider string, phase string, code string) string {
 			return fmt.Sprintf("%s could not start because the current account needs an eligible subscription.", name)
 		case FailureCodeModelNotAllowed:
 			return fmt.Sprintf("%s could not start because the selected model is unavailable for this account.", name)
+		case FailureCodeModelNotRecognized:
+			return fmt.Sprintf("%s could not start because it does not recognize the selected model. Choose another model and try again.", name)
 		case "plugin_unavailable":
 			return fmt.Sprintf("%s started without an optional integration that is currently unavailable.", name)
 		case "auth_required":
@@ -531,6 +556,8 @@ func visibleFailureContent(provider string, phase string, code string) string {
 		return fmt.Sprintf("%s requires an eligible subscription for this request.", name)
 	case FailureCodeModelNotAllowed:
 		return fmt.Sprintf("%s could not use the selected model. Choose another model and try again.", name)
+	case FailureCodeModelNotRecognized:
+		return fmt.Sprintf("%s does not recognize the selected model. Choose another model and try again.", name)
 	case "plugin_unavailable":
 		return fmt.Sprintf("%s could not use an optional integration that is currently unavailable.", name)
 	case "auth_required":

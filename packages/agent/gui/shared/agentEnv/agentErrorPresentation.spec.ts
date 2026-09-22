@@ -177,6 +177,7 @@ describe("resolveAgentErrorPresentation", () => {
       "provider_protocol_incompatible",
       "insufficient_credits",
       "model_not_allowed",
+      "model_not_recognized",
       "plugin_unavailable",
       "quota_or_rate_limit",
       "session_interrupted",
