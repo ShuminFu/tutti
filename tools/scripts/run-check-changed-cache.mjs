@@ -36,6 +36,7 @@ export function buildLaneInputFingerprint(input) {
   hash.update(`key:${input.lane.key}\n`);
   hash.update(`label:${input.lane.label}\n`);
   hash.update(`command:${JSON.stringify(input.lane.command)}\n`);
+  hash.update(`depends-on:${JSON.stringify(input.lane.dependsOn ?? [])}\n`);
   hash.update(`input-files:${JSON.stringify(inputFiles)}\n`);
 
   if (inputFiles.length === 0) {

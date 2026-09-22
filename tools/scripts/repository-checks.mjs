@@ -177,6 +177,23 @@ export function selectRepositoryCheckInputs(definition, changedFiles) {
   );
 }
 
+export function repositoryCheckArgs(definition, changedFiles) {
+  if (
+    definition.key !== "boundary:agent-provider-strategy" ||
+    changedFiles.some(
+      (file) =>
+        isCheckInfrastructure(file) ||
+        normalize(file).startsWith("packages/agent/daemon/providerregistry/") ||
+        normalize(file).startsWith(
+          "tools/scripts/check-agent-provider-strategy-boundaries."
+        )
+    )
+  ) {
+    return [];
+  }
+  return ["--", "--files-json", JSON.stringify(changedFiles.map(normalize))];
+}
+
 export function selectedRepositoryCheckGroups(changedFiles) {
   return new Set(
     selectRepositoryChecks(changedFiles).map((definition) => definition.group)

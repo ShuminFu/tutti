@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { selectRepositoryChecks } from "./repository-checks.mjs";
+import {
+  repositoryCheckArgs,
+  selectRepositoryChecks
+} from "./repository-checks.mjs";
 import { runValidationLanes } from "./run-validation-lanes.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -34,7 +37,12 @@ if (checks.length === 0) {
 const pnpmCommand = resolvePnpmCommand();
 const result = await runValidationLanes({
   lanes: checks.map((check) => ({
-    command: [...pnpmCommand, "run", check.script],
+    command: [
+      ...pnpmCommand,
+      "run",
+      check.script,
+      ...repositoryCheckArgs(check, changedFiles)
+    ],
     key: check.key,
     label: check.label
   })),

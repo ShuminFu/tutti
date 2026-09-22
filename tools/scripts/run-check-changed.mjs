@@ -35,6 +35,7 @@ import {
   isPackagePackRelevantPath
 } from "./change-classification.mjs";
 import {
+  repositoryCheckArgs,
   selectRepositoryCheckInputs,
   selectRepositoryChecks
 } from "./repository-checks.mjs";
@@ -120,7 +121,11 @@ export async function main() {
   }
 
   const startedAt = Date.now();
-  const executedResults = await runLanes(lanesToRun, runDirectory);
+  const executedResults = await runLanes(
+    lanesToRun,
+    runDirectory,
+    reusedResults
+  );
   const results = mergeLaneResults(
     currentLanes,
     executedResults,
@@ -221,7 +226,12 @@ function buildChangedLanes() {
     addLane({
       key: check.key,
       label: check.label,
-      command: [...pnpmCommand, "run", check.script],
+      command: [
+        ...pnpmCommand,
+        "run",
+        check.script,
+        ...repositoryCheckArgs(check, changedFiles)
+      ],
       inputFiles: selectRepositoryCheckInputs(check, changedFiles)
     });
   }
@@ -362,6 +372,9 @@ function buildChangedLanes() {
     addLane({
       key: "pack:npm",
       label: "npm package pack",
+      dependsOn: Array.from(lanesByKey.keys()).filter(
+        (key) => key === "typecheck:all" || key.endsWith(":typecheck")
+      ),
       command: [...pnpmCommand, "run", "release:pack:check", ...packageArgs],
       inputFiles: changedFiles
     });
@@ -377,9 +390,27 @@ function readLatestSummary() {
   return JSON.parse(readFileSync(latestSummaryPath, "utf8"));
 }
 
-export async function runLanes(inputLanes, runDirectory) {
+export async function runLanes(inputLanes, runDirectory, reusedResults = []) {
   const results = [];
   const serialGroups = new Map();
+  const completions = new Map(
+    reusedResults.map((result) => [
+      result.key,
+      { promise: Promise.resolve(result) }
+    ])
+  );
+  // Prerequisites precede dependents in the plan, so waiting workers cannot
+  // exhaust the pool before a prerequisite has been scheduled.
+  for (const lane of inputLanes) {
+    for (const key of lane.dependsOn ?? []) {
+      if (!completions.has(key)) {
+        throw new Error(
+          `lane ${lane.key} requires an earlier or reused lane: ${key}`
+        );
+      }
+    }
+    completions.set(lane.key, Promise.withResolvers());
+  }
   let nextIndex = 0;
   const workerCount = Math.max(1, Math.min(maxParallel, inputLanes.length));
 
@@ -388,19 +419,42 @@ export async function runLanes(inputLanes, runDirectory) {
       while (nextIndex < inputLanes.length) {
         const laneIndex = nextIndex++;
         const lane = inputLanes[laneIndex];
-        results.push(
-          await runLaneInSerialGroup(
-            lane,
-            laneIndex,
-            runDirectory,
-            serialGroups
-          )
+        const prerequisites = await Promise.all(
+          (lane.dependsOn ?? []).map((key) => completions.get(key).promise)
         );
+        const blockedBy = prerequisites
+          .filter((result) => result.exitCode !== 0)
+          .map((result) => result.key);
+        const result =
+          blockedBy.length > 0
+            ? buildBlockedLaneResult(lane, laneIndex, runDirectory, blockedBy)
+            : await runLaneInSerialGroup(
+                lane,
+                laneIndex,
+                runDirectory,
+                serialGroups
+              );
+        results.push(result);
+        completions.get(lane.key).resolve(result);
       }
     })
   );
 
   return results.sort((left, right) => left.index - right.index);
+}
+
+function buildBlockedLaneResult(lane, index, runDirectory, blockedBy) {
+  const logPath = join(runDirectory, `${sanitizeFileName(lane.key)}.log`);
+  writeFileSync(
+    logPath,
+    `Blocked by failed prerequisites: ${blockedBy.join(", ")}\n`
+  );
+  return {
+    ...buildLaneResult(lane, index, logPath, Date.now(), 1),
+    status: "blocked",
+    blockedBy,
+    durationMs: 0
+  };
 }
 
 function runLaneInSerialGroup(lane, index, runDirectory, serialGroups) {
@@ -484,6 +538,9 @@ function printPlan(inputLanes, reusedResults = []) {
   );
   for (const lane of inputLanes) {
     console.log(`- ${lane.label}: ${formatCommand(lane.command)}`);
+    if (lane.dependsOn?.length) {
+      console.log(`  requires: ${lane.dependsOn.join(", ")}`);
+    }
   }
   for (const result of reusedResults) {
     console.log(`- ${result.label}: reuse passed result`);
@@ -502,10 +559,19 @@ export function printSummary(results, failures, durationMs, runDirectory) {
     return;
   }
 
+  const blockedCount = failures.filter(
+    (result) => result.status === "blocked"
+  ).length;
   console.error(
-    `check:changed failed ${failures.length}/${results.length} lane(s) in ${formatDuration(durationMs)}${reuseSuffix}`
+    `check:changed failed ${failures.length - blockedCount}/${results.length} lane(s), ${blockedCount} blocked in ${formatDuration(durationMs)}${reuseSuffix}`
   );
   for (const failure of failures) {
+    if (failure.status === "blocked") {
+      console.error(
+        `\n${failure.label}: blocked by ${failure.blockedBy.join(", ")}`
+      );
+      continue;
+    }
     const output = failureExcerpt(failure.logPath, tailLines);
     const header = output.truncated
       ? `${failure.label} ${output.label} (full log: ${failure.logPathRelative})`
@@ -570,7 +636,12 @@ function gitLines(args) {
 }
 
 function resolveDefaultBaseRef() {
-  for (const candidate of ["origin/main", "main"]) {
+  for (const candidate of [
+    "origin/dintal-dock",
+    "dintal-dock",
+    "origin/main",
+    "main"
+  ]) {
     const result = spawnSync("git", ["rev-parse", "--verify", candidate], {
       cwd: workspaceRoot,
       encoding: "utf8"

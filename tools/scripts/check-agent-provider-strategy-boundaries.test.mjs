@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import {
   createProviderIdentityPatterns,
   findProviderIdentityViolations,
-  isExemptPath
+  isExemptPath,
+  scanWorkspace
 } from "./check-agent-provider-strategy-boundaries.mjs";
+import {
+  repositoryCheckArgs,
+  selectRepositoryChecks
+} from "./repository-checks.mjs";
 
 const providerIds = [
   "claude-code",
@@ -205,4 +213,42 @@ test("rejects an invalid provider catalog", () => {
   assert.throws(() => createProviderIdentityPatterns(["codex", "codex"]), {
     name: "TypeError"
   });
+});
+
+test("incremental provider checks isolate changed sources and retain full-scan triggers", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "provider-scope-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const computer = "services/tuttid/service/computer/permissions.go";
+  const existing = "packages/agent/daemon/runtime/policy.go";
+  const desktop = "apps/desktop/src/policy.ts";
+  for (const [file, source] of [
+    [computer, "return receipt != nil"],
+    [existing, 'if provider == "codex" {}'],
+    [desktop, 'if (provider === "cursor") {}']
+  ]) {
+    mkdirSync(dirname(join(root, file)), { recursive: true });
+    writeFileSync(join(root, file), source);
+  }
+  const check = selectRepositoryChecks([computer]).find(
+    (item) => item.key === "boundary:agent-provider-strategy"
+  );
+  const args = repositoryCheckArgs(check, [computer]);
+  assert.deepEqual(scanWorkspace(providerIds, JSON.parse(args[2]), root), []);
+  assert.equal(scanWorkspace(providerIds, [existing, desktop], root).length, 2);
+  assert.equal(scanWorkspace(providerIds, null, root).length, 2);
+  assert.deepEqual(
+    scanWorkspace(
+      providerIds,
+      [`${computer}_test.go`, "services/tuttid/deleted.go"],
+      root
+    ),
+    []
+  );
+  for (const file of [
+    "packages/agent/daemon/providerregistry/registry.go",
+    "tools/scripts/check-agent-provider-strategy-boundaries.mjs",
+    "tools/scripts/repository-checks.mjs"
+  ]) {
+    assert.deepEqual(repositoryCheckArgs(check, [file]), [], file);
+  }
 });

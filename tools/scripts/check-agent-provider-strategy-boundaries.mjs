@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,8 +38,13 @@ const providerBehaviorCollectionName =
   /(?:action|dispatch|enabled|fallback|handler|hidden|install|login|policy|priority|probe|runtime|status|strategy|supported|visibility)/iu;
 
 if (isMainModule()) {
+  const args = process.argv.slice(2).filter((arg) => arg !== "--");
+  if (args.length && (args.length !== 2 || args[0] !== "--files-json")) {
+    throw new Error("expected --files-json <JSON array> or no arguments");
+  }
+  const files = args.length ? JSON.parse(args[1]) : null;
   const providerIds = readRegistryProviderIds();
-  const violations = scanWorkspace(providerIds);
+  const violations = scanWorkspace(providerIds, files);
   if (violations.length > 0) {
     console.error(
       "Provider behavior must dispatch through providerregistry strategies. " +
@@ -137,19 +142,38 @@ export function createProviderIdentityPatterns(providerIds) {
   return { constantIdentity, comparedLiteral, caseLiteral };
 }
 
-function scanWorkspace(providerIds) {
+export function selectProviderStrategyFiles(files) {
+  if (!Array.isArray(files) || files.some((file) => typeof file !== "string")) {
+    throw new TypeError("provider strategy files must be an array of paths");
+  }
+  return [...new Set(files)].filter(
+    (file) =>
+      roots.some((root) => file.startsWith(`${root}/`)) &&
+      !file.split("/").includes("..") &&
+      sourceExtensions.some((extension) => file.endsWith(extension)) &&
+      !isTestSource(file) &&
+      !isExemptPath(file)
+  );
+}
+
+export function scanWorkspace(providerIds, files = null, root = workspaceRoot) {
   const violations = [];
-  for (const root of roots) {
-    for (const file of sourceFiles(join(workspaceRoot, root))) {
-      const path = relative(workspaceRoot, file).replaceAll("\\", "/");
-      violations.push(
-        ...findProviderIdentityViolations(
-          path,
-          readFileSync(file, "utf8"),
-          providerIds
-        )
-      );
-    }
+  const paths =
+    files === null
+      ? roots
+          .flatMap((sourceRoot) => sourceFiles(join(root, sourceRoot)))
+          .map((file) => relative(root, file).replaceAll("\\", "/"))
+      : files;
+  for (const path of selectProviderStrategyFiles(paths)) {
+    const file = join(root, path);
+    if (!existsSync(file)) continue;
+    violations.push(
+      ...findProviderIdentityViolations(
+        path,
+        readFileSync(file, "utf8"),
+        providerIds
+      )
+    );
   }
   return violations;
 }

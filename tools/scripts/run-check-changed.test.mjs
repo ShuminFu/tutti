@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -350,6 +356,90 @@ test("runLanes preserves lane indexes without relying on outer scope", async () 
   assert.deepEqual(
     results.map((result) => result.key),
     ["lane-b", "lane-a"]
+  );
+});
+
+test("pack is blocked after typecheck failure and runs after a successful retry", async (t) => {
+  const runDirectory = mkdtempSync(join(tmpdir(), "check-prerequisites-"));
+  t.after(() => rmSync(runDirectory, { recursive: true, force: true }));
+  const marker = join(runDirectory, "packed.txt");
+  const typecheck = {
+    ...laneFixture("typecheck:all", "same"),
+    command: [process.execPath, "-e", "process.exit(1)"]
+  };
+  const pack = {
+    ...laneFixture("pack:npm", "same"),
+    dependsOn: [typecheck.key],
+    command: [
+      process.execPath,
+      "-e",
+      'require("node:fs").writeFileSync(process.argv[1], "packed")',
+      marker
+    ]
+  };
+  const independent = {
+    ...laneFixture("independent", "same"),
+    command: [process.execPath, "-e", ""]
+  };
+  const firstResults = await runLanes(
+    [typecheck, pack, independent],
+    runDirectory
+  );
+  assert.equal(firstResults[0].exitCode, 1);
+  assert.equal(firstResults[1].status, "blocked");
+  assert.deepEqual(firstResults[1].blockedBy, [typecheck.key]);
+  assert.equal(firstResults[2].exitCode, 0);
+  assert.equal(existsSync(marker), false);
+  const errors = [];
+  const originalError = console.error;
+  try {
+    console.error = (...args) => errors.push(args.join(" "));
+    printSummary(
+      firstResults,
+      firstResults.filter((result) => result.exitCode !== 0),
+      0,
+      runDirectory
+    );
+  } finally {
+    console.error = originalError;
+  }
+  assert.match(errors.join("\n"), /1 blocked/u);
+  assert.match(errors.join("\n"), /pack:npm: blocked by typecheck:all/u);
+
+  const fixedTypecheck = {
+    ...typecheck,
+    command: [process.execPath, "-e", ""]
+  };
+  const selection = selectFailedOnlyLanes([fixedTypecheck, pack, independent], {
+    laneFingerprintVersion: 1,
+    results: firstResults
+  });
+  assert.deepEqual(
+    selection.lanesToRun.map((lane) => lane.key),
+    [typecheck.key, pack.key]
+  );
+  const retried = await runLanes(
+    selection.lanesToRun,
+    runDirectory,
+    selection.reusedResults
+  );
+  assert.deepEqual(
+    retried.map((result) => result.exitCode),
+    [0, 0]
+  );
+  assert.equal(readFileSync(marker, "utf8"), "packed");
+
+  const reusedPrerequisite = await runLanes([pack], runDirectory, [retried[0]]);
+  assert.equal(reusedPrerequisite[0].exitCode, 0);
+});
+
+test("lane prerequisites reject missing or forward references instead of hanging", async () => {
+  await assert.rejects(
+    runLanes(
+      [{ ...laneFixture("pack", "same"), dependsOn: ["missing"] }],
+      tmpdir()
+    ),
+    /requires an earlier or reused lane/u
   );
 });
 

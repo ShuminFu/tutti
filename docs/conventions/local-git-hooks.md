@@ -160,6 +160,19 @@ concurrently, prints compact summaries, and stores full logs under
 architecture boundaries come from `tools/scripts/repository-checks.mjs`; PR CI
 uses the same selectors.
 
+The default comparison base prefers `origin/dintal-dock`, then `dintal-dock`,
+before falling back to `origin/main`, `main`, or `HEAD`. Use `--base` to override.
+Incremental provider strategy checks scan only changed source files, so unrelated
+existing violations do not block a change. Provider registry, checker, and shared
+selection infrastructure changes still select a full scan. The standalone
+provider check and `check:full` also retain full scans.
+
+The npm pack lane waits for selected typecheck lanes. A failed prerequisite marks
+pack as blocked without starting another build or repeating its type errors.
+Blocked lanes keep the overall gate unsuccessful and rerun with `--failed-only`;
+passed, unchanged prerequisites may be reused. Lockfile and root dependency
+changes still select global typechecking and public-package validation.
+
 Go package selection is also shared by local changed-aware validation and PR
 CI. Test module roots come from `go.work` at runtime; lint uses the repository's
 established lint-enabled module set. Ordinary Go source changes run the owning
