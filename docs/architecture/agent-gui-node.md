@@ -2402,6 +2402,13 @@ unsettled upload becomes an ordinary visible failure, never a permanent
 draft update that cannot be applied because its draft scope disappeared is
 reported as a diagnostic instead of being discarded silently.
 
+The primary send button invokes the same event-time command as the editor's
+Enter shortcut, without relying on native form submission. A sandboxed host
+can suppress the browser's submit event before React receives it. The form
+handler remains a no-navigation fallback; a button activation must not invoke
+both paths. Button availability must preserve the command's attachment
+degradation policy rather than introducing a second upload-state gate.
+
 Plain-text absolute path paste may enter an optional host-owned
 `workspace.resolvePastedPath` boundary. AgentGUI applies only a strict sync
 candidate gate (one trimmed absolute path with no whitespace or quotes). The

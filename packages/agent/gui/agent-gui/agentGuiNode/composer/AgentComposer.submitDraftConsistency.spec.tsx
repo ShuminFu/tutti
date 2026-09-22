@@ -234,4 +234,59 @@ describe("composer submit draft consistency", () => {
       })
     );
   });
+
+  it.each(["codex", "claude-code", "custom-provider"])(
+    "dispatches one command without a native form submit for %s",
+    (provider) => {
+      const onSubmit = vi.fn();
+      const nativeSubmit = vi.fn();
+      const props = {
+        agentTargets: [{ ...agentTargets[0], provider }],
+        capabilitiesByAgentTargetId: {
+          "agent:codex": { imageInput: true, workspaceReferences: true }
+        },
+        content: [{ text: "click draft", type: "text" as const }],
+        selectedAgentTargetId: "agent:codex",
+        workspaceId: "workspace:test",
+        onAgentTargetChange: vi.fn(),
+        onContentChange: vi.fn(),
+        onSubmit
+      };
+      const { container, rerender } = render(
+        <AgentGUIQuickComposer {...props} />
+      );
+      container.addEventListener("submit", nativeSubmit);
+      const clickSend = () => {
+        act(() => {
+          container
+            .querySelector<HTMLButtonElement>(
+              '[data-testid="agent-gui-composer-send"]'
+            )!
+            .click();
+        });
+      };
+
+      clickSend();
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(nativeSubmit).not.toHaveBeenCalled();
+      expect(onSubmit).toHaveBeenLastCalledWith(
+        expect.objectContaining({ content: props.content })
+      );
+
+      rerender(<AgentGUIQuickComposer {...props} disabled />);
+      clickSend();
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+
+      rerender(<AgentGUIQuickComposer {...props} content={[]} />);
+      clickSend();
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+
+      rerender(
+        <AgentGUIQuickComposer {...props} composerActionPlacement="footer" />
+      );
+      clickSend();
+      expect(onSubmit).toHaveBeenCalledTimes(2);
+      expect(nativeSubmit).not.toHaveBeenCalled();
+    }
+  );
 });

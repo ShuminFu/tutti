@@ -725,6 +725,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     currentUserId,
     onSubmitInteractivePrompt,
     onInterruptCurrentTurn,
+    onSubmitCurrentPrompt: slashActions.submitCurrentPrompt,
     isSelectedProjectMissing,
     submitDisabled,
     allowEmptySubmit: onSubmitEmpty !== undefined,

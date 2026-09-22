@@ -50,6 +50,7 @@ interface Input {
   currentUserId?: string | null;
   onSubmitInteractivePrompt: AgentComposerProps["onSubmitInteractivePrompt"];
   onInterruptCurrentTurn: () => void;
+  onSubmitCurrentPrompt: () => void;
   isSelectedProjectMissing: boolean;
   submitDisabled: boolean;
   /** Keeps the send button live on an empty draft (empty-send override). */
@@ -104,6 +105,7 @@ export function useComposerPresentation(input: Input) {
     currentUserId,
     onSubmitInteractivePrompt,
     onInterruptCurrentTurn,
+    onSubmitCurrentPrompt,
     isSelectedProjectMissing,
     submitDisabled,
     allowEmptySubmit,
@@ -156,12 +158,6 @@ export function useComposerPresentation(input: Input) {
     isSelectedProjectMissing ? "project_missing" : null,
     submitDisabled ? "submit_disabled" : null,
     emptyDraftBlocksSend ? "draft_empty" : null,
-    hasUploadingDraftImages ? "image_uploading" : null,
-    hasFailedDraftImages ? "image_upload_failed" : null,
-    hasUploadingDraftFiles ? "file_uploading" : null,
-    hasFailedDraftFiles ? "file_upload_failed" : null,
-    hasUploadingDraftLargeTexts ? "large_text_uploading" : null,
-    hasFailedDraftLargeTexts ? "large_text_upload_failed" : null,
     sendButtonBusy ? "send_busy" : null
   ].filter((reason): reason is string => reason !== null);
   const sendDisabledReasonKey = sendDisabledReasons.join(",");
@@ -298,7 +294,8 @@ export function useComposerPresentation(input: Input) {
     </button>
   ) : (
     <button
-      type="submit"
+      type="button"
+      onClick={() => onSubmitCurrentPrompt()}
       className={styles.composerSendButton}
       data-testid="agent-gui-composer-send"
       data-state={sendButtonState}
@@ -308,12 +305,6 @@ export function useComposerPresentation(input: Input) {
         isSelectedProjectMissing ||
         submitDisabled ||
         emptyDraftBlocksSend ||
-        hasUploadingDraftImages ||
-        hasFailedDraftImages ||
-        hasUploadingDraftFiles ||
-        hasFailedDraftFiles ||
-        hasUploadingDraftLargeTexts ||
-        hasFailedDraftLargeTexts ||
         sendButtonBusy
       }
       aria-label={planReviewSendLabel ?? labels.send}
