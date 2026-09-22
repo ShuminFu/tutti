@@ -2,7 +2,7 @@ import type {
   DesktopComputerUsePermissionPane,
   DesktopComputerUseRestartDriverInput,
   DesktopDeveloperLogKind,
-  ExportDeveloperLogsInput
+  ExportDeveloperLogsInput,
 } from "@shared/contracts/ipc";
 import type { DesktopLocale } from "@shared/i18n";
 import type {
@@ -20,33 +20,33 @@ import type {
   DesktopUpdateChannel,
   DesktopUpdatePolicy,
   DesktopWorkbenchShortcuts,
-  DesktopWorkbenchWindowSnapping
+  DesktopWorkbenchWindowSnapping,
 } from "@shared/preferences";
 import {
   defaultDesktopFeatureFlags,
   defaultDesktopMinimizeAnimation,
   defaultDesktopWorkbenchShortcuts,
   desktopWorkbenchShortcutsEqual,
-  desktopWorkbenchWindowSnappingEqual
+  desktopWorkbenchWindowSnappingEqual,
 } from "../../../../../../shared/preferences/index.ts";
 import {
   isFeatureEnabled,
   LAB_CONNECTORS_FLAG,
   resolveDesktopWorkspaceUiMode,
-  withDesktopWorkspaceUiMode
+  withDesktopWorkspaceUiMode,
 } from "../../../../../../shared/featureFlags/catalog.ts";
 import type { DesktopThemeSource, DesktopThemeState } from "@shared/theme";
 import {
   INotificationService,
-  type NotificationService
+  type NotificationService,
 } from "@tutti-os/ui-notifications";
 import {
   IDesktopPreferencesService,
-  type IDesktopPreferencesService as DesktopPreferencesService
+  type IDesktopPreferencesService as DesktopPreferencesService,
 } from "../../../desktop-preferences/services/desktopPreferencesService.interface.ts";
 import {
   IWorkspaceAppCenterService,
-  type IWorkspaceAppCenterService as WorkspaceAppCenterService
+  type IWorkspaceAppCenterService as WorkspaceAppCenterService,
 } from "../../../workspace-app-center/services/workspaceAppCenterService.interface.ts";
 import { SettingsOpenedReporter } from "../../../analytics/reporters/settings-opened/settingsOpenedReporter.ts";
 import { SettingsSectionSwitchedReporter } from "../../../analytics/reporters/settings-section-switched/settingsSectionSwitchedReporter.ts";
@@ -54,7 +54,7 @@ import { SettingsLanguageChangedReporter } from "../../../analytics/reporters/se
 import { SettingsThemeChangedReporter } from "../../../analytics/reporters/settings-theme-changed/settingsThemeChangedReporter.ts";
 import {
   IReporterService,
-  type IReporterService as ReporterService
+  type IReporterService as ReporterService,
 } from "../../../analytics/services/reporterService.interface.ts";
 import type { DesktopPreferencesReadableStoreState } from "../../../desktop-preferences/services/desktopPreferencesTypes.ts";
 import { getActiveLocale } from "../../../../i18n/runtime.ts";
@@ -63,7 +63,7 @@ import type {
   IWorkspaceSettingsService,
   WorkspaceSettingsOpenOptions,
   WorkspaceSettingsSectionID,
-  WorkspaceSettingsWorkspaceInput
+  WorkspaceSettingsWorkspaceInput,
 } from "../workspaceSettingsService.interface";
 import type { WorkspaceSettingsAgentTab } from "../workspaceSettingsTypes";
 import type { DesktopWorkspaceSettingsClient } from "./adapters/desktopWorkspaceSettingsClient.ts";
@@ -72,7 +72,7 @@ import { createWorkspaceSettingsStore } from "./workspaceSettingsStore.ts";
 import { writeDeveloperPanelVisible } from "./developerPanelVisibility.ts";
 import {
   createWorkspaceFeatureFlagSettings,
-  type WorkspaceFeatureFlagSettings
+  type WorkspaceFeatureFlagSettings,
 } from "./workspaceFeatureFlagSettings.ts";
 import { WorkspaceModelPlansController } from "./workspaceModelPlansController.ts";
 import { WorkspaceAgentsController } from "./workspaceAgentsController.ts";
@@ -90,7 +90,7 @@ export interface WorkspaceSettingsServiceDependencies {
   client: DesktopWorkspaceSettingsClient;
   onAgentTargetsChanged?: () => void | Promise<void>;
   onWorkspaceUiModeChangeError?: (
-    input: WorkspaceUiModeChangeErrorInput
+    input: WorkspaceUiModeChangeErrorInput,
   ) => void;
   replaceWorkspaceWindow?: (input: {
     clientTs: number;
@@ -129,14 +129,14 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       WorkspaceAppCenterService,
       "refreshCatalog"
     > | null = null,
-    reporterNow?: () => number
+    reporterNow?: () => number,
   ) {
     this.dependencies = dependencies;
     this.desktopPreferences = desktopPreferences;
     this.featureFlagSettings = createWorkspaceFeatureFlagSettings({
       desktopPreferences,
       notifications,
-      refreshAgentTargets: () => this.refreshAgentTargetConsumers()
+      refreshAgentTargets: () => this.refreshAgentTargetConsumers(),
     });
     this.notifications = notifications;
     this.reporterService = reporterService;
@@ -145,27 +145,27 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     this.modelPlans = new WorkspaceModelPlansController({
       client: dependencies.client,
       notifications,
-      store: this.store
+      store: this.store,
     });
     this.agents = new WorkspaceAgentsController({
       client: dependencies.client,
       onWorkspaceAgentsChanged: dependencies.onAgentTargetsChanged,
-      store: this.store
+      store: this.store,
     });
     this.automationRules = new WorkspaceAutomationRulesController({
       client: dependencies.client,
-      store: this.store
+      store: this.store,
     });
     this.deletedConversations = new WorkspaceDeletedConversationsController({
       client: dependencies.client,
       notifications,
-      store: this.store
+      store: this.store,
     });
   }
 
   openPanel(
     workspace: WorkspaceSettingsWorkspaceInput,
-    options?: WorkspaceSettingsOpenOptions
+    options?: WorkspaceSettingsOpenOptions,
   ): void {
     this.syncWorkspace(workspace);
     // Normalize every legacy/plain-string settings request at this single
@@ -260,13 +260,13 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
         details: input.details,
         event: input.event,
         level: input.level,
-        workspaceId: this.store.workspaceID
+        workspaceId: this.store.workspaceID,
       })
       .catch(() => undefined);
   }
 
   openComputerUsePermissionSettings(
-    pane: DesktopComputerUsePermissionPane
+    pane: DesktopComputerUsePermissionPane,
   ): Promise<void> {
     return this.dependencies.client.openComputerUsePermissionSettings(pane);
   }
@@ -350,7 +350,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
 
   async setAgentTargetEnabled(
     agentTargetID: string,
-    enabled: boolean
+    enabled: boolean,
   ): Promise<void> {
     const normalizedAgentTargetID = agentTargetID.trim();
     if (!normalizedAgentTargetID) {
@@ -359,7 +359,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
 
     await this.dependencies.client.setSystemAgentTargetEnabled(
       normalizedAgentTargetID,
-      enabled
+      enabled,
     );
     await this.refreshAgentTargetConsumers();
   }
@@ -385,19 +385,19 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       await this.desktopPreferences.setLocale(nextLocale);
       this.reportSettingsLanguageChanged({
         fromLanguage,
-        toLanguage: nextLocale
+        toLanguage: nextLocale,
       });
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.general.localeSaveFailed"
-        )
+          "workspace.settings.general.localeSaveFailed",
+        ),
       });
     }
   }
 
   async changeDefaultAgentProvider(
-    provider: DesktopDefaultAgentProvider
+    provider: DesktopDefaultAgentProvider,
   ): Promise<void> {
     if (
       this.desktopPreferences.store.defaultAgentProvider === provider ||
@@ -411,14 +411,14 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.general.defaultAgentProviderSaveFailed"
-        )
+          "workspace.settings.general.defaultAgentProviderSaveFailed",
+        ),
       });
     }
   }
 
   async changeAgentConversationDetailMode(
-    mode: DesktopAgentConversationDetailMode
+    mode: DesktopAgentConversationDetailMode,
   ): Promise<void> {
     if (
       this.desktopPreferences.store.agentConversationDetailMode === mode ||
@@ -432,14 +432,14 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.general.agentConversationDetailModeSaveFailed"
-        )
+          "workspace.settings.general.agentConversationDetailModeSaveFailed",
+        ),
       });
     }
   }
 
   async changeBrowserUseConnectionMode(
-    mode: DesktopBrowserUseConnectionMode
+    mode: DesktopBrowserUseConnectionMode,
   ): Promise<void> {
     if (
       this.desktopPreferences.store.browserUseConnectionMode === mode ||
@@ -453,8 +453,8 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.general.browserUseConnectionModeSaveFailed"
-        )
+          "workspace.settings.general.browserUseConnectionModeSaveFailed",
+        ),
       });
     }
   }
@@ -472,8 +472,8 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.appearance.dockPlacementSaveFailed"
-        )
+          "workspace.settings.appearance.dockPlacementSaveFailed",
+        ),
       });
     }
   }
@@ -491,14 +491,14 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.appearance.dockIconStyleSaveFailed"
-        )
+          "workspace.settings.appearance.dockIconStyleSaveFailed",
+        ),
       });
     }
   }
 
   async changeMinimizeAnimation(
-    animation: DesktopMinimizeAnimation
+    animation: DesktopMinimizeAnimation,
   ): Promise<void> {
     if (
       this.desktopPreferences.store.minimizeAnimation === animation ||
@@ -512,24 +512,24 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.appearance.minimizeAnimationSaveFailed"
-        )
+          "workspace.settings.appearance.minimizeAnimationSaveFailed",
+        ),
       });
     }
   }
 
   async changeWorkbenchWindowSnapping(
-    value: DesktopWorkbenchWindowSnapping
+    value: DesktopWorkbenchWindowSnapping,
   ): Promise<void> {
     if (
       desktopWorkbenchWindowSnappingEqual(
         this.desktopPreferences.store.workbenchWindowSnapping,
-        value
+        value,
       ) ||
       (this.desktopPreferences.store.changingWorkbenchWindowSnapping !== null &&
         desktopWorkbenchWindowSnappingEqual(
           this.desktopPreferences.store.changingWorkbenchWindowSnapping,
-          value
+          value,
         ))
     ) {
       return;
@@ -540,8 +540,8 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.appearance.workbenchWindowSnappingSaveFailed"
-        )
+          "workspace.settings.appearance.workbenchWindowSnappingSaveFailed",
+        ),
       });
     }
   }
@@ -551,17 +551,17 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
   }
 
   async changeDeletedAgentConversationRetentionDays(
-    days: DeletedAgentConversationRetentionDays
+    days: DeletedAgentConversationRetentionDays,
   ): Promise<void> {
     try {
       await this.desktopPreferences.setDeletedAgentConversationRetentionDays(
-        days
+        days,
       );
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.general.deletedConversationRetentionSaveFailed"
-        )
+          "workspace.settings.general.deletedConversationRetentionSaveFailed",
+        ),
       });
     }
   }
@@ -583,7 +583,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
           clientTs: (this.reporterNow ?? Date.now)(),
           mode,
           previousMode,
-          workspaceId: this.store.workspaceID
+          workspaceId: this.store.workspaceID,
         });
       }
     } catch (error) {
@@ -591,23 +591,23 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
         error,
         mode,
         previousMode,
-        workspaceId: this.store.workspaceID
+        workspaceId: this.store.workspaceID,
       });
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.general.workspaceUiModeSaveFailed"
-        )
+          "workspace.settings.general.workspaceUiModeSaveFailed",
+        ),
       });
     }
   }
 
   async changeWorkbenchShortcuts(
-    shortcuts: DesktopWorkbenchShortcuts
+    shortcuts: DesktopWorkbenchShortcuts,
   ): Promise<void> {
     if (
       desktopWorkbenchShortcutsEqual(
         this.desktopPreferences.store.workbenchShortcuts,
-        shortcuts
+        shortcuts,
       )
     ) {
       return;
@@ -618,8 +618,8 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.lab.preferencesSaveFailed"
-        )
+          "workspace.settings.lab.preferencesSaveFailed",
+        ),
       });
     }
   }
@@ -637,19 +637,19 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       await this.desktopPreferences.setThemeSource(nextThemeSource);
       this.reportSettingsThemeChanged({
         fromTheme,
-        toTheme: nextThemeSource
+        toTheme: nextThemeSource,
       });
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.appearance.themeSaveFailed"
-        )
+          "workspace.settings.appearance.themeSaveFailed",
+        ),
       });
     }
   }
 
   async changeSleepPreventionMode(
-    mode: DesktopSleepPreventionMode
+    mode: DesktopSleepPreventionMode,
   ): Promise<void> {
     if (
       this.desktopPreferences.store.sleepPreventionMode === mode ||
@@ -663,8 +663,8 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.general.preventSleepSaveFailed"
-        )
+          "workspace.settings.general.preventSleepSaveFailed",
+        ),
       });
     }
   }
@@ -682,8 +682,8 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.general.updatePolicySaveFailed"
-        )
+          "workspace.settings.general.updatePolicySaveFailed",
+        ),
       });
     }
   }
@@ -701,14 +701,14 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.general.updateChannelSaveFailed"
-        )
+          "workspace.settings.general.updateChannelSaveFailed",
+        ),
       });
     }
   }
 
   async changeAppCatalogChannel(
-    channel: DesktopAppCatalogChannel
+    channel: DesktopAppCatalogChannel,
   ): Promise<void> {
     if (
       this.desktopPreferences.store.appCatalogChannel === channel ||
@@ -722,8 +722,8 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.apps.appCatalogChannelSaveFailed"
-        )
+          "workspace.settings.apps.appCatalogChannelSaveFailed",
+        ),
       });
       return;
     }
@@ -748,8 +748,8 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.developer.showAppDeveloperSourcesSaveFailed"
-        )
+          "workspace.settings.developer.showAppDeveloperSourcesSaveFailed",
+        ),
       });
     }
   }
@@ -767,15 +767,15 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       this.notifications.success({
         title: translator.t("workspace.settings.developer.logsCleared", {
           count: String(result.clearedFiles),
-          size: formatWorkspaceSettingsBytes(result.clearedSizeBytes)
-        })
+          size: formatWorkspaceSettingsBytes(result.clearedSizeBytes),
+        }),
       });
       await this.refreshDeveloperLogs();
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.developer.logsClearFailed"
-        )
+          "workspace.settings.developer.logsClearFailed",
+        ),
       });
     } finally {
       this.store.developerLogs.clearing = false;
@@ -797,15 +797,15 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
         title: createActiveTranslator().t(
           "workspace.settings.developer.conversationHistoryCleared",
           {
-            count: String(result.removedSessions)
-          }
-        )
+            count: String(result.removedSessions),
+          },
+        ),
       });
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.developer.conversationHistoryClearFailed"
-        )
+          "workspace.settings.developer.conversationHistoryClearFailed",
+        ),
       });
     } finally {
       this.store.developerLogs.clearingConversationHistory = false;
@@ -827,16 +827,16 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
             "workspace.settings.developer.logsExported",
             {
               count: String(result.fileCount),
-              path: result.filePath ?? ""
-            }
-          )
+              path: result.filePath ?? "",
+            },
+          ),
         });
       }
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.developer.logsExportFailed"
-        )
+          "workspace.settings.developer.logsExportFailed",
+        ),
       });
     } finally {
       this.store.developerLogs.exporting = false;
@@ -863,8 +863,8 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
 
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.developer.logsLoadFailed"
-        )
+          "workspace.settings.developer.logsLoadFailed",
+        ),
       });
       this.store.developerLogs.loading = false;
     }
@@ -925,13 +925,13 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       {},
       {
         reporterService: this.reporterService,
-        now: this.reporterNow
-      }
+        now: this.reporterNow,
+      },
     ).report();
   }
 
   private reportSettingsSectionSwitched(
-    section: WorkspaceSettingsSectionID
+    section: WorkspaceSettingsSectionID,
   ): void {
     if (!this.reporterService) {
       return;
@@ -939,12 +939,12 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
 
     void new SettingsSectionSwitchedReporter(
       {
-        section
+        section,
       },
       {
         reporterService: this.reporterService,
-        now: this.reporterNow
-      }
+        now: this.reporterNow,
+      },
     ).report();
   }
 
@@ -958,7 +958,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
 
     void new SettingsLanguageChangedReporter(input, {
       reporterService: this.reporterService,
-      now: this.reporterNow
+      now: this.reporterNow,
     }).report();
   }
 
@@ -972,7 +972,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
 
     void new SettingsThemeChangedReporter(input, {
       reporterService: this.reporterService,
-      now: this.reporterNow
+      now: this.reporterNow,
     }).report();
   }
 }
@@ -989,6 +989,9 @@ IWorkspaceAppCenterService(WorkspaceSettingsService, undefined, 4);
 
 const noopDesktopPreferencesStore: DesktopPreferencesReadableStoreState = {
   agentCliUpdateCheckEnabled: true,
+  agentRuntimeKeepAliveEnabled: true,
+  agentRuntimeIdleMinutes: 30,
+  agentRuntimeMaxResident: 10,
   agentComposerDefaultsByProvider: {},
   agentComposerDefaultsByAgentTarget: {},
   agentGuiConversationRailCollapsedByProvider: {},
@@ -998,6 +1001,9 @@ const noopDesktopPreferencesStore: DesktopPreferencesReadableStoreState = {
   browserUseConnectionMode: "isolated",
   changingAgentConversationDetailMode: null,
   changingAgentCliUpdateCheckEnabled: null,
+  changingAgentRuntimeKeepAliveEnabled: null,
+  changingAgentRuntimeIdleMinutes: null,
+  changingAgentRuntimeMaxResident: null,
   changingAppCatalogChannel: null,
   changingBrowserUseConnectionMode: null,
   changingDefaultAgentProvider: null,
@@ -1029,8 +1035,8 @@ const noopDesktopPreferencesStore: DesktopPreferencesReadableStoreState = {
   workbenchShortcuts: defaultDesktopWorkbenchShortcuts,
   workbenchWindowSnapping: {
     enabled: false,
-    shortcutPreset: "commandArrows"
-  }
+    shortcutPreset: "commandArrows",
+  },
 };
 
 const noopDesktopPreferences: DesktopPreferencesService = {
@@ -1038,6 +1044,15 @@ const noopDesktopPreferences: DesktopPreferencesService = {
   store: noopDesktopPreferencesStore,
   setAgentCliUpdateCheckEnabled(enabled) {
     return Promise.resolve(enabled);
+  },
+  setAgentRuntimeKeepAliveEnabled(enabled) {
+    return Promise.resolve(enabled);
+  },
+  setAgentRuntimeIdleMinutes(minutes) {
+    return Promise.resolve(minutes);
+  },
+  setAgentRuntimeMaxResident(maxResident) {
+    return Promise.resolve(maxResident);
   },
   setAppCatalogChannel(channel) {
     return Promise.resolve(channel);
@@ -1097,7 +1112,7 @@ const noopDesktopPreferences: DesktopPreferencesService = {
     return Promise.resolve({
       acknowledgedFields: [],
       rejectedFields: [],
-      supersededFields: []
+      supersededFields: [],
     });
   },
   rememberAgentGuiConversationRailCollapsed() {
@@ -1105,13 +1120,13 @@ const noopDesktopPreferences: DesktopPreferencesService = {
   },
   rememberAgentSessionLaunchMode() {
     return Promise.resolve();
-  }
+  },
 };
 
 function createNoopTheme(source: DesktopThemeSource): DesktopThemeState {
   return {
     appearance: source === "dark" ? "dark" : "light",
-    source
+    source,
   };
 }
 
@@ -1121,5 +1136,5 @@ const noopNotifications: NotificationService = {
   info() {},
   notify() {},
   success() {},
-  warning() {}
+  warning() {},
 };

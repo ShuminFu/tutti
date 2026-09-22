@@ -4,13 +4,23 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore
+  useSyncExternalStore,
 } from "react";
 import { resolveAgentGUIProviderCatalogIdentity } from "@tutti-os/agent-gui/provider-catalog";
 import { resolveProviderIconAsset } from "@tutti-os/agent-gui/provider-icons";
 import { useService } from "@tutti-os/infra/di";
 import { INotificationService } from "@tutti-os/ui-notifications";
-import { ArrowRightIcon, Button, StatusDot, Switch } from "@tutti-os/ui-system";
+import {
+  ArrowRightIcon,
+  Button,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  StatusDot,
+  Switch,
+} from "@tutti-os/ui-system";
 import type { WorkspaceAgentProvider } from "@tutti-os/client-tuttid-ts";
 import { useTranslation } from "@renderer/i18n";
 import { cn } from "@renderer/lib/format";
@@ -18,34 +28,52 @@ import type { DesktopFeatureFlags } from "@shared/preferences";
 import type { AgentExtensionActivationFlag } from "../../../../../shared/featureFlags/catalog.ts";
 import type {
   AgentProviderStatusSnapshot,
-  IAgentProviderStatusService
+  IAgentProviderStatusService,
 } from "../../workspace-agent/services/agentProviderStatusService.interface.ts";
 import type {
   AgentsSnapshot,
-  IAgentsService
+  IAgentsService,
 } from "../../workspace-agent/services/agentsService.interface.ts";
 import {
   desktopAgentProviderManageDialogProviders,
   projectDesktopAgentProviderManageRows,
-  type DesktopAgentProviderManageRow
+  type DesktopAgentProviderManageRow,
 } from "../../workspace-agent/ui/desktopAgentProviderManageDialogModel.ts";
 import {
   resolveStatusDotTone,
-  statusLabelKeys
+  statusLabelKeys,
 } from "../../workspace-agent/ui/DesktopAgentProviderManageDialog.tsx";
 import {
   isWorkspaceAgentGuiEarlyAccessProvider,
-  resolveWorkspaceAgentGuiLabel
+  resolveWorkspaceAgentGuiLabel,
 } from "../services/workspaceAgentProviderCatalog.ts";
 import {
   filterVisibleAgentProviders,
-  resolveAgentDeepLinkOutcome
+  resolveAgentDeepLinkOutcome,
 } from "./workspaceAgentsSettingsTabModel.ts";
 import {
   formatAgentProviderUpdateSummary,
-  resolveAgentProviderUpdateRowPresentation
+  resolveAgentProviderUpdateRowPresentation,
 } from "./workspaceAgentsSettingsUpdateModel.ts";
 import { projectWorkspaceAgentExtensionSettingsRows } from "./workspaceAgentExtensionSettingsModel.ts";
+import {
+  workspaceSettingsSelectContentClass,
+  workspaceSettingsSelectTriggerClass,
+} from "./workspaceSettingsFieldStyles.ts";
+
+// 档位而不是自由输入框：这两个旋钮的作用是「用多少内存换多快的下一句」，
+// 用户心里只有「短 / 中 / 长 / 一直留着」这几档，给个数字输入框只会让人纠结
+// 27 和 30 的区别。别的客户端写进来的非档位值仍要显示得出来，所以下面会把
+// 当前值临时并进选项里（withCurrentValue）。
+const agentRuntimeIdleMinutesPresets = [5, 15, 30, 60, 0] as const;
+const agentRuntimeMaxResidentPresets = [3, 5, 10, 20, 0] as const;
+
+function withCurrentValue(
+  presets: readonly number[],
+  current: number,
+): number[] {
+  return presets.includes(current) ? [...presets] : [current, ...presets];
+}
 
 const emptyAgentProviderStatusSnapshot: AgentProviderStatusSnapshot = {
   capturedAt: null,
@@ -53,7 +81,7 @@ const emptyAgentProviderStatusSnapshot: AgentProviderStatusSnapshot = {
   error: null,
   isLoading: false,
   pendingActions: [],
-  statuses: []
+  statuses: [],
 };
 
 const emptyAgentsSnapshot: AgentsSnapshot = {
@@ -61,7 +89,7 @@ const emptyAgentsSnapshot: AgentsSnapshot = {
   agentTargets: [],
   capturedAtUnixMs: null,
   error: null,
-  status: "idle"
+  status: "idle",
 };
 
 const managedAgentProviders = [...desktopAgentProviderManageDialogProviders];
@@ -72,7 +100,7 @@ const managedAgentProviders = [...desktopAgentProviderManageDialogProviders];
 // Icons render with a uniform 6px corner radius.
 function resolveAgentSettingsIconUrl(
   provider: string,
-  agentTarget: { iconUrl?: string | null } | null | undefined
+  agentTarget: { iconUrl?: string | null } | null | undefined,
 ): string | null {
   const identity = resolveAgentGUIProviderCatalogIdentity(provider);
   return (
@@ -89,7 +117,7 @@ function resolveAgentSettingsIconUrl(
 // horizontal scrolling.
 const agentsTableColumnsClass = cn(
   "grid gap-3 grid-cols-[minmax(0,1.6fr)_180px_128px]",
-  "max-[560px]:grid-cols-[minmax(0,1fr)_128px]"
+  "max-[560px]:grid-cols-[minmax(0,1fr)_128px]",
 );
 
 function AgentConnectionStatus({
@@ -97,7 +125,7 @@ function AgentConnectionStatus({
   environmentLabel,
   label,
   onOpenEnvironment,
-  status
+  status,
 }: {
   className?: string;
   environmentLabel: string;
@@ -121,7 +149,7 @@ function AgentConnectionStatus({
       <span
         className={cn(
           "min-w-0 items-center gap-1.5 text-[var(--text-primary)]",
-          className
+          className,
         )}
       >
         {content}
@@ -134,7 +162,7 @@ function AgentConnectionStatus({
       aria-label={environmentLabel}
       className={cn(
         "min-w-0 items-center gap-1.5 border-0 bg-transparent p-0 text-left text-[var(--text-primary)] outline-none transition-opacity hover:opacity-75 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-focus)]",
-        className
+        className,
       )}
       type="button"
       onClick={onOpenEnvironment}
@@ -158,6 +186,12 @@ function agentTargetId(provider: string): string | null {
 export function WorkspaceAgentsSettingsTab({
   autoCheckEnabled,
   autoCheckPending,
+  keepAliveEnabled,
+  keepAlivePending,
+  keepAliveIdleMinutes,
+  keepAliveIdleMinutesPending,
+  keepAliveMaxResident,
+  keepAliveMaxResidentPending,
   agentProviderStatusService,
   agentsService,
   earlyAccessEnabled,
@@ -167,11 +201,20 @@ export function WorkspaceAgentsSettingsTab({
   focusRequestID,
   onAgentEnabledChange,
   onAutoCheckEnabledChange,
+  onKeepAliveEnabledChange,
+  onKeepAliveIdleMinutesChange,
+  onKeepAliveMaxResidentChange,
   onOpenEnvironment,
-  onExtensionEnabledChange
+  onExtensionEnabledChange,
 }: {
   autoCheckEnabled: boolean;
   autoCheckPending: boolean;
+  keepAliveEnabled: boolean;
+  keepAlivePending: boolean;
+  keepAliveIdleMinutes: number;
+  keepAliveIdleMinutesPending: boolean;
+  keepAliveMaxResident: number;
+  keepAliveMaxResidentPending: boolean;
   agentProviderStatusService: IAgentProviderStatusService;
   agentsService: IAgentsService;
   earlyAccessEnabled: boolean;
@@ -181,13 +224,16 @@ export function WorkspaceAgentsSettingsTab({
   focusRequestID: number;
   onAgentEnabledChange: (
     agentTargetID: string,
-    enabled: boolean
+    enabled: boolean,
   ) => Promise<void>;
   onAutoCheckEnabledChange: (enabled: boolean) => void;
+  onKeepAliveEnabledChange: (enabled: boolean) => void;
+  onKeepAliveIdleMinutesChange: (minutes: number) => void;
+  onKeepAliveMaxResidentChange: (maxResident: number) => void;
   onOpenEnvironment?: (provider: WorkspaceAgentProvider) => void;
   onExtensionEnabledChange: (
     flag: AgentExtensionActivationFlag,
-    enabled: boolean
+    enabled: boolean,
   ) => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -195,7 +241,7 @@ export function WorkspaceAgentsSettingsTab({
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [highlightedProvider, setHighlightedProvider] = useState<string | null>(
-    null
+    null,
   );
   const [pendingAgentTargetIDs, setPendingAgentTargetIDs] = useState<
     ReadonlySet<string>
@@ -204,13 +250,13 @@ export function WorkspaceAgentsSettingsTab({
   const snapshot = useSyncExternalStore(
     (listener) => agentProviderStatusService.subscribe(listener),
     () => agentProviderStatusService.getSnapshot(),
-    () => emptyAgentProviderStatusSnapshot
+    () => emptyAgentProviderStatusSnapshot,
   );
 
   const agentsSnapshot = useSyncExternalStore(
     (listener) => agentsService.subscribe(listener),
     () => agentsService.getSnapshot(),
-    () => emptyAgentsSnapshot
+    () => emptyAgentsSnapshot,
   );
 
   useEffect(() => {
@@ -230,7 +276,7 @@ export function WorkspaceAgentsSettingsTab({
     void agentProviderStatusService
       .ensureLoaded({
         includeUpdates: true,
-        providers: managedAgentProviders
+        providers: managedAgentProviders,
       })
       .catch(() => null);
   }, [agentProviderStatusService, autoCheckEnabled]);
@@ -244,7 +290,7 @@ export function WorkspaceAgentsSettingsTab({
           error instanceof Error && error.message.trim()
             ? error.message
             : undefined,
-        title: t("workspace.settings.agent.agents.checkUpdatesFailed")
+        title: t("workspace.settings.agent.agents.checkUpdatesFailed"),
       });
     }
   }, [agentProviderStatusService, notifications, t]);
@@ -253,22 +299,22 @@ export function WorkspaceAgentsSettingsTab({
     const rows = projectDesktopAgentProviderManageRows({
       isLoading: snapshot.isLoading,
       pendingActions: snapshot.pendingActions,
-      statuses: snapshot.statuses
+      statuses: snapshot.statuses,
     });
     return new Map<string, DesktopAgentProviderManageRow>(
-      rows.map((row) => [row.provider, row])
+      rows.map((row) => [row.provider, row]),
     );
   }, [snapshot.isLoading, snapshot.pendingActions, snapshot.statuses]);
 
   const visibleProviders = useMemo(
     () =>
       filterVisibleAgentProviders(managedAgentProviders, earlyAccessEnabled),
-    [earlyAccessEnabled]
+    [earlyAccessEnabled],
   );
 
   const checkingUpdates = agentProviderStatusService.isCheckingUpdates();
   const agentUpdatePending = snapshot.pendingActions.some(
-    (action) => action.actionId === "update"
+    (action) => action.actionId === "update",
   );
 
   const agentTargetByID = useMemo(
@@ -276,10 +322,10 @@ export function WorkspaceAgentsSettingsTab({
       new Map(
         agentsSnapshot.agentTargets.map((target) => [
           target.agentTargetId,
-          target
-        ])
+          target,
+        ]),
       ),
-    [agentsSnapshot.agentTargets]
+    [agentsSnapshot.agentTargets],
   );
 
   const extensionRows = useMemo(
@@ -288,14 +334,14 @@ export function WorkspaceAgentsSettingsTab({
         agentTargets: agentsSnapshot.agentTargets,
         directoryLoading: agentsSnapshot.status === "loading",
         earlyAccessEnabled,
-        featureFlags
+        featureFlags,
       }),
     [
       agentsSnapshot.agentTargets,
       agentsSnapshot.status,
       earlyAccessEnabled,
-      featureFlags
-    ]
+      featureFlags,
+    ],
   );
 
   const toggleAgentTargetEnabled = useCallback(
@@ -313,8 +359,8 @@ export function WorkspaceAgentsSettingsTab({
               ? error.message
               : undefined,
           title: t("workspace.settings.agent.agents.enableChangeFailed", {
-            agent: label
-          })
+            agent: label,
+          }),
         });
       } finally {
         setPendingAgentTargetIDs((current) => {
@@ -324,7 +370,7 @@ export function WorkspaceAgentsSettingsTab({
         });
       }
     },
-    [notifications, onAgentEnabledChange, pendingAgentTargetIDs, t]
+    [notifications, onAgentEnabledChange, pendingAgentTargetIDs, t],
   );
 
   const toggleAgentEnabled = useCallback(
@@ -336,10 +382,10 @@ export function WorkspaceAgentsSettingsTab({
       await toggleAgentTargetEnabled(
         targetID,
         resolveWorkspaceAgentGuiLabel(provider),
-        enabled
+        enabled,
       );
     },
-    [toggleAgentTargetEnabled]
+    [toggleAgentTargetEnabled],
   );
 
   const focusRow = useCallback((provider: string) => {
@@ -361,7 +407,7 @@ export function WorkspaceAgentsSettingsTab({
         clearTimeout(highlightTimerRef.current);
       }
     },
-    []
+    [],
   );
 
   // Deep-link focus/highlight, driven by a bumped request id so repeat links to
@@ -373,7 +419,7 @@ export function WorkspaceAgentsSettingsTab({
     const outcome = resolveAgentDeepLinkOutcome({
       earlyAccessEnabled,
       provider: focusProvider,
-      visibleProviders
+      visibleProviders,
     });
     if (!outcome) {
       return;
@@ -384,8 +430,8 @@ export function WorkspaceAgentsSettingsTab({
     }
     notifications.info({
       title: t("workspace.settings.agent.agents.earlyAccessHiddenHint", {
-        agent: resolveWorkspaceAgentGuiLabel(outcome.provider)
-      })
+        agent: resolveWorkspaceAgentGuiLabel(outcome.provider),
+      }),
     });
     // Intentionally no row focus: the row is hidden until Early Access is on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -434,6 +480,108 @@ export function WorkspaceAgentsSettingsTab({
             : t("workspace.settings.agent.agents.checkUpdates")}
         </Button>
       </div>
+      {/*
+        与「自动检查更新」同一条栏样式并排：左边开关 + 说明，右边两个档位下拉。
+        关掉常驻时两个下拉一起禁掉 —— 回合一结束就还进程，「留多久」和
+        「留几条」都没有意义了，留着可点只会让人以为还生效。
+      */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--transparency-block)] px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Switch
+            aria-label={t("workspace.settings.agent.agents.keepAlive")}
+            checked={keepAliveEnabled}
+            disabled={keepAlivePending}
+            size="sm"
+            onCheckedChange={onKeepAliveEnabledChange}
+          />
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-[12px] font-medium text-[var(--text-primary)]">
+              {t("workspace.settings.agent.agents.keepAlive")}
+            </span>
+            <span className="text-[11px] text-[var(--text-tertiary)]">
+              {t("workspace.settings.agent.agents.keepAliveHint")}
+            </span>
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 max-[560px]:w-full max-[560px]:flex-col max-[560px]:items-stretch">
+          <Select
+            disabled={!keepAliveEnabled || keepAliveIdleMinutesPending}
+            value={String(keepAliveIdleMinutes)}
+            onValueChange={(value) =>
+              onKeepAliveIdleMinutesChange(Number(value))
+            }
+          >
+            <SelectTrigger
+              aria-label={t(
+                "workspace.settings.agent.agents.keepAliveIdleLabel",
+              )}
+              className={cn(
+                workspaceSettingsSelectTriggerClass,
+                "h-7 w-[150px] max-[560px]:w-full",
+              )}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent
+              className={workspaceSettingsSelectContentClass}
+              style={{ zIndex: "var(--z-panel-popover)" }}
+            >
+              {withCurrentValue(
+                agentRuntimeIdleMinutesPresets,
+                keepAliveIdleMinutes,
+              ).map((minutes) => (
+                <SelectItem key={minutes} value={String(minutes)}>
+                  {minutes === 0
+                    ? t("workspace.settings.agent.agents.keepAliveIdleNever")
+                    : t(
+                        "workspace.settings.agent.agents.keepAliveIdleMinutes",
+                        { count: minutes },
+                      )}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            disabled={!keepAliveEnabled || keepAliveMaxResidentPending}
+            value={String(keepAliveMaxResident)}
+            onValueChange={(value) =>
+              onKeepAliveMaxResidentChange(Number(value))
+            }
+          >
+            <SelectTrigger
+              aria-label={t(
+                "workspace.settings.agent.agents.keepAliveMaxResidentLabel",
+              )}
+              className={cn(
+                workspaceSettingsSelectTriggerClass,
+                "h-7 w-[150px] max-[560px]:w-full",
+              )}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent
+              className={workspaceSettingsSelectContentClass}
+              style={{ zIndex: "var(--z-panel-popover)" }}
+            >
+              {withCurrentValue(
+                agentRuntimeMaxResidentPresets,
+                keepAliveMaxResident,
+              ).map((maxResident) => (
+                <SelectItem key={maxResident} value={String(maxResident)}>
+                  {maxResident === 0
+                    ? t(
+                        "workspace.settings.agent.agents.keepAliveMaxResidentUnlimited",
+                      )
+                    : t(
+                        "workspace.settings.agent.agents.keepAliveMaxResident",
+                        { count: maxResident },
+                      )}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <div
         className="overflow-hidden rounded-[12px] border border-[var(--line-1)]"
         role="table"
@@ -441,7 +589,7 @@ export function WorkspaceAgentsSettingsTab({
         <div
           className={cn(
             agentsTableColumnsClass,
-            "items-center border-b border-[var(--border-1)] px-2 pb-2 pt-2 text-[12px] font-medium text-[var(--text-tertiary)]"
+            "items-center border-b border-[var(--border-1)] px-2 pb-2 pt-2 text-[12px] font-medium text-[var(--text-tertiary)]",
           )}
           role="row"
         >
@@ -472,10 +620,10 @@ export function WorkspaceAgentsSettingsTab({
             const isEarlyAccess =
               isWorkspaceAgentGuiEarlyAccessProvider(provider);
             const environmentLabel = t("workspace.agentEnv.configTitle", {
-              provider: label
+              provider: label,
             });
             const providerStatus = snapshot.statuses.find(
-              (item) => item.provider === provider
+              (item) => item.provider === provider,
             );
             const updatePresentation =
               resolveAgentProviderUpdateRowPresentation(providerStatus);
@@ -484,7 +632,7 @@ export function WorkspaceAgentsSettingsTab({
               currentVersion: updatePresentation.currentVersion,
               latestVersion: updatePresentation.latestVersion,
               t,
-              updateAvailable: updatePresentation.updateAvailable
+              updateAvailable: updatePresentation.updateAvailable,
             });
             return (
               <div
@@ -501,7 +649,7 @@ export function WorkspaceAgentsSettingsTab({
                   "items-center border-b border-[var(--border-1)] px-2 py-2.5 text-[13px] transition-colors duration-150 last:border-b-0",
                   highlightedProvider === provider
                     ? "bg-[var(--transparency-block)]"
-                    : "bg-transparent"
+                    : "bg-transparent",
                 )}
                 data-agent-provider={provider}
                 role="row"
@@ -525,7 +673,7 @@ export function WorkspaceAgentsSettingsTab({
                       {isEarlyAccess ? (
                         <span className="shrink-0 rounded-full border border-[var(--border-1)] px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-[var(--text-secondary)]">
                           {t(
-                            "workspace.settings.agent.agents.earlyAccessBadge"
+                            "workspace.settings.agent.agents.earlyAccessBadge",
                           )}
                         </span>
                       ) : null}
@@ -580,8 +728,8 @@ export function WorkspaceAgentsSettingsTab({
                     aria-label={t(
                       "workspace.settings.agent.agents.enableAgent",
                       {
-                        agent: label
-                      }
+                        agent: label,
+                      },
                     )}
                     checked={agentEnabled}
                     disabled={
@@ -602,7 +750,7 @@ export function WorkspaceAgentsSettingsTab({
           {extensionRows.map((row) => {
             const label = t(row.labelKey);
             const environmentLabel = t("workspace.agentEnv.configTitle", {
-              provider: label
+              provider: label,
             });
             const statusLabel = row.enabled
               ? row.status === "unknown"
@@ -614,7 +762,7 @@ export function WorkspaceAgentsSettingsTab({
                 key={row.key}
                 className={cn(
                   agentsTableColumnsClass,
-                  "items-center border-b border-[var(--border-1)] px-2 py-2.5 text-[13px] last:border-b-0"
+                  "items-center border-b border-[var(--border-1)] px-2 py-2.5 text-[13px] last:border-b-0",
                 )}
                 data-agent-target={row.agentTargetId}
                 role="row"
@@ -638,7 +786,7 @@ export function WorkspaceAgentsSettingsTab({
                       {row.earlyAccess ? (
                         <span className="shrink-0 rounded-full border border-[var(--border-1)] px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-[var(--text-secondary)]">
                           {t(
-                            "workspace.settings.agent.agents.earlyAccessBadge"
+                            "workspace.settings.agent.agents.earlyAccessBadge",
                           )}
                         </span>
                       ) : null}
@@ -675,8 +823,8 @@ export function WorkspaceAgentsSettingsTab({
                     aria-label={t(
                       "workspace.settings.agent.agents.enableAgent",
                       {
-                        agent: label
-                      }
+                        agent: label,
+                      },
                     )}
                     checked={row.enabled}
                     disabled={
@@ -689,14 +837,14 @@ export function WorkspaceAgentsSettingsTab({
                       if (row.activationFlag !== null) {
                         void onExtensionEnabledChange(
                           row.activationFlag,
-                          enabled
+                          enabled,
                         );
                         return;
                       }
                       void toggleAgentTargetEnabled(
                         row.agentTargetId,
                         label,
-                        enabled
+                        enabled,
                       );
                     }}
                   />

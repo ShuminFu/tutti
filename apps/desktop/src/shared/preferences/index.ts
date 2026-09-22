@@ -2,6 +2,11 @@ export {
   defaultDesktopAgentProvider,
   defaultDesktopAgentCliUpdateCheckEnabled,
   defaultDesktopAgentConversationDetailMode,
+  defaultDesktopAgentRuntimeKeepAliveEnabled,
+  defaultDesktopAgentRuntimeIdleMinutes,
+  defaultDesktopAgentRuntimeMaxResident,
+  maxDesktopAgentRuntimeIdleMinutes,
+  maxDesktopAgentRuntimeMaxResident,
   defaultDesktopAgentSessionLaunchModesByWorkspace,
   defaultDeletedAgentConversationRetentionDays,
   defaultDesktopAppCatalogChannel,
@@ -65,6 +70,9 @@ export {
   mergeDesktopAgentSessionLaunchMode,
   normalizeDesktopAgentComposerDefaults,
   normalizeDesktopAgentCliUpdateCheckEnabled,
+  normalizeDesktopAgentRuntimeKeepAliveEnabled,
+  normalizeDesktopAgentRuntimeIdleMinutes,
+  normalizeDesktopAgentRuntimeMaxResident,
   normalizeDesktopAgentComposerDefaultsByAgentTarget,
   normalizeDesktopAgentComposerDefaultsByProvider,
   normalizeDesktopAgentConversationDetailMode,
@@ -105,5 +113,5 @@ export {
   type DesktopWorkbenchShortcuts,
   type DesktopWorkbenchShortcutsInput,
   type DesktopWorkbenchWindowSnapping,
-  type DesktopWorkbenchWindowSnappingShortcutPreset
+  type DesktopWorkbenchWindowSnappingShortcutPreset,
 } from "./core.ts";

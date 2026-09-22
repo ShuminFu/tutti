@@ -18,7 +18,7 @@ import type {
   DesktopUpdateChannel,
   DesktopUpdatePolicy,
   DesktopWorkbenchShortcuts,
-  DesktopWorkbenchWindowSnapping
+  DesktopWorkbenchWindowSnapping,
 } from "@shared/preferences";
 import type { DesktopThemeState } from "@shared/theme";
 import { proxy } from "valtio";
@@ -26,6 +26,9 @@ import type { DesktopPreferencesStoreState } from "../desktopPreferencesTypes.ts
 
 export function createDesktopPreferencesStore(input: {
   agentCliUpdateCheckEnabled: boolean;
+  agentRuntimeKeepAliveEnabled: boolean;
+  agentRuntimeIdleMinutes: number;
+  agentRuntimeMaxResident: number;
   agentComposerDefaultsByProvider?: DesktopAgentComposerDefaultsByProvider;
   agentComposerDefaultsByAgentTarget?: DesktopAgentComposerDefaultsByAgentTarget;
   agentGuiConversationRailCollapsedByProvider?: DesktopAgentGuiConversationRailCollapsedByProvider;
@@ -51,6 +54,9 @@ export function createDesktopPreferencesStore(input: {
 }): DesktopPreferencesStoreState {
   return proxy({
     changingAgentCliUpdateCheckEnabled: null,
+    changingAgentRuntimeKeepAliveEnabled: null,
+    changingAgentRuntimeIdleMinutes: null,
+    changingAgentRuntimeMaxResident: null,
     changingDefaultAgentProvider: null,
     changingAgentConversationDetailMode: null,
     changingAppCatalogChannel: null,
@@ -68,6 +74,9 @@ export function createDesktopPreferencesStore(input: {
     changingUpdatePolicy: null,
     changingWorkbenchWindowSnapping: null,
     agentCliUpdateCheckEnabled: input.agentCliUpdateCheckEnabled,
+    agentRuntimeKeepAliveEnabled: input.agentRuntimeKeepAliveEnabled,
+    agentRuntimeIdleMinutes: input.agentRuntimeIdleMinutes,
+    agentRuntimeMaxResident: input.agentRuntimeMaxResident,
     agentComposerDefaultsByProvider:
       input.agentComposerDefaultsByProvider ?? {},
     agentComposerDefaultsByAgentTarget:
@@ -94,6 +103,6 @@ export function createDesktopPreferencesStore(input: {
     updateChannel: input.updateChannel,
     updatePolicy: input.updatePolicy,
     workbenchShortcuts: input.workbenchShortcuts,
-    workbenchWindowSnapping: input.workbenchWindowSnapping
+    workbenchWindowSnapping: input.workbenchWindowSnapping,
   });
 }

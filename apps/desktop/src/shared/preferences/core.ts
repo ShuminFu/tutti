@@ -20,7 +20,7 @@ export const defaultDesktopMinimizeAnimation: DesktopMinimizeAnimation =
 
 export const desktopWorkbenchWindowSnappingShortcutPresets = [
   "commandArrows",
-  "commandShiftArrows"
+  "commandShiftArrows",
 ] as const;
 
 export type DesktopWorkbenchWindowSnappingShortcutPreset =
@@ -34,12 +34,12 @@ export interface DesktopWorkbenchWindowSnapping {
 export const defaultDesktopWorkbenchWindowSnapping: DesktopWorkbenchWindowSnapping =
   {
     enabled: false,
-    shortcutPreset: "commandArrows"
+    shortcutPreset: "commandArrows",
   };
 
 export const desktopBrowserUseConnectionModes = [
   "isolated",
-  "autoConnect"
+  "autoConnect",
 ] as const;
 
 export type DesktopBrowserUseConnectionMode =
@@ -61,11 +61,54 @@ export const defaultDesktopShowAppDeveloperSources = false;
 export const defaultDesktopAgentCliUpdateCheckEnabled = true;
 
 export function normalizeDesktopAgentCliUpdateCheckEnabled(
-  value: unknown
+  value: unknown,
 ): boolean {
   return typeof value === "boolean"
     ? value
     : defaultDesktopAgentCliUpdateCheckEnabled;
+}
+
+// DINTAL-5308 的三个旋钮。取值口径与 tuttid 的 biz/preferences 逐条对齐 ——
+// 这里只是界面侧的一份镜像，守门的仍是后端；两边对不上会表现成「我明明选了 X，
+// 转一圈回来变成 Y」。
+export const defaultDesktopAgentRuntimeKeepAliveEnabled = true;
+// 0 = 永不回收（拿内存换秒回），1..1440 = 空闲这么多分钟后回收。
+export const defaultDesktopAgentRuntimeIdleMinutes = 30;
+export const maxDesktopAgentRuntimeIdleMinutes = 1440;
+// 0 = 不限条数，1..100 = 最多常驻这么多条，超了挤最久没说话的那条。
+export const defaultDesktopAgentRuntimeMaxResident = 10;
+export const maxDesktopAgentRuntimeMaxResident = 100;
+
+export function normalizeDesktopAgentRuntimeKeepAliveEnabled(
+  value: unknown,
+): boolean {
+  return typeof value === "boolean"
+    ? value
+    : defaultDesktopAgentRuntimeKeepAliveEnabled;
+}
+
+// 越界收回默认而不是夹到边界：夹边界会把一个明显写错的值变成看着合理的值，
+// 用户再也不知道自己填错过。与后端 NormalizeDesktopAgentRuntimeIdleMinutes 同口径。
+export function normalizeDesktopAgentRuntimeIdleMinutes(
+  value: unknown,
+): number {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= maxDesktopAgentRuntimeIdleMinutes
+    ? value
+    : defaultDesktopAgentRuntimeIdleMinutes;
+}
+
+export function normalizeDesktopAgentRuntimeMaxResident(
+  value: unknown,
+): number {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= maxDesktopAgentRuntimeMaxResident
+    ? value
+    : defaultDesktopAgentRuntimeMaxResident;
 }
 
 export type DesktopFeatureFlags = Record<string, boolean>;
@@ -99,12 +142,12 @@ export type DesktopWorkbenchShortcutsInput = {
 export const defaultDesktopWorkbenchShortcuts: DesktopWorkbenchShortcuts = {
   newAgentConversation: null,
   newSameTypeWindow: null,
-  captureScreenshot: null
+  captureScreenshot: null,
 };
 
 export const desktopAgentConversationDetailModes = [
   "coding",
-  "general"
+  "general",
 ] as const;
 
 export type DesktopAgentConversationDetailMode =
@@ -121,7 +164,7 @@ export type DeletedAgentConversationRetentionDays =
 export const defaultDeletedAgentConversationRetentionDays: DeletedAgentConversationRetentionDays = 30;
 
 export function normalizeDeletedAgentConversationRetentionDays(
-  value: unknown
+  value: unknown,
 ): DeletedAgentConversationRetentionDays {
   return value === 15 || value === 30
     ? value
@@ -129,20 +172,20 @@ export function normalizeDeletedAgentConversationRetentionDays(
 }
 
 export function readInitialDockPlacementFromLocation(
-  locationSearch?: string
+  locationSearch?: string,
 ): DesktopDockPlacement {
   if (typeof window === "undefined" && locationSearch === undefined) {
     return defaultDesktopDockPlacement;
   }
 
   const value = new URLSearchParams(
-    locationSearch ?? window.location.search
+    locationSearch ?? window.location.search,
   ).get("dockPlacement");
   return isDesktopDockPlacement(value) ? value : defaultDesktopDockPlacement;
 }
 
 export function isDesktopDockPlacement(
-  value: unknown
+  value: unknown,
 ): value is DesktopDockPlacement {
   return (
     typeof value === "string" &&
@@ -151,7 +194,7 @@ export function isDesktopDockPlacement(
 }
 
 export function isDesktopDockIconStyle(
-  value: unknown
+  value: unknown,
 ): value is DesktopDockIconStyle {
   return (
     typeof value === "string" &&
@@ -160,7 +203,7 @@ export function isDesktopDockIconStyle(
 }
 
 export function isDesktopMinimizeAnimation(
-  value: unknown
+  value: unknown,
 ): value is DesktopMinimizeAnimation {
   return (
     typeof value === "string" &&
@@ -169,29 +212,29 @@ export function isDesktopMinimizeAnimation(
 }
 
 export function isDesktopWorkbenchWindowSnappingShortcutPreset(
-  value: unknown
+  value: unknown,
 ): value is DesktopWorkbenchWindowSnappingShortcutPreset {
   return (
     typeof value === "string" &&
     desktopWorkbenchWindowSnappingShortcutPresets.includes(
-      value as DesktopWorkbenchWindowSnappingShortcutPreset
+      value as DesktopWorkbenchWindowSnappingShortcutPreset,
     )
   );
 }
 
 export function isDesktopBrowserUseConnectionMode(
-  value: unknown
+  value: unknown,
 ): value is DesktopBrowserUseConnectionMode {
   return (
     typeof value === "string" &&
     desktopBrowserUseConnectionModes.includes(
-      value as DesktopBrowserUseConnectionMode
+      value as DesktopBrowserUseConnectionMode,
     )
   );
 }
 
 export function isDesktopAppCatalogChannel(
-  value: unknown
+  value: unknown,
 ): value is DesktopAppCatalogChannel {
   return (
     typeof value === "string" &&
@@ -200,18 +243,18 @@ export function isDesktopAppCatalogChannel(
 }
 
 export function isDesktopAgentConversationDetailMode(
-  value: unknown
+  value: unknown,
 ): value is DesktopAgentConversationDetailMode {
   return (
     typeof value === "string" &&
     desktopAgentConversationDetailModes.includes(
-      value as DesktopAgentConversationDetailMode
+      value as DesktopAgentConversationDetailMode,
     )
   );
 }
 
 export function normalizeDesktopAgentConversationDetailMode(
-  value: unknown
+  value: unknown,
 ): DesktopAgentConversationDetailMode {
   return isDesktopAgentConversationDetailMode(value)
     ? value
@@ -225,7 +268,7 @@ export const desktopAgentProviders = [
   "cursor",
   "nexight",
   "openclaw",
-  "opencode"
+  "opencode",
 ] as const;
 
 export type DesktopAgentProvider = (typeof desktopAgentProviders)[number];
@@ -235,7 +278,7 @@ export const desktopDefaultAgentProviders = [
   "codex",
   "claude-code",
   "cursor",
-  "opencode"
+  "opencode",
 ] as const;
 
 export type DesktopDefaultAgentProvider =
@@ -277,7 +320,7 @@ export const desktopAgentComposerDefaultsFields = [
   "model",
   "permissionModeId",
   "reasoningEffort",
-  "speed"
+  "speed",
 ] as const;
 
 export type DesktopAgentGuiConversationRailCollapsedByProvider = Partial<
@@ -306,7 +349,7 @@ export const desktopFileDefaultOpeners = [
   "appBrowser",
   "defaultBrowser",
   "fileViewer",
-  "system"
+  "system",
 ] as const;
 
 export type DesktopFileDefaultOpener =
@@ -322,13 +365,13 @@ export const defaultDesktopFileDefaultOpenersByExtension: DesktopFileDefaultOpen
     htm: "appBrowser",
     html: "appBrowser",
     shtml: "appBrowser",
-    xhtml: "appBrowser"
+    xhtml: "appBrowser",
   };
 
 export const desktopSleepPreventionModes = [
   "never",
   "whileAgentRunning",
-  "always"
+  "always",
 ] as const;
 
 export type DesktopSleepPreventionMode =
@@ -350,7 +393,7 @@ export type DesktopUpdateChannel = (typeof desktopUpdateChannels)[number];
 export const defaultDesktopUpdateChannel: DesktopUpdateChannel = "stable";
 
 export function isDesktopSleepPreventionMode(
-  value: unknown
+  value: unknown,
 ): value is DesktopSleepPreventionMode {
   return (
     typeof value === "string" &&
@@ -359,7 +402,7 @@ export function isDesktopSleepPreventionMode(
 }
 
 export function isDesktopUpdatePolicy(
-  value: unknown
+  value: unknown,
 ): value is DesktopUpdatePolicy {
   return (
     typeof value === "string" &&
@@ -368,7 +411,7 @@ export function isDesktopUpdatePolicy(
 }
 
 export function isDesktopUpdateChannel(
-  value: unknown
+  value: unknown,
 ): value is DesktopUpdateChannel {
   return (
     typeof value === "string" &&
@@ -377,7 +420,7 @@ export function isDesktopUpdateChannel(
 }
 
 export function isDesktopAgentProvider(
-  value: unknown
+  value: unknown,
 ): value is DesktopAgentProvider {
   return (
     typeof value === "string" &&
@@ -386,7 +429,7 @@ export function isDesktopAgentProvider(
 }
 
 export function isDesktopDefaultAgentProvider(
-  value: unknown
+  value: unknown,
 ): value is DesktopDefaultAgentProvider {
   return (
     typeof value === "string" &&
@@ -395,7 +438,7 @@ export function isDesktopDefaultAgentProvider(
 }
 
 export function isDesktopFileDefaultOpener(
-  value: unknown
+  value: unknown,
 ): value is DesktopFileDefaultOpener {
   return (
     typeof value === "string" &&
@@ -404,7 +447,7 @@ export function isDesktopFileDefaultOpener(
 }
 
 export function normalizeDesktopWorkbenchWindowSnapping(
-  value: unknown
+  value: unknown,
 ): DesktopWorkbenchWindowSnapping {
   if (!isRecord(value)) {
     return { ...defaultDesktopWorkbenchWindowSnapping };
@@ -412,16 +455,16 @@ export function normalizeDesktopWorkbenchWindowSnapping(
   return {
     enabled: value.enabled === true,
     shortcutPreset: isDesktopWorkbenchWindowSnappingShortcutPreset(
-      value.shortcutPreset
+      value.shortcutPreset,
     )
       ? value.shortcutPreset
-      : defaultDesktopWorkbenchWindowSnapping.shortcutPreset
+      : defaultDesktopWorkbenchWindowSnapping.shortcutPreset,
   };
 }
 
 export function desktopWorkbenchWindowSnappingEqual(
   left: DesktopWorkbenchWindowSnapping | null | undefined,
-  right: DesktopWorkbenchWindowSnapping | null | undefined
+  right: DesktopWorkbenchWindowSnapping | null | undefined,
 ): boolean {
   const normalizedLeft = normalizeDesktopWorkbenchWindowSnapping(left);
   const normalizedRight = normalizeDesktopWorkbenchWindowSnapping(right);
@@ -440,7 +483,7 @@ export function normalizeDesktopShortcutBinding(value: unknown): string | null {
 }
 
 export function normalizeDesktopFeatureFlags(
-  value: unknown
+  value: unknown,
 ): DesktopFeatureFlags {
   if (!isRecord(value)) {
     return { ...defaultDesktopFeatureFlags };
@@ -458,7 +501,7 @@ export function normalizeDesktopFeatureFlags(
 
 export function desktopFeatureFlagsEqual(
   left: DesktopFeatureFlags | null | undefined,
-  right: DesktopFeatureFlags | null | undefined
+  right: DesktopFeatureFlags | null | undefined,
 ): boolean {
   const normalizedLeft = normalizeDesktopFeatureFlags(left);
   const normalizedRight = normalizeDesktopFeatureFlags(right);
@@ -471,23 +514,23 @@ export function desktopFeatureFlagsEqual(
 }
 
 export function normalizeDesktopWorkbenchShortcuts(
-  value: unknown
+  value: unknown,
 ): DesktopWorkbenchShortcuts {
   if (!isRecord(value)) {
     return { ...defaultDesktopWorkbenchShortcuts };
   }
   return {
     newAgentConversation: normalizeDesktopShortcutBinding(
-      value.newAgentConversation
+      value.newAgentConversation,
     ),
     newSameTypeWindow: normalizeDesktopShortcutBinding(value.newSameTypeWindow),
-    captureScreenshot: normalizeDesktopShortcutBinding(value.captureScreenshot)
+    captureScreenshot: normalizeDesktopShortcutBinding(value.captureScreenshot),
   };
 }
 
 export function desktopWorkbenchShortcutsEqual(
   left: DesktopWorkbenchShortcutsInput | null | undefined,
-  right: DesktopWorkbenchShortcutsInput | null | undefined
+  right: DesktopWorkbenchShortcutsInput | null | undefined,
 ): boolean {
   const normalizedLeft = normalizeDesktopWorkbenchShortcuts(left);
   const normalizedRight = normalizeDesktopWorkbenchShortcuts(right);
@@ -558,7 +601,7 @@ export function normalizeDesktopFileExtension(value: unknown): string | null {
 }
 
 export function normalizeDesktopFileDefaultOpenersByExtension(
-  value: unknown
+  value: unknown,
 ): DesktopFileDefaultOpenersByExtension {
   if (!isRecord(value)) {
     return { ...defaultDesktopFileDefaultOpenersByExtension };
@@ -577,13 +620,13 @@ export function normalizeDesktopFileDefaultOpenersByExtension(
 
 export function desktopFileDefaultOpenersByExtensionEqual(
   left: DesktopFileDefaultOpenersByExtension | null | undefined,
-  right: DesktopFileDefaultOpenersByExtension | null | undefined
+  right: DesktopFileDefaultOpenersByExtension | null | undefined,
 ): boolean {
   const normalizedLeft = normalizeDesktopFileDefaultOpenersByExtension(left);
   const normalizedRight = normalizeDesktopFileDefaultOpenersByExtension(right);
   const keys = new Set([
     ...Object.keys(normalizedLeft),
-    ...Object.keys(normalizedRight)
+    ...Object.keys(normalizedRight),
   ]);
   for (const key of keys) {
     if (normalizedLeft[key] !== normalizedRight[key]) {
@@ -594,7 +637,7 @@ export function desktopFileDefaultOpenersByExtensionEqual(
 }
 
 export function normalizeDesktopAgentComposerDefaults(
-  value: unknown
+  value: unknown,
 ): DesktopAgentComposerDefaults | null {
   if (!isRecord(value)) {
     return null;
@@ -624,7 +667,7 @@ export function normalizeDesktopAgentComposerDefaults(
 }
 
 export function normalizeDesktopAgentComposerDefaultsByAgentTarget(
-  value: unknown
+  value: unknown,
 ): DesktopAgentComposerDefaultsByAgentTarget {
   if (!isRecord(value)) {
     return {};
@@ -645,7 +688,7 @@ export function normalizeDesktopAgentComposerDefaultsByAgentTarget(
 }
 
 export function normalizeDesktopAgentComposerDefaultsByProvider(
-  value: unknown
+  value: unknown,
 ): DesktopAgentComposerDefaultsByProvider {
   if (!isRecord(value)) {
     return {};
@@ -662,7 +705,7 @@ export function normalizeDesktopAgentComposerDefaultsByProvider(
 }
 
 export function normalizeDesktopAgentGuiConversationRailCollapsedByProvider(
-  value: unknown
+  value: unknown,
 ): DesktopAgentGuiConversationRailCollapsedByProvider {
   if (!isRecord(value)) {
     return {};
@@ -679,18 +722,18 @@ export function normalizeDesktopAgentGuiConversationRailCollapsedByProvider(
 }
 
 export function isDesktopAgentSessionLaunchMode(
-  value: unknown
+  value: unknown,
 ): value is DesktopAgentSessionLaunchMode {
   return (
     typeof value === "string" &&
     desktopAgentSessionLaunchModes.includes(
-      value as DesktopAgentSessionLaunchMode
+      value as DesktopAgentSessionLaunchMode,
     )
   );
 }
 
 export function normalizeDesktopAgentSessionLaunchModesByWorkspace(
-  value: unknown
+  value: unknown,
 ): DesktopAgentSessionLaunchModesByWorkspace {
   if (!isRecord(value)) {
     return {};
@@ -723,7 +766,7 @@ export function mergeDesktopAgentSessionLaunchMode(
   current: DesktopAgentSessionLaunchModesByWorkspace | null | undefined,
   workspaceId: string,
   projectSectionKey: string,
-  mode: DesktopAgentSessionLaunchMode
+  mode: DesktopAgentSessionLaunchMode,
 ): DesktopAgentSessionLaunchModesByWorkspace {
   const normalizedCurrent =
     normalizeDesktopAgentSessionLaunchModesByWorkspace(current);
@@ -736,14 +779,14 @@ export function mergeDesktopAgentSessionLaunchMode(
     ...normalizedCurrent,
     [normalizedWorkspaceId]: {
       ...normalizedCurrent[normalizedWorkspaceId],
-      [normalizedProjectSectionKey]: mode
-    }
+      [normalizedProjectSectionKey]: mode,
+    },
   };
 }
 
 export function desktopAgentSessionLaunchModesByWorkspaceEqual(
   left: DesktopAgentSessionLaunchModesByWorkspace | null | undefined,
-  right: DesktopAgentSessionLaunchModesByWorkspace | null | undefined
+  right: DesktopAgentSessionLaunchModesByWorkspace | null | undefined,
 ): boolean {
   const normalizedLeft =
     normalizeDesktopAgentSessionLaunchModesByWorkspace(left);
@@ -751,14 +794,14 @@ export function desktopAgentSessionLaunchModesByWorkspaceEqual(
     normalizeDesktopAgentSessionLaunchModesByWorkspace(right);
   const workspaceIds = new Set([
     ...Object.keys(normalizedLeft),
-    ...Object.keys(normalizedRight)
+    ...Object.keys(normalizedRight),
   ]);
   for (const workspaceId of workspaceIds) {
     const leftModes = normalizedLeft[workspaceId] ?? {};
     const rightModes = normalizedRight[workspaceId] ?? {};
     const projectKeys = new Set([
       ...Object.keys(leftModes),
-      ...Object.keys(rightModes)
+      ...Object.keys(rightModes),
     ]);
     for (const projectKey of projectKeys) {
       if (leftModes[projectKey] !== rightModes[projectKey]) {
@@ -775,17 +818,17 @@ export function mergeDesktopAgentGuiConversationRailCollapsedByProvider(
     | null
     | undefined,
   provider: DesktopAgentProvider,
-  collapsed: boolean
+  collapsed: boolean,
 ): DesktopAgentGuiConversationRailCollapsedByProvider {
   return {
     ...normalizeDesktopAgentGuiConversationRailCollapsedByProvider(current),
-    [provider]: collapsed
+    [provider]: collapsed,
   };
 }
 
 export function desktopAgentGuiConversationRailCollapsedByProviderEqual(
   left: DesktopAgentGuiConversationRailCollapsedByProvider | null | undefined,
-  right: DesktopAgentGuiConversationRailCollapsedByProvider | null | undefined
+  right: DesktopAgentGuiConversationRailCollapsedByProvider | null | undefined,
 ): boolean {
   const normalizedLeft =
     normalizeDesktopAgentGuiConversationRailCollapsedByProvider(left);
@@ -794,14 +837,14 @@ export function desktopAgentGuiConversationRailCollapsedByProviderEqual(
   return desktopAgentProviders.every(
     (provider) =>
       (normalizedLeft[provider] ?? false) ===
-      (normalizedRight[provider] ?? false)
+      (normalizedRight[provider] ?? false),
   );
 }
 
 export function mergeDesktopAgentComposerDefaultsByProvider(
   current: DesktopAgentComposerDefaultsByProvider | null | undefined,
   provider: DesktopAgentProvider,
-  defaults: DesktopAgentComposerDefaults | null | undefined
+  defaults: DesktopAgentComposerDefaults | null | undefined,
 ): DesktopAgentComposerDefaultsByProvider {
   const normalizedCurrent =
     normalizeDesktopAgentComposerDefaultsByProvider(current);
@@ -812,7 +855,7 @@ export function mergeDesktopAgentComposerDefaultsByProvider(
   }
   return {
     ...normalizedCurrent,
-    [provider]: normalizedDefaults
+    [provider]: normalizedDefaults,
   };
 }
 
@@ -823,7 +866,7 @@ export function mergeDesktopAgentComposerDefaultsByProvider(
 export function mergeDesktopAgentComposerDefaultsByAgentTarget(
   current: DesktopAgentComposerDefaultsByAgentTarget | null | undefined,
   agentTargetId: string,
-  patch: DesktopAgentComposerDefaultsPatch | null | undefined
+  patch: DesktopAgentComposerDefaultsPatch | null | undefined,
 ): DesktopAgentComposerDefaultsByAgentTarget {
   const normalizedCurrent =
     normalizeDesktopAgentComposerDefaultsByAgentTarget(current);
@@ -862,13 +905,13 @@ export function mergeDesktopAgentComposerDefaultsByAgentTarget(
   }
   return {
     ...remaining,
-    [normalizedAgentTargetId]: merged
+    [normalizedAgentTargetId]: merged,
   };
 }
 
 export function desktopAgentComposerDefaultsByAgentTargetEqual(
   left: DesktopAgentComposerDefaultsByAgentTarget | null | undefined,
-  right: DesktopAgentComposerDefaultsByAgentTarget | null | undefined
+  right: DesktopAgentComposerDefaultsByAgentTarget | null | undefined,
 ): boolean {
   const normalizedLeft =
     normalizeDesktopAgentComposerDefaultsByAgentTarget(left);
@@ -876,13 +919,13 @@ export function desktopAgentComposerDefaultsByAgentTargetEqual(
     normalizeDesktopAgentComposerDefaultsByAgentTarget(right);
   const agentTargetIds = new Set([
     ...Object.keys(normalizedLeft),
-    ...Object.keys(normalizedRight)
+    ...Object.keys(normalizedRight),
   ]);
   for (const agentTargetId of agentTargetIds) {
     if (
       !desktopAgentComposerDefaultsEqual(
         normalizedLeft[agentTargetId],
-        normalizedRight[agentTargetId]
+        normalizedRight[agentTargetId],
       )
     ) {
       return false;
@@ -893,7 +936,7 @@ export function desktopAgentComposerDefaultsByAgentTargetEqual(
 
 export function desktopAgentComposerDefaultsByProviderEqual(
   left: DesktopAgentComposerDefaultsByProvider | null | undefined,
-  right: DesktopAgentComposerDefaultsByProvider | null | undefined
+  right: DesktopAgentComposerDefaultsByProvider | null | undefined,
 ): boolean {
   const normalizedLeft = normalizeDesktopAgentComposerDefaultsByProvider(left);
   const normalizedRight =
@@ -901,14 +944,14 @@ export function desktopAgentComposerDefaultsByProviderEqual(
   return desktopAgentProviders.every((provider) =>
     desktopAgentComposerDefaultsEqual(
       normalizedLeft[provider],
-      normalizedRight[provider]
-    )
+      normalizedRight[provider],
+    ),
   );
 }
 
 export function desktopAgentComposerDefaultsEqual(
   left: DesktopAgentComposerDefaults | null | undefined,
-  right: DesktopAgentComposerDefaults | null | undefined
+  right: DesktopAgentComposerDefaults | null | undefined,
 ): boolean {
   const normalizedLeft = normalizeDesktopAgentComposerDefaults(left);
   const normalizedRight = normalizeDesktopAgentComposerDefaults(right);

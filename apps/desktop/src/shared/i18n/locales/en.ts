@@ -5,8 +5,8 @@ export const en = {
       failed: "Login Cookie import did not complete.",
       partial:
         "Imported {{imported}} login Cookies; some entries were skipped or failed.",
-      title: "Login state import"
-    }
+      title: "Login state import",
+    },
   },
   common: {
     cancel: "Cancel",
@@ -20,7 +20,7 @@ export const en = {
     unknownError: "Unknown error",
     unreachable: "unreachable",
     workspace: "workspace",
-    zipArchive: "ZIP Archive"
+    zipArchive: "ZIP Archive",
   },
   capture: {
     error: "Could not start the Agent. Try again.",
@@ -31,7 +31,7 @@ export const en = {
       "Before starting, create a Qute Task to track this request. Then immediately carry out the request, using the Task as the ongoing work record and keeping its status and notes updated. Do not stop after creating the Task.",
     taskPromptAction: "Create Task and track",
     taskPromptHint: "Agent works now and keeps the Task updated",
-    title: "Tutti"
+    title: "Tutti",
   },
   dashboard: {
     chooseWorkspaceTitle: "Choose a workspace",
@@ -67,7 +67,7 @@ export const en = {
     featureExtensibleTitle: "Extensible ecosystem",
     featureExtensibleDescription:
       "Flexible integrations that can keep evolving",
-    workspaceCountNote: "{{count}} recent workspaces are currently available"
+    workspaceCountNote: "{{count}} recent workspaces are currently available",
   },
   updates: {
     availableTitle: "Update to New Version",
@@ -79,7 +79,7 @@ export const en = {
     errorTitle: "Unable to check for updates",
     restartAction: "Restart & install",
     retryAction: "Retry",
-    storeManaged: "Updates are managed by Microsoft Store."
+    storeManaged: "Updates are managed by Microsoft Store.",
   },
   desktop: {
     installGuard: {
@@ -92,7 +92,7 @@ export const en = {
       moveAction: "Move to Applications and Relaunch",
       quitAction: "Quit",
       showInFinderAction: "Show in Finder",
-      title: "Install Tutti"
+      title: "Install Tutti",
     },
     logsExport: {
       actionHint: "You can copy the agent prompt or open the exported folder.",
@@ -108,14 +108,14 @@ export const en = {
           "4. If code or configuration changes are needed, implement the fix directly and explain what changed and why.",
         stepInspect:
           "1. First inspect runtime-context, export-summary, and the log files in the archive, then summarize the most likely problem.",
-        stepsHeader: "Please handle it in this order:"
+        stepsHeader: "Please handle it in this order:",
       },
       copyAgentPrompt: "Copy Agent Prompt",
       ok: "OK",
       openFolder: "Open Folder",
       savedTitle: "Logs saved",
       savedTo: "Saved {{count}} log files to:",
-      title: "Export Logs"
+      title: "Export Logs",
     },
     menu: {
       checkForUpdates: "Check for Updates...",
@@ -139,11 +139,11 @@ export const en = {
       upToDateDetail: "Tutti {{version}} is currently the latest version.",
       upToDateMessage: "You're up to date!",
       view: "View",
-      window: "Window"
+      window: "Window",
     },
     quitShortcut: {
-      confirmToastTitle: "Press Command + Q again to quit Tutti"
-    }
+      confirmToastTitle: "Press Command + Q again to quit Tutti",
+    },
   },
   workspace: {
     fallback: {
@@ -154,7 +154,7 @@ export const en = {
         "This window was opened without a workspace target. Open a workspace from the workspaces page.",
       missingContextTitle: "Missing workspace context",
       retryAction: "Try again",
-      unavailableTitle: "Workspace unavailable"
+      unavailableTitle: "Workspace unavailable",
     },
     chrome: {
       currentWorkspace: "Current workspace",
@@ -162,7 +162,7 @@ export const en = {
       openWorkspaceFailed: "Unable to open workspace.",
       renameFailed: "Unable to rename workspace.",
       switchWorkspace: "Switch workspace",
-      switchWorkspaceUnavailable: "Unable to load workspaces right now."
+      switchWorkspaceUnavailable: "Unable to load workspaces right now.",
     },
     agentGui: {
       agentDirectoryLoadFailed: "Could not load Agents. Try again",
@@ -195,7 +195,7 @@ export const en = {
           reveal: "Show cassette in Finder",
           revealFailed: "Could not show cassette in Finder",
           start: "Start recording",
-          stop: "Stop and save recording"
+          stop: "Stop and save recording",
         },
         replay: {
           automatic: "Play automatically",
@@ -229,8 +229,8 @@ export const en = {
           toolbar: "Replay controls",
           validationComplete: "Replay validation passed",
           validationFailed: "Replay validation failed",
-          verifying: "Validating"
-        }
+          verifying: "Validating",
+        },
       },
       collapseConversationRail: "Hide sidebar",
       expandConversationRail: "Show sidebar",
@@ -242,12 +242,12 @@ export const en = {
         copyAsMarkdown: "Copy as Markdown",
         copyAsReference: "Copy as reference",
         moreActions: "More session actions",
-        rename: "Rename session"
+        rename: "Rename session",
       },
       browserElementContext: {
         cancel: "Cancel element selection",
         failed: "Unable to add this page element to the Agent input",
-        select: "Select page element"
+        select: "Select page element",
       },
       toolSidebar: {
         apps: "Apps",
@@ -264,8 +264,8 @@ export const en = {
         tasks: "Tasks",
         terminal: "Terminal",
         tool: "Tool",
-        unavailable: "{{tool}} is not available in the Agent window yet."
-      }
+        unavailable: "{{tool}} is not available in the Agent window yet.",
+      },
     },
     accountMenu: {
       title: "Tutti Agent",
@@ -296,7 +296,7 @@ export const en = {
       insufficientCreditsRechargeMessage:
         "Your Tutti credits are insufficient. Recharge credits to continue",
       insufficientCreditsUnknownMessage:
-        "Your Tutti credits are insufficient. Review credit options to continue"
+        "Your Tutti credits are insufficient. Review credit options to continue",
     },
     agentEnv: {
       configTitle: "{{provider}} environment",
@@ -401,7 +401,7 @@ export const en = {
       reportConsentBody:
         "This sends fuller diagnostics (CLI paths, endpoints, proxy address, error details) to help us debug. Send it? You can change this anytime in Settings → General.",
       reportConsentAgree: "Agree & send",
-      reportConsentCancel: "Not now"
+      reportConsentCancel: "Not now",
     },
     referenceSources: {
       appSourceLabel: "Apps",
@@ -412,7 +412,7 @@ export const en = {
       sidebarDocuments: "Documents",
       sidebarDownloads: "Downloads",
       sidebarPersonal: "Home",
-      sidebarRecent: "Recent"
+      sidebarRecent: "Recent",
     },
     agentMessageCenter: {
       openAria: "Open agent messages",
@@ -441,7 +441,7 @@ export const en = {
       waitingNotificationStatus: "Waiting",
       waitingNotificationTitle: "{{title}} needs your decision",
       runningCount: "{{count}} running",
-      waitingCount: "{{count}} waiting"
+      waitingCount: "{{count}} waiting",
     },
     externalImport: {
       archiveEmpty:
@@ -529,7 +529,7 @@ export const en = {
       settingsDescription:
         "Bring local Codex, Claude Code, and Grok history or Claude export conversations into Tutti",
       settingsLabel: "Import session history",
-      title: "Import from AI apps"
+      title: "Import from AI apps",
     },
     analyticsDebug: {
       clear: "Clear",
@@ -538,7 +538,7 @@ export const en = {
       count: "{{count}} events",
       empty: "No analytics events yet",
       open: "Open analytics debug events",
-      title: "Analytics events"
+      title: "Analytics events",
     },
     appCenter: {
       backToApps: "Back to apps",
@@ -546,8 +546,8 @@ export const en = {
       tabs: {
         close: "Close app tab",
         label: "Open apps",
-        new: "Open another app"
-      }
+        new: "Open another app",
+      },
     },
     info: {
       idDescription: "Stable identifier for preload and daemon coordination.",
@@ -557,11 +557,11 @@ export const en = {
       rendererRoleDescription:
         "Desktop UI remains presentation-only while tuttid owns durable state.",
       rendererRoleLabel: "Renderer role",
-      rendererRoleValue: "UI shell"
+      rendererRoleValue: "UI shell",
     },
     meta: {
       daemonLabel: "daemon",
-      platformLabel: "platform"
+      platformLabel: "platform",
     },
     ready: {
       description:
@@ -570,7 +570,7 @@ export const en = {
         "Navigation, rich content, and workspace-specific modules can now build on React, Tailwind, and the shared primitive layer instead of growing the old global stylesheet.",
       panelTwo:
         "The preload bridge and daemon APIs stay unchanged, so this migration only changes renderer composition and visual infrastructure.",
-      title: "Workspace ready"
+      title: "Workspace ready",
     },
     routeDescription:
       "Window routing still resolves from query params to keep the Electron shell simple.",
@@ -579,7 +579,7 @@ export const en = {
       pendingDescription: "Health check pending.",
       statusDescription:
         "Health and shell metadata are now rendered through shared tokens and components.",
-      statusTitle: "Runtime status"
+      statusTitle: "Runtime status",
     },
     wallpaper: {
       options: {
@@ -591,8 +591,8 @@ export const en = {
         peaks: "Mountain night",
         sand: "Sand ripples",
         sky: "Sky",
-        tutti: "Tutti"
-      }
+        tutti: "Tutti",
+      },
     },
     settings: {
       close: "Close settings",
@@ -603,6 +603,16 @@ export const en = {
             "Couldn't save the automatic update check setting.",
           autoCheckUpdatesHint:
             "Checks periodically. Updates are installed only when you choose Update.",
+          keepAlive: "Keep agent processes running",
+          keepAliveHint:
+            "Reuses the process for the next message instead of a cold start. Each resident session costs memory.",
+          keepAliveFailed: "Couldn't save the agent process retention setting.",
+          keepAliveIdleLabel: "Release after",
+          keepAliveIdleMinutes: "{{count}} min idle",
+          keepAliveIdleNever: "Never",
+          keepAliveMaxResidentLabel: "Keep at most",
+          keepAliveMaxResident: "{{count}} sessions",
+          keepAliveMaxResidentUnlimited: "Unlimited",
           checkUpdates: "Check for updates",
           checkUpdatesFailed: "Couldn't check for agent CLI updates.",
           checkingUpdates: "Checking for updates…",
@@ -635,14 +645,14 @@ export const en = {
           updateAvailableSummary: "{{current}} → {{latest}}",
           updateCheckFailed: "Update check unavailable",
           updateCheckFailedSummary: "{{current}} · Check unavailable",
-          updateUpToDateSummary: "{{current}} · Up to date"
+          updateUpToDateSummary: "{{current}} · Up to date",
         },
         tabs: {
           agents: "Agent Runtime",
           automation: "Automation",
           customAgents: "Custom Agents",
-          general: "General Settings"
-        }
+          general: "General Settings",
+        },
       },
       appearance: {
         dockPlacementDescription:
@@ -650,7 +660,7 @@ export const en = {
         dockPlacementLabel: "Dock layout",
         dockPlacementOptions: {
           bottom: "Bottom",
-          left: "Left"
+          left: "Left",
         },
         dockPlacementSaveFailed:
           "We couldn't update the dock layout right now.",
@@ -662,7 +672,7 @@ export const en = {
         minimizeAnimationOptions: {
           genie: "Genie",
           off: "Off",
-          scale: "Scale"
+          scale: "Scale",
         },
         minimizeAnimationSaveFailed:
           "We couldn't update the minimize animation right now.",
@@ -675,7 +685,7 @@ export const en = {
         workbenchWindowSnappingShortcutOptions: {
           off: "Off",
           commandArrows: "Command + Arrow keys",
-          commandShiftArrows: "Command + Shift + Arrow keys"
+          commandShiftArrows: "Command + Shift + Arrow keys",
         },
         themeDescription:
           "Controls window appearance and the color mode for information",
@@ -683,7 +693,7 @@ export const en = {
         themeOptions: {
           dark: "Dark",
           light: "Light",
-          system: "Match system"
+          system: "Match system",
         },
         themeSaveFailed: "We couldn't switch the app appearance right now.",
         wallpaperDisplayModeLabel: "Display",
@@ -691,7 +701,7 @@ export const en = {
           center: "Center",
           fit: "Fit to Screen",
           original: "Original",
-          stretch: "Stretch to Fill Screen"
+          stretch: "Stretch to Fill Screen",
         },
         wallpaperLabel: "Wallpaper",
         wallpaperRemove: "Remove custom wallpaper",
@@ -703,7 +713,7 @@ export const en = {
           "That image is too large. Please choose a smaller file.",
         wallpaperUploadErrorType:
           "Unsupported image format. Please choose PNG, JPG, or WebP.",
-        wallpaperUploading: "Uploading..."
+        wallpaperUploading: "Uploading...",
       },
       general: {
         workspaceUiModeLabel: "Window interaction mode",
@@ -714,7 +724,7 @@ export const en = {
             "Launch directly into a standalone Agent window, with files, tools, and more opening in the right-side panel",
           osTitle: "Immersive OS mode",
           osDescription:
-            "Keep the immersive desktop experience, including multiple windows, the Dock, Launchpad, and more"
+            "Keep the immersive desktop experience, including multiple windows, the Dock, Launchpad, and more",
         },
         workspaceUiModeSaveFailed:
           "We couldn't update the startup interface right now.",
@@ -728,7 +738,7 @@ export const en = {
           codingTitle: "For coding",
           codingDescription: "More technical responses and control.",
           generalTitle: "For everyday work",
-          generalDescription: "Just as powerful, with less technical detail."
+          generalDescription: "Just as powerful, with less technical detail.",
         },
         agentConversationDetailModeSaveFailed:
           "We couldn't update the work mode right now.",
@@ -876,13 +886,13 @@ export const en = {
         browserUseConnectionModeLabel: "Browser connection",
         browserUseConnectionModeOptions: {
           autoConnect: "Reuse my Chrome",
-          isolated: "Separate browser"
+          isolated: "Separate browser",
         },
         browserUseConnectionModeOptionHints: {
           autoConnect:
             "The agent drives the Chrome you already use on this computer. First enable remote debugging in Chrome at chrome://inspect/#remote-debugging. Changes apply the next time a browser session starts.",
           isolated:
-            "Tutti launches a separate browser for the agent, leaving the Chrome you use day to day untouched. Changes apply the next time a browser session starts."
+            "Tutti launches a separate browser for the agent, leaving the Chrome you use day to day untouched. Changes apply the next time a browser session starts.",
         },
         browserUseConnectionModeSaveFailed:
           "We couldn't update the browser connection setting right now.",
@@ -894,7 +904,7 @@ export const en = {
         languageLabel: "Language",
         languageOptions: {
           en: "English",
-          zhCN: "Simplified Chinese"
+          zhCN: "Simplified Chinese",
         },
         localeSaveFailed: "We couldn't switch the app language right now.",
         captureShortcutDefaultPlaceholder: "Default: Cmd/Ctrl+Shift+S",
@@ -906,14 +916,14 @@ export const en = {
         preventSleepOptions: {
           always: "Always prevent sleep",
           never: "Allow computer sleep",
-          whileAgentRunning: "Prevent sleep only while Agent runs"
+          whileAgentRunning: "Prevent sleep only while Agent runs",
         },
         preventSleepSaveFailed:
           "We couldn't update the sleep prevention setting right now.",
         updateChannelSaveFailed:
           "We couldn't update the release channel right now.",
         updatePolicySaveFailed: "We couldn't update the update mode right now.",
-        versionLabel: "Desktop version"
+        versionLabel: "Desktop version",
       },
       deletedConversations: {
         allProjects: "All projects",
@@ -965,7 +975,7 @@ export const en = {
         searchPlaceholder: "Search deleted conversations",
         title: "Deleted conversations",
         unscoped: "Chat (no project)",
-        untitled: "Untitled conversation"
+        untitled: "Untitled conversation",
       },
       nav: {
         about: "About",
@@ -978,12 +988,12 @@ export const en = {
         developer: "Developer",
         general: "General",
         lab: "Lab",
-        model: "Model"
+        model: "Model",
       },
       about: {
         appName: "Tutti",
         developerModeEnabled: "Developer mode is now on",
-        versionLabel: "Version"
+        versionLabel: "Version",
       },
       account: {
         description: "Sign in to use your Tutti account on this device.",
@@ -1006,7 +1016,7 @@ export const en = {
             list: "Paired phones could not be loaded.",
             revoke: "This phone could not be removed.",
             start: "Pairing could not be started.",
-            status: "Pairing status could not be updated."
+            status: "Pairing status could not be updated.",
           },
           mobileDevice: "Mobile device",
           pairedDevices: "Paired phones",
@@ -1021,8 +1031,8 @@ export const en = {
           start: "Pair a phone",
           starting: "Starting...",
           title: "Mobile remote access",
-          waitingForScan: "Waiting for your phone to scan"
-        }
+          waitingForScan: "Waiting for your phone to scan",
+        },
       },
       apps: {
         appCatalogChannelDescription:
@@ -1030,7 +1040,7 @@ export const en = {
         appCatalogChannelLabel: "App source",
         appCatalogChannelOptions: {
           production: "Released",
-          staging: "Test"
+          staging: "Test",
         },
         appCatalogChannelSaveFailed: "We couldn't switch the app source.",
         agents: {
@@ -1079,7 +1089,7 @@ export const en = {
           saveFailed:
             "Couldn't save the Agent — check the fields and try again.",
           saving: "Saving...",
-          title: "Custom Agents"
+          title: "Custom Agents",
         },
         automationRules: {
           addRule: "Add automation",
@@ -1138,8 +1148,8 @@ export const en = {
           triggerLabel: "Trigger",
           triggers: {
             onTaskComplete: "When a task completes",
-            onTaskFailed: "When a task fails or is interrupted"
-          }
+            onTaskFailed: "When a task fails or is interrupted",
+          },
         },
         modelPlans: {
           addModel: "Add model",
@@ -1201,13 +1211,13 @@ export const en = {
           protocolLabel: "API protocol",
           protocols: {
             anthropic: "Anthropic-compatible",
-            openai: "OpenAI-compatible"
+            openai: "OpenAI-compatible",
           },
           referenceKinds: {
             agentTarget: "Agent",
             modelPolicy: "Model policy",
             workspaceAgent: "Workspace agent",
-            workspaceApp: "App"
+            workspaceApp: "App",
           },
           removeModel: "Remove model",
           setDefaultModel: "Set {{model}} as the default model",
@@ -1221,39 +1231,39 @@ export const en = {
             detectionFailed: "Check failed",
             disabled: "Disabled",
             ready: "Ready",
-            undetected: "Not checked"
+            undetected: "Not checked",
           },
           templateGroups: {
             codingPlan: {
               guidance:
                 "Use the endpoint and key from a coding plan subscription, such as a Claude coding plan.",
-              label: "Coding plan"
+              label: "Coding plan",
             },
             custom: {
               guidance:
                 "Enter the Base URL, API key, and models for an OpenAI- or Anthropic-compatible endpoint.",
-              label: "Model endpoint"
+              label: "Model endpoint",
             },
             domestic: {
               guidance:
                 "Connect domestic model providers such as DeepSeek, MiniMax, or MiMo.",
-              label: "Domestic models"
+              label: "Domestic models",
             },
             officialSubscription: {
               guidance:
                 "Connect an official API subscription directly with the provider's key.",
-              label: "Official subscription"
+              label: "Official subscription",
             },
             relay: {
               guidance:
                 "Use a relay or proxy service endpoint that fronts one or more providers.",
-              label: "Relay service"
-            }
+              label: "Relay service",
+            },
           },
           title: "Model plans",
           toggleFailed: "Couldn't update the plan state — try again.",
-          unusedByAgents: "Not used by any Agent"
-        }
+          unusedByAgents: "Not used by any Agent",
+        },
       },
       developer: {
         actionsLabel: "Actions",
@@ -1289,7 +1299,7 @@ export const en = {
           appBrowser: "Built-in browser",
           defaultBrowser: "Default browser",
           fileViewer: "File viewer",
-          system: "System default"
+          system: "System default",
         },
         fileDefaultOpenersDescription:
           "Choose what opens first when a workspace file is activated by extension.",
@@ -1346,7 +1356,7 @@ export const en = {
           "We couldn't update quick-prompt library availability.",
         releaseChannelOptions: {
           rc: "Preview",
-          stable: "Stable"
+          stable: "Stable",
         },
         showAppDeveloperSourcesDescription:
           "Show each app's authors and GitHub source inside App Center cards.",
@@ -1355,7 +1365,7 @@ export const en = {
           "We couldn't update App Center source display.",
         visibilityDescription:
           "Hide this panel from settings. Tap the version number in About seven times to bring it back",
-        visibilityLabel: "Show developer panel"
+        visibilityLabel: "Show developer panel",
       },
       lab: {
         backLabel: "Back",
@@ -1379,10 +1389,10 @@ export const en = {
         workbenchShortcutsDescription:
           "Enables configurable workbench shortcut actions.",
         workbenchShortcutsLabel: "Workbench shortcuts",
-        workbenchShortcutsManageLabel: "Configure keyboard shortcuts"
+        workbenchShortcutsManageLabel: "Configure keyboard shortcuts",
       },
       title: "Settings",
-      trigger: "Settings"
+      trigger: "Settings",
     },
     workbenchDesktop: {
       closeGuard: {
@@ -1390,20 +1400,20 @@ export const en = {
         confirm: "Terminate terminal",
         description:
           "This terminal still has running work. Terminating it will stop the session.",
-        title: "Terminate terminal?"
+        title: "Terminate terminal?",
       },
       windowCloseGuard: {
         cancel: "Keep window open",
         confirm: "Close window",
         description:
           "This window still has running work. Closing it will dismiss the room while background work may continue.",
-        title: "Close this window?"
+        title: "Close this window?",
       },
       windowControls: {
         close: "Close",
         maximize: "Maximize",
         minimize: "Minimize",
-        restore: "Restore"
+        restore: "Restore",
       },
       nodes: {
         agent: "Agent",
@@ -1414,7 +1424,7 @@ export const en = {
         imageFile: "Image file",
         issues: "Issues",
         textFile: "Text file",
-        terminal: "Terminal"
+        terminal: "Terminal",
       },
       filePreview: {
         edit: "Edit",
@@ -1427,12 +1437,12 @@ export const en = {
         saving: "Saving...",
         unsaved: "Unsaved changes",
         unsupportedFallback:
-          "Preview is not supported yet. Opening with your local app."
+          "Preview is not supported yet. Opening with your local app.",
       },
       filesLaunch: {
         openFailedDescription:
           "The referenced file or folder could not be found at its original location.",
-        openFailedTitle: "File or folder no longer exists"
+        openFailedTitle: "File or folder no longer exists",
       },
       agentProviders: {
         checking: "Checking local CLI status...",
@@ -1487,7 +1497,7 @@ export const en = {
         manageUnsupportedTooltip:
           "This agent is temporarily unavailable while local support updates.",
         refresh: "Re-check",
-        unknown: "Unable to confirm local CLI status — refresh to re-check"
+        unknown: "Unable to confirm local CLI status — refresh to re-check",
       },
       launchpad: {
         agentUnavailable: "Unavailable",
@@ -1499,16 +1509,16 @@ export const en = {
         pageDot: "Page {{page}} of {{pageCount}}",
         pages: "Launchpad pages",
         searchPlaceholder: "Search",
-        unavailableItem: "{{title}}, {{reason}}"
+        unavailableItem: "{{title}}, {{reason}}",
       },
       missionControl: {
         layoutShortcutDefault: "Ctrl + 2",
         layoutShortcutMac: "Cmd + 2",
         layoutTrigger: "Quick layout",
         unavailableTrigger: "Available when multiple windows exist",
-        unlockLayoutTrigger: "Unlock layout"
-      }
-    }
+        unlockLayoutTrigger: "Unlock layout",
+      },
+    },
   },
   errors: {
     daemon_unavailable: "The local runtime is unavailable right now.",
@@ -1528,7 +1538,7 @@ export const en = {
         prompt_image_unsupported:
           "This agent does not support image input yet.",
         permission_mode_unavailable:
-          "This permission mode is not available in this session. Choose another permission mode and send again."
+          "This permission mode is not available in this session. Choose another permission mode and send again.",
       },
       malformed_request: "We couldn't understand that request.",
       missing_workspace_id: "Choose a workspace before trying again.",
@@ -1539,7 +1549,7 @@ export const en = {
         "Choose a PNG, JPG, or WebP image under 5 MB.",
       workspace_app_icon_replace_forbidden:
         "Only generated apps can replace their icon.",
-      workspace_app_package_exists: "This app version already exists."
+      workspace_app_package_exists: "This app version already exists.",
     },
     method_not_allowed: "That action is not available for this request.",
     logger_file_unavailable: "The local logger is temporarily unavailable.",
@@ -1556,7 +1566,7 @@ export const en = {
         "Workspace files are temporarily unavailable.",
       workspace_service_unavailable: "Workspaces are temporarily unavailable.",
       workspace_workbench_service_unavailable:
-        "The workspace workbench is temporarily unavailable."
+        "The workspace workbench is temporarily unavailable.",
     },
     transport_connect_failed: "We couldn't connect to the local runtime.",
     transport_request_failed:
@@ -1570,7 +1580,7 @@ export const en = {
     workspace_operation_failed: {
       default: "We couldn't finish that workspace action right now.",
       acp_adapter_version_mismatch:
-        "The local agent adapter is unavailable or version-mismatched. Reconnect the agent from the dock, then try again."
-    }
-  }
+        "The local agent adapter is unavailable or version-mismatched. Reconnect the agent from the dock, then try again.",
+    },
+  },
 } as const;

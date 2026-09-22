@@ -18,12 +18,17 @@ import type {
   DesktopUpdateChannel,
   DesktopUpdatePolicy,
   DesktopWorkbenchShortcuts,
-  DesktopWorkbenchWindowSnapping
+  DesktopWorkbenchWindowSnapping,
 } from "@shared/preferences";
 import type { DesktopThemeSource, DesktopThemeState } from "@shared/theme";
 
 export interface DesktopPreferencesStoreState {
   changingAgentCliUpdateCheckEnabled: boolean | null;
+  // DINTAL-5308 的三个旋钮各带一个 changing：进行中的那一档要把控件禁掉，
+  // 否则用户连点两下会和后端回声打架。
+  changingAgentRuntimeKeepAliveEnabled: boolean | null;
+  changingAgentRuntimeIdleMinutes: number | null;
+  changingAgentRuntimeMaxResident: number | null;
   changingDefaultAgentProvider: DesktopDefaultAgentProvider | null;
   changingAgentConversationDetailMode: DesktopAgentConversationDetailMode | null;
   changingAppCatalogChannel: DesktopAppCatalogChannel | null;
@@ -42,6 +47,9 @@ export interface DesktopPreferencesStoreState {
   changingWorkbenchWindowSnapping: DesktopWorkbenchWindowSnapping | null;
   agentComposerDefaultsByProvider: DesktopAgentComposerDefaultsByProvider;
   agentCliUpdateCheckEnabled: boolean;
+  agentRuntimeKeepAliveEnabled: boolean;
+  agentRuntimeIdleMinutes: number;
+  agentRuntimeMaxResident: number;
   agentComposerDefaultsByAgentTarget: DesktopAgentComposerDefaultsByAgentTarget;
   agentGuiConversationRailCollapsedByProvider: DesktopAgentGuiConversationRailCollapsedByProvider;
   agentSessionLaunchModesByWorkspace: DesktopAgentSessionLaunchModesByWorkspace;
@@ -67,6 +75,9 @@ export interface DesktopPreferencesStoreState {
 
 export interface DesktopPreferencesReadableStoreState {
   readonly changingAgentCliUpdateCheckEnabled: boolean | null;
+  readonly changingAgentRuntimeKeepAliveEnabled: boolean | null;
+  readonly changingAgentRuntimeIdleMinutes: number | null;
+  readonly changingAgentRuntimeMaxResident: number | null;
   readonly changingDefaultAgentProvider: DesktopDefaultAgentProvider | null;
   readonly changingAgentConversationDetailMode: DesktopAgentConversationDetailMode | null;
   readonly changingAppCatalogChannel: DesktopAppCatalogChannel | null;
@@ -85,6 +96,9 @@ export interface DesktopPreferencesReadableStoreState {
   readonly changingWorkbenchWindowSnapping: DesktopWorkbenchWindowSnapping | null;
   readonly agentComposerDefaultsByProvider: DesktopAgentComposerDefaultsByProvider;
   readonly agentCliUpdateCheckEnabled: boolean;
+  readonly agentRuntimeKeepAliveEnabled: boolean;
+  readonly agentRuntimeIdleMinutes: number;
+  readonly agentRuntimeMaxResident: number;
   readonly agentComposerDefaultsByAgentTarget: DesktopAgentComposerDefaultsByAgentTarget;
   readonly agentGuiConversationRailCollapsedByProvider: DesktopAgentGuiConversationRailCollapsedByProvider;
   readonly agentSessionLaunchModesByWorkspace: DesktopAgentSessionLaunchModesByWorkspace;

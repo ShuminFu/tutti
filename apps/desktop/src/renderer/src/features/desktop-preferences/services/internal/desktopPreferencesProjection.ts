@@ -12,6 +12,9 @@ import {
   desktopWorkbenchWindowSnappingEqual,
   normalizeDeletedAgentConversationRetentionDays,
   normalizeDesktopAgentCliUpdateCheckEnabled,
+  normalizeDesktopAgentRuntimeIdleMinutes,
+  normalizeDesktopAgentRuntimeKeepAliveEnabled,
+  normalizeDesktopAgentRuntimeMaxResident,
   normalizeDesktopAgentComposerDefaultsByAgentTarget,
   normalizeDesktopAgentConversationDetailMode,
   normalizeDesktopAgentGuiConversationRailCollapsedByProvider,
@@ -19,7 +22,7 @@ import {
   normalizeDesktopFeatureFlags,
   normalizeDesktopFileDefaultOpenersByExtension,
   normalizeDesktopWorkbenchShortcuts,
-  normalizeDesktopWorkbenchWindowSnapping
+  normalizeDesktopWorkbenchWindowSnapping,
 } from "../../../../../../shared/preferences/index.ts";
 import type { DesktopPreferencesStoreState } from "../desktopPreferencesTypes.ts";
 
@@ -36,23 +39,33 @@ export function applyDesktopPreferencesProjection(input: {
 }): void {
   const { preferences, store } = input;
   store.agentCliUpdateCheckEnabled = normalizeDesktopAgentCliUpdateCheckEnabled(
-    preferences.agentCliUpdateCheckEnabled
+    preferences.agentCliUpdateCheckEnabled,
+  );
+  store.agentRuntimeKeepAliveEnabled =
+    normalizeDesktopAgentRuntimeKeepAliveEnabled(
+      preferences.agentRuntimeKeepAliveEnabled,
+    );
+  store.agentRuntimeIdleMinutes = normalizeDesktopAgentRuntimeIdleMinutes(
+    preferences.agentRuntimeIdleMinutes,
+  );
+  store.agentRuntimeMaxResident = normalizeDesktopAgentRuntimeMaxResident(
+    preferences.agentRuntimeMaxResident,
   );
   store.agentComposerDefaultsByAgentTarget =
     normalizeDesktopAgentComposerDefaultsByAgentTarget(
-      preferences.agentComposerDefaultsByAgentTarget
+      preferences.agentComposerDefaultsByAgentTarget,
     );
   store.agentGuiConversationRailCollapsedByProvider =
     normalizeDesktopAgentGuiConversationRailCollapsedByProvider(
-      preferences.agentGuiConversationRailCollapsedByProvider
+      preferences.agentGuiConversationRailCollapsedByProvider,
     );
   store.agentSessionLaunchModesByWorkspace =
     normalizeDesktopAgentSessionLaunchModesByWorkspace(
-      preferences.agentSessionLaunchModesByWorkspace
+      preferences.agentSessionLaunchModesByWorkspace,
     );
   store.agentConversationDetailMode =
     normalizeDesktopAgentConversationDetailMode(
-      preferences.agentConversationDetailMode
+      preferences.agentConversationDetailMode,
     );
   store.appCatalogChannel =
     preferences.appCatalogChannel ?? defaultDesktopAppCatalogChannel;
@@ -64,14 +77,14 @@ export function applyDesktopPreferencesProjection(input: {
   store.dockPlacement = preferences.dockPlacement;
   store.deletedAgentConversationRetentionDays =
     normalizeDeletedAgentConversationRetentionDays(
-      preferences.deletedAgentConversationRetentionDays
+      preferences.deletedAgentConversationRetentionDays,
     );
   store.fileDefaultOpenersByExtension =
     normalizeDesktopFileDefaultOpenersByExtension(
-      preferences.fileDefaultOpenersByExtension
+      preferences.fileDefaultOpenersByExtension,
     );
   const nextFeatureFlags = normalizeDesktopFeatureFlags(
-    preferences.featureFlags
+    preferences.featureFlags,
   );
   if (!desktopFeatureFlagsEqual(store.featureFlags, nextFeatureFlags)) {
     store.featureFlags = nextFeatureFlags;
@@ -86,29 +99,29 @@ export function applyDesktopPreferencesProjection(input: {
   applyDesktopPreferenceTheme(
     store,
     input.resolveTheme(preferences.themeSource),
-    input.applyTheme
+    input.applyTheme,
   );
   store.updateChannel = preferences.updateChannel;
   store.updatePolicy = preferences.updatePolicy;
   const nextWorkbenchShortcuts = normalizeDesktopWorkbenchShortcuts(
-    preferences.workbenchShortcuts
+    preferences.workbenchShortcuts,
   );
   if (
     !desktopWorkbenchShortcutsEqual(
       store.workbenchShortcuts,
-      nextWorkbenchShortcuts
+      nextWorkbenchShortcuts,
     )
   ) {
     store.workbenchShortcuts = nextWorkbenchShortcuts;
   }
   store.workbenchWindowSnapping = normalizeDesktopWorkbenchWindowSnapping(
-    preferences.workbenchWindowSnapping
+    preferences.workbenchWindowSnapping,
   );
 }
 
 export function createDesktopPreferencesMutation(
   store: DesktopPreferencesStoreState,
-  overrides: DesktopPreferencesOverrides = {}
+  overrides: DesktopPreferencesOverrides = {},
 ): DesktopPreferences {
   const hasWorkbenchWindowSnappingOverride =
     "workbenchWindowSnapping" in overrides;
@@ -117,28 +130,38 @@ export function createDesktopPreferencesMutation(
   const agentSessionLaunchModesByWorkspace =
     normalizeDesktopAgentSessionLaunchModesByWorkspace(
       overrides.agentSessionLaunchModesByWorkspace ??
-        store.agentSessionLaunchModesByWorkspace
+        store.agentSessionLaunchModesByWorkspace,
     );
   const workbenchWindowSnapping = normalizeDesktopWorkbenchWindowSnapping(
-    overrides.workbenchWindowSnapping ?? store.workbenchWindowSnapping
+    overrides.workbenchWindowSnapping ?? store.workbenchWindowSnapping,
   );
   return {
     agentCliUpdateCheckEnabled:
       overrides.agentCliUpdateCheckEnabled ?? store.agentCliUpdateCheckEnabled,
+    // 这三项后端允许缺省（缺 = 沿用库里的），但渲染进程的整份写入本来就带着
+    // 自己刚投影过的值，照常全量发即可；?? 只在 override 没表态时回落到 store。
+    agentRuntimeKeepAliveEnabled:
+      overrides.agentRuntimeKeepAliveEnabled ??
+      store.agentRuntimeKeepAliveEnabled,
+    agentRuntimeIdleMinutes:
+      overrides.agentRuntimeIdleMinutes ?? store.agentRuntimeIdleMinutes,
+    agentRuntimeMaxResident:
+      overrides.agentRuntimeMaxResident ?? store.agentRuntimeMaxResident,
     // Keep the required wire-contract field, but stop round-tripping the
     // frozen legacy provider-keyed defaults through renderer state.
     agentComposerDefaultsByProvider: {},
     agentGuiConversationRailCollapsedByProvider:
       normalizeDesktopAgentGuiConversationRailCollapsedByProvider(
         overrides.agentGuiConversationRailCollapsedByProvider ??
-          store.agentGuiConversationRailCollapsedByProvider
+          store.agentGuiConversationRailCollapsedByProvider,
       ),
     ...(hasAgentSessionLaunchModesOverride ||
     Object.keys(agentSessionLaunchModesByWorkspace).length > 0
       ? { agentSessionLaunchModesByWorkspace }
       : {}),
     agentConversationDetailMode: normalizeDesktopAgentConversationDetailMode(
-      overrides.agentConversationDetailMode ?? store.agentConversationDetailMode
+      overrides.agentConversationDetailMode ??
+        store.agentConversationDetailMode,
     ),
     // The dual-dock (legacySplit) layout has been removed; the stored
     // preference is pinned to the unified layout.
@@ -154,12 +177,12 @@ export function createDesktopPreferencesMutation(
       overrides.deletedAgentConversationRetentionDays ??
       store.deletedAgentConversationRetentionDays,
     featureFlags: normalizeDesktopFeatureFlags(
-      overrides.featureFlags ?? store.featureFlags
+      overrides.featureFlags ?? store.featureFlags,
     ),
     fileDefaultOpenersByExtension:
       normalizeDesktopFileDefaultOpenersByExtension(
         overrides.fileDefaultOpenersByExtension ??
-          store.fileDefaultOpenersByExtension
+          store.fileDefaultOpenersByExtension,
       ),
     locale: overrides.locale ?? store.locale,
     minimizeAnimation: overrides.minimizeAnimation ?? store.minimizeAnimation,
@@ -171,22 +194,22 @@ export function createDesktopPreferencesMutation(
     updateChannel: overrides.updateChannel ?? store.updateChannel,
     updatePolicy: overrides.updatePolicy ?? store.updatePolicy,
     workbenchShortcuts: normalizeDesktopWorkbenchShortcuts(
-      overrides.workbenchShortcuts ?? store.workbenchShortcuts
+      overrides.workbenchShortcuts ?? store.workbenchShortcuts,
     ),
     ...(hasWorkbenchWindowSnappingOverride ||
     !desktopWorkbenchWindowSnappingEqual(
       workbenchWindowSnapping,
-      defaultDesktopWorkbenchWindowSnapping
+      defaultDesktopWorkbenchWindowSnapping,
     )
       ? { workbenchWindowSnapping }
-      : {})
+      : {}),
   };
 }
 
 export function applyDesktopPreferenceLocale(
   store: DesktopPreferencesStoreState,
   locale: DesktopLocale,
-  apply: (locale: DesktopLocale) => void
+  apply: (locale: DesktopLocale) => void,
 ): void {
   if (store.locale === locale) {
     return;
@@ -198,7 +221,7 @@ export function applyDesktopPreferenceLocale(
 export function applyDesktopPreferenceTheme(
   store: DesktopPreferencesStoreState,
   theme: DesktopThemeState,
-  apply: (theme: DesktopThemeState) => void
+  apply: (theme: DesktopThemeState) => void,
 ): void {
   if (
     store.theme.appearance === theme.appearance &&

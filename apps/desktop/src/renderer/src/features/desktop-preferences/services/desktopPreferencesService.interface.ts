@@ -18,7 +18,7 @@ import type {
   DesktopUpdateChannel,
   DesktopUpdatePolicy,
   DesktopWorkbenchShortcuts,
-  DesktopWorkbenchWindowSnapping
+  DesktopWorkbenchWindowSnapping,
 } from "@shared/preferences";
 import type { DesktopThemeSource, DesktopThemeState } from "@shared/theme";
 import type { DesktopPreferencesReadableStoreState } from "./desktopPreferencesTypes.ts";
@@ -52,60 +52,65 @@ export interface IDesktopPreferencesService {
   readonly store: DesktopPreferencesReadableStoreState;
 
   setAgentCliUpdateCheckEnabled(enabled: boolean): Promise<boolean>;
+  // DINTAL-5308：Agent 进程常驻的三个旋钮。返回值一律是后端归一化后的权威值，
+  // 所以界面永远显示后端认的那个数，而不是用户刚点的那个。
+  setAgentRuntimeKeepAliveEnabled(enabled: boolean): Promise<boolean>;
+  setAgentRuntimeIdleMinutes(minutes: number): Promise<number>;
+  setAgentRuntimeMaxResident(maxResident: number): Promise<number>;
   setDefaultAgentProvider(
-    provider: DesktopDefaultAgentProvider
+    provider: DesktopDefaultAgentProvider,
   ): Promise<DesktopDefaultAgentProvider>;
   setAgentConversationDetailMode(
-    mode: DesktopAgentConversationDetailMode
+    mode: DesktopAgentConversationDetailMode,
   ): Promise<DesktopAgentConversationDetailMode>;
   setAppCatalogChannel(
-    channel: DesktopAppCatalogChannel
+    channel: DesktopAppCatalogChannel,
   ): Promise<DesktopAppCatalogChannel>;
   setBrowserUseConnectionMode(
-    mode: DesktopBrowserUseConnectionMode
+    mode: DesktopBrowserUseConnectionMode,
   ): Promise<DesktopBrowserUseConnectionMode>;
   setDockPlacement(
-    placement: DesktopDockPlacement
+    placement: DesktopDockPlacement,
   ): Promise<DesktopDockPlacement>;
   setDeletedAgentConversationRetentionDays(
-    days: DeletedAgentConversationRetentionDays
+    days: DeletedAgentConversationRetentionDays,
   ): Promise<DeletedAgentConversationRetentionDays>;
   setDockIconStyle(style: DesktopDockIconStyle): Promise<DesktopDockIconStyle>;
   setFeatureFlags(flags: DesktopFeatureFlags): Promise<DesktopFeatureFlags>;
   setFileDefaultOpenersByExtension(
-    openersByExtension: DesktopFileDefaultOpenersByExtension
+    openersByExtension: DesktopFileDefaultOpenersByExtension,
   ): Promise<DesktopFileDefaultOpenersByExtension>;
   setLocale(locale: DesktopLocale): Promise<DesktopLocale>;
   setMinimizeAnimation(
-    animation: DesktopMinimizeAnimation
+    animation: DesktopMinimizeAnimation,
   ): Promise<DesktopMinimizeAnimation>;
   setSleepPreventionMode(
-    mode: DesktopSleepPreventionMode
+    mode: DesktopSleepPreventionMode,
   ): Promise<DesktopSleepPreventionMode>;
   setShowAppDeveloperSources(show: boolean): Promise<boolean>;
   setThemeSource(source: DesktopThemeSource): Promise<DesktopThemeState>;
   setUpdateChannel(
-    channel: DesktopUpdateChannel
+    channel: DesktopUpdateChannel,
   ): Promise<DesktopUpdateChannel>;
   setUpdatePolicy(policy: DesktopUpdatePolicy): Promise<DesktopUpdatePolicy>;
   setWorkbenchShortcuts(
-    shortcuts: DesktopWorkbenchShortcuts
+    shortcuts: DesktopWorkbenchShortcuts,
   ): Promise<DesktopWorkbenchShortcuts>;
   setWorkbenchWindowSnapping(
-    value: DesktopWorkbenchWindowSnapping
+    value: DesktopWorkbenchWindowSnapping,
   ): Promise<DesktopWorkbenchWindowSnapping>;
   rememberAgentComposerDefaultsForAgentTarget(
     agentTargetId: string,
-    defaults: DesktopAgentComposerDefaultsPatch | null
+    defaults: DesktopAgentComposerDefaultsPatch | null,
   ): Promise<DesktopAgentComposerDefaultsPatchResult>;
   rememberAgentGuiConversationRailCollapsed(
     provider: DesktopAgentProvider,
-    collapsed: boolean
+    collapsed: boolean,
   ): Promise<void>;
   rememberAgentSessionLaunchMode(
     workspaceId: string,
     projectSectionKey: string,
-    mode: DesktopAgentSessionLaunchMode
+    mode: DesktopAgentSessionLaunchMode,
   ): Promise<void>;
 }
 

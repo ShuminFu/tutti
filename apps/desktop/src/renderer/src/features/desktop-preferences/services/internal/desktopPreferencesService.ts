@@ -10,12 +10,15 @@ import {
   applyDesktopPreferenceTheme,
   applyDesktopPreferencesProjection,
   createDesktopPreferencesMutation,
-  type DesktopPreferencesOverrides
+  type DesktopPreferencesOverrides,
 } from "./desktopPreferencesProjection.ts";
 import {
   desktopAgentGuiConversationRailCollapsedByProviderEqual,
   desktopAgentSessionLaunchModesByWorkspaceEqual,
   defaultDesktopAgentCliUpdateCheckEnabled,
+  defaultDesktopAgentRuntimeIdleMinutes,
+  defaultDesktopAgentRuntimeKeepAliveEnabled,
+  defaultDesktopAgentRuntimeMaxResident,
   defaultDesktopAgentProvider,
   defaultDesktopAgentSessionLaunchModesByWorkspace,
   defaultDesktopAgentConversationDetailMode,
@@ -37,6 +40,9 @@ import {
   mergeDesktopAgentGuiConversationRailCollapsedByProvider,
   mergeDesktopAgentSessionLaunchMode,
   normalizeDesktopAgentCliUpdateCheckEnabled,
+  normalizeDesktopAgentRuntimeIdleMinutes,
+  normalizeDesktopAgentRuntimeKeepAliveEnabled,
+  normalizeDesktopAgentRuntimeMaxResident,
   normalizeDesktopAgentConversationDetailMode,
   normalizeDeletedAgentConversationRetentionDays,
   normalizeDesktopFeatureFlags,
@@ -63,7 +69,7 @@ import {
   type DesktopUpdateChannel,
   type DesktopUpdatePolicy,
   type DesktopWorkbenchShortcuts,
-  type DesktopWorkbenchWindowSnapping
+  type DesktopWorkbenchWindowSnapping,
 } from "../../../../../../shared/preferences/index.ts";
 
 export interface DesktopPreferencesServiceDependencies {
@@ -91,10 +97,13 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
     this.agentComposerDefaultsPatchCoordinator =
       new AgentComposerDefaultsPatchCoordinator({
         publish: (input) =>
-          this.dependencies.client.patchAgentComposerDefaultsForTarget(input)
+          this.dependencies.client.patchAgentComposerDefaultsForTarget(input),
       });
     this.store = createDesktopPreferencesStore({
       agentCliUpdateCheckEnabled: defaultDesktopAgentCliUpdateCheckEnabled,
+      agentRuntimeKeepAliveEnabled: defaultDesktopAgentRuntimeKeepAliveEnabled,
+      agentRuntimeIdleMinutes: defaultDesktopAgentRuntimeIdleMinutes,
+      agentRuntimeMaxResident: defaultDesktopAgentRuntimeMaxResident,
       agentComposerDefaultsByProvider: {},
       agentComposerDefaultsByAgentTarget: {},
       agentGuiConversationRailCollapsedByProvider: {},
@@ -120,13 +129,13 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       updateChannel: defaultDesktopUpdateChannel,
       updatePolicy: defaultDesktopUpdatePolicy,
       workbenchShortcuts: defaultDesktopWorkbenchShortcuts,
-      workbenchWindowSnapping: defaultDesktopWorkbenchWindowSnapping
+      workbenchWindowSnapping: defaultDesktopWorkbenchWindowSnapping,
     });
     this.unsubscribePreferencesUpdates =
       this.dependencies.client.subscribeToDesktopPreferencesUpdated(
         (preferences) => {
           this.applyPreferences(preferences);
-        }
+        },
       );
     this.initialPreferencesHydration = this.hydrateInitialPreferences();
     void this.connectAfterInitialPreferencesHydration();
@@ -155,11 +164,11 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            agentCliUpdateCheckEnabled: enabled
-          })
+            agentCliUpdateCheckEnabled: enabled,
+          }),
         });
       return normalizeDesktopAgentCliUpdateCheckEnabled(
-        authoritativePreferences.agentCliUpdateCheckEnabled
+        authoritativePreferences.agentCliUpdateCheckEnabled,
       );
     } catch (error) {
       this.store.agentCliUpdateCheckEnabled = previousEnabled;
@@ -171,8 +180,95 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
     }
   }
 
+  // 下面三个 setter 与 setAgentCliUpdateCheckEnabled 完全同构：乐观改本地、
+  // 全量写回、失败回滚、只有自己那一档还在 changing 时才清空标记（防止把
+  // 后来者的 changing 误清）。
+  async setAgentRuntimeKeepAliveEnabled(enabled: boolean): Promise<boolean> {
+    if (this.store.changingAgentRuntimeKeepAliveEnabled === enabled) {
+      return enabled;
+    }
+
+    const previousEnabled = this.store.agentRuntimeKeepAliveEnabled;
+    this.store.changingAgentRuntimeKeepAliveEnabled = enabled;
+    this.store.agentRuntimeKeepAliveEnabled = enabled;
+    try {
+      const authoritativePreferences =
+        await this.dependencies.client.updateDesktopPreferences({
+          preferences: this.currentPreferences({
+            agentRuntimeKeepAliveEnabled: enabled,
+          }),
+        });
+      return normalizeDesktopAgentRuntimeKeepAliveEnabled(
+        authoritativePreferences.agentRuntimeKeepAliveEnabled,
+      );
+    } catch (error) {
+      this.store.agentRuntimeKeepAliveEnabled = previousEnabled;
+      throw error;
+    } finally {
+      if (this.store.changingAgentRuntimeKeepAliveEnabled === enabled) {
+        this.store.changingAgentRuntimeKeepAliveEnabled = null;
+      }
+    }
+  }
+
+  async setAgentRuntimeIdleMinutes(minutes: number): Promise<number> {
+    if (this.store.changingAgentRuntimeIdleMinutes === minutes) {
+      return minutes;
+    }
+
+    const previousMinutes = this.store.agentRuntimeIdleMinutes;
+    this.store.changingAgentRuntimeIdleMinutes = minutes;
+    this.store.agentRuntimeIdleMinutes = minutes;
+    try {
+      const authoritativePreferences =
+        await this.dependencies.client.updateDesktopPreferences({
+          preferences: this.currentPreferences({
+            agentRuntimeIdleMinutes: minutes,
+          }),
+        });
+      return normalizeDesktopAgentRuntimeIdleMinutes(
+        authoritativePreferences.agentRuntimeIdleMinutes,
+      );
+    } catch (error) {
+      this.store.agentRuntimeIdleMinutes = previousMinutes;
+      throw error;
+    } finally {
+      if (this.store.changingAgentRuntimeIdleMinutes === minutes) {
+        this.store.changingAgentRuntimeIdleMinutes = null;
+      }
+    }
+  }
+
+  async setAgentRuntimeMaxResident(maxResident: number): Promise<number> {
+    if (this.store.changingAgentRuntimeMaxResident === maxResident) {
+      return maxResident;
+    }
+
+    const previousMaxResident = this.store.agentRuntimeMaxResident;
+    this.store.changingAgentRuntimeMaxResident = maxResident;
+    this.store.agentRuntimeMaxResident = maxResident;
+    try {
+      const authoritativePreferences =
+        await this.dependencies.client.updateDesktopPreferences({
+          preferences: this.currentPreferences({
+            agentRuntimeMaxResident: maxResident,
+          }),
+        });
+      return normalizeDesktopAgentRuntimeMaxResident(
+        authoritativePreferences.agentRuntimeMaxResident,
+      );
+    } catch (error) {
+      this.store.agentRuntimeMaxResident = previousMaxResident;
+      throw error;
+    } finally {
+      if (this.store.changingAgentRuntimeMaxResident === maxResident) {
+        this.store.changingAgentRuntimeMaxResident = null;
+      }
+    }
+  }
+
   async setDefaultAgentProvider(
-    provider: DesktopDefaultAgentProvider
+    provider: DesktopDefaultAgentProvider,
   ): Promise<DesktopDefaultAgentProvider> {
     if (this.store.changingDefaultAgentProvider === provider) {
       return provider;
@@ -185,8 +281,8 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            defaultAgentProvider: provider
-          })
+            defaultAgentProvider: provider,
+          }),
         });
       return authoritativePreferences.defaultAgentProvider;
     } catch (error) {
@@ -200,7 +296,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setAgentConversationDetailMode(
-    mode: DesktopAgentConversationDetailMode
+    mode: DesktopAgentConversationDetailMode,
   ): Promise<DesktopAgentConversationDetailMode> {
     const nextMode = normalizeDesktopAgentConversationDetailMode(mode);
     if (this.store.changingAgentConversationDetailMode === nextMode) {
@@ -214,11 +310,11 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            agentConversationDetailMode: nextMode
-          })
+            agentConversationDetailMode: nextMode,
+          }),
         });
       return normalizeDesktopAgentConversationDetailMode(
-        authoritativePreferences.agentConversationDetailMode
+        authoritativePreferences.agentConversationDetailMode,
       );
     } catch (error) {
       this.store.agentConversationDetailMode = previousMode;
@@ -231,7 +327,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setAppCatalogChannel(
-    channel: DesktopAppCatalogChannel
+    channel: DesktopAppCatalogChannel,
   ): Promise<DesktopAppCatalogChannel> {
     if (this.store.changingAppCatalogChannel === channel) {
       return channel;
@@ -244,8 +340,8 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            appCatalogChannel: channel
-          })
+            appCatalogChannel: channel,
+          }),
         });
       return authoritativePreferences.appCatalogChannel;
     } catch (error) {
@@ -259,7 +355,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setBrowserUseConnectionMode(
-    mode: DesktopBrowserUseConnectionMode
+    mode: DesktopBrowserUseConnectionMode,
   ): Promise<DesktopBrowserUseConnectionMode> {
     if (this.store.changingBrowserUseConnectionMode === mode) {
       return mode;
@@ -272,8 +368,8 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            browserUseConnectionMode: mode
-          })
+            browserUseConnectionMode: mode,
+          }),
         });
       return (
         authoritativePreferences.browserUseConnectionMode ??
@@ -290,7 +386,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setDockPlacement(
-    placement: DesktopDockPlacement
+    placement: DesktopDockPlacement,
   ): Promise<DesktopDockPlacement> {
     if (this.store.changingDockPlacement === placement) {
       return placement;
@@ -303,8 +399,8 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            dockPlacement: placement
-          })
+            dockPlacement: placement,
+          }),
         });
       return authoritativePreferences.dockPlacement;
     } catch (error) {
@@ -318,7 +414,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setDeletedAgentConversationRetentionDays(
-    days: DeletedAgentConversationRetentionDays
+    days: DeletedAgentConversationRetentionDays,
   ): Promise<DeletedAgentConversationRetentionDays> {
     const nextDays = normalizeDeletedAgentConversationRetentionDays(days);
     if (this.store.changingDeletedAgentConversationRetentionDays === nextDays) {
@@ -331,11 +427,11 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            deletedAgentConversationRetentionDays: nextDays
-          })
+            deletedAgentConversationRetentionDays: nextDays,
+          }),
         });
       return normalizeDeletedAgentConversationRetentionDays(
-        authoritativePreferences.deletedAgentConversationRetentionDays
+        authoritativePreferences.deletedAgentConversationRetentionDays,
       );
     } catch (error) {
       this.store.deletedAgentConversationRetentionDays = previousDays;
@@ -350,7 +446,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setDockIconStyle(
-    style: DesktopDockIconStyle
+    style: DesktopDockIconStyle,
   ): Promise<DesktopDockIconStyle> {
     if (this.store.changingDockIconStyle === style) {
       return style;
@@ -363,8 +459,8 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            dockIconStyle: style
-          })
+            dockIconStyle: style,
+          }),
         });
       return authoritativePreferences.dockIconStyle;
     } catch (error) {
@@ -378,14 +474,14 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setFileDefaultOpenersByExtension(
-    openersByExtension: DesktopFileDefaultOpenersByExtension
+    openersByExtension: DesktopFileDefaultOpenersByExtension,
   ): Promise<DesktopFileDefaultOpenersByExtension> {
     const nextOpenersByExtension =
       normalizeDesktopFileDefaultOpenersByExtension(openersByExtension);
     if (
       desktopFileDefaultOpenersByExtensionEqual(
         this.store.fileDefaultOpenersByExtension,
-        nextOpenersByExtension
+        nextOpenersByExtension,
       )
     ) {
       return this.store.fileDefaultOpenersByExtension;
@@ -397,11 +493,11 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            fileDefaultOpenersByExtension: nextOpenersByExtension
-          })
+            fileDefaultOpenersByExtension: nextOpenersByExtension,
+          }),
         });
       return normalizeDesktopFileDefaultOpenersByExtension(
-        authoritativePreferences.fileDefaultOpenersByExtension
+        authoritativePreferences.fileDefaultOpenersByExtension,
       );
     } catch (error) {
       this.store.fileDefaultOpenersByExtension = previousOpenersByExtension;
@@ -419,19 +515,19 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
     applyDesktopPreferenceLocale(
       this.store,
       locale,
-      this.dependencies.applyLocale
+      this.dependencies.applyLocale,
     );
     try {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
-          preferences: this.currentPreferences({ locale })
+          preferences: this.currentPreferences({ locale }),
         });
       return authoritativePreferences.locale;
     } catch (error) {
       applyDesktopPreferenceLocale(
         this.store,
         previousLocale,
-        this.dependencies.applyLocale
+        this.dependencies.applyLocale,
       );
       throw error;
     } finally {
@@ -442,7 +538,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setFeatureFlags(
-    flags: DesktopFeatureFlags
+    flags: DesktopFeatureFlags,
   ): Promise<DesktopFeatureFlags> {
     const nextFlags = normalizeDesktopFeatureFlags(flags);
     if (
@@ -461,10 +557,10 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
     try {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
-          preferences: this.currentPreferences({ featureFlags: nextFlags })
+          preferences: this.currentPreferences({ featureFlags: nextFlags }),
         });
       return normalizeDesktopFeatureFlags(
-        authoritativePreferences.featureFlags
+        authoritativePreferences.featureFlags,
       );
     } catch (error) {
       this.store.featureFlags = previousFlags;
@@ -480,13 +576,13 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setWorkbenchShortcuts(
-    shortcuts: DesktopWorkbenchShortcuts
+    shortcuts: DesktopWorkbenchShortcuts,
   ): Promise<DesktopWorkbenchShortcuts> {
     const nextShortcuts = normalizeDesktopWorkbenchShortcuts(shortcuts);
     if (
       desktopWorkbenchShortcutsEqual(
         this.store.workbenchShortcuts,
-        nextShortcuts
+        nextShortcuts,
       )
     ) {
       return this.store.workbenchShortcuts;
@@ -498,11 +594,11 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            workbenchShortcuts: nextShortcuts
-          })
+            workbenchShortcuts: nextShortcuts,
+          }),
         });
       return normalizeDesktopWorkbenchShortcuts(
-        authoritativePreferences.workbenchShortcuts
+        authoritativePreferences.workbenchShortcuts,
       );
     } catch (error) {
       this.store.workbenchShortcuts = previousShortcuts;
@@ -511,7 +607,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setMinimizeAnimation(
-    animation: DesktopMinimizeAnimation
+    animation: DesktopMinimizeAnimation,
   ): Promise<DesktopMinimizeAnimation> {
     if (this.store.changingMinimizeAnimation === animation) {
       return animation;
@@ -524,8 +620,8 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            minimizeAnimation: animation
-          })
+            minimizeAnimation: animation,
+          }),
         });
       return (
         authoritativePreferences.minimizeAnimation ??
@@ -542,14 +638,14 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setWorkbenchWindowSnapping(
-    value: DesktopWorkbenchWindowSnapping
+    value: DesktopWorkbenchWindowSnapping,
   ): Promise<DesktopWorkbenchWindowSnapping> {
     const nextValue = normalizeDesktopWorkbenchWindowSnapping(value);
     if (
       this.store.changingWorkbenchWindowSnapping &&
       desktopWorkbenchWindowSnappingEqual(
         this.store.changingWorkbenchWindowSnapping,
-        nextValue
+        nextValue,
       )
     ) {
       return nextValue;
@@ -562,11 +658,11 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            workbenchWindowSnapping: nextValue
-          })
+            workbenchWindowSnapping: nextValue,
+          }),
         });
       return normalizeDesktopWorkbenchWindowSnapping(
-        authoritativePreferences.workbenchWindowSnapping
+        authoritativePreferences.workbenchWindowSnapping,
       );
     } catch (error) {
       this.store.workbenchWindowSnapping = previousValue;
@@ -576,7 +672,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
         this.store.changingWorkbenchWindowSnapping &&
         desktopWorkbenchWindowSnappingEqual(
           this.store.changingWorkbenchWindowSnapping,
-          nextValue
+          nextValue,
         )
       ) {
         this.store.changingWorkbenchWindowSnapping = null;
@@ -595,21 +691,21 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
     applyDesktopPreferenceTheme(
       this.store,
       nextTheme,
-      this.dependencies.applyTheme
+      this.dependencies.applyTheme,
     );
     try {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
-          preferences: this.currentPreferences({ themeSource: source })
+          preferences: this.currentPreferences({ themeSource: source }),
         });
       return this.dependencies.resolveTheme(
-        authoritativePreferences.themeSource
+        authoritativePreferences.themeSource,
       );
     } catch (error) {
       applyDesktopPreferenceTheme(
         this.store,
         previousTheme,
-        this.dependencies.applyTheme
+        this.dependencies.applyTheme,
       );
       throw error;
     } finally {
@@ -620,7 +716,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setSleepPreventionMode(
-    mode: DesktopSleepPreventionMode
+    mode: DesktopSleepPreventionMode,
   ): Promise<DesktopSleepPreventionMode> {
     if (this.store.changingSleepPreventionMode === mode) {
       return mode;
@@ -633,8 +729,8 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            sleepPreventionMode: mode
-          })
+            sleepPreventionMode: mode,
+          }),
         });
       return authoritativePreferences.sleepPreventionMode;
     } catch (error) {
@@ -659,8 +755,8 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            showAppDeveloperSources: show
-          })
+            showAppDeveloperSources: show,
+          }),
         });
       return authoritativePreferences.showAppDeveloperSources ?? false;
     } catch (error) {
@@ -674,7 +770,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setUpdatePolicy(
-    policy: DesktopUpdatePolicy
+    policy: DesktopUpdatePolicy,
   ): Promise<DesktopUpdatePolicy> {
     if (this.store.changingUpdatePolicy === policy) {
       return policy;
@@ -687,8 +783,8 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            updatePolicy: policy
-          })
+            updatePolicy: policy,
+          }),
         });
       return authoritativePreferences.updatePolicy;
     } catch (error) {
@@ -702,7 +798,7 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   }
 
   async setUpdateChannel(
-    channel: DesktopUpdateChannel
+    channel: DesktopUpdateChannel,
   ): Promise<DesktopUpdateChannel> {
     if (this.store.changingUpdateChannel === channel) {
       return channel;
@@ -715,8 +811,8 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       const authoritativePreferences =
         await this.dependencies.client.updateDesktopPreferences({
           preferences: this.currentPreferences({
-            updateChannel: channel
-          })
+            updateChannel: channel,
+          }),
         });
       return authoritativePreferences.updateChannel;
     } catch (error) {
@@ -731,17 +827,17 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
 
   async rememberAgentComposerDefaultsForAgentTarget(
     agentTargetId: string,
-    defaults: DesktopAgentComposerDefaultsPatch | null
+    defaults: DesktopAgentComposerDefaultsPatch | null,
   ): Promise<DesktopAgentComposerDefaultsPatchResult> {
     return this.agentComposerDefaultsPatchCoordinator.patch(
       agentTargetId,
-      defaults
+      defaults,
     );
   }
 
   async rememberAgentGuiConversationRailCollapsed(
     provider: DesktopAgentProvider,
-    collapsed: boolean
+    collapsed: boolean,
   ): Promise<void> {
     const previousCollapsedByProvider =
       this.store.agentGuiConversationRailCollapsedByProvider;
@@ -749,12 +845,12 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       mergeDesktopAgentGuiConversationRailCollapsedByProvider(
         previousCollapsedByProvider,
         provider,
-        collapsed
+        collapsed,
       );
     if (
       desktopAgentGuiConversationRailCollapsedByProviderEqual(
         previousCollapsedByProvider,
-        nextCollapsedByProvider
+        nextCollapsedByProvider,
       )
     ) {
       return;
@@ -765,8 +861,8 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
     try {
       await this.dependencies.client.updateDesktopPreferences({
         preferences: this.currentPreferences({
-          agentGuiConversationRailCollapsedByProvider: nextCollapsedByProvider
-        })
+          agentGuiConversationRailCollapsedByProvider: nextCollapsedByProvider,
+        }),
       });
     } catch (error) {
       this.store.agentGuiConversationRailCollapsedByProvider =
@@ -778,14 +874,14 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   async rememberAgentSessionLaunchMode(
     workspaceId: string,
     projectSectionKey: string,
-    mode: DesktopAgentSessionLaunchMode
+    mode: DesktopAgentSessionLaunchMode,
   ): Promise<void> {
     const previousModes = this.store.agentSessionLaunchModesByWorkspace;
     const nextModes = mergeDesktopAgentSessionLaunchMode(
       previousModes,
       workspaceId,
       projectSectionKey,
-      mode
+      mode,
     );
     if (
       desktopAgentSessionLaunchModesByWorkspaceEqual(previousModes, nextModes)
@@ -798,13 +894,13 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
       await this.dependencies.client.patchAgentSessionLaunchMode({
         workspaceId,
         projectSectionKey,
-        mode
+        mode,
       });
     } catch (error) {
       if (
         desktopAgentSessionLaunchModesByWorkspaceEqual(
           this.store.agentSessionLaunchModesByWorkspace,
-          nextModes
+          nextModes,
         )
       ) {
         this.store.agentSessionLaunchModesByWorkspace = previousModes;
@@ -840,14 +936,14 @@ export class DesktopPreferencesService implements IDesktopPreferencesService {
   private applyPreferences(
     preferences: Parameters<
       DesktopPreferencesClient["updateDesktopPreferences"]
-    >[0]["preferences"]
+    >[0]["preferences"],
   ): void {
     applyDesktopPreferencesProjection({
       applyLocale: this.dependencies.applyLocale,
       applyTheme: this.dependencies.applyTheme,
       preferences,
       resolveTheme: this.dependencies.resolveTheme,
-      store: this.store
+      store: this.store,
     });
   }
 
