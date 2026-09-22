@@ -44,7 +44,6 @@ import {
 } from "./agentMessageMarkdownRuntime";
 import {
   isClickableMarkdownHref,
-  isExplicitWorkspaceFilePath,
   isLocalAbsolutePath,
   isWindowsAbsolutePath,
   isMentionOnlyMarkdownContent,
@@ -71,6 +70,9 @@ import {
 import { AgentMessageFileCard } from "./AgentMessageFileCard";
 import { remarkAgentFileCards } from "./remarkAgentFileCards";
 import { MarkdownMedia } from "./AgentMessageMarkdownMedia";
+import {
+  resolveWorkspaceFilePathCandidate
+} from "../actions/workspaceFilePathCandidate";
 import { ConversationFileContextMenu } from "./agentConversation/components/ConversationFileContextMenu";
 import { remarkLiteralAutolinkBoundary } from "./remarkLiteralAutolinkBoundary";
 import { cachedMarkdownParser } from "./cachedMarkdownParser";
@@ -328,6 +330,8 @@ export function AgentMessageMarkdown({
         <MarkdownLink
           {...props}
           onLinkClick={handleLinkClick}
+          workspaceRoot={workspaceRoot}
+          basePath={basePath}
           workspaceAppIcons={workspaceAppIcons}
           agentTargets={effectiveAgentTargets}
         />
@@ -351,12 +355,14 @@ export function AgentMessageMarkdown({
       )
     }),
     [
+      basePath,
       effectiveAgentTargets,
       enableImageZoom,
       handleLinkClick,
       inline,
       mermaidStreaming,
-      workspaceAppIcons
+      workspaceAppIcons,
+      workspaceRoot
     ]
   );
 
@@ -487,18 +493,23 @@ function MarkdownLink({
   node: _node,
   onClick: _onClick,
   onLinkClick,
+  workspaceRoot,
+  basePath,
   workspaceAppIcons,
   agentTargets,
   href,
   ...props
 }: MarkdownDomProps<"a"> & {
   onLinkClick?: (href: string) => void;
+  workspaceRoot?: string | null;
+  basePath?: string | null;
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
   agentTargets?: readonly AgentMessageMarkdownAgentTarget[];
 }): JSX.Element {
   "use memo";
   const { t } = useTranslation();
   const targetHref = href?.trim() ?? "";
+  const linkLabel = textFromReactNode(props.children);
   const mention = targetHref
     ? parseMentionLink(
         targetHref,
@@ -519,10 +530,7 @@ function MarkdownLink({
     );
   }
   const fileMention = targetHref
-    ? parseWorkspaceFileMentionLink(
-        targetHref,
-        textFromReactNode(props.children)
-      )
+    ? parseWorkspaceFileMentionLink(targetHref, linkLabel)
     : null;
   if (fileMention) {
     return (
@@ -536,7 +544,13 @@ function MarkdownLink({
       </ConversationFileContextMenu>
     );
   }
-  if (!isClickableMarkdownHref(targetHref)) {
+  const resolvedFilePath =
+    resolveWorkspaceFilePathCandidate({
+      path: targetHref,
+      workspaceRoot,
+      basePath
+    })?.path ?? "";
+  if (!resolvedFilePath && !isClickableMarkdownHref(targetHref)) {
     return (
       <MarkdownLinkContext.Provider value={true}>
         <span className={props.className} title={props.title}>
@@ -545,31 +559,32 @@ function MarkdownLink({
       </MarkdownLinkContext.Provider>
     );
   }
-
-  const localFilePath = isExplicitWorkspaceFilePath(targetHref)
-    ? targetHref
-    : "";
+  const clickHref = resolvedFilePath || targetHref;
   const anchor = (
     <a
       {...props}
-      data-agent-link-href={targetHref}
+      data-agent-link-href={clickHref}
       role="link"
       tabIndex={0}
       onClick={(event) => {
-        activateMarkdownLink(event, targetHref, onLinkClick);
+        activateMarkdownLink(event, clickHref, onLinkClick);
       }}
       onPointerDown={(event) => {
-        activateMarkdownLinkFromPointer(event, targetHref, onLinkClick);
+        activateMarkdownLinkFromPointer(event, clickHref, onLinkClick);
       }}
       onKeyDown={(event) => {
-        activateMarkdownLinkFromKey(event, targetHref, onLinkClick);
+        activateMarkdownLinkFromKey(event, clickHref, onLinkClick);
       }}
     />
   );
   return (
     <MarkdownLinkContext.Provider value={true}>
-      {localFilePath ? (
-        <ConversationFileContextMenu path={localFilePath} asChild>
+      {resolvedFilePath ? (
+        <ConversationFileContextMenu
+          path={resolvedFilePath}
+          asChild
+          onOpen={() => onLinkClick?.(resolvedFilePath)}
+        >
           {anchor}
         </ConversationFileContextMenu>
       ) : (

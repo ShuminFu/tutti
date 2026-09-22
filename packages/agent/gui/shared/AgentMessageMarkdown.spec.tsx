@@ -186,7 +186,7 @@ describe("AgentMessageMarkdown", () => {
     expect(event).toBe(false);
   });
 
-  it("renders relative markdown links as plain text", () => {
+  it("resolves relative markdown links against the session directory", () => {
     const onLinkAction = vi.fn();
     render(
       <AgentMessageMarkdown
@@ -202,11 +202,49 @@ describe("AgentMessageMarkdown", () => {
       />
     );
 
-    expect(screen.queryByRole("link", { name: "README.md" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "content/posts" })).toBeNull();
-    expect(screen.getByText("README.md")).toBeInTheDocument();
-    expect(screen.getByText("content/posts")).toBeInTheDocument();
-    expect(onLinkAction).not.toHaveBeenCalled();
+    const readme = screen.getByRole("link", { name: "README.md" });
+    expect(readme).toHaveAttribute(
+      "data-agent-link-href",
+      "/Users/local/project/docs/README.md"
+    );
+    fireEvent.click(readme);
+    expect(onLinkAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "open-workspace-file",
+        path: "/Users/local/project/docs/README.md"
+      })
+    );
+  });
+
+  it("gives file urls the same open action as local paths", async () => {
+    const onLinkAction = vi.fn();
+    const root =
+      "/Users/ning/Documents/tutti/session-491ff190/销售大师-思考过程词库";
+    render(
+      <AgentMessageMarkdown
+        content={`- [主词库 JSON](file://${root}/lexicon.json)`}
+        onLinkAction={onLinkAction}
+        workspaceLinkContext={{
+          workspaceRoot: root,
+          basePath: root,
+          source: "agent-markdown"
+        }}
+      />
+    );
+
+    const link = screen.getByRole("link", { name: "主词库 JSON" });
+    expect(link).toHaveAttribute(
+      "data-agent-link-href",
+      `${root}/lexicon.json`
+    );
+    fireEvent.contextMenu(link);
+    fireEvent.pointerDown(await screen.findByText("Open"), { button: 0 });
+    expect(onLinkAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "open-workspace-file",
+        path: `${root}/lexicon.json`
+      })
+    );
   });
 
   it("keeps standard markdown link hrefs clickable", () => {
@@ -1893,8 +1931,11 @@ describe("AgentMessageMarkdown", () => {
       />
     );
 
+    expect(screen.getByRole("link", { name: "empty-files" })).toHaveAttribute(
+      "data-agent-link-href",
+      "/Users/local/project/empty-files"
+    );
     for (const label of [
-      "empty-files",
       "xx.html",
       "xx.md",
       "content/posts",

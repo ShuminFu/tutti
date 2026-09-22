@@ -434,8 +434,20 @@ function createWebHostApi(): DesktopHostApi {
           }
         );
       },
-      openFile() {
-        return Promise.reject(electronDebugRequired("openFile"));
+      openFile(_workspaceID, path) {
+        // Embedded Dock previews in the host canvas instead of shell.openPath.
+        return requestHostCapability("openWorkspaceFile", [{ path }]).then(
+          () => undefined,
+          (error) => {
+            if (
+              error instanceof HostBridgeUnavailableError &&
+              !isHostBridgeAvailable()
+            ) {
+              return Promise.reject(electronDebugRequired("openFile"));
+            }
+            return Promise.reject(error);
+          }
+        );
       },
       listOpenWithApplications() {
         return Promise.reject(

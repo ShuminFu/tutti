@@ -18,12 +18,33 @@ export interface ResolvedWorkspaceFilePathCandidate {
  * It intentionally has no Workspace mention, app, issue, registry, or renderer
  * dependencies.
  */
+export function fileUrlToLocalPath(value: string): string | null {
+  const target = value.trim();
+  if (!target.toLowerCase().startsWith("file:")) {
+    return null;
+  }
+  try {
+    const url = new URL(target);
+    if (url.protocol !== "file:" || url.hostname) {
+      return null;
+    }
+    const decodedPath = decodeURIComponent(url.pathname);
+    return /^[A-Za-z]:[\\/]/.test(decodedPath.slice(1))
+      ? decodedPath.slice(1)
+      : decodedPath || null;
+  } catch {
+    return null;
+  }
+}
+
 export function resolveWorkspaceFilePathCandidate({
   path,
   workspaceRoot,
   basePath
 }: ResolveWorkspaceFilePathCandidateInput): ResolvedWorkspaceFilePathCandidate | null {
-  const rawPath = decodeWorkspaceLinkPath(path.trim());
+  const rawPath = decodeWorkspaceLinkPath(
+    fileUrlToLocalPath(path) ?? path.trim()
+  );
   if (
     !rawPath ||
     isUrlLikeWorkspaceFilePath(rawPath) ||
