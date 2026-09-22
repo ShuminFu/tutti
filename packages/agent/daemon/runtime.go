@@ -37,6 +37,7 @@ type ProcessTransport = agentruntime.ProcessTransport
 type RecordingProcessTransport = agentruntime.RecordingProcessTransport
 type ReplayPlaybackState = agentruntime.ReplayPlaybackState
 type ReplayProcessTransport = agentruntime.ReplayProcessTransport
+type Session = agentruntime.Session
 type SessionReplayProcessRegistration = agentruntime.SessionReplayProcessRegistration
 type SessionReplayProcessTransport = agentruntime.SessionReplayProcessTransport
 type SessionRecordingProcessTransport = agentruntime.SessionRecordingProcessTransport
@@ -59,12 +60,22 @@ type Config struct {
 	CommandNetworkAccessPolicy CommandNetworkAccessPolicy
 	Adapters                   []Adapter
 	LiveSessionReaper          LiveSessionReaperConfig
+	// LiveSessionReaperLoad 让回收策略可以热改：每次扫描前重读一次。
+	//
+	// 为什么不能只在启动时读一次：这套旋钮是要给用户在设置里调的（DINTAL-5308
+	// 的「Agent 进程常驻」开关与 TTL）。启动时读死意味着改完要重启 tuttid 才生效，
+	// 而用户只会看到「我关了它还在」。留 nil 就一直用 LiveSessionReaper 的静态值。
+	LiveSessionReaperLoad func() LiveSessionReaperConfig
 }
 
 type LiveSessionReaperConfig struct {
 	Enabled       *bool
 	IdleAfter     time.Duration
 	SweepInterval time.Duration
+	// IdleAfterFor 按会话定空闲阈值（DINTAL-5308）。留 nil 则所有会话用 IdleAfter。
+	// 语义见 agentruntime.ReleaseIdleLiveSessionsInput.IdleAfterFor：
+	// >0 等这么久、0 不在跑回合就立刻放、<0 不回收。
+	IdleAfterFor func(session Session) time.Duration
 }
 
 type Runtime struct {
@@ -103,7 +114,7 @@ func NewRuntime(config Config) (*Runtime, error) {
 		controller:       controller,
 		processTransport: config.ProcessTransport,
 	}
-	runtime.startLiveSessionReaper(config.LiveSessionReaper)
+	runtime.startLiveSessionReaper(config.LiveSessionReaper, config.LiveSessionReaperLoad)
 	return runtime, nil
 }
 
@@ -200,51 +211,71 @@ func (r *Runtime) closeAllLiveSessions() {
 	)
 }
 
-func (r *Runtime) startLiveSessionReaper(config LiveSessionReaperConfig) {
-	if r == nil || r.controller == nil || !liveSessionReaperEnabled(config) {
+func (r *Runtime) startLiveSessionReaper(config LiveSessionReaperConfig, load func() LiveSessionReaperConfig) {
+	if r == nil || r.controller == nil {
 		return
 	}
-	idleAfter := config.IdleAfter
-	if idleAfter <= 0 {
-		idleAfter = defaultLiveSessionReaperIdleAfter
+	// 静态配置且明说关掉 —— 保持老行为，连 goroutine 都不起。
+	// 有 load 时一律起：用户随时可能在设置里把它打开，循环得在那儿等着。
+	if load == nil && !liveSessionReaperEnabled(config) {
+		return
 	}
-	sweepInterval := config.SweepInterval
-	if sweepInterval <= 0 {
-		sweepInterval = defaultLiveSessionReaperSweepInterval
+	if load == nil {
+		static := config
+		load = func() LiveSessionReaperConfig { return static }
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	r.done = make(chan struct{})
 	go func() {
 		defer close(r.done)
-		ticker := time.NewTicker(sweepInterval)
-		defer ticker.Stop()
+		// 用 Timer 而不是 Ticker：扫描间隔本身也可能被用户改，每轮按当前配置重置。
+		timer := time.NewTimer(liveSessionReaperSweepInterval(load()))
+		defer timer.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
-				result := r.controller.ReleaseIdleLiveSessions(ctx, agentruntime.ReleaseIdleLiveSessionsInput{
-					IdleAfter: idleAfter,
-					Now:       time.Now(),
-				})
-				if result.Scanned == 0 {
-					continue
-				}
-				slog.Info("agent live session reaper sweep completed",
-					"event", "agent_session.live_reaper.sweep_completed",
-					"scanned", result.Scanned,
-					"released", result.Released,
-					"skipped_fresh", result.SkippedFresh,
-					"skipped_active_turn", result.SkippedActiveTurn,
-					"skipped_unsupported", result.SkippedUnsupported,
-					"skipped_not_live", result.SkippedNotLive,
-					"skipped_busy", result.SkippedBusy,
-					"failed", result.Failed,
-				)
+			case <-timer.C:
 			}
+			current := load()
+			timer.Reset(liveSessionReaperSweepInterval(current))
+			if !liveSessionReaperEnabled(current) {
+				continue
+			}
+			idleAfter := current.IdleAfter
+			if idleAfter <= 0 {
+				idleAfter = defaultLiveSessionReaperIdleAfter
+			}
+			result := r.controller.ReleaseIdleLiveSessions(ctx, agentruntime.ReleaseIdleLiveSessionsInput{
+				IdleAfter:    idleAfter,
+				IdleAfterFor: current.IdleAfterFor,
+				Now:          time.Now(),
+			})
+			if result.Scanned == 0 {
+				continue
+			}
+			slog.Info("agent live session reaper sweep completed",
+				"event", "agent_session.live_reaper.sweep_completed",
+				"scanned", result.Scanned,
+				"released", result.Released,
+				"skipped_fresh", result.SkippedFresh,
+				"skipped_active_turn", result.SkippedActiveTurn,
+				"skipped_unsupported", result.SkippedUnsupported,
+				"skipped_not_live", result.SkippedNotLive,
+				"skipped_busy", result.SkippedBusy,
+				"skipped_retained", result.SkippedRetained,
+				"failed", result.Failed,
+			)
 		}
 	}()
+}
+
+func liveSessionReaperSweepInterval(config LiveSessionReaperConfig) time.Duration {
+	if config.SweepInterval > 0 {
+		return config.SweepInterval
+	}
+	return defaultLiveSessionReaperSweepInterval
 }
 
 func liveSessionReaperEnabled(config LiveSessionReaperConfig) bool {

@@ -147,9 +147,19 @@ type reportRequest struct {
 }
 
 type ReleaseIdleLiveSessionsInput struct {
+	// IdleAfter 是所有会话的默认空闲阈值；IdleAfterFor 为某条会话另行表态时以后者为准。
 	IdleAfter time.Duration
-	Now       time.Time
-	Limit     int
+	// IdleAfterFor 让调用方按会话定阈值（DINTAL-5308）。
+	//
+	// 为什么需要按会话分：进程该留多久不是一个全局事实。用户正在界面上聊的会话，
+	// 留着是为了下一句话不用冷启动；而 visible=false 的机器派工（工作流/自动化）
+	// 没有「下一句话」，回合一结束就该把进程还给系统。
+	//
+	// 返回值语义：>0 = 空闲这么久之后回收；0 = 只要不在跑回合就立刻回收；
+	// <0 = 这条会话不回收（用户选了常驻）。留 nil 则所有会话都用 IdleAfter。
+	IdleAfterFor func(session Session) time.Duration
+	Now          time.Time
+	Limit        int
 }
 
 type ReleaseIdleLiveSessionsResult struct {
@@ -160,7 +170,10 @@ type ReleaseIdleLiveSessionsResult struct {
 	SkippedUnsupported int
 	SkippedNotLive     int
 	SkippedBusy        int
-	Failed             int
+	// SkippedRetained 是策略明说「这条不回收」的会话（IdleAfterFor 返回负数），
+	// 与 SkippedFresh（还没到阈值）分开记：前者是用户的选择，后者只是还没轮到。
+	SkippedRetained int
+	Failed          int
 }
 
 // CloseAllLiveSessionsResult reports the outcome of CloseAllLiveSessions.

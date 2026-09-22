@@ -40,7 +40,7 @@ func (c *Controller) ensureLiveAdapterSession(ctx context.Context, session Sessi
 
 func (c *Controller) ReleaseIdleLiveSessions(ctx context.Context, input ReleaseIdleLiveSessionsInput) ReleaseIdleLiveSessionsResult {
 	var result ReleaseIdleLiveSessionsResult
-	if c == nil || input.IdleAfter <= 0 {
+	if c == nil || (input.IdleAfter <= 0 && input.IdleAfterFor == nil) {
 		return result
 	}
 	nowTime := input.Now
@@ -48,8 +48,8 @@ func (c *Controller) ReleaseIdleLiveSessions(ctx context.Context, input ReleaseI
 		nowTime = now()
 	}
 	nowUnixMS := unixMS(nowTime)
-	idleAfterMS := input.IdleAfter.Milliseconds()
-	if idleAfterMS <= 0 {
+	defaultIdleAfterMS := input.IdleAfter.Milliseconds()
+	if defaultIdleAfterMS <= 0 && input.IdleAfterFor == nil {
 		return result
 	}
 	type candidate struct {
@@ -72,6 +72,19 @@ func (c *Controller) ReleaseIdleLiveSessions(ctx context.Context, input ReleaseI
 			break
 		}
 		result.Scanned++
+		idleAfterMS := defaultIdleAfterMS
+		if input.IdleAfterFor != nil {
+			// 判正负要在 Duration 上判，不能先转毫秒：-1ns 转成毫秒是 0，
+			// 「不回收」会被悄悄读成「立刻回收」——正好反过来。
+			idleAfter := input.IdleAfterFor(candidate.session)
+			if idleAfter < 0 {
+				// 策略说这条留着（用户开了常驻）。它不是「还没到点」，单独记一档，
+				// 免得看日志的人以为是阈值没配对。
+				result.SkippedRetained++
+				continue
+			}
+			idleAfterMS = idleAfter.Milliseconds()
+		}
 		result.add(c.releaseIdleLiveSession(ctx, candidate.session, candidate.adapter, nowUnixMS, idleAfterMS))
 	}
 	return result
@@ -232,6 +245,7 @@ func (r *ReleaseIdleLiveSessionsResult) add(next ReleaseIdleLiveSessionsResult) 
 	r.SkippedUnsupported += next.SkippedUnsupported
 	r.SkippedNotLive += next.SkippedNotLive
 	r.SkippedBusy += next.SkippedBusy
+	r.SkippedRetained += next.SkippedRetained
 	r.Failed += next.Failed
 }
 

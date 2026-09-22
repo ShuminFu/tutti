@@ -522,3 +522,58 @@ func TestControllerCloseReportsSessionCompleted(t *testing.T) {
 		return false
 	})
 }
+
+// DINTAL-5308：「进程该留多久」不是一个全局事实。
+//
+// 用户正在界面上聊的会话，留着是为了下一句话不用冷启动；而 visible=false 的
+// 机器派工（工作流/自动化）没有「下一句话」，回合一结束就该把进程还给系统。
+// 所以阈值按会话取，不是一个数管所有人。
+func TestControllerReleaseIdleLiveSessionsHonoursPerSessionIdleAfter(t *testing.T) {
+	t.Parallel()
+
+	adapter := newReleasableAdapter()
+	controller := NewController([]Adapter{adapter}, nil)
+	headless := startReleasableSession(t, controller, "headless-session")
+	chatting := startReleasableSession(t, controller, "chatting-session")
+
+	// 两条都是「一分钟前说完话」：按全局 30 分钟阈值，谁都不该被回收。
+	// 下面的差别只能来自 IdleAfterFor。
+	recent := time.Now().Add(-time.Minute)
+	setSessionUpdatedAt(t, controller, headless.Session, recent)
+	setSessionUpdatedAt(t, controller, chatting.Session, recent)
+
+	result := controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
+		IdleAfter: 30 * time.Minute,
+		IdleAfterFor: func(session Session) time.Duration {
+			if session.AgentSessionID == headless.Session.AgentSessionID {
+				return 0 // 机器派工：不在跑回合就立刻放
+			}
+			return -1 // 用户开了常驻：这条不回收
+		},
+		Now: time.Now(),
+	})
+
+	if result.Scanned != 2 {
+		t.Fatalf("scanned = %d, want 2", result.Scanned)
+	}
+	if result.Released != 1 {
+		t.Fatalf("released = %d, want the headless session released: %#v", result.Released, result)
+	}
+	// 「用户选了常驻」要落在 SkippedRetained，不能混进 SkippedFresh：
+	// 前者是用户的选择，后者只是还没轮到，看日志的人得分得清。
+	if result.SkippedRetained != 1 || result.SkippedFresh != 0 {
+		t.Fatalf("retained=%d fresh=%d, want retained=1 fresh=0: %#v",
+			result.SkippedRetained, result.SkippedFresh, result)
+	}
+	if adapter.hasLiveSession(headless.Session.AgentSessionID) {
+		t.Fatal("headless session still live after release")
+	}
+	if !adapter.hasLiveSession(chatting.Session.AgentSessionID) {
+		t.Fatal("chatting session was released although the policy retained it")
+	}
+	// 释放不是关闭：会话身份与可续聊性必须留着。
+	stored, ok := controller.Session(headless.Session.RoomID, headless.Session.AgentSessionID)
+	if !ok || stored.ProviderSessionID == "" {
+		t.Fatalf("released session lost its identity: ok=%v stored=%#v", ok, stored)
+	}
+}
