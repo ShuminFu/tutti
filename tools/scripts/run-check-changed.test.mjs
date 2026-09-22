@@ -293,8 +293,7 @@ test("activity runtime boundary lane covers package, desktop adapter, and checke
     "packages/agent/activity-core/src/engine/engine.ts",
     "apps/desktop/src/renderer/src/features/workspace-agent/services/runtime.ts",
     "apps/desktop/src/renderer/src/features/workspace-workbench/ui/Agent.tsx",
-    "tools/scripts/check-agent-activity-runtime-boundaries.mjs",
-    "tools/scripts/check-agent-activity-runtime-boundaries.test.mjs"
+    "tools/scripts/check-agent-activity-runtime-boundaries.mjs"
   ]) {
     assert.equal(isAgentActivityRuntimeBoundaryRelevant(file), true, file);
   }

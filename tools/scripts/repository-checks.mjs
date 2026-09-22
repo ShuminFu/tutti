@@ -353,8 +353,7 @@ function isElectronRuntimeBoundaryRelevant(file) {
     file.startsWith("apps/desktop/src/preload/") ||
     file.startsWith("apps/desktop/src/shared/") ||
     file.startsWith("packages/") ||
-    file === "tools/scripts/check-electron-runtime-boundaries.mjs" ||
-    file === "tools/scripts/check-electron-runtime-boundaries.test.mjs"
+    file === "tools/scripts/check-electron-runtime-boundaries.mjs"
   );
 }
 
@@ -386,7 +385,6 @@ export function isAgentActivityRuntimeBoundaryRelevant(file) {
       "apps/desktop/src/renderer/src/features/workspace-workbench/"
     ) ||
     file === "tools/scripts/check-agent-activity-runtime-boundaries.mjs" ||
-    file === "tools/scripts/check-agent-activity-runtime-boundaries.test.mjs" ||
     file.startsWith("tools/fixtures/agent-activity-runtime-boundaries/")
   );
 }

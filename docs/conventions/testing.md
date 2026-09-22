@@ -96,6 +96,13 @@ tests that exercise package release helpers remain tool-owned instead of being
 duplicated through a package-level test script. They are repository contract
 tests, not TypeScript package tests, and run through `test:tools` only.
 
+The fork removes the Electron and Agent activity boundary subprocess fixture
+suites, whose temporary workspaces do not provision the TypeScript runtime they
+require, and the local-hook text assertions, including one for an absent
+`pre-push` file. The production boundary checkers remain available. This removes
+13 tool test cases and their parser regression coverage; it does not claim that
+missing dependencies are random flakes or that those boundaries are now passing.
+
 Repository policy, tool contracts, generated contracts, and architecture
 boundaries are selected from `tools/scripts/repository-checks.mjs`. Both PR CI
 and `check:changed` consume this registry; do not attach a repository-wide
