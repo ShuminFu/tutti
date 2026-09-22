@@ -3,6 +3,7 @@ import {
   useExternalStoreSnapshot,
   type ExternalStoreSnapshotSource
 } from "@tutti-os/ui-react-hooks";
+import { attachHostPanelPolling } from "../../hostPanelVisibility";
 
 const AgentConversationClockVisibilityContext = createContext(true);
 type ClockListener = () => void;
@@ -11,9 +12,9 @@ class AgentConversationClockStore {
   private readonly minuteListeners = new Set<ClockListener>();
   private readonly secondListeners = new Set<ClockListener>();
   private minuteTimeMs = Date.now();
-  private minuteTimer: number | null = null;
+  private minutePollingStop: (() => void) | null = null;
   private secondTimeMs = Date.now();
-  private secondTimer: number | null = null;
+  private secondPollingStop: (() => void) | null = null;
 
   readonly disabled: ExternalStoreSnapshotSource<number> = {
     getSnapshot: () => 0,
@@ -23,50 +24,47 @@ class AgentConversationClockStore {
   readonly minute: ExternalStoreSnapshotSource<number> = {
     getSnapshot: () => this.minuteTimeMs,
     subscribe: (listener) =>
-      this.subscribe(
-        listener,
-        this.minuteListeners,
-        60_000,
-        "minuteTimeMs",
-        "minuteTimer"
-      )
+      this.subscribe(listener, this.minuteListeners, 60_000, "minuteTimeMs")
   };
 
   readonly second: ExternalStoreSnapshotSource<number> = {
     getSnapshot: () => this.secondTimeMs,
     subscribe: (listener) =>
-      this.subscribe(
-        listener,
-        this.secondListeners,
-        1_000,
-        "secondTimeMs",
-        "secondTimer"
-      )
+      this.subscribe(listener, this.secondListeners, 1_000, "secondTimeMs")
   };
 
   private subscribe(
     listener: ClockListener,
     listeners: Set<ClockListener>,
     intervalMs: number,
-    timeKey: "minuteTimeMs" | "secondTimeMs",
-    timerKey: "minuteTimer" | "secondTimer"
+    timeKey: "minuteTimeMs" | "secondTimeMs"
   ): () => void {
     listeners.add(listener);
     if (listeners.size === 1) {
       this[timeKey] = Date.now();
       // timing: share one cadence timer across all mounted consumers.
-      this[timerKey] = window.setInterval(() => {
-        this[timeKey] = Date.now();
-        listeners.forEach((candidate) => candidate());
-      }, intervalMs);
+      // tickOnAttach 为 false：这里跑在外部 store 的 subscribe 里，
+      // 不能同步通知 listener。宿主面板从隐藏回到可见时才补一拍。
+      const stop = attachHostPanelPolling({
+        intervalMs,
+        tickOnAttach: false,
+        tick: () => {
+          this[timeKey] = Date.now();
+          listeners.forEach((candidate) => candidate());
+        }
+      });
+      if (timeKey === "minuteTimeMs") this.minutePollingStop = stop;
+      else this.secondPollingStop = stop;
     }
     return () => {
       listeners.delete(listener);
       if (listeners.size === 0) {
-        const timer = this[timerKey];
-        if (timer !== null) {
-          window.clearInterval(timer);
-          this[timerKey] = null;
+        if (timeKey === "minuteTimeMs") {
+          this.minutePollingStop?.();
+          this.minutePollingStop = null;
+        } else {
+          this.secondPollingStop?.();
+          this.secondPollingStop = null;
         }
       }
     };

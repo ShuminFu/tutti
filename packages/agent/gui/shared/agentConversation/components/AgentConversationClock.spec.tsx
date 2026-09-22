@@ -1,9 +1,14 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import type { JSX } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  resetHostPanelVisibilityForTests,
+  setHostPanelVisible
+} from "../../hostPanelVisibility";
+import {
   AgentConversationClockProvider,
-  useAgentConversationMinuteNowUnixMs
+  useAgentConversationMinuteNowUnixMs,
+  useAgentConversationNowUnixMs
 } from "./AgentConversationClock";
 import { useElapsedSeconds } from "./useElapsedSeconds";
 
@@ -14,6 +19,8 @@ describe("AgentConversationClock", () => {
   });
 
   afterEach(() => {
+    cleanup();
+    resetHostPanelVisibilityForTests();
     vi.useRealTimers();
   });
 
@@ -71,6 +78,74 @@ describe("AgentConversationClock", () => {
     expect(screen.getByTestId("minute-now")).toHaveTextContent("181000");
     expect(setInterval).toHaveBeenCalledTimes(2);
   });
+
+  it("宿主面板隐藏时秒针停住，亮回来先跳到当前时刻再继续", () => {
+    render(<SecondValue isVisible />);
+    expect(screen.getByTestId("second-now")).toHaveTextContent("1000");
+
+    act(() => {
+      vi.advanceTimersByTime(3_000);
+    });
+    expect(screen.getByTestId("second-now")).toHaveTextContent("4000");
+    expect(document.visibilityState).toBe("visible");
+
+    act(() => setHostPanelVisible(false));
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(screen.getByTestId("second-now")).toHaveTextContent("4000");
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => setHostPanelVisible(true));
+    expect(screen.getByTestId("second-now")).toHaveTextContent("14000");
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(screen.getByTestId("second-now")).toHaveTextContent("15000");
+  });
+
+  it("宿主面板隐藏时分针停住，亮回来先跳到当前时刻再继续", () => {
+    render(<MinuteValue isVisible />);
+    expect(screen.getByTestId("minute-now")).toHaveTextContent("1000");
+
+    act(() => {
+      vi.advanceTimersByTime(3 * 60_000);
+    });
+    expect(screen.getByTestId("minute-now")).toHaveTextContent("181000");
+
+    act(() => setHostPanelVisible(false));
+    act(() => {
+      vi.advanceTimersByTime(10 * 60_000);
+    });
+    expect(screen.getByTestId("minute-now")).toHaveTextContent("181000");
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => setHostPanelVisible(true));
+    expect(screen.getByTestId("minute-now")).toHaveTextContent("781000");
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByTestId("minute-now")).toHaveTextContent("841000");
+  });
+
+  it("挂上时宿主面板已经隐藏：秒针不走，第一次变可见才跳到当前时刻", () => {
+    act(() => setHostPanelVisible(false));
+    render(<SecondValue isVisible />);
+    expect(screen.getByTestId("second-now")).toHaveTextContent("1000");
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(screen.getByTestId("second-now")).toHaveTextContent("1000");
+
+    act(() => setHostPanelVisible(true));
+    expect(screen.getByTestId("second-now")).toHaveTextContent("11000");
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(screen.getByTestId("second-now")).toHaveTextContent("12000");
+  });
 });
 
 function ElapsedPair({ isVisible }: { isVisible: boolean }): JSX.Element {
@@ -98,4 +173,17 @@ function MinuteValue({ isVisible }: { isVisible: boolean }): JSX.Element {
 function MinuteNow(): JSX.Element {
   const nowUnixMs = useAgentConversationMinuteNowUnixMs();
   return <span data-testid="minute-now">{nowUnixMs}</span>;
+}
+
+function SecondValue({ isVisible }: { isVisible: boolean }): JSX.Element {
+  return (
+    <AgentConversationClockProvider isVisible={isVisible}>
+      <SecondNow />
+    </AgentConversationClockProvider>
+  );
+}
+
+function SecondNow(): JSX.Element {
+  const nowUnixMs = useAgentConversationNowUnixMs(true);
+  return <span data-testid="second-now">{nowUnixMs}</span>;
 }

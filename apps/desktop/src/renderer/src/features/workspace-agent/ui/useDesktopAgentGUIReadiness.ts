@@ -36,11 +36,14 @@ import {
   activeProviderNotReadyRecheckKey,
   shouldSuppressAgentProviderNotReadyProjection
 } from "./desktopAgentProviderNotReadyRecheck.ts";
+import { attachHostPanelPolling } from "@tutti-os/agent-gui/host-panel-visibility";
 import {
   getEmptyProviderStatusSnapshot,
   noopSubscribe,
   sessionEventLooksLikeAuthFailure
 } from "./desktopAgentGUIWorkbenchModel.ts";
+
+export const DESKTOP_COMPUTER_USE_STATUS_POLL_INTERVAL_MS = 15_000;
 
 export function useDesktopAgentGUIReadiness(input: {
   agentActivityRuntime: AgentGUIRuntime;
@@ -199,10 +202,13 @@ export function useDesktopAgentGUIReadiness(input: {
         });
     };
 
-    refreshComputerUseStatus();
-    const interval = window.setInterval(refreshComputerUseStatus, 15_000);
+    const stopPolling = attachHostPanelPolling({
+      intervalMs: DESKTOP_COMPUTER_USE_STATUS_POLL_INTERVAL_MS,
+      tick: refreshComputerUseStatus
+    });
     // Permission changes usually happen in System Settings; refresh as soon
     // as the user comes back instead of waiting for the next interval tick.
+    // 这两条监听和会话事件订阅不跟宿主面板可见性走：藏面板只停主动轮询。
     let lastVisibilityRefreshAt = 0;
     const refreshOnVisibility = () => {
       if (document.visibilityState !== "visible") {
@@ -219,7 +225,7 @@ export function useDesktopAgentGUIReadiness(input: {
     document.addEventListener("visibilitychange", refreshOnVisibility);
     return () => {
       canceled = true;
-      window.clearInterval(interval);
+      stopPolling();
       window.removeEventListener("focus", refreshOnVisibility);
       document.removeEventListener("visibilitychange", refreshOnVisibility);
     };

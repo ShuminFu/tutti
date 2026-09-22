@@ -1,11 +1,16 @@
-import { render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  resetHostPanelVisibilityForTests,
+  setHostPanelVisible
+} from "../hostPanelVisibility";
 import {
   registerMonitorAutomationHost,
   type HostMonitorAutomation,
   type MonitorAutomationHost
 } from "./monitorAutomationHost";
 import {
+  HOST_MONITOR_AUTOMATIONS_POLL_INTERVAL_MS,
   useHostMonitorAutomations,
   type HostMonitorAutomationsResult
 } from "./useHostMonitorAutomations";
@@ -47,6 +52,8 @@ function resultBox(): { current: HostMonitorAutomationsResult | null } {
 
 describe("useHostMonitorAutomations", () => {
   afterEach(() => {
+    cleanup();
+    resetHostPanelVisibilityForTests();
     unregister?.();
     unregister = null;
     vi.useRealTimers();
@@ -174,5 +181,50 @@ describe("useHostMonitorAutomations", () => {
     expect(latest.current?.canStop).toBe(false);
     latest.current?.stopAll();
     expect(setMonitorAutomationsEnabled).not.toHaveBeenCalled();
+  });
+
+  it("宿主面板隐藏时拆掉 20s 轮询，亮回来先补一拍再恢复", async () => {
+    vi.useFakeTimers();
+    const queryMonitorAutomations = vi.fn(async () => ({ monitors: [] }));
+    installHost({ queryMonitorAutomations });
+    render(<Probe agentSessionId="sess-a" onResult={() => {}} />);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(queryMonitorAutomations).toHaveBeenCalledTimes(1);
+    queryMonitorAutomations.mockClear();
+
+    const intervalMs = HOST_MONITOR_AUTOMATIONS_POLL_INTERVAL_MS;
+    await vi.advanceTimersByTimeAsync(3 * intervalMs);
+    expect(queryMonitorAutomations).toHaveBeenCalledTimes(3);
+    expect(document.visibilityState).toBe("visible");
+
+    act(() => setHostPanelVisible(false));
+    await vi.advanceTimersByTimeAsync(10 * intervalMs);
+    expect(queryMonitorAutomations).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => setHostPanelVisible(true));
+    expect(queryMonitorAutomations).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(intervalMs);
+    expect(queryMonitorAutomations).toHaveBeenCalledTimes(5);
+  });
+
+  it("挂上时宿主面板已经隐藏：不轮询，第一次变可见才补一拍", async () => {
+    vi.useFakeTimers();
+    const queryMonitorAutomations = vi.fn(async () => ({ monitors: [] }));
+    installHost({ queryMonitorAutomations });
+    act(() => setHostPanelVisible(false));
+    render(<Probe agentSessionId="sess-a" onResult={() => {}} />);
+    await vi.advanceTimersByTimeAsync(
+      10 * HOST_MONITOR_AUTOMATIONS_POLL_INTERVAL_MS
+    );
+    expect(queryMonitorAutomations).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => setHostPanelVisible(true));
+    expect(queryMonitorAutomations).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(
+      HOST_MONITOR_AUTOMATIONS_POLL_INTERVAL_MS
+    );
+    expect(queryMonitorAutomations).toHaveBeenCalledTimes(2);
   });
 });

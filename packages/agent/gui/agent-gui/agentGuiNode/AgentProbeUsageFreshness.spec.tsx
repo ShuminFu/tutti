@@ -1,9 +1,14 @@
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  resetHostPanelVisibilityForTests,
+  setHostPanelVisible
+} from "../../shared/hostPanelVisibility";
+import {
   AgentProbeUsageFreshness,
+  FRESHNESS_TICK_MS,
   type AgentProbeUsageFreshnessLabels
 } from "./AgentProbeUsageFreshness";
 
@@ -96,5 +101,67 @@ describe("AgentProbeUsageFreshness", () => {
     expect(icon()?.getAttribute("class") ?? "").toContain(
       "motion-safe:animate-[spin_0.6s_linear]"
     );
+  });
+});
+
+describe("AgentProbeUsageFreshness host panel visibility", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    cleanup();
+    resetHostPanelVisibilityForTests();
+    vi.useRealTimers();
+  });
+
+  it("宿主面板隐藏时新鲜度停走，亮回来先跳到当前时刻再继续", () => {
+    const { getByTestId } = renderControl({ capturedAtUnixMs: NOW });
+    const stamp = () => getByTestId("freshness").getAttribute("data-now-ms");
+    expect(stamp()).toBe(String(NOW));
+
+    act(() => {
+      vi.advanceTimersByTime(3 * FRESHNESS_TICK_MS);
+    });
+    expect(stamp()).toBe(String(NOW + 3 * FRESHNESS_TICK_MS));
+    expect(getByTestId("freshness")).toHaveTextContent("1m ago");
+    expect(document.visibilityState).toBe("visible");
+
+    act(() => setHostPanelVisible(false));
+    act(() => {
+      vi.advanceTimersByTime(10 * FRESHNESS_TICK_MS);
+    });
+    expect(stamp()).toBe(String(NOW + 3 * FRESHNESS_TICK_MS));
+    expect(getByTestId("freshness")).toHaveTextContent("1m ago");
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => setHostPanelVisible(true));
+    expect(stamp()).toBe(String(NOW + 13 * FRESHNESS_TICK_MS));
+    expect(getByTestId("freshness")).toHaveTextContent("4m ago");
+    act(() => {
+      vi.advanceTimersByTime(FRESHNESS_TICK_MS);
+    });
+    expect(stamp()).toBe(String(NOW + 14 * FRESHNESS_TICK_MS));
+  });
+
+  it("挂上时宿主面板已经隐藏：不走表，第一次变可见才跳到当前时刻", () => {
+    act(() => setHostPanelVisible(false));
+    const { getByTestId } = renderControl({ capturedAtUnixMs: NOW });
+    const stamp = () => getByTestId("freshness").getAttribute("data-now-ms");
+    expect(stamp()).toBe(String(NOW));
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(10 * FRESHNESS_TICK_MS);
+    });
+    expect(stamp()).toBe(String(NOW));
+
+    act(() => setHostPanelVisible(true));
+    expect(stamp()).toBe(String(NOW + 10 * FRESHNESS_TICK_MS));
+    act(() => {
+      vi.advanceTimersByTime(FRESHNESS_TICK_MS);
+    });
+    expect(stamp()).toBe(String(NOW + 11 * FRESHNESS_TICK_MS));
   });
 });

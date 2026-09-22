@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { attachHostPanelPolling } from "../hostPanelVisibility";
 import {
   monitorAutomationHost,
   MONITOR_AUTOMATIONS_MAX_IDS,
@@ -63,7 +64,8 @@ export function useHostMonitorAutomations(
 ): HostMonitorAutomationsResult {
   const host = monitorAutomationHost();
   const requestedId = useMemo(() => {
-    const trimmed = typeof agentSessionId === "string" ? agentSessionId.trim() : "";
+    const trimmed =
+      typeof agentSessionId === "string" ? agentSessionId.trim() : "";
     return trimmed;
   }, [agentSessionId]);
   const enabled = monitorAutomationChip && host !== null && requestedId !== "";
@@ -107,14 +109,19 @@ export function useHostMonitorAutomations(
       }
     };
     refreshRef.current = () => void tick();
-    void tick();
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "hidden") void tick();
-    }, HOST_MONITOR_AUTOMATIONS_POLL_INTERVAL_MS);
+    const stopPolling = attachHostPanelPolling({
+      intervalMs: HOST_MONITOR_AUTOMATIONS_POLL_INTERVAL_MS,
+      tick: () => {
+        void tick();
+      },
+      intervalTick: () => {
+        if (document.visibilityState !== "hidden") void tick();
+      }
+    });
     return () => {
       cancelled = true;
       refreshRef.current = null;
-      window.clearInterval(timer);
+      stopPolling();
     };
   }, [enabled, host, requestedId]);
 

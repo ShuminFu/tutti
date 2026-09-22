@@ -1,13 +1,29 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  resetHostPanelVisibilityForTests,
+  setHostPanelVisible
+} from "../../hostPanelVisibility";
 import {
   registerPeerPairRequestHost,
   type PeerPairRequestHost,
   type PeerPairRequestView
 } from "../peerPairRequestHost";
-import { AgentPeerPairRequestSurface } from "./AgentPeerPairRequestSurface";
+import {
+  AgentPeerPairRequestSurface,
+  PEER_PAIR_REQUEST_POLL_INTERVAL_MS
+} from "./AgentPeerPairRequestSurface";
 
-function side(sessionId: string, extra: Partial<PeerPairRequestView["to"]> = {}) {
+function side(
+  sessionId: string,
+  extra: Partial<PeerPairRequestView["to"]> = {}
+) {
   return {
     taskId: `task-${sessionId}`,
     sessionId,
@@ -33,13 +49,18 @@ function request(id: string): PeerPairRequestView {
 
 let unregister: (() => void) | null = null;
 afterEach(() => {
+  cleanup();
+  resetHostPanelVisibilityForTests();
   unregister?.();
   unregister = null;
+  vi.useRealTimers();
 });
 
 function installHost(overrides: Partial<PeerPairRequestHost> = {}) {
   const host: PeerPairRequestHost = {
-    listPendingPeerPairRequests: vi.fn(async () => ({ requests: [request("req-1")] })),
+    listPendingPeerPairRequests: vi.fn(async () => ({
+      requests: [request("req-1")]
+    })),
     decidePeerPairRequest: vi.fn(async ({ requestId }) => ({
       request: { ...request(requestId), status: "approved" }
     })),
@@ -67,8 +88,12 @@ describe("AgentPeerPairRequestSurface", () => {
       agentSessionId: "sess-a"
     });
     // 抬头带对端名字，原因原样展示。
-    expect(getByTestId("agent-peer-pair-request-surface").textContent).toContain("乙会话");
-    expect(getByTestId("agent-peer-pair-request-reason").textContent).toBe("一起看这段 diff");
+    expect(
+      getByTestId("agent-peer-pair-request-surface").textContent
+    ).toContain("乙会话");
+    expect(getByTestId("agent-peer-pair-request-reason").textContent).toBe(
+      "一起看这段 diff"
+    );
 
     fireEvent.click(getByTestId("agent-peer-pair-request-req-1-approve"));
     await waitFor(() => {
@@ -99,9 +124,9 @@ describe("AgentPeerPairRequestSurface", () => {
         decision: "reject"
       });
     });
-    expect((await findByTestId("agent-peer-pair-request-error")).textContent).toBe(
-      "request already decided"
-    );
+    expect(
+      (await findByTestId("agent-peer-pair-request-error")).textContent
+    ).toBe("request already decided");
     // 出错后立刻重拉一遍（第一次是挂载时的那一拍）。
     await waitFor(() => {
       expect(host.listPendingPeerPairRequests).toHaveBeenCalledTimes(2);
@@ -119,5 +144,49 @@ describe("AgentPeerPairRequestSurface", () => {
     expect(container.firstChild).toBeNull();
     rerender(<AgentPeerPairRequestSurface agentSessionId={null} />);
     expect(container.firstChild).toBeNull();
+  });
+
+  it("宿主面板隐藏时拆掉 4s 轮询，亮回来先补一拍再恢复", async () => {
+    vi.useFakeTimers();
+    const host = installHost({
+      listPendingPeerPairRequests: vi.fn(async () => ({ requests: [] }))
+    });
+    const list = host.listPendingPeerPairRequests;
+    render(<AgentPeerPairRequestSurface agentSessionId="sess-a" />);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(list).toHaveBeenCalledTimes(1);
+    vi.mocked(list).mockClear();
+
+    const intervalMs = PEER_PAIR_REQUEST_POLL_INTERVAL_MS;
+    await vi.advanceTimersByTimeAsync(3 * intervalMs);
+    expect(list).toHaveBeenCalledTimes(3);
+    expect(document.visibilityState).toBe("visible");
+
+    act(() => setHostPanelVisible(false));
+    await vi.advanceTimersByTimeAsync(10 * intervalMs);
+    expect(list).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => setHostPanelVisible(true));
+    expect(list).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(intervalMs);
+    expect(list).toHaveBeenCalledTimes(5);
+  });
+
+  it("挂上时宿主面板已经隐藏：不轮询，第一次变可见才补一拍", async () => {
+    vi.useFakeTimers();
+    const host = installHost({
+      listPendingPeerPairRequests: vi.fn(async () => ({ requests: [] }))
+    });
+    act(() => setHostPanelVisible(false));
+    render(<AgentPeerPairRequestSurface agentSessionId="sess-a" />);
+    await vi.advanceTimersByTimeAsync(10 * PEER_PAIR_REQUEST_POLL_INTERVAL_MS);
+    expect(host.listPendingPeerPairRequests).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => setHostPanelVisible(true));
+    expect(host.listPendingPeerPairRequests).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(PEER_PAIR_REQUEST_POLL_INTERVAL_MS);
+    expect(host.listPendingPeerPairRequests).toHaveBeenCalledTimes(2);
   });
 });

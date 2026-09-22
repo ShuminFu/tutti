@@ -40,6 +40,7 @@
     "./conversation-rail-projection": "./conversationRailProjection.ts",
     "./monitor-automation-host": "./shared/agentConversation/monitorAutomationHost.ts",
     "./composer-model-history": "./shared/composerModelHistory/composerModelHistoryHost.ts",
+    "./host-panel-visibility": "./shared/hostPanelVisibility.ts",
     "./conversation-projection": "./conversationProjection.ts",
     "./composer-projection": "./composerProjection.ts",
     "./i18n": "./i18n/index.ts",

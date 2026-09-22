@@ -1,4 +1,5 @@
 import { useEffect, useState, type JSX } from "react";
+import { attachHostPanelPolling } from "../../hostPanelVisibility";
 import styles from "../../../agent-gui/agentGuiNode/AgentGUIConversation.styles";
 import { translate } from "../../../i18n/index";
 import {
@@ -17,7 +18,7 @@ import {
 const peerPairRequestInlineApproval = true;
 
 // 请求是 agent 在本会话里发的，用户多半正盯着这条对话，4s 一拍够快；页面不可见时不拍。
-const POLL_INTERVAL_MS = 4000;
+export const PEER_PAIR_REQUEST_POLL_INTERVAL_MS = 4000;
 
 export interface AgentPeerPairRequestSurfaceProps {
   agentSessionId: string | null | undefined;
@@ -40,7 +41,8 @@ export function AgentPeerPairRequestSurface({
   "use memo";
   const host = peerPairRequestHost();
   const sessionId = agentSessionId?.trim() ?? "";
-  const enabled = peerPairRequestInlineApproval && host !== null && sessionId !== "";
+  const enabled =
+    peerPairRequestInlineApproval && host !== null && sessionId !== "";
   const [requests, setRequests] = useState<PeerPairRequestView[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,13 +69,18 @@ export function AgentPeerPairRequestSurface({
         }
       }
     };
-    void tick();
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "hidden") void tick();
-    }, POLL_INTERVAL_MS);
+    const stopPolling = attachHostPanelPolling({
+      intervalMs: PEER_PAIR_REQUEST_POLL_INTERVAL_MS,
+      tick: () => {
+        void tick();
+      },
+      intervalTick: () => {
+        if (document.visibilityState !== "hidden") void tick();
+      }
+    });
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      stopPolling();
     };
   }, [enabled, host, sessionId, refreshTick]);
 

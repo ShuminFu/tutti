@@ -32,6 +32,7 @@ import {
   installHostFocusRecovery,
   installHostLocaleBridge,
   installHostThemeBridge,
+  installHostVisibilityBridge,
   installHostWorkbenchLayoutNotifications,
   isHostBridgeAvailable,
   requestHostCapability
@@ -67,6 +68,7 @@ export function createWebDesktopApi(): DesktopApi {
   installHostLocaleBridge((locale) => {
     setHostLocale(locale);
   });
+  installHostVisibilityBridge();
   installHostWorkbenchLayoutNotifications();
 
   return {
