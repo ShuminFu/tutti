@@ -33,6 +33,7 @@ func (s *SQLiteStore) applyDesktopPreferencesMigrations(ctx context.Context) err
 		s.applyDesktopPreferencesFeatureFlagsV1,
 		s.applyDesktopPreferencesDeletedAgentRetentionV1,
 		s.applyDesktopPreferencesAgentCLIUpdateCheckV1,
+		s.applyDesktopPreferencesAgentRuntimeRetentionV1,
 	}
 	for _, apply := range migrations {
 		if err := apply(ctx); err != nil {
@@ -796,6 +797,49 @@ SET agent_composer_defaults_by_agent_target_json = ?
 WHERE id = ?
 `, migratedJSON, desktopPreferencesRowID)
 	return err
+}
+
+// DINTAL-5308 的三列。DDL 默认值就是业务默认值（常驻开、30 分钟、最多 10 条），
+// 所以老库升级上来的那一行直接得到默认行为，而不是 Go 的零值（那会变成
+// 「不常驻 + 永不回收 + 不限条数」这种谁也没选过的组合）。
+func (s *SQLiteStore) applyDesktopPreferencesAgentRuntimeRetentionV1(ctx context.Context) error {
+	applied, err := s.hasMigration(ctx, schemaMigrationDesktopPreferencesAgentRuntimeRetentionV1)
+	if err != nil {
+		return err
+	}
+	if applied {
+		return nil
+	}
+
+	now := unixMs(time.Now().UTC())
+	columns := []struct {
+		name string
+		ddl  string
+	}{
+		{"agent_runtime_keep_alive_enabled", "ALTER TABLE desktop_preferences\n  ADD COLUMN agent_runtime_keep_alive_enabled INTEGER NOT NULL DEFAULT 1;"},
+		{"agent_runtime_idle_minutes", "ALTER TABLE desktop_preferences\n  ADD COLUMN agent_runtime_idle_minutes INTEGER NOT NULL DEFAULT 30;"},
+		{"agent_runtime_max_resident", "ALTER TABLE desktop_preferences\n  ADD COLUMN agent_runtime_max_resident INTEGER NOT NULL DEFAULT 10;"},
+	}
+	for _, column := range columns {
+		has, err := s.hasColumn(ctx, "desktop_preferences", column.name)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := s.writeDB.ExecContext(ctx, column.ddl); err != nil {
+			return fmt.Errorf("migrate workspace database for desktop agent runtime retention: %w", err)
+		}
+	}
+	if _, err := s.writeDB.ExecContext(ctx, `
+INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms)
+  VALUES (?, ?);
+`, schemaMigrationDesktopPreferencesAgentRuntimeRetentionV1, now); err != nil {
+		return fmt.Errorf("migrate workspace database for desktop agent runtime retention: %w", err)
+	}
+
+	return nil
 }
 
 func (s *SQLiteStore) applyDesktopPreferencesBrowserUseConnectionModeV1(ctx context.Context) error {

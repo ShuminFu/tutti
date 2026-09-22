@@ -626,3 +626,79 @@ func TestDesktopPreferencesFeatureFlagsRoundtrip(t *testing.T) {
 		t.Fatalf("shortcuts wrong: %+v", got.WorkbenchShortcuts)
 	}
 }
+
+// DINTAL-5308：这三项一开始只做了 API 与界面、没建列，于是写进去的值悄悄丢掉、
+// 读回来永远是 Go 零值（常驻=false、TTL=0、上限=0 —— 一个谁也没选过的组合）。
+// 这条测两件事：写得进读得回；老库（那一行早于这三列）升级上来拿到的是业务默认值。
+func TestSQLiteStoreDesktopPreferencesAgentRuntimeRetentionRoundTripAndUpgrade(t *testing.T) {
+	t.Parallel()
+
+	store := openTestSQLiteStore(t)
+	ctx := context.Background()
+
+	for _, column := range []string{
+		"agent_runtime_keep_alive_enabled",
+		"agent_runtime_idle_minutes",
+		"agent_runtime_max_resident",
+	} {
+		has, err := store.hasColumn(ctx, "desktop_preferences", column)
+		if err != nil {
+			t.Fatalf("hasColumn(%q) error = %v", column, err)
+		}
+		if !has {
+			t.Fatalf("desktop_preferences.%s column missing after migration", column)
+		}
+	}
+
+	// 老行：只填这三列之外的字段，让 DDL 默认值兜底 —— 这就是升级上来的那一行。
+	if _, err := store.writeDB.ExecContext(ctx, `
+INSERT INTO desktop_preferences (
+  id, default_agent_provider, agent_conversation_detail_mode, agent_dock_layout,
+  dock_icon_style, dock_placement, locale, theme_source, sleep_prevention_mode,
+  update_channel, update_policy, agent_composer_defaults_by_provider_json,
+  agent_gui_conversation_rail_collapsed_by_provider_json,
+  file_default_openers_by_extension_json, app_catalog_channel,
+  browser_use_connection_mode, minimize_animation, show_app_developer_sources,
+  workbench_window_snapping_enabled, workbench_window_snapping_shortcut_preset,
+  updated_at_unix_ms
+) VALUES (
+  'desktop', 'codex', 'coding', 'unified', 'default', 'bottom', 'en', 'dark',
+  'never', 'rc', 'prompt', '{}', '{}', '{}', 'production', 'isolated', 'scale',
+  0, 0, 'commandArrows', 1
+)`); err != nil {
+		t.Fatalf("seed legacy preferences row error = %v", err)
+	}
+
+	upgraded, err := store.GetDesktopPreferences(ctx)
+	if err != nil {
+		t.Fatalf("GetDesktopPreferences() error = %v", err)
+	}
+	if !upgraded.AgentRuntimeKeepAliveEnabled {
+		t.Fatal("keep-alive read false on an upgraded row: the DDL default must give the business default, not Go's zero value")
+	}
+	if upgraded.AgentRuntimeIdleMinutes != preferencesbiz.DefaultDesktopAgentRuntimeIdleMinutes {
+		t.Fatalf("idle minutes = %d, want the default %d on an upgraded row",
+			upgraded.AgentRuntimeIdleMinutes, preferencesbiz.DefaultDesktopAgentRuntimeIdleMinutes)
+	}
+	if upgraded.AgentRuntimeMaxResident != preferencesbiz.DefaultDesktopAgentRuntimeMaxResident {
+		t.Fatalf("max resident = %d, want the default %d on an upgraded row",
+			upgraded.AgentRuntimeMaxResident, preferencesbiz.DefaultDesktopAgentRuntimeMaxResident)
+	}
+
+	// 写回一组「用户自己选过」的值，包括两个合法的 0（永不回收 / 不限条数）。
+	upgraded.AgentRuntimeKeepAliveEnabled = true
+	upgraded.AgentRuntimeIdleMinutes = 0
+	upgraded.AgentRuntimeMaxResident = 0
+	if _, err := store.PutDesktopPreferences(ctx, upgraded); err != nil {
+		t.Fatalf("PutDesktopPreferences() error = %v", err)
+	}
+	reloaded, err := store.GetDesktopPreferences(ctx)
+	if err != nil {
+		t.Fatalf("GetDesktopPreferences() error = %v", err)
+	}
+	if !reloaded.AgentRuntimeKeepAliveEnabled ||
+		reloaded.AgentRuntimeIdleMinutes != 0 ||
+		reloaded.AgentRuntimeMaxResident != 0 {
+		t.Fatalf("round trip lost the chosen values: %#v", reloaded)
+	}
+}
