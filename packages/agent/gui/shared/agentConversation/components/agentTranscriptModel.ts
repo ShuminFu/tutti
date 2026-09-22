@@ -21,6 +21,17 @@ export interface AgentMessageLocatorItem {
   summary: string;
 }
 
+/**
+ * Locator summaries normalize every user message body into plain text, which is
+ * proportional to the whole user-visible prompt text. Row VMs are immutable
+ * snapshots, so the normalized summary is cached on row identity: the message
+ * locator rail keeps its text work per changed row instead of per update.
+ */
+const agentTranscriptUserMessageSummaryCache = new WeakMap<
+  AgentConversationVM["rows"][number],
+  string
+>();
+
 export interface AgentParticipantTurnProjection {
   dividerRowIndexes: ReadonlySet<number>;
   turnIndexByRowIndex: ReadonlyMap<number, number>;
@@ -93,46 +104,129 @@ export function findLastMessageRowIndex(
   return null;
 }
 
+/**
+ * Groups the projected rows into presentation turns.
+ *
+ * `previousGroups` is optional and only used for reference reuse: a group whose
+ * rows are still the identical row objects at the identical indexes is returned
+ * as the exact previous group object. Downstream projections (turn work
+ * section models, virtualizer item keys, participant headers) memoize on group
+ * identity, so a streaming delta that only changes the last Turn keeps every
+ * earlier group and every earlier derived model stable instead of rebuilding
+ * all of them.
+ */
 export function buildAgentTranscriptTurnGroups(
   rows: ReadonlyArray<AgentConversationVM["rows"][number]>,
-  rowKeys: ReadonlyArray<string>
+  rowKeys: ReadonlyArray<string>,
+  previousGroups?: readonly AgentTranscriptTurnGroup[]
 ): AgentTranscriptTurnGroup[] {
   const groups: AgentTranscriptTurnGroup[] = [];
-  let currentGroup: AgentTranscriptTurnGroup | null = null;
+  const reusablePreviousGroupByIndex: Array<AgentTranscriptTurnGroup | null> =
+    [];
+  const nextTurnIdByRowIndex = buildNextTurnIdByRowIndex(rows);
 
   rows.forEach((row, rowIndex) => {
+    const openGroup = groups.at(-1) ?? null;
     const turnId = transcriptPresentationTurnId(
-      rows,
-      rowIndex,
-      currentGroup?.turnId ?? null
+      row.turnId ?? null,
+      nextTurnIdByRowIndex[rowIndex] ?? null,
+      openGroup?.turnId ?? null
     );
-    if (!currentGroup || currentGroup.turnId !== turnId) {
-      currentGroup = {
-        key: turnId ?? `orphan:${rowKeys[rowIndex] ?? transcriptRowKey(row)}`,
-        turnId,
-        rows: []
-      };
-      groups.push(currentGroup);
-    }
+    const group =
+      openGroup && openGroup.turnId === turnId
+        ? openGroup
+        : createTurnGroup({
+            groups,
+            previousGroups,
+            reusablePreviousGroupByIndex,
+            rowKey: rowKeys[rowIndex] ?? transcriptRowKey(row),
+            turnId
+          });
 
-    currentGroup.rows.push({ row, rowIndex });
+    group.rows.push({ row, rowIndex });
+
+    const groupIndex = groups.length - 1;
+    const previousGroup = reusablePreviousGroupByIndex[groupIndex];
+    if (previousGroup) {
+      const previousEntry = previousGroup.rows[group.rows.length - 1];
+      if (previousEntry?.row !== row || previousEntry.rowIndex !== rowIndex) {
+        reusablePreviousGroupByIndex[groupIndex] = null;
+      }
+    }
+  });
+
+  reusablePreviousGroupByIndex.forEach((previousGroup, groupIndex) => {
+    const group = groups[groupIndex];
+    if (!previousGroup || !group) {
+      return;
+    }
+    if (previousGroup.rows.length !== group.rows.length) {
+      return;
+    }
+    groups[groupIndex] = previousGroup;
   });
 
   return groups;
 }
 
+function createTurnGroup({
+  groups,
+  previousGroups,
+  reusablePreviousGroupByIndex,
+  rowKey,
+  turnId
+}: {
+  groups: AgentTranscriptTurnGroup[];
+  previousGroups: readonly AgentTranscriptTurnGroup[] | undefined;
+  reusablePreviousGroupByIndex: Array<AgentTranscriptTurnGroup | null>;
+  rowKey: string;
+  turnId: string | null;
+}): AgentTranscriptTurnGroup {
+  const group: AgentTranscriptTurnGroup = {
+    key: turnId ?? `orphan:${rowKey}`,
+    turnId,
+    rows: []
+  };
+  const previousGroup = previousGroups?.[groups.length];
+  groups.push(group);
+  reusablePreviousGroupByIndex.push(
+    previousGroup && previousGroup.key === group.key ? previousGroup : null
+  );
+  return group;
+}
+
+/**
+ * `nextTurnIdByRowIndex[index]` is the presentation turn id of the first row
+ * after `index` whose own `turnId` is not null, mirroring the previous forward
+ * `find` scan. It is computed in one backward pass so a transcript with many
+ * turnless session-level rows no longer allocates a tail slice per row.
+ */
+function buildNextTurnIdByRowIndex(
+  rows: ReadonlyArray<AgentConversationVM["rows"][number]>
+): Array<string | null> {
+  const nextTurnIdByRowIndex: Array<string | null> = Array.from(
+    { length: rows.length },
+    () => null
+  );
+  let nextTurnId: string | null = null;
+  for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex -= 1) {
+    nextTurnIdByRowIndex[rowIndex] = nextTurnId;
+    const rowTurnId = rows[rowIndex]?.turnId;
+    if (rowTurnId !== null) {
+      nextTurnId = rowTurnId ?? null;
+    }
+  }
+  return nextTurnIdByRowIndex;
+}
+
 function transcriptPresentationTurnId(
-  rows: ReadonlyArray<AgentConversationVM["rows"][number]>,
-  rowIndex: number,
+  rowTurnId: string | null,
+  nextTurnId: string | null,
   currentTurnId: string | null
 ): string | null {
-  const rowTurnId = rows[rowIndex]?.turnId ?? null;
   if (rowTurnId || !currentTurnId) {
     return rowTurnId;
   }
-  const nextTurnId =
-    rows.slice(rowIndex + 1).find((candidate) => candidate.turnId !== null)
-      ?.turnId ?? null;
   // A session-level row can occur chronologically inside a live Turn. Keep it
   // in that Turn's presentation group only when the next lifecycle-owned row
   // proves the surrounding Turn is unchanged; the row itself stays turnless.
@@ -211,9 +305,15 @@ export function hasAgentResponseForTurn(
 export function summarizeUserMessageRow(
   row: Extract<AgentConversationVM["rows"][number], { kind: "message" }>
 ): string {
-  return normalizeLocatorSummary(
+  const cached = agentTranscriptUserMessageSummaryCache.get(row);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const summary = normalizeLocatorSummary(
     row.messages.map((message) => message.copyText ?? message.body).join(" ")
   );
+  agentTranscriptUserMessageSummaryCache.set(row, summary);
+  return summary;
 }
 
 export function normalizeLocatorSummary(value: string): string {

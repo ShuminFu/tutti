@@ -47,11 +47,17 @@ export interface AgentTurnWorkSectionModel {
  * Selects at most one participant header per speaker in each presentation
  * turn. Completed collapsed turns prefer a visible message so the Agent header
  * does not disappear into the hidden work section.
+ *
+ * The model resolver is a callback rather than a prebuilt map so participant
+ * mode can reuse the exact per-group models the transcript already resolved for
+ * the turns it renders, instead of building one model per turn up front.
  */
 export function findParticipantHeaderRenderKeys(
   groups: readonly AgentTranscriptTurnGroup[],
   rowKeys: readonly string[],
-  modelByGroupKey: ReadonlyMap<string, AgentTurnWorkSectionModel | null>,
+  resolveModel: (
+    group: AgentTranscriptTurnGroup
+  ) => AgentTurnWorkSectionModel | null,
   participantTurnIndexByRowIndex: ReadonlyMap<number, number>
 ): ReadonlySet<string> {
   const headerCandidateByTurn = new Map<
@@ -63,7 +69,7 @@ export function findParticipantHeaderRenderKeys(
   >();
 
   for (const group of groups) {
-    const model = modelByGroupKey.get(group.key);
+    const model = resolveModel(group);
     const renderedRows: ReadonlyArray<{
       entry: AgentTurnWorkSectionRow;
       visibilityPriority: number;

@@ -11,10 +11,47 @@ export interface AgentTranscriptComplexityAssessment extends AgentTranscriptComp
   turnCount: number;
 }
 
+/**
+ * Integer-only per-row cost inputs. Keeping them integral lets a turn score be
+ * summed exactly like the original single-pass scan, so the incremental path
+ * cannot drift from the previous formula.
+ */
+export interface AgentTranscriptRowComplexity {
+  charCount: number;
+  codeFenceCount: number;
+  tableCount: number;
+  toolCallCount: number;
+  thinkingBlockCount: number;
+  imageCount: number;
+}
+
 const AGENT_TRANSCRIPT_COMPLEXITY_VIRTUALIZATION_SCORE = 40;
 const AGENT_TRANSCRIPT_COMPLEXITY_SINGLE_TURN_SCORE = 24;
 const AGENT_TRANSCRIPT_COMPLEXITY_TURN_COUNT = 30;
 const AGENT_TRANSCRIPT_COMPLEXITY_MINIMUM_TURN_COUNT = 8;
+
+const CHAR_COUNT_SCORE_DIVISOR = 1200;
+const CODE_FENCE_SCORE = 4;
+const TABLE_SCORE = 5;
+const TOOL_CALL_SCORE = 2;
+const THINKING_BLOCK_SCORE = 2;
+const IMAGE_SCORE = 4;
+
+/**
+ * Transcript row VMs are immutable snapshots: the conversation projection
+ * reuses the exact previous row object for every row whose render input did not
+ * change (`reconcileProjectedAgentConversationVM`) and allocates a new object
+ * for the rows that did. Row identity is therefore a sound cache key, and a
+ * streaming delta only rescans the rows that actually changed instead of
+ * re-splitting every message body in the whole transcript on each update.
+ *
+ * The cache is weak, so it stays bounded by the rows a mounted transcript still
+ * references.
+ */
+const agentTranscriptRowComplexityCache = new WeakMap<
+  AgentTranscriptRowVM,
+  AgentTranscriptRowComplexity
+>();
 
 export function assessAgentTranscriptComplexity(
   turnGroups: ReadonlyArray<{
@@ -62,10 +99,25 @@ export function shouldVirtualizeAgentTranscript(input: {
   );
 }
 
+/**
+ * Row cost inputs for one row, memoized on row identity. Returns the same
+ * record for a row this projection already observed.
+ */
+export function agentTranscriptRowComplexity(
+  row: AgentTranscriptRowVM
+): AgentTranscriptRowComplexity {
+  const cached = agentTranscriptRowComplexityCache.get(row);
+  if (cached) {
+    return cached;
+  }
+  const metrics = computeAgentTranscriptRowComplexity(row);
+  agentTranscriptRowComplexityCache.set(row, metrics);
+  return metrics;
+}
+
 function calculateTurnScore(
   rows: ReadonlyArray<{ row: AgentTranscriptRowVM }>
 ): number {
-  let rowCount = 0;
   let charCount = 0;
   let codeFenceCount = 0;
   let tableCount = 0;
@@ -74,57 +126,78 @@ function calculateTurnScore(
   let imageCount = 0;
 
   for (const { row } of rows) {
-    rowCount += 1;
-    // An MCP App view is an embedded document of comparable layout cost.
-    if (row.kind === "generated-image" || row.kind === "mcp-app") {
-      imageCount += 1;
-      continue;
-    }
-    if (row.kind === "message") {
-      for (const message of row.messages) {
-        charCount += message.body.length;
-        codeFenceCount += countCodeFences(message.body);
-        tableCount += countMarkdownTables(message.body);
-        imageCount +=
-          (message.images?.length ?? 0) + countMarkdownImages(message.body);
-      }
-      for (const thinking of row.thinking) {
-        thinkingBlockCount += 1;
-        charCount += thinking.body.length;
-        codeFenceCount += countCodeFences(thinking.body);
-      }
-      continue;
-    }
-    if (row.kind === "tool-group") {
-      toolCallCount += row.calls.length;
-      thinkingBlockCount += row.entries.filter(
-        (entry) => entry.kind === "thinking"
-      ).length;
-      charCount += (row.summary ?? "").length;
-      continue;
-    }
-    if (row.kind === "turn-summary") {
-      charCount += row.files.reduce(
-        (total, file) =>
-          total +
-          file.label.length +
-          file.path.length +
-          (file.unifiedDiff?.length ?? 0) +
-          (file.content?.length ?? 0),
-        0
-      );
-    }
+    const metrics = agentTranscriptRowComplexity(row);
+    charCount += metrics.charCount;
+    codeFenceCount += metrics.codeFenceCount;
+    tableCount += metrics.tableCount;
+    toolCallCount += metrics.toolCallCount;
+    thinkingBlockCount += metrics.thinkingBlockCount;
+    imageCount += metrics.imageCount;
   }
 
   return (
-    rowCount +
-    charCount / 1200 +
-    codeFenceCount * 4 +
-    tableCount * 5 +
-    toolCallCount * 2 +
-    thinkingBlockCount * 2 +
-    imageCount * 4
+    rows.length +
+    charCount / CHAR_COUNT_SCORE_DIVISOR +
+    codeFenceCount * CODE_FENCE_SCORE +
+    tableCount * TABLE_SCORE +
+    toolCallCount * TOOL_CALL_SCORE +
+    thinkingBlockCount * THINKING_BLOCK_SCORE +
+    imageCount * IMAGE_SCORE
   );
+}
+
+function computeAgentTranscriptRowComplexity(
+  row: AgentTranscriptRowVM
+): AgentTranscriptRowComplexity {
+  const metrics: AgentTranscriptRowComplexity = {
+    charCount: 0,
+    codeFenceCount: 0,
+    tableCount: 0,
+    toolCallCount: 0,
+    thinkingBlockCount: 0,
+    imageCount: 0
+  };
+
+  // An MCP App view is an embedded document of comparable layout cost.
+  if (row.kind === "generated-image" || row.kind === "mcp-app") {
+    metrics.imageCount += 1;
+    return metrics;
+  }
+  if (row.kind === "message") {
+    for (const message of row.messages) {
+      metrics.charCount += message.body.length;
+      metrics.codeFenceCount += countCodeFences(message.body);
+      metrics.tableCount += countMarkdownTables(message.body);
+      metrics.imageCount +=
+        (message.images?.length ?? 0) + countMarkdownImages(message.body);
+    }
+    for (const thinking of row.thinking) {
+      metrics.thinkingBlockCount += 1;
+      metrics.charCount += thinking.body.length;
+      metrics.codeFenceCount += countCodeFences(thinking.body);
+    }
+    return metrics;
+  }
+  if (row.kind === "tool-group") {
+    metrics.toolCallCount += row.calls.length;
+    metrics.thinkingBlockCount += row.entries.filter(
+      (entry) => entry.kind === "thinking"
+    ).length;
+    metrics.charCount += (row.summary ?? "").length;
+    return metrics;
+  }
+  if (row.kind === "turn-summary") {
+    metrics.charCount += row.files.reduce(
+      (total, file) =>
+        total +
+        file.label.length +
+        file.path.length +
+        (file.unifiedDiff?.length ?? 0) +
+        (file.content?.length ?? 0),
+      0
+    );
+  }
+  return metrics;
 }
 
 function countCodeFences(value: string): number {
