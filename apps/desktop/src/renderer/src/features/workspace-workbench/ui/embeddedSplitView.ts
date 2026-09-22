@@ -503,6 +503,14 @@ export function createEmbeddedSplitViewController(
   // 这中间 `syncFromNodes` 读到的仍是旧号，不挡就会把刚关掉的会话又认回槽里
   // （表现：✕ 点了没反应，还停在这条会话）。
   const goingHomeByNodeId = new Map<string, string>();
+  // 刚 activate 过、还没换过来的窗口：值是「我们请它显示的那条」和「它这会儿还在
+  // 显示的那条」。activateNode 是异步的，中间这几拍它照旧报旧会话号；不记这一笔，
+  // 整组切换之后右栏那一拍的旧号会被当成「用户在右栏切了会话」，把刚换掉的那条
+  // 塞回来（真机：分支③整组切换退化成只换左栏）。
+  const pendingActivateByNodeId = new Map<
+    string,
+    { expected: string; stale: string }
+  >();
 
   function surfaceWidth(): number {
     const size =
@@ -810,6 +818,12 @@ export function createEmbeddedSplitViewController(
 
   function activate(nodeId: string, agentSessionId: string): void {
     goingHomeByNodeId.delete(nodeId);
+    const stale = sessionIdByNodeId.get(nodeId) ?? "";
+    if (stale && stale !== agentSessionId) {
+      pendingActivateByNodeId.set(nodeId, { expected: agentSessionId, stale });
+    } else {
+      pendingActivateByNodeId.delete(nodeId);
+    }
     sessionIdByNodeId.set(nodeId, agentSessionId);
     host.activateNode(
       { nodeId },
@@ -930,6 +944,7 @@ export function createEmbeddedSplitViewController(
     if (shown === null) return;
     goingHomeByNodeId.set(nodeId, shown);
     sessionIdByNodeId.delete(nodeId);
+    pendingActivateByNodeId.delete(nodeId);
     host.activateNode(
       { nodeId },
       { type: agentGuiWorkbenchGoHomeActivationType }
@@ -960,6 +975,7 @@ export function createEmbeddedSplitViewController(
       if (rightNodeId) {
         host.closeNode(rightNodeId);
         sessionIdByNodeId.delete(rightNodeId);
+        pendingActivateByNodeId.delete(rightNodeId);
         nodeIdBySide = { ...nodeIdBySide, right: null };
       }
     } else if (nodeIdBySide.right) {
@@ -1457,6 +1473,18 @@ export function createEmbeddedSplitViewController(
       }
       // 刚请它回首页、它还没把旧号清掉：这一拍读到的旧号不是「用户切了会话」。
       if (goingHomeByNodeId.get(nodeId) === observed) continue;
+      // 刚 activate 到别的会话、它还没换过来：同理，这一拍的旧号不是用户切的。
+      const pendingActivate = pendingActivateByNodeId.get(nodeId);
+      if (pendingActivate) {
+        if (observed === pendingActivate.expected) {
+          pendingActivateByNodeId.delete(nodeId);
+        } else if (observed === pendingActivate.stale) {
+          continue;
+        } else {
+          // 报的既不是旧号也不是我们请的那条 = 用户真的又切了别的，待换作废。
+          pendingActivateByNodeId.delete(nodeId);
+        }
+      }
       settledNodeIds.add(nodeId);
       freshNodeIds.delete(nodeId);
       if (observed === panes[side] || observed === panes[otherSide(side)])

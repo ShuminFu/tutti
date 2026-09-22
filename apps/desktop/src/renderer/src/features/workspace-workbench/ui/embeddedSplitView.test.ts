@@ -1653,6 +1653,30 @@ test("票02：双列时点与右栏无关但自己有结对的会话 → 整组�
   controller.dispose();
 });
 
+test("票02：整组切换时右栏窗口还在回声旧会话号，不能把它塞回来", async () => {
+  // activateNode 是异步的：整组切换后右栏那个窗口还要几拍才换过来，中间照旧报旧号。
+  // 真机上这一拍被当成「用户在右栏切了会话」，分支③就退化成了「只换左栏」。
+  const { controller, fake, observed, panes, switchTo } =
+    await railController();
+  await switchTo("session-a");
+  assert.deepEqual(panes(), { left: "session-a", right: "session-b" });
+  const rightNodeId = fake.launched[0] as string;
+  observed.set(rightNodeId, "session-b");
+  fake.notify();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  // e 只和 f 结对，与右栏的 b 无关 → 整组换成 e/f。
+  await switchTo("session-e");
+  assert.deepEqual(panes(), { left: "session-e", right: "session-f" });
+
+  // 右栏这一拍仍报 session-b（还没换过来）。
+  fake.notify();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(panes(), { left: "session-e", right: "session-f" });
+  controller.dispose();
+});
+
 test("票03：上次开过的搭档优先于候选里的第一个", async () => {
   const { controller, panes, switchTo } = await railController();
   await switchTo("session-a");
