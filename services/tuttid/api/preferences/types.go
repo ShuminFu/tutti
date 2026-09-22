@@ -17,6 +17,8 @@ func GeneratedDesktopPreferencesFromBiz(value preferencesbiz.DesktopPreferences)
 	}
 	return tuttigenerated.DesktopPreferences{
 		AgentCliUpdateCheckEnabled:                  value.AgentCLIUpdateCheckEnabled,
+		AgentRuntimeKeepAliveEnabled:                &value.AgentRuntimeKeepAliveEnabled,
+		AgentRuntimeIdleMinutes:                     agentRuntimeIdleMinutesPointer(value.AgentRuntimeIdleMinutes),
 		AgentComposerDefaultsByProvider:             generatedAgentComposerDefaultsByProvider(value.AgentComposerDefaultsByProvider),
 		AgentComposerDefaultsByAgentTarget:          generatedAgentComposerDefaultsByAgentTarget(value.AgentComposerDefaultsByAgentTarget),
 		AgentGuiConversationRailCollapsedByProvider: generatedAgentGUIConversationRailCollapsedByProvider(value.AgentGUIConversationRailCollapsedByProvider),
@@ -150,4 +152,11 @@ func optionalBoolPointerFromMap(value map[string]bool, key string) *bool {
 		return nil
 	}
 	return &collapsed
+}
+
+// agentRuntimeIdleMinutesPointer 读出去时一律归一化：库里存着越界的老值
+// （比如别的版本写进去的）不该原样让界面显示成一个它自己都不接受的数。
+func agentRuntimeIdleMinutesPointer(value int) *int {
+	normalized := preferencesbiz.NormalizeDesktopAgentRuntimeIdleMinutes(value)
+	return &normalized
 }

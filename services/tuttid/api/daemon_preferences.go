@@ -359,6 +359,18 @@ func (api DaemonAPI) PutDesktopPreferences(ctx context.Context, request tuttigen
 			),
 		}, nil
 	}
+	if minutes := request.Body.Preferences.AgentRuntimeIdleMinutes; minutes != nil &&
+		!preferencesbiz.IsDesktopAgentRuntimeIdleMinutes(*minutes) {
+		return tuttigenerated.PutDesktopPreferences400JSONResponse{
+			InvalidRequestErrorJSONResponse: invalidRequestError(
+				apierrors.InvalidRequest(
+					apierrors.ReasonUnsupportedAgentRuntimeIdleMinutes,
+					apierrors.WithDeveloperMessage("agent runtime idle minutes must be 0 (never) or 1..1440"),
+					apierrors.WithParams(map[string]any{"field": "preferences.agentRuntimeIdleMinutes"}),
+				),
+			),
+		}, nil
+	}
 	deletedAgentConversationRetentionDays := int(request.Body.Preferences.DeletedAgentConversationRetentionDays)
 	if deletedAgentConversationRetentionDays == 0 {
 		deletedAgentConversationRetentionDays = preferencesbiz.DefaultDeletedAgentConversationRetentionDays
@@ -408,7 +420,9 @@ func (api DaemonAPI) PutDesktopPreferences(ctx context.Context, request tuttigen
 		}
 	}
 	preferences, err := api.PreferencesService.Put(ctx, preferencesservice.PutInput{
-		AgentCLIUpdateCheckEnabled: request.Body.Preferences.AgentCliUpdateCheckEnabled,
+		AgentCLIUpdateCheckEnabled:   request.Body.Preferences.AgentCliUpdateCheckEnabled,
+		AgentRuntimeKeepAliveEnabled: request.Body.Preferences.AgentRuntimeKeepAliveEnabled,
+		AgentRuntimeIdleMinutes:      request.Body.Preferences.AgentRuntimeIdleMinutes,
 		AgentComposerDefaultsByProvider: agentComposerDefaultsByProviderFromGenerated(
 			request.Body.Preferences.AgentComposerDefaultsByProvider,
 		),

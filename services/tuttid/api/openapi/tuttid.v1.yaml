@@ -8217,6 +8217,25 @@ components:
           type: boolean
           default: true
           description: Whether tuttid may periodically discover newer managed agent CLI releases on this device. This never authorizes automatic installation.
+        agentRuntimeKeepAliveEnabled:
+          type: boolean
+          default: true
+          description: >-
+            Whether an agent provider process stays resident after its turn ends so the next
+            message skips a cold start. When false the process is handed back as soon as the
+            turn settles. Optional on write: omitting it keeps the current value, because an
+            absent boolean must not read as "turn keep-alive off". Machine-dispatched sessions
+            (visible=false) always release on turn end and ignore this setting.
+        agentRuntimeIdleMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          default: 30
+          description: >-
+            How long a resident agent process may sit idle before it is released, in minutes.
+            0 means never release it while the app runs. Only consulted when
+            agentRuntimeKeepAliveEnabled is true. Optional on write; omitting it keeps the
+            current value.
         agentComposerDefaultsByProvider:
           $ref: "#/components/schemas/DesktopAgentComposerDefaultsByProvider"
         agentComposerDefaultsByAgentTarget:

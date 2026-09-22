@@ -896,3 +896,55 @@ func TestServicePatchAgentComposerDefaultsAllRejectedSkipsStoreAndChangedEvent(t
 		t.Fatalf("resolved inputs = %#v, want one all-rejected report", resolved.inputs)
 	}
 }
+
+// DINTAL-5308：常驻开关与 TTL 用指针传，是为了把「没表态」和「表态成 false / 0」
+// 分开。这条测的是「没表态」不能把用户已经关掉的常驻悄悄改回来 ——
+// 整份偏好是全量写入的，缺字段当成清零就会两边互相改回去，永远合不上。
+func TestServicePutKeepsAgentRuntimeRetentionWhenFieldsAreOmitted(t *testing.T) {
+	t.Parallel()
+
+	store := &preferencesStoreStub{getResult: preferencesbiz.DesktopPreferences{
+		AgentRuntimeKeepAliveEnabled: false,
+		AgentRuntimeIdleMinutes:      5,
+	}}
+	service := Service{Store: store}
+
+	if _, err := service.Put(context.Background(), PutInput{}); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+	if store.putInput.AgentRuntimeKeepAliveEnabled {
+		t.Fatal("keep-alive was turned back on by an update that never mentioned it")
+	}
+	if store.putInput.AgentRuntimeIdleMinutes != 5 {
+		t.Fatalf("idle minutes = %d, want the stored 5 preserved", store.putInput.AgentRuntimeIdleMinutes)
+	}
+}
+
+// 表态成 0 分钟是合法的「永不回收」，不能被当成「没填」而顶成默认 30。
+func TestServicePutAcceptsNeverReleaseAndRejectsOutOfRangeIdleMinutes(t *testing.T) {
+	t.Parallel()
+
+	never := 0
+	store := &preferencesStoreStub{getResult: preferencesbiz.DesktopPreferences{
+		AgentRuntimeKeepAliveEnabled: true,
+		AgentRuntimeIdleMinutes:      preferencesbiz.DefaultDesktopAgentRuntimeIdleMinutes,
+	}}
+	service := Service{Store: store}
+	if _, err := service.Put(context.Background(), PutInput{AgentRuntimeIdleMinutes: &never}); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+	if store.putInput.AgentRuntimeIdleMinutes != 0 {
+		t.Fatalf("idle minutes = %d, want 0 (never release) to survive", store.putInput.AgentRuntimeIdleMinutes)
+	}
+
+	// 越界值收回默认，而不是夹到边界：夹边界会把明显写错的数变成一个
+	// 看着合理的数，用户再也不知道自己填错过。
+	tooLarge := preferencesbiz.MaxDesktopAgentRuntimeIdleMinutes + 1
+	if _, err := service.Put(context.Background(), PutInput{AgentRuntimeIdleMinutes: &tooLarge}); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+	if store.putInput.AgentRuntimeIdleMinutes != preferencesbiz.DefaultDesktopAgentRuntimeIdleMinutes {
+		t.Fatalf("idle minutes = %d, want the out-of-range value normalized back to the default",
+			store.putInput.AgentRuntimeIdleMinutes)
+	}
+}

@@ -6778,24 +6778,31 @@ type DesktopPreferences struct {
 	AgentConversationDetailMode                 DesktopAgentConversationDetailMode                 `json:"agentConversationDetailMode"`
 	AgentDockLayout                             DesktopAgentDockLayout                             `json:"agentDockLayout"`
 	AgentGuiConversationRailCollapsedByProvider DesktopAgentGuiConversationRailCollapsedByProvider `json:"agentGuiConversationRailCollapsedByProvider"`
-	AgentSessionLaunchModesByWorkspace          *DesktopAgentSessionLaunchModesByWorkspace         `json:"agentSessionLaunchModesByWorkspace,omitempty"`
-	AppCatalogChannel                           DesktopAppCatalogChannel                           `json:"appCatalogChannel"`
-	BrowserUseConnectionMode                    *DesktopBrowserUseConnectionMode                   `json:"browserUseConnectionMode,omitempty"`
-	DefaultAgentProvider                        DesktopDefaultAgentProvider                        `json:"defaultAgentProvider"`
-	DeletedAgentConversationRetentionDays       DeletedAgentConversationRetentionDays              `json:"deletedAgentConversationRetentionDays"`
-	DockIconStyle                               DesktopDockIconStyle                               `json:"dockIconStyle"`
-	DockPlacement                               DesktopDockPlacement                               `json:"dockPlacement"`
-	FeatureFlags                                DesktopFeatureFlags                                `json:"featureFlags"`
-	FileDefaultOpenersByExtension               DesktopFileDefaultOpenersByExtension               `json:"fileDefaultOpenersByExtension"`
-	Locale                                      DesktopLocale                                      `json:"locale"`
-	MinimizeAnimation                           DesktopMinimizeAnimation                           `json:"minimizeAnimation"`
-	ShowAppDeveloperSources                     bool                                               `json:"showAppDeveloperSources"`
-	SleepPreventionMode                         DesktopSleepPreventionMode                         `json:"sleepPreventionMode"`
-	ThemeSource                                 DesktopThemeSource                                 `json:"themeSource"`
-	UpdateChannel                               DesktopUpdateChannel                               `json:"updateChannel"`
-	UpdatePolicy                                DesktopUpdatePolicy                                `json:"updatePolicy"`
-	WorkbenchShortcuts                          DesktopWorkbenchShortcuts                          `json:"workbenchShortcuts"`
-	WorkbenchWindowSnapping                     *DesktopWorkbenchWindowSnapping                    `json:"workbenchWindowSnapping,omitempty"`
+
+	// AgentRuntimeIdleMinutes How long a resident agent process may sit idle before it is released, in minutes. 0 means never release it while the app runs. Only consulted when agentRuntimeKeepAliveEnabled is true. Optional on write; omitting it keeps the current value.
+	AgentRuntimeIdleMinutes *int `json:"agentRuntimeIdleMinutes,omitempty"`
+
+	// AgentRuntimeKeepAliveEnabled Whether an agent provider process stays resident after its turn ends so the next message skips a cold start. When false the process is handed back as soon as the turn settles. Optional on write: omitting it keeps the current value, because an absent boolean must not read as "turn keep-alive off". Machine-dispatched sessions (visible=false) always release on turn end and ignore this setting.
+	AgentRuntimeKeepAliveEnabled *bool `json:"agentRuntimeKeepAliveEnabled,omitempty"`
+
+	AgentSessionLaunchModesByWorkspace    *DesktopAgentSessionLaunchModesByWorkspace `json:"agentSessionLaunchModesByWorkspace,omitempty"`
+	AppCatalogChannel                     DesktopAppCatalogChannel                   `json:"appCatalogChannel"`
+	BrowserUseConnectionMode              *DesktopBrowserUseConnectionMode           `json:"browserUseConnectionMode,omitempty"`
+	DefaultAgentProvider                  DesktopDefaultAgentProvider                `json:"defaultAgentProvider"`
+	DeletedAgentConversationRetentionDays DeletedAgentConversationRetentionDays      `json:"deletedAgentConversationRetentionDays"`
+	DockIconStyle                         DesktopDockIconStyle                       `json:"dockIconStyle"`
+	DockPlacement                         DesktopDockPlacement                       `json:"dockPlacement"`
+	FeatureFlags                          DesktopFeatureFlags                        `json:"featureFlags"`
+	FileDefaultOpenersByExtension         DesktopFileDefaultOpenersByExtension       `json:"fileDefaultOpenersByExtension"`
+	Locale                                DesktopLocale                              `json:"locale"`
+	MinimizeAnimation                     DesktopMinimizeAnimation                   `json:"minimizeAnimation"`
+	ShowAppDeveloperSources               bool                                       `json:"showAppDeveloperSources"`
+	SleepPreventionMode                   DesktopSleepPreventionMode                 `json:"sleepPreventionMode"`
+	ThemeSource                           DesktopThemeSource                         `json:"themeSource"`
+	UpdateChannel                         DesktopUpdateChannel                       `json:"updateChannel"`
+	UpdatePolicy                          DesktopUpdatePolicy                        `json:"updatePolicy"`
+	WorkbenchShortcuts                    DesktopWorkbenchShortcuts                  `json:"workbenchShortcuts"`
+	WorkbenchWindowSnapping               *DesktopWorkbenchWindowSnapping            `json:"workbenchWindowSnapping,omitempty"`
 }
 
 // DesktopPreferencesStateResponse defines model for DesktopPreferencesStateResponse.

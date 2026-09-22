@@ -378,6 +378,10 @@ func validateDesktopPreferencesUpdateRequestedPayload(payload []byte) error {
 	if !preferencesbiz.IsDesktopDockPlacement(decoded.DockPlacement) {
 		return fmt.Errorf("preferences.dockPlacement is unsupported")
 	}
+	if minutes := decoded.AgentRuntimeIdleMinutes; minutes != nil &&
+		!preferencesbiz.IsDesktopAgentRuntimeIdleMinutes(*minutes) {
+		return fmt.Errorf("preferences.agentRuntimeIdleMinutes is unsupported")
+	}
 	if !preferencesbiz.IsDeletedAgentConversationRetentionDays(decoded.DeletedAgentConversationRetentionDays) {
 		return fmt.Errorf("preferences.deletedAgentConversationRetentionDays is unsupported")
 	}

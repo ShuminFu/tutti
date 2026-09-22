@@ -263,6 +263,7 @@ func buildDaemonAPI(
 		},
 		ProviderCommandResolver:    agentProviderCommandResolver(&agentStatusService),
 		CommandNetworkAccessPolicy: tuttiDesktopCommandNetworkAccessPolicy,
+		LiveSessionReaperLoad:      agentLiveSessionReaperLoader(preferences),
 	}
 	agentRuntimeConfig = applyAgentReplayRuntimeComposition(agentRuntimeConfig, replayComposition)
 	agentRuntime, err := agentdaemon.NewRuntime(agentRuntimeConfig)
@@ -905,4 +906,48 @@ func openExternalImportCatalog() agentservice.ExternalImportCatalog {
 		return nil
 	}
 	return store
+}
+
+// agentLiveSessionReaperLoader 把「Agent 进程常驻」偏好翻成回收策略（DINTAL-5308）。
+//
+// 每次扫描前重读一次，所以用户在设置里改完立刻生效，不用重启 tuttid。
+// 读不到偏好就退回默认（常驻 + 30 分钟）—— 回收是省内存的优化，
+// 读一次配置失败不该变成「把用户正在聊的会话的进程掐了」。
+func agentLiveSessionReaperLoader(
+	preferences *preferencesservice.Service,
+) func() agentdaemon.LiveSessionReaperConfig {
+	return func() agentdaemon.LiveSessionReaperConfig {
+		keepAlive := preferencesbiz.DefaultDesktopAgentRuntimeKeepAliveEnabled
+		idleMinutes := preferencesbiz.DefaultDesktopAgentRuntimeIdleMinutes
+		if preferences != nil {
+			if current, err := preferences.Get(context.Background()); err == nil {
+				keepAlive = current.AgentRuntimeKeepAliveEnabled
+				idleMinutes = preferencesbiz.NormalizeDesktopAgentRuntimeIdleMinutes(current.AgentRuntimeIdleMinutes)
+			}
+		}
+		idleAfter := time.Duration(idleMinutes) * time.Minute
+		return agentdaemon.LiveSessionReaperConfig{
+			IdleAfter: idleAfter,
+			// 扫描频率定得比默认密，是因为「回合结束即放」这一档的时效由它决定：
+			// 机器派工的会话等一整个默认间隔才被收走，就不叫「即放」了。
+			// 单次扫描只是内存里过一遍 + 问适配器进程在不在，代价可以忽略。
+			SweepInterval: 30 * time.Second,
+			IdleAfterFor: func(session agentdaemon.Session) time.Duration {
+				// visible=false = 机器派工（工作流 / 自动化 / CLI 派工）。它没有
+				// 「下一句话」，留着进程纯占内存，所以恒按「不在跑回合就放」走，
+				// 不看用户的常驻开关 —— 那个开关是给用户自己的会话用的。
+				if !session.Visible {
+					return 0
+				}
+				if !keepAlive {
+					return 0
+				}
+				// 0 分钟 = 用户明说永不回收（拿内存换秒回）。
+				if idleMinutes == 0 {
+					return -1
+				}
+				return idleAfter
+			},
+		}
+	}
 }

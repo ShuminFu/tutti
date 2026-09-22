@@ -21,16 +21,28 @@ const (
 	DefaultDesktopDockIconStyle                  = "default"
 	DefaultDesktopDockPlacement                  = "bottom"
 	DefaultDeletedAgentConversationRetentionDays = 30
-	DefaultDesktopBrowserUseConnectionMode       = "isolated"
-	DefaultDesktopLocale                         = "en"
-	DefaultDesktopMinimizeAnimation              = "scale"
-	DefaultDesktopSleepPreventionMode            = "never"
-	DefaultDesktopShowAppDeveloperSources        = false
-	DefaultDesktopThemeSource                    = "dark"
-	DefaultDesktopUpdateChannel                  = "rc"
-	DefaultDesktopUpdatePolicy                   = "prompt"
-	DefaultDesktopWindowSnappingEnabled          = false
-	DefaultDesktopWindowSnappingShortcut         = "commandArrows"
+
+	// Agent 进程常驻（DINTAL-5308）。
+	//
+	// 默认保持历史行为：进程留着，空闲 30 分钟由回收器收走。留着的意义是
+	// 下一句话不用冷启动；代价是每条会话一份常驻内存。
+	//
+	// AgentRuntimeIdleMinutes = 0 表示**永不回收**（只在退出应用时清），
+	// 给那些宁可吃内存也要秒回的人。上限 1440 分钟（一天），再长与「永不」
+	// 没有实际区别，却会让人以为还会被收。
+	DefaultDesktopAgentRuntimeKeepAliveEnabled = true
+	DefaultDesktopAgentRuntimeIdleMinutes      = 30
+	MaxDesktopAgentRuntimeIdleMinutes          = 1440
+	DefaultDesktopBrowserUseConnectionMode     = "isolated"
+	DefaultDesktopLocale                       = "en"
+	DefaultDesktopMinimizeAnimation            = "scale"
+	DefaultDesktopSleepPreventionMode          = "never"
+	DefaultDesktopShowAppDeveloperSources      = false
+	DefaultDesktopThemeSource                  = "dark"
+	DefaultDesktopUpdateChannel                = "rc"
+	DefaultDesktopUpdatePolicy                 = "prompt"
+	DefaultDesktopWindowSnappingEnabled        = false
+	DefaultDesktopWindowSnappingShortcut       = "commandArrows"
 )
 
 var DefaultDesktopDefaultAgentProvider = defaultDesktopAgentProvider()
@@ -52,7 +64,14 @@ func defaultDesktopAgentProvider() string {
 }
 
 type DesktopPreferences struct {
-	AgentCLIUpdateCheckEnabled                  bool
+	AgentCLIUpdateCheckEnabled bool
+	// AgentRuntimeKeepAliveEnabled=false 表示「回合一结束就把 provider 进程还回去」，
+	// 此时 AgentRuntimeIdleMinutes 不参与判断。=true 时才按 IdleMinutes 当 TTL。
+	//
+	// 注意这两项只管**用户自己的会话**。visible=false 的机器派工（工作流、自动化）
+	// 恒按「回合结束即放」走，不看这里 —— 它没有「下一句话」，留着纯占内存。
+	AgentRuntimeKeepAliveEnabled                bool
+	AgentRuntimeIdleMinutes                     int
 	AgentComposerDefaultsByProvider             map[string]AgentComposerDefaults
 	AgentComposerDefaultsByAgentTarget          map[string]AgentComposerDefaults
 	AgentGUIConversationRailCollapsedByProvider map[string]bool
@@ -126,6 +145,8 @@ type DesktopWorkbenchShortcuts struct {
 func DefaultDesktopPreferences() DesktopPreferences {
 	return DesktopPreferences{
 		AgentCLIUpdateCheckEnabled:                  DefaultDesktopAgentCLIUpdateCheckEnabled,
+		AgentRuntimeKeepAliveEnabled:                DefaultDesktopAgentRuntimeKeepAliveEnabled,
+		AgentRuntimeIdleMinutes:                     DefaultDesktopAgentRuntimeIdleMinutes,
 		AgentComposerDefaultsByProvider:             map[string]AgentComposerDefaults{},
 		AgentComposerDefaultsByAgentTarget:          map[string]AgentComposerDefaults{},
 		AgentGUIConversationRailCollapsedByProvider: map[string]bool{},
@@ -157,6 +178,21 @@ func DefaultDesktopPreferences() DesktopPreferences {
 		WindowSnappingShortcutPreset: DefaultDesktopWindowSnappingShortcut,
 		WorkbenchShortcuts:           DesktopWorkbenchShortcuts{},
 	}
+}
+
+// NormalizeDesktopAgentRuntimeIdleMinutes 把越界值收回默认，而不是夹到边界：
+// 夹边界会把一个明显写错的值（比如 999999）变成一个看起来合理的值，
+// 用户再也不知道自己填错过。
+func NormalizeDesktopAgentRuntimeIdleMinutes(value int) int {
+	if IsDesktopAgentRuntimeIdleMinutes(value) {
+		return value
+	}
+	return DefaultDesktopAgentRuntimeIdleMinutes
+}
+
+// IsDesktopAgentRuntimeIdleMinutes：0 = 永不回收，1..1440 = 空闲这么多分钟后回收。
+func IsDesktopAgentRuntimeIdleMinutes(value int) bool {
+	return value >= 0 && value <= MaxDesktopAgentRuntimeIdleMinutes
 }
 
 func NormalizeDeletedAgentConversationRetentionDays(value int) int {

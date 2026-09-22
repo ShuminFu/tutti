@@ -97,6 +97,12 @@ type PatchAgentSessionLaunchModeInput struct {
 
 type PutInput struct {
 	AgentCLIUpdateCheckEnabled bool
+	// AgentRuntimeKeepAliveEnabled / AgentRuntimeIdleMinutes 是 DINTAL-5308 的两个旋钮。
+	// 用指针是为了把「没表态」和「表态成 false / 0」分开：0 分钟在这里是**永不回收**
+	// 的合法取值，false 是「别常驻」的合法取值，两个都不能被「字段没填」冒充。
+	// nil 一律沿用库里已有的值。
+	AgentRuntimeKeepAliveEnabled *bool
+	AgentRuntimeIdleMinutes      *int
 	// AgentComposerDefaultsByProvider is accepted for wire compatibility but
 	// ignored on write: the legacy provider-keyed defaults are frozen after
 	// the one-time migration onto AgentComposerDefaultsByAgentTarget.
@@ -309,7 +315,9 @@ func (s Service) Put(ctx context.Context, input PutInput) (preferencesbiz.Deskto
 
 	windowSnapping := resolveWindowSnapping(stored, input.WindowSnapping)
 	preferences, err := s.Store.PutDesktopPreferences(ctx, preferencesbiz.DesktopPreferences{
-		AgentCLIUpdateCheckEnabled: input.AgentCLIUpdateCheckEnabled,
+		AgentCLIUpdateCheckEnabled:   input.AgentCLIUpdateCheckEnabled,
+		AgentRuntimeKeepAliveEnabled: resolveAgentRuntimeKeepAlive(stored, input.AgentRuntimeKeepAliveEnabled),
+		AgentRuntimeIdleMinutes:      resolveAgentRuntimeIdleMinutes(stored, input.AgentRuntimeIdleMinutes),
 		// The legacy provider-keyed defaults are frozen: client input is
 		// ignored so nothing writes the old field anymore; the stored value
 		// is only kept for downgrade compatibility and should pass through
@@ -400,6 +408,22 @@ func normalizeAgentComposerDefaultsPatch(
 		result[field] = normalized
 	}
 	return result, nil
+}
+
+// resolveAgentRuntimeKeepAlive / resolveAgentRuntimeIdleMinutes：没表态就沿用库里的，
+// 与 resolveWindowSnapping 同一条口径 —— 整份偏好是全量写入的，缺字段不能当成清零。
+func resolveAgentRuntimeKeepAlive(stored preferencesbiz.DesktopPreferences, input *bool) bool {
+	if input == nil {
+		return stored.AgentRuntimeKeepAliveEnabled
+	}
+	return *input
+}
+
+func resolveAgentRuntimeIdleMinutes(stored preferencesbiz.DesktopPreferences, input *int) int {
+	if input == nil {
+		return preferencesbiz.NormalizeDesktopAgentRuntimeIdleMinutes(stored.AgentRuntimeIdleMinutes)
+	}
+	return preferencesbiz.NormalizeDesktopAgentRuntimeIdleMinutes(*input)
 }
 
 func resolveWindowSnapping(stored preferencesbiz.DesktopPreferences, input *DesktopWindowSnappingInput) DesktopWindowSnappingInput {

@@ -99,7 +99,9 @@ func (p DesktopPreferencesPublisher) PublishDesktopPreferencesUpdated(ctx contex
 	payload, err := json.Marshal(desktopPreferencesUpdatedPayload{
 		Initialized: preferences.Initialized,
 		Preferences: desktopPreferencesSettingsPayload{
-			AgentCLIUpdateCheckEnabled: preferences.AgentCLIUpdateCheckEnabled,
+			AgentCLIUpdateCheckEnabled:   preferences.AgentCLIUpdateCheckEnabled,
+			AgentRuntimeKeepAliveEnabled: &preferences.AgentRuntimeKeepAliveEnabled,
+			AgentRuntimeIdleMinutes:      &preferences.AgentRuntimeIdleMinutes,
 			AgentComposerDefaultsByProvider: desktopAgentComposerDefaultsByProviderPayloadFromBiz(
 				preferences.AgentComposerDefaultsByProvider,
 			),
@@ -248,6 +250,8 @@ func NewPreferencesDesktopUpdateRequestedHandler(mutator PreferencesMutator) Int
 
 		_, err = mutator.Put(ctx, preferencesservice.PutInput{
 			AgentCLIUpdateCheckEnabled:                  decoded.AgentCLIUpdateCheckEnabled,
+			AgentRuntimeKeepAliveEnabled:                decoded.AgentRuntimeKeepAliveEnabled,
+			AgentRuntimeIdleMinutes:                     decoded.AgentRuntimeIdleMinutes,
 			AgentComposerDefaultsByProvider:             decoded.AgentComposerDefaultsByProvider,
 			AgentComposerDefaultsByAgentTarget:          decoded.AgentComposerDefaultsByAgentTarget,
 			AgentGUIConversationRailCollapsedByProvider: decoded.AgentGUIConversationRailCollapsedByProvider,
@@ -281,6 +285,8 @@ func NewPreferencesDesktopUpdateRequestedHandler(mutator PreferencesMutator) Int
 
 type decodedDesktopPreferencesMutationPayload struct {
 	AgentCLIUpdateCheckEnabled                  bool
+	AgentRuntimeKeepAliveEnabled                *bool
+	AgentRuntimeIdleMinutes                     *int
 	AgentComposerDefaultsByProvider             map[string]preferencesbiz.AgentComposerDefaults
 	AgentComposerDefaultsByAgentTarget          map[string]preferencesbiz.AgentComposerDefaults
 	AgentGUIConversationRailCollapsedByProvider map[string]bool
@@ -324,7 +330,9 @@ func decodeDesktopPreferencesMutationPayload(payload []byte) (decodedDesktopPref
 	}
 
 	return decodedDesktopPreferencesMutationPayload{
-		AgentCLIUpdateCheckEnabled: decoded.Preferences.AgentCLIUpdateCheckEnabled,
+		AgentCLIUpdateCheckEnabled:   decoded.Preferences.AgentCLIUpdateCheckEnabled,
+		AgentRuntimeKeepAliveEnabled: decoded.Preferences.AgentRuntimeKeepAliveEnabled,
+		AgentRuntimeIdleMinutes:      decoded.Preferences.AgentRuntimeIdleMinutes,
 		AgentComposerDefaultsByProvider: agentComposerDefaultsByProviderFromPayload(
 			decoded.Preferences.AgentComposerDefaultsByProvider,
 		),

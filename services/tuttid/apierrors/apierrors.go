@@ -77,6 +77,7 @@ const (
 	ReasonUnsupportedDesktopDockIconStyle                = "unsupported_desktop_dock_icon_style"
 	ReasonUnsupportedDesktopDockPlacement                = "unsupported_desktop_dock_placement"
 	ReasonUnsupportedDeletedAgentConversationRetention   = "unsupported_deleted_agent_conversation_retention"
+	ReasonUnsupportedAgentRuntimeIdleMinutes             = "unsupported_agent_runtime_idle_minutes"
 	ReasonUnsupportedDesktopAppCatalogChannel            = "unsupported_desktop_app_catalog_channel"
 	ReasonUnsupportedDesktopBrowserUseConnectionMode     = "unsupported_desktop_browser_use_connection_mode"
 	ReasonUnsupportedDesktopLocale                       = "unsupported_desktop_locale"

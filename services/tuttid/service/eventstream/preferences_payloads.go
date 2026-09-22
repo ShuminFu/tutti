@@ -3,6 +3,8 @@ package eventstream
 type desktopPreferencesMutationPayload struct {
 	Preferences struct {
 		AgentCLIUpdateCheckEnabled                  bool                                                      `json:"agentCliUpdateCheckEnabled"`
+		AgentRuntimeKeepAliveEnabled                *bool                                                     `json:"agentRuntimeKeepAliveEnabled,omitempty"`
+		AgentRuntimeIdleMinutes                     *int                                                      `json:"agentRuntimeIdleMinutes,omitempty"`
 		AgentComposerDefaultsByProvider             desktopAgentComposerDefaultsByProviderPayload             `json:"agentComposerDefaultsByProvider"`
 		AgentComposerDefaultsByAgentTarget          desktopAgentComposerDefaultsByAgentTargetPayload          `json:"agentComposerDefaultsByAgentTarget,omitempty"`
 		AgentGUIConversationRailCollapsedByProvider desktopAgentGUIConversationRailCollapsedByProviderPayload `json:"agentGuiConversationRailCollapsedByProvider"`
@@ -36,6 +38,8 @@ type desktopPreferencesUpdatedPayload struct {
 
 type desktopPreferencesSettingsPayload struct {
 	AgentCLIUpdateCheckEnabled                  bool                                                      `json:"agentCliUpdateCheckEnabled"`
+	AgentRuntimeKeepAliveEnabled                *bool                                                     `json:"agentRuntimeKeepAliveEnabled,omitempty"`
+	AgentRuntimeIdleMinutes                     *int                                                      `json:"agentRuntimeIdleMinutes,omitempty"`
 	AgentComposerDefaultsByProvider             desktopAgentComposerDefaultsByProviderPayload             `json:"agentComposerDefaultsByProvider"`
 	AgentComposerDefaultsByAgentTarget          desktopAgentComposerDefaultsByAgentTargetPayload          `json:"agentComposerDefaultsByAgentTarget,omitempty"`
 	AgentGUIConversationRailCollapsedByProvider desktopAgentGUIConversationRailCollapsedByProviderPayload `json:"agentGuiConversationRailCollapsedByProvider"`
