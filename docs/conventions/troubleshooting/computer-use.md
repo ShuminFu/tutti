@@ -1,5 +1,22 @@
 # Computer Use Troubleshooting
 
+## Permission grant succeeds but computer tools remain unavailable
+
+Recent CuaDriver versions keep `screen_recording_capturable: null` and
+`direct_capture_status: "not_checked"` in read-only status, even after
+`cua-driver permissions grant` successfully verifies capture. They include a
+`direct_capture_verification` receipt from `permissions_grant` for
+`com.trycua.driver`. The daemon accepts this receipt while both OS grants remain
+enabled. Missing receipts and explicit capture failures still block control.
+Re-run the driver's normal grant flow if verification is missing; do not edit
+permission output or bypass OS authorization.
+
+Validate with `go test ./service/computer` from `services/tuttid`. When the
+driver is available and authorized, the integration test captures a screenshot
+and verifies the output file. Its optional Escape-key dispatch requires
+`TUTTI_TEST_COMPUTER_INPUT=1` and a controlled desktop with an unambiguous input
+target; normal test runs do not send input to the user's active window.
+
 Use this guide for recurring cua-driver and `tutti computer` failures. Keep
 stable CLI and authorization contracts in
 [Tutti CLI Contract](../tutti-cli-contract.md); keep symptom-driven diagnosis

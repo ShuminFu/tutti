@@ -63,9 +63,15 @@ func checkReady(ctx context.Context) error {
 }
 
 type computerPermissionStatus struct {
-	Accessibility             *bool `json:"accessibility"`
-	ScreenRecording           *bool `json:"screen_recording"`
-	ScreenRecordingCapturable *bool `json:"screen_recording_capturable"`
+	Accessibility             *bool  `json:"accessibility"`
+	ScreenRecording           *bool  `json:"screen_recording"`
+	ScreenRecordingCapturable *bool  `json:"screen_recording_capturable"`
+	DirectCaptureStatus       string `json:"direct_capture_status"`
+	DirectCaptureVerification *struct {
+		BundleID   string `json:"bundle_id"`
+		Source     string `json:"source"`
+		VerifiedAt string `json:"verified_at"`
+	} `json:"direct_capture_verification"`
 }
 
 func checkComputerPermissions(ctx context.Context, executable string) error {
@@ -153,10 +159,25 @@ func computerPermissionIssues(status computerPermissionStatus) []string {
 	}
 	if status.ScreenRecording == nil || !*status.ScreenRecording {
 		issues = append(issues, "missing Screen Recording")
-	} else if status.ScreenRecordingCapturable == nil || !*status.ScreenRecordingCapturable {
+	} else if !computerCaptureVerified(status) {
 		issues = append(issues, "Screen Recording authorized but not capturable; restart CuaDriver and check again")
 	}
 	return issues
+}
+
+func computerCaptureVerified(status computerPermissionStatus) bool {
+	if status.ScreenRecordingCapturable != nil {
+		return *status.ScreenRecordingCapturable
+	}
+	// New drivers leave the read-only capture probe unset even after grant
+	// verifies capture. Accept only the driver's explicit verification receipt.
+	verification := status.DirectCaptureVerification
+	if status.DirectCaptureStatus != "not_checked" || verification == nil ||
+		verification.BundleID != "com.trycua.driver" || verification.Source != "permissions_grant" {
+		return false
+	}
+	_, err := time.Parse(time.RFC3339, verification.VerifiedAt)
+	return err == nil
 }
 
 func stderrSuffix(output []byte) string {

@@ -64,6 +64,40 @@ func TestParseWindowsDriverDoctor(t *testing.T) {
 	}
 }
 
+func TestReadOnlyCaptureStatusWithGrantReceipt(t *testing.T) {
+	for _, tc := range []struct {
+		name, capture, state, receipt string
+		allowed                       bool
+	}{
+		{"verified grant", "null", "not_checked", `{"bundle_id":"com.trycua.driver","source":"permissions_grant","verified_at":"2026-09-20T09:36:45Z"}`, true},
+		{"no receipt", "null", "not_checked", `null`, false},
+		{"explicit capture failure", "false", "not_checked", `{"bundle_id":"com.trycua.driver","source":"permissions_grant","verified_at":"2026-09-20T09:36:45Z"}`, false},
+		{"failed status", "null", "failed", `{"bundle_id":"com.trycua.driver","source":"permissions_grant","verified_at":"2026-09-20T09:36:45Z"}`, false},
+		{"different identity", "null", "not_checked", `{"bundle_id":"other.app","source":"permissions_grant","verified_at":"2026-09-20T09:36:45Z"}`, false},
+		{"different source", "null", "not_checked", `{"bundle_id":"com.trycua.driver","source":"other","verified_at":"2026-09-20T09:36:45Z"}`, false},
+		{"invalid receipt", "null", "not_checked", `{"bundle_id":"com.trycua.driver","source":"permissions_grant","verified_at":""}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status, err := parseComputerPermissionStatus([]byte(`{"accessibility":true,"screen_recording":true,"screen_recording_capturable":` + tc.capture + `,"direct_capture_status":"` + tc.state + `","direct_capture_verification":` + tc.receipt + `}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if allowed := len(computerPermissionIssues(status)) == 0; allowed != tc.allowed {
+				t.Fatalf("allowed = %v, want %v", allowed, tc.allowed)
+			}
+			status.Accessibility = boolPtr(false)
+			if len(computerPermissionIssues(status)) == 0 {
+				t.Fatal("grant receipt must not override revoked Accessibility")
+			}
+			status.Accessibility = boolPtr(true)
+			status.ScreenRecording = boolPtr(false)
+			if len(computerPermissionIssues(status)) == 0 {
+				t.Fatal("grant receipt must not override revoked Screen Recording")
+			}
+		})
+	}
+}
+
 func boolPtr(value bool) *bool {
 	return &value
 }

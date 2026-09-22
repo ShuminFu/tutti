@@ -40,6 +40,11 @@ func TestAdaptToolCallIntegration(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Remove(path) })
 
+	// Input mutates the interactive desktop and depends on its window layout.
+	if os.Getenv("TUTTI_TEST_COMPUTER_INPUT") != "1" {
+		t.Log("screenshot verified; set TUTTI_TEST_COMPUTER_INPUT=1 to also exercise keyboard input")
+		return
+	}
 	if _, err := svc.CallTool(ctx, "integration-test", "", "press_key", map[string]any{"key": "escape"}); err != nil {
 		t.Fatalf("CallTool press_key: %v", err)
 	}

@@ -188,4 +188,5 @@ Android app login, native bridge, secure identity, and mobile transport diagnost
 
 cua-driver discovery, targeting, capture, input delivery, and result verification.
 
+- [Permission grant succeeds but computer tools remain unavailable](./computer-use.md#permission-grant-succeeds-but-computer-tools-remain-unavailable)
 - [A computer click reports success but the UI does not change](./computer-use.md#a-computer-click-reports-success-but-the-ui-does-not-change)
