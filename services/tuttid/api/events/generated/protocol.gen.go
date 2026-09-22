@@ -6,7 +6,7 @@ import "encoding/json"
 
 const (
 	BusinessEventProtocolVersion = 1
-	BusinessEventCatalogRevision = "sha256:20e0dcbcbccc69ad"
+	BusinessEventCatalogRevision = "sha256:737e582518c5e91a"
 )
 
 type Topic string
@@ -72,7 +72,10 @@ type EventEnvelope struct {
 }
 
 type PreferencesDesktopPreferences struct {
-	AgentCliUpdateCheckEnabled      bool `json:"agentCliUpdateCheckEnabled"`
+	AgentCliUpdateCheckEnabled      bool  `json:"agentCliUpdateCheckEnabled"`
+	AgentRuntimeKeepAliveEnabled    *bool `json:"agentRuntimeKeepAliveEnabled,omitempty"`
+	AgentRuntimeIdleMinutes         *int  `json:"agentRuntimeIdleMinutes,omitempty"`
+	AgentRuntimeMaxResident         *int  `json:"agentRuntimeMaxResident,omitempty"`
 	AgentComposerDefaultsByProvider struct {
 		ClaudeCode *struct {
 			Model            *string `json:"model,omitempty"`

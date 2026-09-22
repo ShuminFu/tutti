@@ -33,6 +33,22 @@ export const preferencesDesktopPreferencesSchema = {
       type: "boolean",
       default: true
     },
+    agentRuntimeKeepAliveEnabled: {
+      type: "boolean",
+      default: true
+    },
+    agentRuntimeIdleMinutes: {
+      type: "integer",
+      minimum: 0,
+      maximum: 1440,
+      default: 30
+    },
+    agentRuntimeMaxResident: {
+      type: "integer",
+      minimum: 0,
+      maximum: 100,
+      default: 10
+    },
     agentComposerDefaultsByProvider: {
       type: "object",
       additionalProperties: false,
@@ -2029,6 +2045,22 @@ export const preferencesDesktopUpdateRequestedPayloadSchema = {
           type: "boolean",
           default: true
         },
+        agentRuntimeKeepAliveEnabled: {
+          type: "boolean",
+          default: true
+        },
+        agentRuntimeIdleMinutes: {
+          type: "integer",
+          minimum: 0,
+          maximum: 1440,
+          default: 30
+        },
+        agentRuntimeMaxResident: {
+          type: "integer",
+          minimum: 0,
+          maximum: 100,
+          default: 10
+        },
         agentComposerDefaultsByProvider: {
           type: "object",
           additionalProperties: false,
@@ -2396,6 +2428,22 @@ export const preferencesDesktopUpdatedPayloadSchema = {
         agentCliUpdateCheckEnabled: {
           type: "boolean",
           default: true
+        },
+        agentRuntimeKeepAliveEnabled: {
+          type: "boolean",
+          default: true
+        },
+        agentRuntimeIdleMinutes: {
+          type: "integer",
+          minimum: 0,
+          maximum: 1440,
+          default: 30
+        },
+        agentRuntimeMaxResident: {
+          type: "integer",
+          minimum: 0,
+          maximum: 100,
+          default: 10
         },
         agentComposerDefaultsByProvider: {
           type: "object",

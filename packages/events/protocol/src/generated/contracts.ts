@@ -54,6 +54,9 @@ export type BusinessEventEnvelopeV1<
 
 export interface PreferencesDesktopPreferencesV1 {
   agentCliUpdateCheckEnabled: boolean;
+  agentRuntimeKeepAliveEnabled?: boolean;
+  agentRuntimeIdleMinutes?: number;
+  agentRuntimeMaxResident?: number;
   agentComposerDefaultsByProvider: {
     "claude-code"?: {
       model?: string;
