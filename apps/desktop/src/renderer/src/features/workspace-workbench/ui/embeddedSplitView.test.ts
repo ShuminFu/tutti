@@ -600,8 +600,9 @@ test("the launch request carries the session id and forces its own window", asyn
 
   const launches = fake.calls.filter((call) => call.kind === "launch");
   assert.equal(launches.length, 1);
-  const payload = (launches[0]?.args[0] as { payload?: Record<string, unknown> })
-    .payload;
+  const payload = (
+    launches[0]?.args[0] as { payload?: Record<string, unknown> } | undefined
+  )?.payload;
   assert.equal(payload?.agentSessionId, "session-b");
   assert.equal(payload?.openInNewWindow, true);
   assert.equal(payload?.forceNewInstance, true);
@@ -670,8 +671,8 @@ test("a session-scoped launch refused by the contribution falls back to a plain 
   const launches = fake.calls.filter((call) => call.kind === "launch");
   assert.equal(launches.length, 2, "先试带会话号那次，被拒后再试新开窗口那次");
   const fallback = (
-    launches[1]?.args[0] as { payload?: Record<string, unknown> }
-  ).payload;
+    launches[1]?.args[0] as { payload?: Record<string, unknown> } | undefined
+  )?.payload;
   assert.equal(fallback?.agentSessionId, undefined);
   assert.equal(fallback?.openInNewWindow, true);
   const rightNodeId = controller.getSnapshot().panes.right?.nodeId;
@@ -1046,14 +1047,15 @@ test("侧栏解除配对后本控制器跟着重拉配对表", async () => {
     }
   ];
   const controller = makeController(fake, {
-    pairingHost: () => ({
-      createPeerPair: async () => ({ pairId: "p1" }),
-      deletePeerPair: async () => undefined,
-      listPeerPairs: async () => {
-        lists += 1;
-        return { pairs };
-      }
-    }) as never
+    pairingHost: () =>
+      ({
+        createPeerPair: async () => ({ pairId: "p1" }),
+        deletePeerPair: async () => undefined,
+        listPeerPairs: async () => {
+          lists += 1;
+          return { pairs };
+        }
+      }) as never
   });
   await controller.adopt(["agent-left"]);
   controller.select("session-a");
@@ -1078,14 +1080,15 @@ test("dispose 之后不再响应配对表广播", async () => {
   const fake = createFakeHost();
   let lists = 0;
   const controller = makeController(fake, {
-    pairingHost: () => ({
-      createPeerPair: async () => ({ pairId: "p1" }),
-      deletePeerPair: async () => undefined,
-      listPeerPairs: async () => {
-        lists += 1;
-        return { pairs: [] };
-      }
-    }) as never
+    pairingHost: () =>
+      ({
+        createPeerPair: async () => ({ pairId: "p1" }),
+        deletePeerPair: async () => undefined,
+        listPeerPairs: async () => {
+          lists += 1;
+          return { pairs: [] };
+        }
+      }) as never
   });
   await controller.adopt(["agent-left"]);
   const listsBefore = lists;
@@ -1217,7 +1220,9 @@ function pairModeHost(
           }) => {
             calls.push({ args, kind: "preview" });
             if (input.previewPairKickoff) return input.previewPairKickoff(args);
-            return { block: '<pair-kickoff role="developer">\n协议\n</pair-kickoff>' };
+            return {
+              block: '<pair-kickoff role="developer">\n协议\n</pair-kickoff>'
+            };
           },
           setPeerPairMode: async (args: {
             developerTaskId?: string;
@@ -1242,7 +1247,10 @@ async function splitPairedController(
   overrides: Partial<
     Parameters<typeof createEmbeddedSplitViewController>[0]
   > = {},
-  sessions: { a?: ConversationRailSplitDragSession; b?: ConversationRailSplitDragSession } = {}
+  sessions: {
+    a?: ConversationRailSplitDragSession;
+    b?: ConversationRailSplitDragSession;
+  } = {}
 ) {
   const fake = createFakeHost();
   const controller = makeController(fake, {
@@ -1307,9 +1315,13 @@ test("结对模式单选显示条件②：两栏没配对不给投影", async ()
 
 test("结对模式单选显示条件③：任一栏是非托管会话不给投影", async () => {
   const { host } = pairModeHost();
-  const { controller } = await splitPairedController(host, {}, {
-    b: { ...dragSession("session-b"), isImported: true }
-  });
+  const { controller } = await splitPairedController(
+    host,
+    {},
+    {
+      b: { ...dragSession("session-b"), isImported: true }
+    }
+  );
   assert.equal(controller.getSnapshot().pairMode, null);
   controller.dispose();
 });
@@ -1462,5 +1474,237 @@ test("写在途时连点（评审补充 2）：第二次选择被挡掉，只写
     left: "developer",
     right: "reviewer"
   });
+  controller.dispose();
+});
+
+// ---------------------------------------------------------------------------
+// 侧栏点选在结对模式下的三条去向（rndmaster 票 01/02）+ 顺序记忆（票 03）+
+// 退出重进恢复（票 04）。
+//
+// 侧栏那份会话列表只长在**左栏**那个窗口里（右栏用 CSS 隐掉了），所以「用户在
+// 列表里点了另一条会话」在本层看到的样子就是：左栏窗口自己报了一个新的会话号。
+// 下面的用例都用 `observed` + `fake.notify()` 模拟这一步。
+// ---------------------------------------------------------------------------
+
+function pairEndpoint(sessionId: string) {
+  return {
+    alias: sessionId,
+    cwd: "/tmp",
+    provider: "claude",
+    sessionId,
+    status: "working",
+    taskId: `task-${sessionId}`,
+    title: sessionId
+  };
+}
+
+/** 夹具：A/B/C 三条互为结对，E↔F 一对，D 没结对。可整对改成 solo（空心徽标）。 */
+function railPairsHost(
+  rows: readonly (readonly [string, string, "pair" | "solo"])[]
+) {
+  return {
+    commitPairKickoff: async () => ({}),
+    createPeerPair: async () => ({ pairId: "new" }),
+    deletePeerPair: async () => undefined,
+    listPeerPairs: async () => ({
+      pairs: rows.map(([a, b, pairMode], index) => ({
+        a: pairEndpoint(a),
+        b: pairEndpoint(b),
+        developerTaskId: "",
+        kickoffState: "" as const,
+        pairId: `p${index}`,
+        pairMode
+      }))
+    }),
+    previewPairKickoff: async () => ({ block: "x" }),
+    setPeerPairMode: async () => ({})
+  };
+}
+
+const RAIL_PAIRS = [
+  ["session-a", "session-b", "pair"],
+  ["session-a", "session-c", "pair"],
+  ["session-b", "session-c", "pair"],
+  ["session-e", "session-f", "pair"]
+] as const;
+
+/** 左栏窗口开着 `start` 那条会话的控制器；`switchTo` 模拟用户在侧栏点了另一条。 */
+async function railController(
+  rows: readonly (readonly [string, string, "pair" | "solo"])[] = RAIL_PAIRS,
+  overrides: Partial<
+    Parameters<typeof createEmbeddedSplitViewController>[0]
+  > = {},
+  start = "session-d"
+) {
+  const fake = createFakeHost({ seed: ["agent-left"] });
+  const observed = new Map<string, string>([["agent-left", start]]);
+  const controller = makeController(fake, {
+    pairingHost: () => railPairsHost(rows) as never,
+    sessions: { read: (node) => observed.get(node.id) ?? null },
+    ...overrides
+  });
+  await controller.adopt(["agent-left"]);
+  // 换会话号之后要把 launchNode 的 promise 排空：右栏窗口是异步起的，
+  // 不等它落地，nodeIdBySide.right 还是 null，下一步的关窗判据就看不到。
+  const switchTo = async (sessionId: string): Promise<void> => {
+    observed.set("agent-left", sessionId);
+    fake.notify();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  const panes = () => ({
+    left: controller.getSnapshot().panes.left?.sessionId ?? null,
+    right: controller.getSnapshot().panes.right?.sessionId ?? null
+  });
+  return { controller, fake, observed, panes, switchTo };
+}
+
+test("票01：侧栏点一条正在结对的会话 → 一次开出两列", async () => {
+  const { controller, fake, panes, switchTo } = await railController();
+  assert.deepEqual(panes(), { left: "session-d", right: null });
+
+  await switchTo("session-a");
+
+  assert.deepEqual(panes(), { left: "session-a", right: "session-b" });
+  assert.equal(fake.launched.length, 1);
+  controller.dispose();
+});
+
+test("票01：空心徽标（配对还在、已切独立）点了仍是单列", async () => {
+  const { controller, panes, switchTo } = await railController([
+    ["session-a", "session-b", "solo"]
+  ]);
+
+  await switchTo("session-a");
+
+  assert.deepEqual(panes(), { left: "session-a", right: null });
+  controller.dispose();
+});
+
+test("票02：双列时点没结对的会话 → 收成单列全宽", async () => {
+  const { controller, fake, panes, switchTo } = await railController();
+  await switchTo("session-a");
+  assert.deepEqual(panes(), { left: "session-a", right: "session-b" });
+  const rightNodeId = fake.launched[0] as string;
+  fake.calls.length = 0;
+
+  await switchTo("session-d");
+
+  assert.deepEqual(panes(), { left: "session-d", right: null });
+  assert.deepEqual(
+    fake.calls.filter((call) => call.kind === "close").map((call) => call.args),
+    [[rightNodeId]]
+  );
+  controller.dispose();
+});
+
+test("票02：双列时点和右栏也结对的会话 → 只换左栏", async () => {
+  const { controller, fake, panes, switchTo } = await railController();
+  await switchTo("session-a");
+  const rightNodeId = fake.launched[0] as string;
+  fake.calls.length = 0;
+
+  await switchTo("session-c");
+
+  assert.deepEqual(panes(), { left: "session-c", right: "session-b" });
+  // 右栏窗口既不关也不重新 activate：正文不闪。
+  assert.deepEqual(
+    fake.calls.filter(
+      (call) =>
+        call.kind === "close" ||
+        (call.kind === "activate" &&
+          (call.args[0] as { nodeId: string }).nodeId === rightNodeId)
+    ),
+    []
+  );
+  controller.dispose();
+});
+
+test("票02：双列时点与右栏无关但自己有结对的会话 → 整组切换", async () => {
+  const { controller, panes, switchTo } = await railController();
+  await switchTo("session-a");
+
+  await switchTo("session-e");
+
+  assert.deepEqual(panes(), { left: "session-e", right: "session-f" });
+  controller.dispose();
+});
+
+test("票03：上次开过的搭档优先于候选里的第一个", async () => {
+  const { controller, panes, switchTo } = await railController();
+  await switchTo("session-a");
+  assert.deepEqual(panes(), { left: "session-a", right: "session-b" });
+  // 用户把右栏换成 C（A 的另一个搭档），再走开，再点回 A。
+  await controller.dropSession(dragSession("session-c"), "right");
+  assert.deepEqual(panes(), { left: "session-a", right: "session-c" });
+  await switchTo("session-d");
+
+  await switchTo("session-a");
+
+  assert.deepEqual(panes(), { left: "session-a", right: "session-c" });
+  controller.dispose();
+});
+
+test("票03：记住的左右顺序压过「点的那条在左」", async () => {
+  const layoutStore = {
+    read: async () => ({
+      layout: null,
+      pairOrder: {
+        "session-a|session-b": {
+          left: "session-b",
+          right: "session-a",
+          usedAt: 10
+        }
+      }
+    }),
+    write: () => {}
+  };
+  const { controller, panes, switchTo } = await railController(RAIL_PAIRS, {
+    layoutStore
+  });
+
+  await switchTo("session-a");
+
+  assert.deepEqual(panes(), { left: "session-b", right: "session-a" });
+  controller.dispose();
+});
+
+test("票04：耐久存储里的分栏在 adopt 时恢复，之后的改动写回去", async () => {
+  const writes: unknown[] = [];
+  const layoutStore = {
+    read: async () => ({
+      layout: {
+        focus: "left" as const,
+        panes: { left: "session-a", right: "session-b" },
+        ratio: 0.4
+      },
+      pairOrder: {}
+    }),
+    write: (snapshot: unknown) => {
+      writes.push(snapshot);
+    }
+  };
+  const fake = createFakeHost({ seed: ["agent-left"] });
+  const observed = new Map<string, string>([["agent-left", "session-a"]]);
+  const controller = makeController(fake, {
+    layoutStore,
+    pairingHost: () => railPairsHost(RAIL_PAIRS) as never,
+    sessions: { read: (node) => observed.get(node.id) ?? null }
+  });
+
+  await controller.adopt(["agent-left"]);
+
+  assert.equal(controller.getSnapshot().panes.left?.sessionId, "session-a");
+  assert.equal(controller.getSnapshot().panes.right?.sessionId, "session-b");
+  assert.equal(controller.getSnapshot().ratio, 0.4);
+
+  controller.resize(0.6);
+
+  const last = writes.at(-1) as {
+    layout: { ratio: number };
+    pairOrder: Record<string, { left: string; right: string }>;
+  };
+  assert.equal(last.layout.ratio, 0.6);
+  // 恢复出来的这一对也算「刚用过」，顺序跟着记下来。
+  assert.deepEqual(last.pairOrder["session-a|session-b"]?.left, "session-a");
   controller.dispose();
 });

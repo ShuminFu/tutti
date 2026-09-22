@@ -88,6 +88,16 @@
 // 当前 origin 里的老值会在第一次读时自动迁移；换过 origin 的旧值 iframe 读不到，
 // 无法自动找回。
 //
+// 分栏布局 + 这一对上次的左右顺序（rndmaster 票 03/04），同理必须落宿主：
+// getSplitLayout    args[0] = { targetId, scopeKey, legacyLayout? }
+//                   result  = { layout: {left,right,focus,ratio} | null,
+//                               pairOrder: { "<a>|<b>": {left,right,usedAt} } }
+// updateSplitLayout args[0] = { targetId, scopeKey, layout, pairOrder? }
+//                   result  = 同上（写后的权威快照）
+// scopeKey 与 gui 侧 splitLayoutStorageKey 同串（workspace + target 过滤域）；
+// pairOrder 按 target 存一份，key 是两条会话号排序后用 `|` 连起来。
+// 未注册时 iframe 退回 localStorage，行为与补丁前逐字一致。
+//
 // 别名由宿主算，iframe 传空串；后端拒绝时回 { error: <中文文案>, code }。
 
 import { writeWorkspaceFileDropData } from "@tutti-os/agent-gui/workspace-file-drop";
@@ -1150,6 +1160,105 @@ export function requestHostUpdateComposerModelHistory(args: {
     [args]
   ).then((result) =>
     hostComposerModelHistorySnapshot(result, "updateComposerModelHistory")
+  );
+}
+
+/** 分栏布局 + 这一对上次的左右顺序（rndmaster 票 03/04）的耐久快照。 */
+export interface HostSplitLayoutPanes {
+  left: string | null;
+  right: string | null;
+  focus: "left" | "right";
+  ratio: number;
+}
+
+export interface HostSplitPairOrderEntry {
+  left: string;
+  right: string;
+  usedAt: number;
+}
+
+export interface HostSplitLayoutSnapshot {
+  layout: HostSplitLayoutPanes | null;
+  pairOrder: Record<string, HostSplitPairOrderEntry>;
+}
+
+function hostSplitLayoutSnapshot(result: unknown): HostSplitLayoutSnapshot {
+  const record = (result ?? {}) as {
+    layout?: unknown;
+    pairOrder?: unknown;
+  };
+  const layoutRaw = record.layout as Partial<HostSplitLayoutPanes> | null;
+  const layout =
+    layoutRaw && typeof layoutRaw === "object"
+      ? {
+          left: typeof layoutRaw.left === "string" ? layoutRaw.left : null,
+          right: typeof layoutRaw.right === "string" ? layoutRaw.right : null,
+          focus:
+            layoutRaw.focus === "right"
+              ? ("right" as const)
+              : ("left" as const),
+          ratio:
+            typeof layoutRaw.ratio === "number" &&
+            Number.isFinite(layoutRaw.ratio)
+              ? layoutRaw.ratio
+              : 0.5
+        }
+      : null;
+  const pairOrder: Record<string, HostSplitPairOrderEntry> = {};
+  const rawOrder = record.pairOrder;
+  if (rawOrder && typeof rawOrder === "object" && !Array.isArray(rawOrder)) {
+    for (const [key, value] of Object.entries(
+      rawOrder as Record<string, unknown>
+    )) {
+      const entry = value as Partial<HostSplitPairOrderEntry>;
+      if (
+        entry &&
+        typeof entry.left === "string" &&
+        typeof entry.right === "string" &&
+        entry.left.trim() &&
+        entry.right.trim()
+      ) {
+        pairOrder[key] = {
+          left: entry.left.trim(),
+          right: entry.right.trim(),
+          usedAt:
+            typeof entry.usedAt === "number" && Number.isFinite(entry.usedAt)
+              ? entry.usedAt
+              : 0
+        };
+      }
+    }
+  }
+  return { layout, pairOrder };
+}
+
+/**
+ * 读这台机器上这个 target 的分栏布局。
+ *
+ * 为什么必须走宿主：嵌入 DinTalDock 的 iframe origin 是随机回环端口，宿主每次
+ * 重启都换一个，localStorage 跟着 origin 一起丢 —— 用户看到的就是「退出重进
+ * 分栏没了」。`legacyLayout` 只在宿主**还没有**记录时用来播种（与模型收藏同款
+ * 口径），已有记录一律以宿主为准。
+ */
+export function requestHostSplitLayout(args: {
+  targetId: string;
+  scopeKey: string;
+  legacyLayout?: HostSplitLayoutPanes | null;
+}): Promise<HostSplitLayoutSnapshot> {
+  return requestHostCapability<unknown>("getSplitLayout", [args]).then(
+    hostSplitLayoutSnapshot
+  );
+}
+
+/** 写回布局与这一对的左右顺序；宿主 read-modify-write + 原子落盘。 */
+export function requestHostUpdateSplitLayout(args: {
+  targetId: string;
+  scopeKey: string;
+  layout: HostSplitLayoutPanes;
+  pairOrder?: Record<string, HostSplitPairOrderEntry>;
+}): Promise<HostSplitLayoutSnapshot> {
+  return requestHostCapability<unknown>("updateSplitLayout", [args]).then(
+    hostSplitLayoutSnapshot
   );
 }
 
