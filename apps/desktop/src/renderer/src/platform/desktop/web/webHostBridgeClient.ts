@@ -90,6 +90,7 @@
 //
 // 别名由宿主算，iframe 传空串；后端拒绝时回 { error: <中文文案>, code }。
 
+import { setHostPanelVisible } from "@tutti-os/agent-gui/host-panel-visibility";
 import { writeWorkspaceFileDropData } from "@tutti-os/agent-gui/workspace-file-drop";
 
 const REQUEST_TYPE = "tutti-host-request";
@@ -102,6 +103,8 @@ export const HOST_OPEN_AGENT_SESSION_ACK_TYPE =
   "tutti-host-open-agent-session-ack";
 export const HOST_WORKBENCH_LAYOUT_TYPE = "tutti-host-workbench-layout";
 export const HOST_THEME_TYPE = "tutti-host-theme";
+// 宿主面板 active 变化。visible 必须是 boolean；nonce 仍是通道凭证，不是新字段。
+export const HOST_VISIBILITY_TYPE = "tutti-host-visibility";
 export const HOST_LOCALE_TYPE = "tutti-host-locale";
 export const HOST_CLEAR_TEXT_SELECTION_TYPE = "tutti-host-clear-text-selection";
 const FULLSCREEN_WORKBENCH_WINDOW_SELECTOR =
@@ -321,6 +324,40 @@ export function installHostThemeBridge(
         applyHostWindowInsets(insets);
       }
     }
+  };
+
+  windowRef.addEventListener("message", onMessage);
+  return () => windowRef.removeEventListener("message", onMessage);
+}
+
+// 宿主用 CSS 藏 iframe 时 document.visibilityState 仍是 visible，所以面板
+// 可见性走和 focus / theme 同一条 source + origin + nonce 通道。
+export function installHostVisibilityBridge(
+  windowRef: Window = window
+): () => void {
+  const coordinates = bridgeCoordinates(windowRef.location.search);
+  if (!coordinates || !windowRef.parent || windowRef.parent === windowRef) {
+    return () => undefined;
+  }
+
+  const parent = windowRef.parent;
+  const onMessage = (event: MessageEvent): void => {
+    const data = event.data as
+      | { type?: unknown; nonce?: unknown; visible?: unknown }
+      | null
+      | undefined;
+    if (
+      !data ||
+      typeof data !== "object" ||
+      data.type !== HOST_VISIBILITY_TYPE ||
+      data.nonce !== coordinates.nonce ||
+      event.source !== parent ||
+      event.origin !== coordinates.hostOrigin ||
+      typeof data.visible !== "boolean"
+    ) {
+      return;
+    }
+    setHostPanelVisible(data.visible);
   };
 
   windowRef.addEventListener("message", onMessage);

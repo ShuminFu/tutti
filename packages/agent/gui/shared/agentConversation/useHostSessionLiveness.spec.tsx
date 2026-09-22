@@ -1,5 +1,9 @@
-import { render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  resetHostPanelVisibilityForTests,
+  setHostPanelVisible
+} from "../hostPanelVisibility";
 import {
   registerSessionLivenessHost,
   type HostSessionLivenessEntry,
@@ -7,6 +11,7 @@ import {
 } from "./sessionLivenessHost";
 import { resetHostSessionLivenessCacheForTests } from "./hostSessionLivenessCache";
 import {
+  HOST_SESSION_LIVENESS_POLL_INTERVAL_MS,
   useHostSessionLiveness,
   type HostSessionLivenessMap
 } from "./useHostSessionLiveness";
@@ -81,6 +86,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
+  resetHostPanelVisibilityForTests();
   unregister?.();
   unregister = null;
   resetHostSessionLivenessCacheForTests();
@@ -380,6 +387,53 @@ describe("useHostSessionLiveness", () => {
 
     await vi.advanceTimersByTimeAsync(4000);
     expect(query).toHaveBeenCalledTimes(3);
+  });
+
+  it("宿主面板隐藏时拆掉 4s 轮询，亮回来先补一拍再恢复", async () => {
+    vi.useFakeTimers();
+    const query = vi.fn(async () => ({
+      sessions: { "sess-a": entry("live") }
+    }));
+    installHost({ querySessionLiveness: query });
+    renderProbe(["sess-a"]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(query).toHaveBeenCalledTimes(1);
+    query.mockClear();
+
+    const intervalMs = HOST_SESSION_LIVENESS_POLL_INTERVAL_MS;
+    await vi.advanceTimersByTimeAsync(3 * intervalMs);
+    expect(query).toHaveBeenCalledTimes(3);
+    expect(document.visibilityState).toBe("visible");
+
+    act(() => setHostPanelVisible(false));
+    await vi.advanceTimersByTimeAsync(10 * intervalMs);
+    expect(query).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => setHostPanelVisible(true));
+    expect(query).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(intervalMs);
+    expect(query).toHaveBeenCalledTimes(5);
+  });
+
+  it("挂上时宿主面板已经隐藏：不轮询，第一次变可见才补一拍", async () => {
+    vi.useFakeTimers();
+    const query = vi.fn(async () => ({
+      sessions: { "sess-a": entry("live") }
+    }));
+    installHost({ querySessionLiveness: query });
+    act(() => setHostPanelVisible(false));
+    renderProbe(["sess-a"]);
+    await vi.advanceTimersByTimeAsync(
+      10 * HOST_SESSION_LIVENESS_POLL_INTERVAL_MS
+    );
+    expect(query).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => setHostPanelVisible(true));
+    expect(query).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(HOST_SESSION_LIVENESS_POLL_INTERVAL_MS);
+    expect(query).toHaveBeenCalledTimes(2);
   });
 
   it("会话栏只是重排（同一批 id 换个顺序）不会多问一次", async () => {

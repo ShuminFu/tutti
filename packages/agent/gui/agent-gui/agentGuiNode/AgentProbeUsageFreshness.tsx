@@ -1,6 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { attachHostPanelPolling } from "../../shared/hostPanelVisibility";
 import { toLocalShortDateTime } from "../../app/renderer/shell/utils/format";
 
 export interface AgentProbeUsageFreshnessLabels {
@@ -15,7 +16,7 @@ export interface AgentProbeUsageFreshnessLabels {
 /** How often the relative "updated N ago" label re-renders while the popover
  * is open. Coarse on purpose — minute-level granularity doesn't need a faster
  * tick, and the popover only mounts (so this interval only runs) while open. */
-const FRESHNESS_TICK_MS = 20_000;
+export const FRESHNESS_TICK_MS = 20_000;
 
 function freshnessAgeText(
   capturedAtUnixMs: number,
@@ -79,9 +80,11 @@ export function AgentProbeUsageFreshness({
     if (!showRelativeTime) {
       return;
     }
-    setNowMs(Date.now());
-    const timer = setInterval(() => setNowMs(Date.now()), FRESHNESS_TICK_MS);
-    return () => clearInterval(timer);
+    const stopPolling = attachHostPanelPolling({
+      intervalMs: FRESHNESS_TICK_MS,
+      tick: () => setNowMs(Date.now())
+    });
+    return () => stopPolling();
   }, [showRelativeTime, capturedAtUnixMs]);
 
   const text = isLoading
@@ -100,6 +103,7 @@ export function AgentProbeUsageFreshness({
     <button
       type="button"
       data-testid={testId}
+      data-now-ms={nowMs}
       data-state={isLoading ? "loading" : didFail ? "failed" : "idle"}
       className={`nodrag inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-[5px] px-1 py-0.5 text-[11px] leading-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] disabled:cursor-default disabled:opacity-70 [-webkit-app-region:no-drag] ${stateClassName}`}
       onClick={handleClick}

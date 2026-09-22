@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { attachHostPanelPolling } from "../hostPanelVisibility";
 import {
   readHostSessionLivenessCache,
   writeHostSessionLivenessCache
@@ -170,13 +171,19 @@ export function useHostSessionLiveness(
         inFlight = false;
       }
     };
-    void tick();
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "hidden") void tick();
-    }, HOST_SESSION_LIVENESS_POLL_INTERVAL_MS);
+    const stopPolling = attachHostPanelPolling({
+      intervalMs: HOST_SESSION_LIVENESS_POLL_INTERVAL_MS,
+      tick: () => {
+        void tick();
+      },
+      // 文档 hidden 只跳过仍挂着的这一拍；宿主面板 hidden 会把 interval 拆掉。
+      intervalTick: () => {
+        if (document.visibilityState !== "hidden") void tick();
+      }
+    });
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      stopPolling();
     };
   }, [enabled, host, requestKey, workspaceId]);
 
