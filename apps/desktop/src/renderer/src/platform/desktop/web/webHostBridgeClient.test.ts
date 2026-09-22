@@ -9,6 +9,7 @@ import {
   HOST_CLEAR_TEXT_SELECTION_TYPE,
   HOST_LOCALE_TYPE,
   HOST_THEME_TYPE,
+  HOST_VISIBILITY_TYPE,
   HOST_WORKBENCH_LAYOUT_TYPE,
   installHostAgentSessionBridge,
   installHostClearTextSelectionBridge,
@@ -16,10 +17,15 @@ import {
   installHostFocusRecovery,
   installHostLocaleBridge,
   installHostThemeBridge,
+  installHostVisibilityBridge,
   installHostWorkbenchLayoutNotifications,
   requestHostCapability,
   requestHostCreateAgentSession
 } from "./webHostBridgeClient.ts";
+import {
+  isHostPanelVisible,
+  resetHostPanelVisibilityForTests
+} from "@tutti-os/agent-gui/host-panel-visibility";
 
 test("createAgentSession reuses the host capability channel and frozen args shape", async () => {
   const previousWindow = globalThis.window;
@@ -859,3 +865,75 @@ function createHarness() {
     windowRef
   };
 }
+
+// 宿主用 visibility:hidden 藏 iframe 时 document.visibilityState 仍是 visible，
+// 面板只认这条带 nonce 的宿主消息；错 nonce / 错来源 / 错 origin / 非布尔一律不理。
+test("embedded host visibility accepts only a secured boolean and rejects the rest", () => {
+  const previousWindow = globalThis.window;
+  let messageListener: ((event: MessageEvent) => void) | null = null;
+  const parent = { postMessage() {} } as unknown as WindowProxy;
+  const windowRef = {
+    addEventListener(type: string, listener: EventListener) {
+      if (type === "message")
+        messageListener = listener as (event: MessageEvent) => void;
+    },
+    location: {
+      search:
+        "?tuttiBootstrap=nonce-1&tuttiHostOrigin=http%3A%2F%2Fwails.localhost"
+    },
+    parent,
+    removeEventListener(type: string) {
+      if (type === "message") messageListener = null;
+    }
+  } as unknown as Window;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: windowRef
+  });
+  resetHostPanelVisibilityForTests();
+  const deliver = (
+    data: Record<string, unknown>,
+    overrides: Partial<MessageEvent> = {}
+  ): void => {
+    messageListener?.({
+      data,
+      origin: "http://wails.localhost",
+      source: parent,
+      ...overrides
+    } as MessageEvent);
+  };
+
+  try {
+    const dispose = installHostVisibilityBridge(windowRef);
+    assert.equal(typeof messageListener, "function");
+
+    deliver({ type: HOST_VISIBILITY_TYPE, nonce: "wrong", visible: false });
+    deliver(
+      { type: HOST_VISIBILITY_TYPE, nonce: "nonce-1", visible: false },
+      { source: {} as WindowProxy }
+    );
+    deliver(
+      { type: HOST_VISIBILITY_TYPE, nonce: "nonce-1", visible: false },
+      { origin: "https://evil.example" }
+    );
+    deliver({ type: HOST_VISIBILITY_TYPE, nonce: "nonce-1", visible: "false" });
+    deliver({ type: HOST_VISIBILITY_TYPE, nonce: "nonce-1", visible: 0 });
+    deliver({ type: HOST_VISIBILITY_TYPE, nonce: "nonce-1" });
+    assert.equal(isHostPanelVisible(), true);
+
+    deliver({ type: HOST_VISIBILITY_TYPE, nonce: "nonce-1", visible: false });
+    assert.equal(isHostPanelVisible(), false);
+    deliver({ type: HOST_VISIBILITY_TYPE, nonce: "nonce-1", visible: true });
+    assert.equal(isHostPanelVisible(), true);
+
+    dispose();
+    deliver({ type: HOST_VISIBILITY_TYPE, nonce: "nonce-1", visible: false });
+    assert.equal(isHostPanelVisible(), true);
+  } finally {
+    resetHostPanelVisibilityForTests();
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: previousWindow
+    });
+  }
+});
