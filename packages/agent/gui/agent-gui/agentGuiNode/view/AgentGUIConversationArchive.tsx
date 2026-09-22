@@ -15,7 +15,6 @@ import {
 } from "../../../agentActivityRuntime";
 import { useTranslation } from "../../../i18n";
 import { useEngineSelector } from "../../../shared/engine/useEngineSelector";
-import { useAgentConversationMinuteNowUnixMs } from "../../../shared/agentConversation/components/AgentConversationClock";
 import { projectCanonicalAgentGUIConversationSummaries } from "../../../shared/agentGUIConversationSummaryProjection";
 import { stabilizeConversationSectionItems } from "../model/agentGuiConversationRail";
 import { createAgentGUIConversationRailQueryController } from "../../../agentConversationRailController";
@@ -54,8 +53,8 @@ export function AgentGUIConversationArchive(
       <DialogContent className="max-w-lg nodrag [-webkit-app-region:no-drag]">
         <DialogHeader>
           <DialogTitle>{t("agentHost.agentGui.archiveView")}</DialogTitle>
-          <DialogDescription>
-            {t("agentHost.agentGui.archiveRetention")}
+          <DialogDescription className="sr-only">
+            {t("agentHost.agentGui.archiveView")}
           </DialogDescription>
         </DialogHeader>
         {props.open ? (
@@ -145,7 +144,6 @@ function ArchiveContents(
     };
   }, [query.runtimeRailMemberships]);
   const items = useEngineSelector(engine, selectItems);
-  const now = useAgentConversationMinuteNowUnixMs();
   const page = query.sectionPageStates.get("archive");
   return (
     <ScrollArea className="h-96 min-h-0" scrollbarMode="native">
@@ -187,20 +185,6 @@ function ArchiveContents(
           onRequestRenameConversation={props.onRequestRenameConversation}
           onCancelDeleteConversation={props.onCancelDeleteConversation}
           onConfirmDeleteConversation={props.onConfirmDeleteConversation}
-          presentation={{
-            kind: "activity",
-            priorityReason: null,
-            projectLabel: item.railSectionKey ?? "",
-            secondary: {
-              kind: "source",
-              text:
-                archiveRemainingDays(item.archivedAtUnixMs!, now) === 0
-                  ? t("agentHost.agentGui.archiveExpired")
-                  : t("agentHost.agentGui.archiveRemaining", {
-                      days: archiveRemainingDays(item.archivedAtUnixMs!, now)
-                    })
-            }
-          }}
         />
       ))}
       {page?.hasMore ? (
@@ -215,18 +199,5 @@ function ArchiveContents(
         </Button>
       ) : null}
     </ScrollArea>
-  );
-}
-
-export function archiveRemainingDays(
-  archivedAtUnixMs: number,
-  nowUnixMs: number
-): number {
-  return Math.min(
-    30,
-    Math.max(
-      0,
-      Math.ceil((archivedAtUnixMs + 30 * 86_400_000 - nowUnixMs) / 86_400_000)
-    )
   );
 }

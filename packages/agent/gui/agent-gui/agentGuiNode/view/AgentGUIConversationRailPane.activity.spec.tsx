@@ -21,19 +21,12 @@ import { AgentGUIConversationRailPane } from "./AgentGUIConversationRailPane";
 import { createAgentGUIConversationActivityController } from "../controller/agentGUIConversationActivityController";
 import { createTestAgentSessionEngine } from "../../../shared/testing/createTestAgentSessionEngine";
 import { normalizeAgentActivitySession } from "@tutti-os/agent-activity-core";
-import {
-  AgentGUIConversationArchive,
-  archiveRemainingDays
-} from "./AgentGUIConversationArchive";
+import { AgentGUIConversationArchive } from "./AgentGUIConversationArchive";
 
 describe("AgentGUIConversationRailPane Activity capability", () => {
-  it("pages and opens expired archives, restores through the engine, and confirms menu-only deletion", async () => {
+  it("pages and opens archived sessions, restores through the engine, and confirms menu-only deletion", async () => {
     const engine = createTestAgentSessionEngine("workspace-1");
-    const deadline = 30 * 86_400_000;
-    const archivedAtUnixMs = Date.now() - deadline;
-    expect(archiveRemainingDays(1000, 999)).toBe(30);
-    expect(archiveRemainingDays(1000, 1000 + deadline - 1)).toBe(1);
-    expect(archiveRemainingDays(1000, 1000 + deadline)).toBe(0);
+    const archivedAtUnixMs = 1;
     const archived = normalizeAgentActivitySession({
       activeTurnId: null,
       agentSessionId: "expired",
@@ -81,7 +74,6 @@ describe("AgentGUIConversationRailPane Activity capability", () => {
     const row = await screen.findByTestId(
       "agent-gui-conversation-item-expired"
     );
-    expect(screen.getByText("Expired")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     await screen.findByTestId("agent-gui-conversation-item-later");
     expect(listSessionSectionPage.mock.calls[1]?.[0].cursor).toBe("next");
@@ -569,6 +561,12 @@ const LABELS = {
   noConversations: "No sessions",
   projectRailCreateProject: "New project",
   projectRailLinkExistingProject: "Link project",
+  relativeTimeDays: (value: number) => `${value} days`,
+  relativeTimeHours: (value: number) => `${value} hours`,
+  relativeTimeJustNow: "just now",
+  relativeTimeMinutes: (value: number) => `${value} minutes`,
+  relativeTimeMonths: (value: number) => `${value} months`,
+  relativeTimeYears: (value: number) => `${value} years`,
   retryConversations: "Retry",
   retrySearch: "Retry",
   searchFailed: "Search failed",
