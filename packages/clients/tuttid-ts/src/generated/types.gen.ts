@@ -483,6 +483,18 @@ export type DesktopPreferences = {
    * Whether tuttid may periodically discover newer managed agent CLI releases on this device. This never authorizes automatic installation.
    */
   agentCliUpdateCheckEnabled: boolean;
+  /**
+   * Whether an agent provider process stays resident after its turn ends so the next message skips a cold start. When false the process is handed back as soon as the turn settles. Optional on write: omitting it keeps the current value, because an absent boolean must not read as "turn keep-alive off". Machine-dispatched sessions (visible=false) always release on turn end and ignore this setting.
+   */
+  agentRuntimeKeepAliveEnabled?: boolean;
+  /**
+   * How long a resident agent process may sit idle before it is released, in minutes. 0 means never release it while the app runs. Only consulted when agentRuntimeKeepAliveEnabled is true. Optional on write; omitting it keeps the current value.
+   */
+  agentRuntimeIdleMinutes?: number;
+  /**
+   * How many agent processes may stay resident at once. When the count exceeds this, the least recently used sessions are released first. 0 means unlimited. Optional on write; omitting it keeps the current value.
+   */
+  agentRuntimeMaxResident?: number;
   agentComposerDefaultsByProvider: DesktopAgentComposerDefaultsByProvider;
   agentComposerDefaultsByAgentTarget?: DesktopAgentComposerDefaultsByAgentTarget;
   agentGuiConversationRailCollapsedByProvider: DesktopAgentGuiConversationRailCollapsedByProvider;
