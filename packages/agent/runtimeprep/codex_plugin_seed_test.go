@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -43,6 +44,14 @@ func readMarker(t *testing.T, dir string) string {
 		t.Fatalf("read marker in %s: %v", dir, err)
 	}
 	return string(raw)
+}
+
+// stubCheckoutComplete replaces the git completeness check for fake trees.
+func stubCheckoutComplete(t *testing.T, ok bool) {
+	t.Helper()
+	orig := codexPluginsCheckoutComplete
+	codexPluginsCheckoutComplete = func(string, string) bool { return ok }
+	t.Cleanup(func() { codexPluginsCheckoutComplete = orig })
 }
 
 func requireDarwinClone(t *testing.T) {
@@ -139,6 +148,7 @@ func TestSeedCodexCuratedPluginsSwallowsCloneFailure(t *testing.T) {
 
 func TestRefreshCodexCuratedPluginsSeed(t *testing.T) {
 	requireDarwinClone(t)
+	stubCheckoutComplete(t, true)
 	seedRoot := filepath.Join(t.TempDir(), codexCuratedPluginsSeedDirName)
 	old := time.Now().Add(-2 * time.Hour)
 
@@ -205,6 +215,7 @@ func TestRefreshCodexCuratedPluginsSeedSwallowsCloneFailure(t *testing.T) {
 	codexPluginSeedTryLock = func(string) (func(), error) { return func() {}, nil }
 	t.Cleanup(func() { codexPluginSeedCloneDir, codexPluginSeedTryLock = origClone, origLock })
 
+	stubCheckoutComplete(t, true)
 	run := t.TempDir()
 	writeCodexPluginsTree(t, filepath.Join(run, codexPluginsTmpDirName), testShaA, "rev-a", time.Now())
 	if refreshCodexCuratedPluginsSeed(run, seedRoot) {
@@ -229,5 +240,62 @@ func TestCodexPluginSeedCleanupKeepsInnerError(t *testing.T) {
 	}
 	if err := codexPluginSeedCleanup(nil, t.TempDir(), t.TempDir())(t.Context()); err != nil {
 		t.Fatalf("nil inner cleanup error = %v", err)
+	}
+}
+
+// A half-written checkout (e.g. codex killed mid in-place update) carries a
+// valid-looking sha; publishing it would poison every future session.
+func TestRefreshCodexCuratedPluginsSeedRejectsIncompleteCheckout(t *testing.T) {
+	requireDarwinClone(t)
+	stubCheckoutComplete(t, false)
+	seedRoot := filepath.Join(t.TempDir(), codexCuratedPluginsSeedDirName)
+	run := t.TempDir()
+	writeCodexPluginsTree(t, filepath.Join(run, codexPluginsTmpDirName), testShaA, "rev-a", time.Now())
+	if refreshCodexCuratedPluginsSeed(run, seedRoot) {
+		t.Fatal("published an incomplete checkout")
+	}
+	if _, ok := latestCodexPluginsSeed(seedRoot); ok {
+		t.Fatal("incomplete checkout became the seed")
+	}
+	entries, _ := os.ReadDir(seedRoot)
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), codexSeedStagePrefix) {
+			t.Fatalf("stage left behind: %s", e.Name())
+		}
+	}
+}
+
+// The real check against an actual git checkout: complete → true; a deleted
+// tracked file or a wrong sha → false.
+func TestCodexPluginsCheckoutCompleteWithRealGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	run := func(args ...string) string {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	run("init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "README.md")
+	run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init")
+	sha := run("rev-parse", "HEAD")
+	if !codexPluginsCheckoutComplete(dir, sha) {
+		t.Fatal("complete checkout rejected")
+	}
+	if codexPluginsCheckoutComplete(dir, testShaB) {
+		t.Fatal("wrong sha accepted")
+	}
+	if err := os.Remove(filepath.Join(dir, "README.md")); err != nil {
+		t.Fatal(err)
+	}
+	if codexPluginsCheckoutComplete(dir, sha) {
+		t.Fatal("checkout with a missing tracked file accepted")
 	}
 }

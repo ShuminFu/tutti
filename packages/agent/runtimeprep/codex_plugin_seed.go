@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -155,10 +156,21 @@ func seedCodexCuratedPlugins(codexHome, seedRoot string) (seeded bool) {
 	}
 	// Clone plugins/ first, then plugins.sha: a partially seeded home must
 	// never carry a sha without the checkout it vouches for.
-	if err := codexPluginSeedCloneDir(filepath.Join(seed.dir, codexPluginsDirName), targetPlugins); err != nil {
-		_ = os.RemoveAll(targetPlugins)
+	// Clone into a private stage and rename into place: if two prepares race on
+	// the same home, the loser only ever deletes its own stage, never the
+	// winner's plugins/ checkout.
+	stage, err := os.MkdirTemp(tmpDir, codexSeedStagePrefix)
+	if err != nil {
+		return false
+	}
+	defer os.RemoveAll(stage) // no-op after a successful rename
+	stagePlugins := filepath.Join(stage, codexPluginsDirName)
+	if err := codexPluginSeedCloneDir(filepath.Join(seed.dir, codexPluginsDirName), stagePlugins); err != nil {
 		codexPluginSeedLogDebugf("codex plugin seed skipped", "event", "agent.runtime_prep.codex_plugin_seed_skipped", "reason", "clone", "error", err)
 		return false
+	}
+	if err := os.Rename(stagePlugins, targetPlugins); err != nil {
+		return false // someone else placed plugins/ first: leave theirs alone
 	}
 	shaTarget := filepath.Join(tmpDir, codexPluginsShaFileName)
 	if err := writeFileAtomic(shaTarget, []byte(seed.sha+"\n"), 0o644); err != nil {
@@ -214,6 +226,15 @@ func refreshCodexCuratedPluginsSeed(codexHome, seedRoot string) (refreshed bool)
 	// stage may mix two revisions, so drop it.
 	after, ok := readCodexPluginsSnapshot(tmpDir)
 	if !ok || after.sha != run.sha {
+		return false
+	}
+	// Verify the staged checkout really is that revision, complete: HEAD must
+	// equal plugins.sha and no tracked file may be modified or missing. A bad
+	// seed would be served to every future session (its sha matches upstream,
+	// so codex would never re-download), so when git is unavailable or the
+	// check fails we simply don't publish.
+	if !codexPluginsCheckoutComplete(filepath.Join(stage, codexPluginsDirName), run.sha) {
+		codexPluginSeedLogDebugf("codex plugin seed refresh skipped", "event", "agent.runtime_prep.codex_plugin_seed_refresh_skipped", "reason", "incomplete_checkout")
 		return false
 	}
 	shaPath := filepath.Join(stage, codexPluginsShaFileName)
@@ -311,4 +332,16 @@ func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 		return fmt.Errorf("publish %s: %w", filepath.Base(path), err)
 	}
 	return nil
+}
+
+// codexPluginsCheckoutComplete reports whether dir is a git checkout at sha
+// with no modified or deleted tracked files. It is a var so tests can stub it
+// without a git binary.
+var codexPluginsCheckoutComplete = func(dir, sha string) bool {
+	head, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	if err != nil || strings.TrimSpace(string(head)) != sha {
+		return false
+	}
+	status, err := exec.Command("git", "-C", dir, "status", "--porcelain", "--untracked-files=no").Output()
+	return err == nil && len(strings.TrimSpace(string(status))) == 0
 }
