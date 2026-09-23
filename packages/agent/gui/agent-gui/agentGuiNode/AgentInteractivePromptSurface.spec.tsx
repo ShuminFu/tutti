@@ -1149,6 +1149,17 @@ describe("AgentInteractivePromptSurface", () => {
               kind: "allow_always"
             },
             {
+              id: "allow_project_read",
+              label:
+                "Yes, allow reading from store\\ and d\\ from this project",
+              kind: "allow_always"
+            },
+            {
+              id: "allow_session_read",
+              label: "Yes, allow reading from d/ during this session",
+              kind: "allow_always"
+            },
+            {
               id: "allow_always",
               label:
                 "Yes, and don't ask again for commands that start with `curl -I https://example.com`",
@@ -1208,6 +1219,12 @@ describe("AgentInteractivePromptSurface", () => {
     expect(screen.getByRole("button", { name: "本次会话允许" })).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "本次会话允许所有编辑" })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "允许读取本项目中的 store\\、d\\" })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "本次会话允许读取 d/" })
     ).toBeTruthy();
     expect(
       screen.getByRole("button", {

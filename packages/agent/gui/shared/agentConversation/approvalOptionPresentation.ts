@@ -157,6 +157,36 @@ function approvalOptionProviderLabelTranslation(
     };
   }
 
+  const projectReadMatch = label.match(
+    /^Yes,\s*allow reading from (.+) from this project$/i
+  );
+  if (projectReadMatch?.[1]) {
+    return {
+      key: "agentHost.agentGui.approvalOptions.allowReadFromProject",
+      params: {
+        paths: projectReadMatch[1].replace(
+          /([\\/]) and (?=[^ ]+[\\/](?:$| and ))/g,
+          "$1、"
+        )
+      }
+    };
+  }
+
+  const sessionReadMatch = label.match(
+    /^Yes,\s*allow reading from (.+) during this session$/i
+  );
+  if (sessionReadMatch?.[1]) {
+    return {
+      key: "agentHost.agentGui.approvalOptions.allowReadForSession",
+      params: {
+        paths: sessionReadMatch[1].replace(
+          /([\\/]) and (?=[^ ]+[\\/](?:$| and ))/g,
+          "$1、"
+        )
+      }
+    };
+  }
+
   const allowScopeMatch = label.match(/^Yes,\s*and don't ask again for (.+)$/i);
   if (allowScopeMatch?.[1]) {
     return {

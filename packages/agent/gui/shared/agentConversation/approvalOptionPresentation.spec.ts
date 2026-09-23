@@ -44,6 +44,33 @@ describe("approvalOptionDisplayLabel", () => {
     ).toBe("本次会话允许所有编辑");
   });
 
+  it("localizes project read approval while preserving the requested paths", () => {
+    expect(
+      approvalOptionDisplayLabel({
+        id: "allow_always",
+        kind: "allow_always",
+        label: "Yes, allow reading from store\\ and d\\ from this project"
+      })
+    ).toBe("允许读取本项目中的 store\\、d\\");
+    expect(
+      approvalOptionDisplayLabel({
+        id: "allow_once",
+        kind: "allow_once",
+        label: "Yes, allow reading from src/ from this project"
+      })
+    ).toBe("允许读取本项目中的 src/");
+  });
+
+  it("localizes session read approval shown by embedded Claude Code", () => {
+    expect(
+      approvalOptionDisplayLabel({
+        id: "allow_always",
+        kind: "allow_always",
+        label: "Yes, allow reading from d/ during this session"
+      })
+    ).toBe("本次会话允许读取 d/");
+  });
+
   it("localizes Codex ACP permission option labels", () => {
     expect(
       approvalOptionDisplayLabel({

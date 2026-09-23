@@ -525,6 +525,9 @@ export const enAgentGui = {
     allowOnce: "Yes, proceed",
     allowForSession: "Yes, for this session",
     allowAllEditsForSession: "Yes, allow all edits during this session",
+    allowReadFromProject: "Yes, allow reading from {{paths}} from this project",
+    allowReadForSession:
+      "Yes, allow reading from {{paths}} during this session",
     allowAlways: "Yes, and don't ask again",
     allowAlwaysForCommandPrefix:
       "Yes, and don't ask again for commands that start with `{{command}}`",

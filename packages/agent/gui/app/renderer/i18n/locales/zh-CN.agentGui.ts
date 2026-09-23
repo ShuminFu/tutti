@@ -548,6 +548,8 @@ export const zhCNAgentGui = {
     allowOnce: "允许执行",
     allowForSession: "本次会话允许",
     allowAllEditsForSession: "本次会话允许所有编辑",
+    allowReadFromProject: "允许读取本项目中的 {{paths}}",
+    allowReadForSession: "本次会话允许读取 {{paths}}",
     allowAlways: "允许，并且不再询问",
     allowAlwaysForCommandPrefix:
       "允许，并且不再询问以 `{{command}}` 开头的命令",
