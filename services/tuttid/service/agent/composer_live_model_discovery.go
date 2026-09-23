@@ -490,11 +490,17 @@ func staticClaudeComposerModelOptions(selectedModel string) []ComposerConfigOpti
 			return options
 		}
 	}
+	// The extra row only mirrors the caller's selection so the picker can
+	// still show it. It is not catalog evidence: the defaults validator feeds
+	// the value it is judging in as the selection, so without Requested a
+	// Codex model (gpt-5.6-luna) proved itself legal for claude-code, was
+	// stored as the claude-code default, and every later create failed.
 	return append(options, ComposerConfigOptionValue{
 		ID:          selectedModel,
 		Label:       selectedModel,
 		Value:       selectedModel,
 		Description: "Claude configured custom model",
+		Requested:   true,
 	})
 }
 
@@ -810,6 +816,9 @@ func normalizeLiveComposerModelOptions(options []ComposerConfigOptionValue) []Co
 			ReasoningEffort:            strings.TrimSpace(option.ReasoningEffort),
 			ReasoningEfforts:           append([]AgentModelReasoningEffortOption(nil), option.ReasoningEfforts...),
 			ReasoningEffortsAdvertised: option.ReasoningEffortsAdvertised,
+			// Keep echo provenance: dropping it here turned a selection echo
+			// into catalog evidence for advertisedComposerModelValues.
+			Requested: option.Requested,
 		})
 	}
 	return normalized
