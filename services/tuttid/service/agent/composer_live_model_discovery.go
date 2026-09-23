@@ -666,6 +666,16 @@ func (s *Service) mergeLiveComposerModelsForComposerOptions(
 				modelSource = runtimeLiveModelCatalogSource
 			}
 		}
+	} else if input.IncludeTargetRuntimeEvidence && liveModelCatalogUsesAccountScope(provider) {
+		// Defaults patches carry no workspace. An account-scoped catalog key does
+		// not depend on workspace or cwd, so the last-known list the picker
+		// showed is still the right evidence. Read it only — never probe from a
+		// mutation. Without this the validator saw only the static aliases and
+		// refused live models such as claude-fable-5-1[1m].
+		if snapshot := s.readComposerModelList(ctx, scope, time.Now().UTC()); len(snapshot.Options) > 0 {
+			liveModels = snapshot.Options
+			modelSource = runtimeLiveModelCatalogSource
+		}
 	}
 	if len(liveModels) > 0 {
 		liveModels = s.enrichModelCapabilityOptions(ctx, provider, liveModels)
