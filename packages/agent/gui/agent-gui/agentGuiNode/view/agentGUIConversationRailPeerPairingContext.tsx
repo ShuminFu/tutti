@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { useOptionalAgentHostApi } from "../../../agentActivityHost";
 import {
   conversationRailPeerDisplayTitle,
@@ -9,6 +17,7 @@ import {
 import {
   conversationRailPeerPairingHost,
   notifyConversationRailPeerPairsChanged,
+  publishConversationRailPeerPairsSnapshot,
   subscribeConversationRailPeerPairsChanged,
   type ConversationRailPeerPairingHost
 } from "../model/conversationRailPeerPairingHost";
@@ -96,7 +105,10 @@ export function useAgentGUIConversationRailPeerPairingState(input: {
 }): AgentGUIConversationRailPeerPairingValue {
   const agentHostApi = useOptionalAgentHostApi();
   const explicitHost = input.host;
-  const host = explicitHost === undefined ? conversationRailPeerPairingHost() : explicitHost;
+  const host =
+    explicitHost === undefined
+      ? conversationRailPeerPairingHost()
+      : explicitHost;
   const [pairs, setPairs] = useState<readonly ConversationRailPeerPair[]>([]);
   const [supported, setSupported] = useState(Boolean(host));
   const [marked, setMarked] = useState<AgentGUIConversationRailPeerMark | null>(
@@ -115,7 +127,10 @@ export function useAgentGUIConversationRailPeerPairingState(input: {
       .listPeerPairs()
       .then((result) => {
         setSupported(true);
-        setPairs(Array.isArray(result?.pairs) ? result.pairs : []);
+        const next = Array.isArray(result?.pairs) ? result.pairs : [];
+        setPairs(next);
+        // 分栏那份也用这次拉到的（它自己只在写配对后才刷新，否则会跟徽标对不上）。
+        publishConversationRailPeerPairsSnapshot(next);
       })
       .catch((error: unknown) => {
         // 宿主未注册这组能力（unsupported）→ 整组 UI 隐身，老宿主照旧可用。
@@ -134,7 +149,10 @@ export function useAgentGUIConversationRailPeerPairingState(input: {
   // 别人写了配对表也要跟着拉（补丁 0130）：分栏拖放配对/解除走的是嵌入层那份
   // 缓存，不经过这里的 createPair/deletePair，光靠上面那个 effect 永远不刷新
   // —— 当前会话没变，右键菜单就一直停在 `Unpair (0)`。
-  useEffect(() => subscribeConversationRailPeerPairsChanged(refresh), [refresh]);
+  useEffect(
+    () => subscribeConversationRailPeerPairsChanged(refresh),
+    [refresh]
+  );
 
   // 单标记：再标一条就替换；点同一条就取消。
   const toggleMarked = useCallback((mark: AgentGUIConversationRailPeerMark) => {

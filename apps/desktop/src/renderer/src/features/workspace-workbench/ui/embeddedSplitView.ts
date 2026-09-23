@@ -19,6 +19,7 @@ import {
   resolveSplitPairSelection,
   splitLayoutStorageKey,
   subscribeConversationRailPeerPairsChanged,
+  subscribeConversationRailPeerPairsSnapshot,
   type AgentPromptSubmitPreparation,
   type ConversationRailPeerPair,
   type ConversationRailPeerPairEndpoint,
@@ -1048,6 +1049,16 @@ export function createEmbeddedSplitViewController(
     void refreshPairs();
   });
 
+  // 侧栏每次换会话都会重拉配对表；它拉到的那份直接拿来用，免得「徽标实心、
+  // 点了却只开单列」（agent / 自动化在外面建的配对，本控制器否则看不见）。
+  // 收到只替换缓存，不 listPeerPairs、不广播，不会绕成环。
+  const unsubscribePeerPairsSnapshot =
+    subscribeConversationRailPeerPairsSnapshot((next) => {
+      if (disposed) return;
+      pairs = next;
+      emit();
+    });
+
   function broadcastPeerPairsChanged(): void {
     broadcastingOwnPairChange = true;
     try {
@@ -1468,6 +1479,9 @@ export function createEmbeddedSplitViewController(
         // 报过真号之后又读成空 = 用户在这个窗口点了「新建会话」。只是刚起来还没
         // 初始化的窗口不算（否则右栏刚 launch 就被当成空栏，落下即配对那一步会被跳过）。
         goingHomeByNodeId.delete(nodeId);
+        // 请它换的那条打不开（会话已删，gui 退回首页）也会读成空：待换到此作废。
+        // 不清的话，用户下一次在侧栏点回旧那条会被当成旧回声吞掉，栏永远卡住。
+        pendingActivateByNodeId.delete(nodeId);
         if (settledNodeIds.has(nodeId)) freshNodeIds.add(nodeId);
         continue;
       }
@@ -1485,10 +1499,26 @@ export function createEmbeddedSplitViewController(
           pendingActivateByNodeId.delete(nodeId);
         }
       }
+      const wasSettled = settledNodeIds.has(nodeId);
       settledNodeIds.add(nodeId);
       freshNodeIds.delete(nodeId);
-      if (observed === panes[side] || observed === panes[otherSide(side)])
+      if (observed === panes[side]) continue;
+      if (observed === panes[otherSide(side)]) {
+        // 左栏（侧栏所在的那个窗口）早就报过真号、这会儿报出右栏那条 = 用户在侧栏
+        // 点了右栏正显示的会话：焦点给右栏，左栏窗口请回原来那条，不然两栏显示同一条。
+        // 刚起来的新窗口回声另一栏的号（真机验收 03）不走这里：它还没 settled。
+        if (side === "left" && wasSettled && panes.left !== null) {
+          sessionIdByNodeId.set(nodeId, observed);
+          activate(nodeId, panes.left);
+          if (layout.focus !== "right") {
+            layout = { ...layout, focus: "right" };
+            focusActivePane();
+            persist();
+          }
+          break;
+        }
         continue;
+      }
       sessionIdByNodeId.set(nodeId, observed);
       // 侧栏点选走的就是这条路（会话栏只在左栏那个窗口里，右栏用 CSS 隐掉了）：
       // 用户在列表里点了另一条会话，这个窗口自己换了会话号，我们才看见。
@@ -1603,6 +1633,15 @@ export function createEmbeddedSplitViewController(
 
   const controller: EmbeddedSplitViewController = {
     async adopt(nodeIds) {
+      // 耐久存储优先（票 04）：iframe 的 localStorage 会随宿主重启换 origin 而丢，
+      // 「退出重进分栏没了」就是这么来的。宿主没这个能力时 store 自己退回本地。
+      // **必须在认领窗口之前读完**：读后端要来回一趟，这期间窗口只要报一次会话号，
+      // syncFromNodes 就会拿「空布局 + 空 pairOrder」做决定并 persist，把上次的
+      // 两栏覆盖成单列（屏幕上是两栏、磁盘上是一栏，下次开机两栏就没了）。
+      // nodeIdBySide 还空着时 syncFromNodes 一律被 `!nodeId` 拦掉。
+      const restoredStore = layoutStore
+        ? await layoutStore.read()
+        : { layout: null, pairOrder: {} };
       nodeIdBySide = {
         left: nodeIds[0] ?? null,
         right: nodeIds[1] ?? null
@@ -1614,11 +1653,6 @@ export function createEmbeddedSplitViewController(
       }
       collapsed =
         surfaceWidth() > 0 && surfaceWidth() < EMBEDDED_SPLIT_COLLAPSE_WIDTH_PX;
-      // 耐久存储优先（票 04）：iframe 的 localStorage 会随宿主重启换 origin 而丢，
-      // 「退出重进分栏没了」就是这么来的。宿主没这个能力时 store 自己退回本地。
-      const restoredStore = layoutStore
-        ? await layoutStore.read()
-        : { layout: null, pairOrder: {} };
       pairOrder = restoredStore.pairOrder ?? {};
       const stored = restoredStore.layout;
       // 开机时 workbench 并不知道有哪些会话（会话列表是 gui 自己的数据，宿主快照里
@@ -1654,6 +1688,7 @@ export function createEmbeddedSplitViewController(
       clearPendingRelaunch();
       unregisterSplitHost();
       unsubscribePeerPairs();
+      unsubscribePeerPairsSnapshot();
       unsubscribeController();
       unsubscribeSessions();
       listeners.clear();

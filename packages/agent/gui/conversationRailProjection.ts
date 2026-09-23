@@ -11,8 +11,10 @@ export {
 export {
   conversationRailPeerPairingHost,
   notifyConversationRailPeerPairsChanged,
+  publishConversationRailPeerPairsSnapshot,
   registerConversationRailPeerPairingHost,
   subscribeConversationRailPeerPairsChanged,
+  subscribeConversationRailPeerPairsSnapshot,
   type ConversationRailCreatePeerPairInput,
   type ConversationRailCreatePeerPairResult,
   type ConversationRailCommitPairKickoffInput,

@@ -115,6 +115,8 @@ export interface EmbeddedSplitLayoutStoreInput {
   scopeKey: string;
   storage: Pick<Storage, "getItem" | "setItem"> | null;
   targetId: string;
+  /** 只给测试换掉宿主写入口（默认走宿主桥）。 */
+  hostWrite?: typeof requestHostUpdateSplitLayout;
 }
 
 /**
@@ -128,6 +130,7 @@ export function createEmbeddedSplitLayoutStore(
   input: EmbeddedSplitLayoutStoreInput
 ): EmbeddedSplitLayoutStore {
   const { scopeKey, storage, targetId } = input;
+  const hostWrite = input.hostWrite ?? requestHostUpdateSplitLayout;
   let hostUnsupported = false;
 
   function localSnapshot(): EmbeddedSplitLayoutSnapshot {
@@ -135,6 +138,31 @@ export function createEmbeddedSplitLayoutStore(
       layout: storage ? loadSplitLayout(storage, scopeKey) : null,
       pairOrder: readLocalPairOrder(storage, scopeKey)
     };
+  }
+
+  // 发往宿主的写一次只放一个在途，后来的只留最新那份。拖分界线每个 pointermove
+  // 都会 write：并发的 fetch 到宿主时先后不定，存下来的可能是拖到一半的比例，
+  // 还会白白重写几十次磁盘。串行 + 只留最新 = 最后落盘的一定是最后一次 write。
+  let queuedHostWrite:
+    | Parameters<typeof requestHostUpdateSplitLayout>[0]
+    | null = null;
+  let hostWriteInFlight = false;
+
+  async function flushHostWrites(): Promise<void> {
+    hostWriteInFlight = true;
+    try {
+      while (queuedHostWrite && !hostUnsupported) {
+        const next = queuedHostWrite;
+        queuedHostWrite = null;
+        try {
+          await hostWrite(next);
+        } catch (error) {
+          if (isUnsupported(error)) hostUnsupported = true;
+        }
+      }
+    } finally {
+      hostWriteInFlight = false;
+    }
   }
 
   return {
@@ -172,14 +200,13 @@ export function createEmbeddedSplitLayoutStore(
         writeLocalPairOrder(storage, scopeKey, snapshot.pairOrder);
       }
       if (hostUnsupported || !snapshot.layout) return;
-      void requestHostUpdateSplitLayout({
+      queuedHostWrite = {
         layout: toHostPanes(snapshot.layout),
         pairOrder: trimSplitPairOrder(snapshot.pairOrder),
         scopeKey,
         targetId
-      }).catch((error: unknown) => {
-        if (isUnsupported(error)) hostUnsupported = true;
-      });
+      };
+      if (!hostWriteInFlight) void flushHostWrites();
     }
   };
 }

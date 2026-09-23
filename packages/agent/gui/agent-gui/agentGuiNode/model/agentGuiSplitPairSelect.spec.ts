@@ -136,13 +136,13 @@ describe("侧栏点选在分栏 + 结对模式下的去向", () => {
   });
 
   it("多个搭档时默认第一个，记过就用上次那个", () => {
-    expect(pickSplitPairPartner("sess-a", PAIRS["sess-a"], null)).toBe(
+    expect(pickSplitPairPartner("sess-a", PAIRS["sess-a"] ?? [], null)).toBe(
       "sess-b"
     );
     expect(
       pickSplitPairPartner(
         "sess-a",
-        PAIRS["sess-a"],
+        PAIRS["sess-a"] ?? [],
         memoryOf({ lastPartner: { "sess-a": "sess-c" } })
       )
     ).toBe("sess-c");
@@ -152,7 +152,7 @@ describe("侧栏点选在分栏 + 结对模式下的去向", () => {
     expect(
       pickSplitPairPartner(
         "sess-a",
-        PAIRS["sess-a"],
+        PAIRS["sess-a"] ?? [],
         memoryOf({ lastPartner: { "sess-a": "sess-gone" } })
       )
     ).toBe("sess-b");

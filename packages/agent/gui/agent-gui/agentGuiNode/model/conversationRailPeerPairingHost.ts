@@ -40,8 +40,7 @@ export interface ConversationRailPairKickoffInput {
   goal: string;
 }
 
-export interface ConversationRailCommitPairKickoffInput
-  extends ConversationRailPairKickoffInput {
+export interface ConversationRailCommitPairKickoffInput extends ConversationRailPairKickoffInput {
   /**
    * preview 时拍下的开发者（task id 或会话号，后端同样归一）。给了且与行里当前
    * developer 不一致 → 409 kickoff_roles_changed，不投递、保持 pending（契约补充评审 A）。
@@ -69,9 +68,7 @@ export interface ConversationRailPeerPairingHost {
    * `delivered: false`（可带 reason，例如搭档那张卡被环路闸 / 限流丢了）时行仍是
    * pending，调用方按「没投到」处理，下一句再带卡重试。
    */
-  commitPairKickoff?(
-    input: ConversationRailCommitPairKickoffInput
-  ): Promise<{
+  commitPairKickoff?(input: ConversationRailCommitPairKickoffInput): Promise<{
     pair: ConversationRailPeerPair;
     delivered: boolean;
     reason?: string;
@@ -123,4 +120,33 @@ export function subscribeConversationRailPeerPairsChanged(
 export function notifyConversationRailPeerPairsChanged(): void {
   // 复制一份再遍历：订阅者在回调里退订（组件卸载）不影响这一轮派发。
   for (const listener of [...peerPairsListeners]) listener();
+}
+
+// 侧栏拉到的配对表快照（带数据，区别于上面只喊「变了」的广播）。
+//
+// 为什么需要：侧栏那份每次换当前会话都会重拉（agent / 自动化建的配对也看得见），
+// 分栏那份只在自己写配对、收到上面的广播时才刷新。于是在侧栏点一条外部建好的
+// 结对会话：徽标已是实心，分栏拿旧表判断「没结对」，只开单列。侧栏每拉到一份就
+// 在这里发出来，分栏直接用这份，两边对「此刻谁在结对」只认同一次 listPeerPairs。
+// 约定同上：订阅方收到后只替换缓存，绝不再发、也不再 listPeerPairs。
+type ConversationRailPeerPairsSnapshotListener = (
+  pairs: readonly ConversationRailPeerPair[]
+) => void;
+
+const peerPairsSnapshotListeners =
+  new Set<ConversationRailPeerPairsSnapshotListener>();
+
+export function subscribeConversationRailPeerPairsSnapshot(
+  listener: ConversationRailPeerPairsSnapshotListener
+): () => void {
+  peerPairsSnapshotListeners.add(listener);
+  return () => {
+    peerPairsSnapshotListeners.delete(listener);
+  };
+}
+
+export function publishConversationRailPeerPairsSnapshot(
+  pairs: readonly ConversationRailPeerPair[]
+): void {
+  for (const listener of [...peerPairsSnapshotListeners]) listener(pairs);
 }

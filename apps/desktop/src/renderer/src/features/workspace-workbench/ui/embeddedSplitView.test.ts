@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   conversationRailSplitHost,
   notifyConversationRailPeerPairsChanged,
+  publishConversationRailPeerPairsSnapshot,
   subscribeConversationRailPeerPairsChanged
 } from "@tutti-os/agent-gui/conversation-rail-projection";
 import type { ConversationRailSplitDragSession } from "@tutti-os/agent-gui/conversation-rail-projection";
@@ -1754,5 +1755,133 @@ test("票04：耐久存储里的分栏在 adopt 时恢复，之后的改动写�
   assert.equal(last.layout.ratio, 0.6);
   // 恢复出来的这一对也算「刚用过」，顺序跟着记下来。
   assert.deepEqual(last.pairOrder["session-a|session-b"]?.left, "session-a");
+  controller.dispose();
+});
+
+test("评审1：开机读存储期间窗口报了会话号，不能拿空布局把上次的两栏写成单列", async () => {
+  // 读后端要来回一趟；这期间 syncFromNodes 若已认领窗口，就会按「空布局 +
+  // 空 pairOrder」判成单列并 persist —— 屏幕上两栏、磁盘上一栏，下次开机两栏没了。
+  const writes: {
+    layout: { panes: { left: string | null; right: string | null } } | null;
+  }[] = [];
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const layoutStore = {
+    read: async () => {
+      await gate;
+      return {
+        layout: {
+          focus: "left" as const,
+          panes: { left: "session-a", right: "session-b" },
+          ratio: 0.5
+        },
+        pairOrder: {}
+      };
+    },
+    write: (snapshot: (typeof writes)[number]) => {
+      writes.push(snapshot);
+    }
+  };
+  const fake = createFakeHost({ seed: ["agent-left"] });
+  const observed = new Map<string, string>([["agent-left", "session-a"]]);
+  const controller = makeController(fake, {
+    layoutStore: layoutStore as never,
+    pairingHost: () => railPairsHost(RAIL_PAIRS) as never,
+    sessions: { read: (node) => observed.get(node.id) ?? null }
+  });
+
+  const adopting = controller.adopt(["agent-left"]);
+  fake.notify();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // 用 length 判：deepEqual 的 asserts 会把 writes 收窄成 never[]。
+  assert.equal(writes.length, 0);
+
+  release();
+  await adopting;
+
+  assert.equal(controller.getSnapshot().panes.left?.sessionId, "session-a");
+  assert.equal(controller.getSnapshot().panes.right?.sessionId, "session-b");
+  assert.ok(
+    writes.every((write) => write.layout?.panes.right !== null),
+    "没有任何一次把右栏写成空"
+  );
+  controller.dispose();
+});
+
+test("评审3：请它换的那条打不开（退回首页读成空），之后点回旧那条不能被当回声吞掉", async () => {
+  const layoutStore = {
+    read: async () => ({
+      layout: {
+        focus: "left" as const,
+        panes: { left: "session-dead", right: null },
+        ratio: 0.5
+      },
+      pairOrder: {}
+    }),
+    write: () => {}
+  };
+  const fake = createFakeHost({ seed: ["agent-left"] });
+  const observed = new Map<string, string>([["agent-left", "session-x"]]);
+  const controller = makeController(fake, {
+    layoutStore,
+    sessions: { read: (node) => observed.get(node.id) ?? null }
+  });
+  await controller.adopt(["agent-left"]);
+  assert.equal(controller.getSnapshot().panes.left?.sessionId, "session-dead");
+
+  // gui 打不开 session-dead，退回首页：读成空。
+  observed.delete("agent-left");
+  fake.notify();
+  // 用户在侧栏点 session-x。
+  observed.set("agent-left", "session-x");
+  fake.notify();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(controller.getSnapshot().panes.left?.sessionId, "session-x");
+  controller.dispose();
+});
+
+test("评审2：侧栏拉到的配对表分栏直接用 —— 外部建的结对，点了也开两列", async () => {
+  // 控制器自己那份只在 adopt 时拉过一次（此时 d 没结对）；之后 agent 在外面给
+  // d/g 建了结对，侧栏换会话时重拉看到了、徽标变实心。分栏必须认同一份表。
+  const { controller, panes, switchTo } = await railController(
+    RAIL_PAIRS,
+    {},
+    "session-x"
+  );
+  const fresh = await railPairsHost([
+    ...RAIL_PAIRS,
+    ["session-d", "session-g", "pair"]
+  ]).listPeerPairs();
+  publishConversationRailPeerPairsSnapshot(fresh.pairs);
+
+  await switchTo("session-d");
+
+  assert.deepEqual(panes(), { left: "session-d", right: "session-g" });
+  controller.dispose();
+});
+
+test("评审4：在侧栏点右栏正显示的那条 → 焦点给右栏，左栏请回原来那条", async () => {
+  const { controller, fake, panes, switchTo } = await railController();
+  await switchTo("session-a");
+  assert.deepEqual(panes(), { left: "session-a", right: "session-b" });
+  fake.calls.length = 0;
+
+  // 左栏窗口（侧栏在这里）报出右栏那条。
+  await switchTo("session-b");
+
+  assert.deepEqual(panes(), { left: "session-a", right: "session-b" });
+  assert.equal(controller.getSnapshot().focus, "right");
+  assert.deepEqual(activations(fake), [
+    { nodeId: "agent-left", sessionId: "session-a" }
+  ]);
+
+  // 窗口还没换过来、下一拍仍报 session-b：不能再发一次，也不能改布局。
+  fake.notify();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(activations(fake).length, 1);
+  assert.deepEqual(panes(), { left: "session-a", right: "session-b" });
   controller.dispose();
 });
