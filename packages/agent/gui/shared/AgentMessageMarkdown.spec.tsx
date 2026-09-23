@@ -136,6 +136,19 @@ describe("AgentMessageMarkdown", () => {
     expect(screen.getByRole("list")).toBeInTheDocument();
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
+  it("keeps mixed nested lists with native ordered markers", () => {
+    const { container } = render(
+      <AgentMessageMarkdown content={"- parent\n\n  7. nested\n  8. next\n\n3. outer\n4. next\n   - nested bullet"} />
+    );
+    const nestedOrder = container.querySelector("ul > li > ol");
+    expect(nestedOrder).toHaveAttribute("start", "7");
+    expect(container.querySelector("ol > li > ul")).toBeInTheDocument();
+    const parentBulletList = nestedOrder?.closest("ul");
+    expect(parentBulletList).toHaveStyle({ listStyleType: "disc", listStylePosition: "outside" });
+    expect(nestedOrder).toHaveStyle({ listStyleType: "decimal" });
+    expect(parentBulletList?.className || "").not.toContain("::before");
+  });
+
   it("renders a copy button on fenced code blocks", () => {
     render(<AgentMessageMarkdown content={"```ts\nconst x = 42;\n```"} />);
 

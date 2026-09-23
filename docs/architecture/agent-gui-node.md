@@ -1712,6 +1712,11 @@ Escape, a pointer down outside the message body, a host
 `tutti-host-clear-text-selection` notification, and unmount collapse
 non-editable Ranges. While a drag-select is in progress, append-following and
 direct transform updates pause so streaming layout cannot stretch the Range.
+Markdown message lists keep native `ul`/`ol`/`li` markers and ordered-list
+`start` values. List markers remain in normal list layout so selection within a
+message, including across nested lists and adjoining paragraphs, follows the
+rendered text rather than an absolutely positioned marker box. Interactive
+links retain their existing click behavior.
 
 Virtualizer- or layout-driven scroll events do not change the end-following
 mode or trigger older-page loading without explicit user scroll-away intent. A

@@ -10,7 +10,6 @@ import {
 } from "react";
 import { Check, Copy } from "lucide-react";
 import { translate } from "../i18n/index";
-import { cn } from "../app/renderer/lib/utils";
 import type { MarkdownDomProps } from "./AgentMessageMarkdown";
 import { AgentMessageMermaid } from "./AgentMessageMermaid";
 
@@ -36,8 +35,11 @@ const MARKDOWN_ORDERED_LIST_STYLE: CSSProperties = {
 };
 
 const MARKDOWN_UNORDERED_LIST_STYLE: CSSProperties = {
+  listStylePosition: "outside",
+  listStyleType: "disc",
   margin: "12px 0 8px",
-  paddingInlineStart: 0
+  paddingInlineStart: 34,
+  paddingInlineEnd: 16
 };
 
 const MARKDOWN_LIST_ITEM_STYLE: CSSProperties = {
@@ -46,7 +48,6 @@ const MARKDOWN_LIST_ITEM_STYLE: CSSProperties = {
 
 export function MarkdownUnorderedList({
   node: _node,
-  className,
   style,
   ...props
 }: MarkdownDomProps<"ul">): JSX.Element {
@@ -54,10 +55,6 @@ export function MarkdownUnorderedList({
   return (
     <ul
       {...props}
-      className={cn(
-        '[&_li]:relative [&_li]:list-none [&_li]:pl-[34px] [&_li::before]:absolute [&_li::before]:left-4 [&_li::before]:top-[0.78em] [&_li::before]:h-1.5 [&_li::before]:w-1.5 [&_li::before]:-translate-y-1/2 [&_li::before]:rounded-full [&_li::before]:bg-[var(--text-tertiary)] [&_li::before]:content-[""]',
-        className
-      )}
       style={{ ...MARKDOWN_UNORDERED_LIST_STYLE, ...style }}
     />
   );
