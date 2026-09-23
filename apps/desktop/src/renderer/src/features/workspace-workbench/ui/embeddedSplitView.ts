@@ -13,11 +13,10 @@ import {
   conversationRailPeerPairingHost,
   createEmptySplitLayout,
   isSplitLayoutSplit,
-  loadSplitLayout,
   notifyConversationRailPeerPairsChanged,
   reduceSplitLayout,
   registerConversationRailSplitHost,
-  saveSplitLayout,
+  resolveSplitPairSelection,
   splitLayoutStorageKey,
   subscribeConversationRailPeerPairsChanged,
   type AgentPromptSubmitPreparation,
@@ -28,8 +27,15 @@ import {
   type ConversationRailSplitPoint,
   type SplitLayoutEvent,
   type SplitLayoutState,
+  type SplitPairSelectMemory,
   type SplitSide
 } from "@tutti-os/agent-gui/conversation-rail-projection";
+import {
+  createEmbeddedSplitLayoutStore,
+  splitPairOrderKey,
+  type EmbeddedSplitLayoutStore,
+  type SplitPairOrderRecord
+} from "./embeddedSplitLayoutStore.ts";
 import {
   agentGuiWorkbenchGoHomeActivationType,
   agentGuiWorkbenchOpenSessionActivationType,
@@ -79,7 +85,10 @@ export interface EmbeddedSplitPairModeSnapshot {
    * 每栏的角色：按「这一栏那条会话的 task 是不是 developerTaskId」算，
    * 所以交换左右栏之后角色跟着会话走，而不是跟着左右走。
    */
-  roles: { left: EmbeddedSplitPairRole | null; right: EmbeddedSplitPairRole | null };
+  roles: {
+    left: EmbeddedSplitPairRole | null;
+    right: EmbeddedSplitPairRole | null;
+  };
 }
 
 /** 栏头要写的那点身份信息（票 04）：来自侧栏上报 / 拖动摘要，拿不到就是 null。 */
@@ -188,6 +197,11 @@ export interface EmbeddedSplitViewInput {
   /** 等「重开的对端」在侧栏露面的上限，默认 20s；只给单测缩短。 */
   relaunchWaitMs?: number;
   sessions?: EmbeddedSplitSessionSource;
+  /**
+   * 布局与「这一对上次怎么摆」的耐久存储（票 03/04）。默认宿主优先、
+   * localStorage 兜底；单测传桩。
+   */
+  layoutStore?: EmbeddedSplitLayoutStore | null;
   storage?: Pick<Storage, "getItem" | "setItem"> | null;
   targetId?: string | null;
   toast?: EmbeddedSplitToast;
@@ -229,7 +243,10 @@ export interface EmbeddedSplitViewController {
   select(agentSessionId: string): boolean;
   setFocus(side: SplitSide): void;
   /** composer 上方单选：从 `side` 这一栏的视角选模式 / 角色（票 04）。 */
-  setPairMode(side: SplitSide, choice: EmbeddedSplitPairModeChoice): Promise<void>;
+  setPairMode(
+    side: SplitSide,
+    choice: EmbeddedSplitPairModeChoice
+  ): Promise<void>;
   /** 这条会话现在在哪一栏（给 composer 上方那排单选认栏用）。 */
   sideForSessionId(agentSessionId: string): SplitSide | null;
   sideForNodeId(nodeId: string): SplitSide | null;
@@ -408,8 +425,18 @@ export function createEmbeddedSplitViewController(
     targetId: input.targetId ?? null,
     workspaceId: input.workspaceId
   });
+  const layoutStore =
+    input.layoutStore === undefined
+      ? createEmbeddedSplitLayoutStore({
+          scopeKey: storageKey,
+          storage,
+          targetId: input.targetId?.trim() || "default"
+        })
+      : input.layoutStore;
 
   let layout: SplitLayoutState = createEmptySplitLayout();
+  /** 「这一对上次怎么摆 / 上次配的是谁」：key 见 splitPairOrderKey，值里带 usedAt。 */
+  let pairOrder: SplitPairOrderRecord = {};
   let nodeIdBySide: { left: string | null; right: string | null } = {
     left: null,
     right: null
@@ -454,7 +481,8 @@ export function createEmbeddedSplitViewController(
     side: SplitSide;
     timer: ReturnType<typeof setTimeout> | null;
   } | null = null;
-  const relaunchWaitMs = input.relaunchWaitMs ?? EMBEDDED_SPLIT_RELAUNCH_WAIT_MS;
+  const relaunchWaitMs =
+    input.relaunchWaitMs ?? EMBEDDED_SPLIT_RELAUNCH_WAIT_MS;
 
   const listeners = new Set<() => void>();
   // 拖起时 gui 侧把摘要给过来一次；配对判据（非托管 / 已结束）就靠它。
@@ -475,6 +503,14 @@ export function createEmbeddedSplitViewController(
   // 这中间 `syncFromNodes` 读到的仍是旧号，不挡就会把刚关掉的会话又认回槽里
   // （表现：✕ 点了没反应，还停在这条会话）。
   const goingHomeByNodeId = new Map<string, string>();
+  // 刚 activate 过、还没换过来的窗口：值是「我们请它显示的那条」和「它这会儿还在
+  // 显示的那条」。activateNode 是异步的，中间这几拍它照旧报旧会话号；不记这一笔，
+  // 整组切换之后右栏那一拍的旧号会被当成「用户在右栏切了会话」，把刚换掉的那条
+  // 塞回来（真机：分支③整组切换退化成只换左栏）。
+  const pendingActivateByNodeId = new Map<
+    string,
+    { expected: string; stale: string }
+  >();
 
   function surfaceWidth(): number {
     const size =
@@ -687,9 +723,7 @@ export function createEmbeddedSplitViewController(
     const next = [
       isFreshPane("left") ? null : layout.panes.left,
       isFreshPane("right") ? null : layout.panes.right
-    ].filter(
-      (id): id is string => typeof id === "string" && id.length > 0
-    );
+    ].filter((id): id is string => typeof id === "string" && id.length > 0);
     if (
       next.length === shownSessionIds.size &&
       next.every((id) => shownSessionIds.has(id))
@@ -709,8 +743,73 @@ export function createEmbeddedSplitViewController(
   }
 
   function persist(): void {
-    if (!storage) return;
-    saveSplitLayout(storage, storageKey, layout);
+    if (!layoutStore) return;
+    layoutStore.write({ layout, pairOrder });
+  }
+
+  /**
+   * 这条会话**正在结对编程**的对端（配对行 pairMode === "pair"）。
+   * 空心徽标（配对在、已切独立）与老宿主报不出 pairMode 的都不算，
+   * 与徽标两态口径一致（DINTAL-5331）——点它们还是单列。
+   */
+  function activePartnersOf(sessionId: string): readonly string[] {
+    const index = conversationRailPeerPairIndex(pairs);
+    return conversationRailPeerPairLinks(index, sessionId)
+      .filter((link) => link.pairMode === "pair")
+      .map((link) => link.peer.sessionId?.trim() ?? "")
+      .filter((id) => id && id !== sessionId);
+  }
+
+  /**
+   * 记忆读侧：`lastPartnerOf` 不单独存一份，从 pairOrder 里「含这条会话、usedAt
+   * 最大」的那条反推 —— 两份缓存迟早互相打架（CLAUDE 教训：一个事实一个所有者）。
+   */
+  const pairSelectMemory: SplitPairSelectMemory = {
+    lastPartnerOf(sessionId) {
+      const id = sessionId.trim();
+      if (!id) return null;
+      let best: { partner: string; usedAt: number } | null = null;
+      for (const entry of Object.values(pairOrder)) {
+        const partner =
+          entry.left === id
+            ? entry.right
+            : entry.right === id
+              ? entry.left
+              : "";
+        if (!partner) continue;
+        if (!best || entry.usedAt > best.usedAt) {
+          best = { partner, usedAt: entry.usedAt };
+        }
+      }
+      return best?.partner ?? null;
+    },
+    orderOf(a, b) {
+      const entry = pairOrder[splitPairOrderKey(a, b)];
+      return entry ? ([entry.left, entry.right] as const) : null;
+    }
+  };
+
+  /**
+   * 把「这一对此刻的左右」记下来。usedAt 强制单调递增：同一毫秒内连着换两对时
+   * `Date.now()` 会打平，`lastPartnerOf` 就会挑回更早的那一对（真机上表现为
+   * 「明明刚开过 C，点回去又变成 B」）。
+   */
+  function rememberPairOrder(left: string, right: string): void {
+    const a = left.trim();
+    const b = right.trim();
+    if (!a || !b || a === b) return;
+    const highest = Object.values(pairOrder).reduce(
+      (max, entry) => Math.max(max, entry.usedAt ?? 0),
+      0
+    );
+    pairOrder = {
+      ...pairOrder,
+      [splitPairOrderKey(a, b)]: {
+        left: a,
+        right: b,
+        usedAt: Math.max(Date.now(), highest + 1)
+      }
+    };
   }
 
   function nodeById(nodeId: string): EmbeddedSplitViewNode | null {
@@ -719,6 +818,12 @@ export function createEmbeddedSplitViewController(
 
   function activate(nodeId: string, agentSessionId: string): void {
     goingHomeByNodeId.delete(nodeId);
+    const stale = sessionIdByNodeId.get(nodeId) ?? "";
+    if (stale && stale !== agentSessionId) {
+      pendingActivateByNodeId.set(nodeId, { expected: agentSessionId, stale });
+    } else {
+      pendingActivateByNodeId.delete(nodeId);
+    }
     sessionIdByNodeId.set(nodeId, agentSessionId);
     host.activateNode(
       { nodeId },
@@ -737,7 +842,9 @@ export function createEmbeddedSplitViewController(
    * 窗口起来之后由调用方 activate 到目标会话。两次都钉着 openInNewWindow，
    * 否则 reusePolicy 会落到 dock-entry、把左栏那个窗口还回来。
    */
-  async function launchPaneNode(agentSessionId: string): Promise<string | null> {
+  async function launchPaneNode(
+    agentSessionId: string
+  ): Promise<string | null> {
     const known = dragSessionById.get(agentSessionId);
     const withSession = await host.launchNode({
       payload: {
@@ -837,7 +944,11 @@ export function createEmbeddedSplitViewController(
     if (shown === null) return;
     goingHomeByNodeId.set(nodeId, shown);
     sessionIdByNodeId.delete(nodeId);
-    host.activateNode({ nodeId }, { type: agentGuiWorkbenchGoHomeActivationType });
+    pendingActivateByNodeId.delete(nodeId);
+    host.activateNode(
+      { nodeId },
+      { type: agentGuiWorkbenchGoHomeActivationType }
+    );
   }
 
   function applyLayout(
@@ -845,6 +956,11 @@ export function createEmbeddedSplitViewController(
     options: { persist: boolean }
   ): void {
     layout = next;
+    // 两栏都有人就把此刻的左右记下来：交换左右、拖出分栏、整组切换走的都是这里，
+    // 下次再点开这一对就照这个顺序摆（票 03）。
+    if (layout.panes.left !== null && layout.panes.right !== null) {
+      rememberPairOrder(layout.panes.left, layout.panes.right);
+    }
     if (
       pendingRelaunch &&
       layout.panes[pendingRelaunch.side] !== pendingRelaunch.forSessionId
@@ -859,6 +975,7 @@ export function createEmbeddedSplitViewController(
       if (rightNodeId) {
         host.closeNode(rightNodeId);
         sessionIdByNodeId.delete(rightNodeId);
+        pendingActivateByNodeId.delete(rightNodeId);
         nodeIdBySide = { ...nodeIdBySide, right: null };
       }
     } else if (nodeIdBySide.right) {
@@ -1146,8 +1263,7 @@ export function createEmbeddedSplitViewController(
       return null;
     }
     const sender = endpointOf(pair, input.agentSessionId.trim());
-    const senderTaskId =
-      sender?.taskId?.trim() || input.agentSessionId.trim();
+    const senderTaskId = sender?.taskId?.trim() || input.agentSessionId.trim();
     const request = { goal, pairId: pair.pairId, senderTaskId };
     // 评审 A：拍下 preview 时的开发者。块里的角色是按它写的；到 commit 时行里的
     // developer 变了，这张卡就是错的，不能投（本地缓存先挡一道，后端 409 再挡一道）。
@@ -1183,14 +1299,18 @@ export function createEmbeddedSplitViewController(
       onAccepted: async () => {
         // 评审 A：等引擎接受的这段时间里用户可能换了角色 / 退回独立模式。缓存里这一行
         // 已经不是 preview 时的样子，就别投了：提示、清在途、重拉，下一句按新行重新拼卡。
-        const latest = pairs.find((candidate) => candidate.pairId === pair.pairId);
+        const latest = pairs.find(
+          (candidate) => candidate.pairId === pair.pairId
+        );
         if (
           !latest ||
           latest.pairMode !== "pair" ||
           (latest.developerTaskId?.trim() ?? "") !== expectedDeveloperTaskId
         ) {
           kickoffInFlight.delete(pair.pairId);
-          toast.error(labels().kickoffRolesChanged ?? labels().kickoffCommitFailed ?? "");
+          toast.error(
+            labels().kickoffRolesChanged ?? labels().kickoffCommitFailed ?? ""
+          );
           emit();
           await refreshPairs();
           return;
@@ -1353,10 +1473,48 @@ export function createEmbeddedSplitViewController(
       }
       // 刚请它回首页、它还没把旧号清掉：这一拍读到的旧号不是「用户切了会话」。
       if (goingHomeByNodeId.get(nodeId) === observed) continue;
+      // 刚 activate 到别的会话、它还没换过来：同理，这一拍的旧号不是用户切的。
+      const pendingActivate = pendingActivateByNodeId.get(nodeId);
+      if (pendingActivate) {
+        if (observed === pendingActivate.expected) {
+          pendingActivateByNodeId.delete(nodeId);
+        } else if (observed === pendingActivate.stale) {
+          continue;
+        } else {
+          // 报的既不是旧号也不是我们请的那条 = 用户真的又切了别的，待换作废。
+          pendingActivateByNodeId.delete(nodeId);
+        }
+      }
       settledNodeIds.add(nodeId);
       freshNodeIds.delete(nodeId);
-      if (observed === panes[side] || observed === panes[otherSide(side)]) continue;
+      if (observed === panes[side] || observed === panes[otherSide(side)])
+        continue;
       sessionIdByNodeId.set(nodeId, observed);
+      // 侧栏点选走的就是这条路（会话栏只在左栏那个窗口里，右栏用 CSS 隐掉了）：
+      // 用户在列表里点了另一条会话，这个窗口自己换了会话号，我们才看见。
+      // 正在结对编程的会话要按票 01/02 分三条去向，不能一律原地顶替这一栏。
+      const resolved =
+        side === "left"
+          ? resolveSplitPairSelection({
+              activePartnersOf,
+              id: observed,
+              layout: { ...layout, panes },
+              memory: pairSelectMemory
+            })
+          : { kind: "single" as const, id: observed };
+      // 左栏这一下重写的是**整个**布局，右栏窗口这一拍还报着旧会话号（它要等
+      // applyLayout 去关/去换）。这时继续看右栏，会把刚被收掉的那条当成「用户在
+      // 右栏切了会话」再塞回来——真机上表现为「点没结对的会话收不成单列」。
+      if (resolved.kind === "group") {
+        panes = { left: resolved.left, right: resolved.right };
+        break;
+      }
+      if (resolved.kind === "single" && side === "left") {
+        // 没结对（含空心徽标）→ 收成单列全宽；右栏窗口由 applyLayout 关掉。
+        panes = { left: observed, right: null };
+        break;
+      }
+      // swap-left / 右栏自己换了会话：原地顶替这一栏，另一栏不动。
       panes = { ...panes, [side]: observed };
     }
     if (panes !== layout.panes) {
@@ -1456,7 +1614,13 @@ export function createEmbeddedSplitViewController(
       }
       collapsed =
         surfaceWidth() > 0 && surfaceWidth() < EMBEDDED_SPLIT_COLLAPSE_WIDTH_PX;
-      const stored = storage ? loadSplitLayout(storage, storageKey) : null;
+      // 耐久存储优先（票 04）：iframe 的 localStorage 会随宿主重启换 origin 而丢，
+      // 「退出重进分栏没了」就是这么来的。宿主没这个能力时 store 自己退回本地。
+      const restoredStore = layoutStore
+        ? await layoutStore.read()
+        : { layout: null, pairOrder: {} };
+      pairOrder = restoredStore.pairOrder ?? {};
+      const stored = restoredStore.layout;
       // 开机时 workbench 并不知道有哪些会话（会话列表是 gui 自己的数据，宿主快照里
       // 没有），所以「存活」判据无从取得：一律当存活，激活不到就由 gui 自己退回首页。
       const alive = [stored?.panes.left, stored?.panes.right].filter(

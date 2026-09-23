@@ -242,6 +242,69 @@ func (a *ClaudeCodeSDKAdapter) HasLiveSession(session Session) bool {
 	return a.sessionIsUsable(session.AgentSessionID, adapterSession)
 }
 
-func (a *ClaudeCodeSDKAdapter) ReleaseLiveSession(ctx context.Context, session Session) error {
-	return a.Close(ctx, session)
+// ReleaseLiveSession 把一条闲置 Claude Code 会话的进程还给系统，供空闲回收器
+// （Controller.ReleaseIdleLiveSessions）与人工释放（Controller.ReleaseLiveSessionNow）
+// 调用。
+//
+// 这里刻意**不走 Close**（历史实现直接 `return a.Close(ctx, session)`，是错的）：
+// Close 会向 sidecar 发一条协议级 `close`，那是在告诉对端「这条会话到此为止」，
+// 对端据此丢掉会话状态，之后续聊未必接得回来。空闲回收的意图恰恰相反 —— 只想
+// 省掉闲着的进程，用户下次续聊必须原样接上。所以只丢本地这一侧：adapter 的
+// sessions 表项、进程连接（连带 sidecar 子进程）。会话记录与 providerSessionID
+// 留在控制器里不动，CanResume 仍为真，下一次 Resume 会重新拉起进程。
+// 这与 codex 的 closeLiveSession、standard ACP 的 ReleaseLiveSession 同构。
+func (a *ClaudeCodeSDKAdapter) ReleaseLiveSession(_ context.Context, session Session) error {
+	if a == nil {
+		return nil
+	}
+	agentSessionID := strings.TrimSpace(session.AgentSessionID)
+	if a.hasLiveSessionWork(agentSessionID) {
+		return ErrLiveSessionBusy
+	}
+	adapterSession := a.getSession(agentSessionID)
+	if adapterSession == nil {
+		return nil
+	}
+	if !a.removeSession(agentSessionID, adapterSession) {
+		// 并发下这条已经被别处换掉/摘掉：那条连接不归这次调用管。
+		return nil
+	}
+	if adapterSession.conn == nil {
+		return nil
+	}
+	return adapterSession.conn.Close()
+}
+
+// hasLiveSessionWork 判断这条 Claude 会话此刻是不是还在干活：有在飞的回合
+// （claudeSDKTurnWaiter 还没收尾），或有挂起/正在解析的交互请求（审批、提问）。
+// 忙就表态 ErrLiveSessionBusy —— 绝不把用户正在用的会话掐掉。判据形状与
+// standardACPAdapter.hasLiveSessionWork / CodexAppServerAdapter.hasLiveSessionWork
+// 同源。
+func (a *ClaudeCodeSDKAdapter) hasLiveSessionWork(agentSessionID string) bool {
+	if a == nil {
+		return false
+	}
+	agentSessionID = strings.TrimSpace(agentSessionID)
+	a.mu.Lock()
+	adapterSession := a.sessions[agentSessionID]
+	if adapterSession == nil {
+		a.mu.Unlock()
+		return false
+	}
+	inFlightTurns := len(adapterSession.turns)
+	pending := make([]*pendingInteractiveRequest, 0, len(adapterSession.pendingRequests))
+	for _, request := range adapterSession.pendingRequests {
+		pending = append(pending, request)
+	}
+	a.mu.Unlock()
+	if inFlightTurns > 0 {
+		return true
+	}
+	for _, request := range pending {
+		state := request.disposition()
+		if state == pendingInteractiveRequestStatePending || state == pendingInteractiveRequestStateResolving {
+			return true
+		}
+	}
+	return false
 }

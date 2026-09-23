@@ -18,8 +18,12 @@ const stateRootDir = resolveDevelopmentStateRoot();
 const canonicalShimPath = join(stateRootDir, "bin", commandName);
 
 await buildDevCli();
-await writeDevShim(canonicalShimPath, builtCliPath);
-const pathShimPath = await installPathShimIfPossible(canonicalShimPath);
+await writeDevShim(canonicalShimPath, builtCliPath, stateRootDir);
+const pathShimPath = await installPathShimIfPossible(
+  canonicalShimPath,
+  builtCliPath,
+  resolvePathShimStateRoot()
+);
 
 log(`built ${builtCliPath}`);
 log(`installed ${canonicalShimPath}`);
@@ -37,6 +41,23 @@ function resolveDevelopmentStateRoot() {
   if (override) {
     return override;
   }
+  return resolveStableDevelopmentStateRoot();
+}
+
+// The user-global PATH shim outlives the run that wrote it, so it must only ever
+// encode a state root that will still exist later. A workspace-local root (a
+// perf runtime under <repo>/.tmp, a scratch checkout) is deleted with the run
+// that created it; baking one into ~/.local/bin/tutti-dev is what left the shim
+// pointing at a state root that no longer existed. A non-workspace override is a
+// deliberate multi-instance choice (dev vs demo) and is kept as-is.
+function resolvePathShimStateRoot() {
+  const resolved = resolveDevelopmentStateRoot();
+  return isWorkspaceLocalPath(resolve(resolved))
+    ? resolveStableDevelopmentStateRoot()
+    : resolved;
+}
+
+function resolveStableDevelopmentStateRoot() {
   return join(homedir(), generatedDefaults.state.developmentDirName);
 }
 
@@ -62,7 +83,11 @@ async function buildDevCli() {
   }
 }
 
-async function installPathShimIfPossible(canonicalPath) {
+async function installPathShimIfPossible(
+  canonicalPath,
+  targetPath,
+  shimStateRootDir
+) {
   if (process.env.TUTTI_DEV_SKIP_PATH_SHIM === "1") {
     return null;
   }
@@ -75,7 +100,10 @@ async function installPathShimIfPossible(canonicalPath) {
   const existing = await findExistingPathCommand(pathDirs);
   if (existing) {
     if (await isOwnedDevShim(existing)) {
-      await writeDevShim(existing, canonicalPath);
+      // Rewriting unconditionally also repairs a shim an earlier run left
+      // dangling against a cleaned-up state root: the marker above is what makes
+      // overwriting a file outside our own state root safe.
+      await writeDevShim(existing, targetPath, shimStateRootDir);
       return existing;
     }
     log(
@@ -90,7 +118,7 @@ async function installPathShimIfPossible(canonicalPath) {
   }
 
   const shimPath = join(writableDir, commandName);
-  await writeDevShim(shimPath, canonicalPath);
+  await writeDevShim(shimPath, targetPath, shimStateRootDir);
   return shimPath;
 }
 
@@ -135,7 +163,7 @@ function isWorkspaceLocalPath(path) {
   );
 }
 
-async function writeDevShim(shimPath, targetPath) {
+async function writeDevShim(shimPath, targetPath, shimStateRootDir) {
   await mkdir(dirname(shimPath), { recursive: true });
   if (process.platform === "win32") {
     await writeFile(
@@ -143,7 +171,7 @@ async function writeDevShim(shimPath, targetPath) {
       [
         "@echo off",
         "rem Tutti dev CLI shim",
-        `if "%TUTTI_STATE_DIR%"=="" set "TUTTI_STATE_DIR=${stateRootDir}"`,
+        `if "%TUTTI_STATE_DIR%"=="" set "TUTTI_STATE_DIR=${shimStateRootDir}"`,
         `"${targetPath}" %*`,
         ""
       ].join("\r\n"),
@@ -157,7 +185,7 @@ async function writeDevShim(shimPath, targetPath) {
     [
       "#!/usr/bin/env sh",
       "# Tutti dev CLI shim",
-      `if [ -z "\${TUTTI_STATE_DIR:-}" ]; then export TUTTI_STATE_DIR=${shellQuote(stateRootDir)}; fi`,
+      `if [ -z "\${TUTTI_STATE_DIR:-}" ]; then export TUTTI_STATE_DIR=${shellQuote(shimStateRootDir)}; fi`,
       `exec ${shellQuote(targetPath)} "$@"`,
       ""
     ].join("\n"),

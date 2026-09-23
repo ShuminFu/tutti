@@ -248,6 +248,73 @@ test("a new completion re-lights a session that was already read", () => {
   assert.deepEqual(hydrated?.completedReadIds, []);
 });
 
+test("a known session's new settlement is unread; an already settled turn is not", () => {
+  const snapshot = (latestTurn: AgentActivityTurn) => ({
+    type: "session/snapshotReceived" as const,
+    sessions: [
+      {
+        workspaceId: "workspace-1",
+        agentSessionId: "session-1",
+        provider: "codex",
+        cwd: "/workspace",
+        title: "Session",
+        userId: "user-1",
+        activeTurnId: null,
+        activeTurn: null,
+        latestTurn,
+        latestTurnInteractions: [],
+        pendingInteractions: []
+      }
+    ]
+  });
+  const running = {
+    ...turn,
+    outcome: undefined,
+    phase: "running" as const,
+    settledAtUnixMs: undefined,
+    updatedAtUnixMs: 1
+  };
+  const lit = attentionReadStateReducer(
+    createInitialAttentionReadState(),
+    snapshot(turn),
+    {
+      previousSessionsById: {
+        "session-1": { userId: "user-1" } as never
+      },
+      previousTurnsById: {
+        [canonicalTurnKey("session-1", "turn-1")]: running
+      },
+      sessionsById: { "session-1": { userId: "user-1" } },
+      turnsById: { [canonicalTurnKey("session-1", "turn-1")]: turn }
+    }
+  ).state;
+  assert.equal(
+    lit.partitionsByUserId["user-1"]?.recordsBySessionId["session-1"]
+      ?.isUnread,
+    true
+  );
+
+  const held = attentionReadStateReducer(
+    createInitialAttentionReadState(),
+    snapshot(turn),
+    {
+      previousSessionsById: {
+        "session-1": { userId: "user-1" } as never
+      },
+      previousTurnsById: {
+        [canonicalTurnKey("session-1", "turn-1")]: turn
+      },
+      sessionsById: { "session-1": { userId: "user-1" } },
+      turnsById: { [canonicalTurnKey("session-1", "turn-1")]: turn }
+    }
+  ).state;
+  assert.equal(
+    held.partitionsByUserId["user-1"]?.recordsBySessionId["session-1"]
+      ?.isUnread,
+    false
+  );
+});
+
 test("historical snapshot completion stays read unless persistence says unread", () => {
   const snapshot = {
     type: "session/snapshotReceived" as const,

@@ -60,6 +60,15 @@ export {
   type SplitLayoutState,
   type SplitSide
 } from "./agent-gui/agentGuiNode/model/agentGuiSplitLayout.ts";
+// 侧栏点选在结对模式下的去向（rndmaster 票 01/02）：纯决策层，嵌入层调它。
+export {
+  orderSplitPair,
+  pickSplitPairPartner,
+  resolveSplitPairSelection,
+  type SplitPairSelectInput,
+  type SplitPairSelectMemory,
+  type SplitPairSelectOutcome
+} from "./agent-gui/agentGuiNode/model/agentGuiSplitPairSelect.ts";
 
 // 配对请求就地审批（补丁 0116）：宿主端口注册口，同样挂在这个子路径上。
 export {

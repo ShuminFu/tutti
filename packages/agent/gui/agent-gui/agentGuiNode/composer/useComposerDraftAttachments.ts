@@ -53,7 +53,11 @@ import {
 } from "./composerDraftUtils";
 import { reportAgentComposerDiagnostic } from "./agentComposerDiagnostics";
 import { settleWithTimeout } from "./composerAssetUploadTimeout";
-import { uploadComposerDraftImage } from "./composerDraftImageUpload";
+import { settlePastedComposerImage } from "./composerDraftImageUpload";
+import {
+  mergePastedComposerImages,
+  revokeComposerImagePreviewUrl
+} from "./composerPastedImagePreview";
 import type { AgentGUIComposerContentType } from "../engagement/agentGUIEngagement.types";
 import type { ComposerDraftVersionTracker } from "../model/composerDraftVersion";
 import { recordComposerLocalDraftEdit } from "../model/composerDraftVersion";
@@ -136,6 +140,7 @@ export function useComposerDraftAttachments({
 }: UseComposerDraftAttachmentsInput) {
   const agentHostApi = useOptionalAgentHostApi();
   const agentActivityRuntime = useOptionalAgentGUIRuntime();
+  const removedDraftImageIdsRef = useRef(new Set<string>());
   const activeDraftScopeKeyRef = useRef(draftScopeKey);
   activeDraftScopeKeyRef.current = draftScopeKey;
   const reportContentEntered = useStableEventCallback(
@@ -301,67 +306,65 @@ export function useComposerDraftAttachments({
         onPromptImagesUnsupported?.();
         return;
       }
-      const currentDraftImages = draftImagesRef.current;
-      const remainingSlots = Math.min(
-        Math.max(
-          0,
-          MAX_AGENT_COMPOSER_DRAFT_IMAGES - currentDraftImages.length
-        ),
-        remainingAgentComposerPromptAssetSlots({
-          images: currentDraftImages.length,
-          files: draftFilesRef.current.length,
-          largeTexts: draftLargeTextsRef.current.length,
-          limit: promptAssetLimit
-        })
-      );
-      if (remainingSlots === 0) {
-        return;
-      }
       const uploadPromptContent =
         agentActivityRuntime?.uploadPromptContent &&
         (agentActivityRuntime.promptContentUploadSupport?.image ?? true)
           ? agentActivityRuntime.uploadPromptContent
           : undefined;
-      reportAgentComposerDiagnostic(agentActivityRuntime, {
-        details: {
-          imageCount: Math.min(images.length, remainingSlots),
-          promptImagesSupported,
-          runtimeAvailable: Boolean(agentActivityRuntime),
-          uploadFunctionAvailable: Boolean(uploadPromptContent),
-          uploadSupportDeclared:
-            agentActivityRuntime?.promptContentUploadSupport?.image ?? null
-        },
-        event: "agent.gui.composer.image_upload.requested",
-        level: "info",
-        source: "agent-gui",
-        workspaceId
+      const merged = mergePastedComposerImages({
+        current: draftImagesRef.current,
+        incoming: images,
+        remainingSlots: Math.min(
+          Math.max(
+            0,
+            MAX_AGENT_COMPOSER_DRAFT_IMAGES - draftImagesRef.current.length
+          ),
+          remainingAgentComposerPromptAssetSlots({
+            images: draftImagesRef.current.length,
+            files: draftFilesRef.current.length,
+            largeTexts: draftLargeTextsRef.current.length,
+            limit: promptAssetLimit
+          })
+        ),
+        removedIds: removedDraftImageIdsRef.current,
+        uploadEnabled: Boolean(uploadPromptContent)
       });
-      const nextImages = images.slice(0, remainingSlots).map((image) => ({
-        id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
-        name: image.name,
-        mimeType: image.mimeType,
-        data: image.data,
-        previewUrl: `data:${image.mimeType};base64,${image.data}`,
-        uploading: Boolean(uploadPromptContent)
-      }));
-      const nextDraftImages = [...currentDraftImages, ...nextImages];
-      draftImagesRef.current = nextDraftImages;
-      reportContentEntered("image");
+      if (!merged.changed) {
+        return;
+      }
+      for (const previewUrl of merged.revokedPreviewUrls) {
+        revokeComposerImagePreviewUrl(previewUrl);
+      }
+      draftImagesRef.current = merged.images;
+      if (merged.addedCount > 0) {
+        reportContentEntered("image");
+        reportAgentComposerDiagnostic(agentActivityRuntime, {
+          details: {
+            imageCount: merged.addedCount,
+            promptImagesSupported,
+            runtimeAvailable: Boolean(agentActivityRuntime),
+            uploadFunctionAvailable: Boolean(uploadPromptContent),
+            uploadSupportDeclared:
+              agentActivityRuntime?.promptContentUploadSupport?.image ?? null
+          },
+          event: "agent.gui.composer.image_upload.requested",
+          level: "info",
+          source: "agent-gui",
+          workspaceId
+        });
+      }
       publishLocalScopedDraft(
         draftScopeKey,
         buildAgentComposerDraft({
           prompt: draftPromptRef.current,
-          images: nextDraftImages,
+          images: merged.images,
           files: draftFilesRef.current,
           largeTexts: draftLargeTextsRef.current
         })
       );
-      if (!uploadPromptContent) {
-        return;
-      }
-      for (const draftImage of nextImages) {
-        uploadComposerDraftImage({
-          draftImage,
+      for (const job of merged.jobs) {
+        settlePastedComposerImage({
+          job,
           runtime: agentActivityRuntime,
           updateScopedDraft: (update) =>
             updateScopedDraft(draftScopeKey, update),
@@ -385,6 +388,9 @@ export function useComposerDraftAttachments({
 
   const removeDraftImage = useCallback(
     (id: string): void => {
+      const removed = draftImagesRef.current.find((image) => image.id === id);
+      removedDraftImageIdsRef.current.add(id);
+      revokeComposerImagePreviewUrl(removed?.previewUrl);
       const nextDraftImages = draftImagesRef.current.filter(
         (image) => image.id !== id
       );

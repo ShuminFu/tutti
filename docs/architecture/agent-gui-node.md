@@ -2084,12 +2084,12 @@ failure semantics, or a parallel settings store; the desktop capture window
 is the first adopter.
 
 The Quick Composer uses the Composer's `embedded` layout contract. Unlike
-`dock`, which owns a fixed, bounded bottom-dock viewport, `embedded` keeps the
+`dock`, which owns a bounded bottom-dock viewport, `embedded` keeps the
 entire draft in normal document flow. Compact host surfaces must select that
 layout instead of compensating for dock overflow with consumer-specific offsets
-or clipping. In the existing-Session dock, the outer region is non-shrinking and
-reserves a content-independent border-box height of `min(240px, 40% of the
-definite detail pane height)`. Lifted prompts, session accessories, workflow
+or clipping. In the existing-Session dock, the outer region is non-shrinking,
+fits its visible controls, and is capped at `min(240px, 40% of the definite
+detail pane height)`. Lifted prompts, session accessories, workflow
 cards, queued prompts, and the primary composer share one nested `min-height: 0`
 scroll viewport; a short pane therefore makes every control reachable by dock-
 local scrolling rather than pushing or covering the transcript. The floating
@@ -2308,6 +2308,19 @@ successful check that confirms absence may render missing-project chrome.
 The empty-home carousel may measure its placeholder synchronously when live
 alignment first activates. Later React updates coalesce alignment into the next
 animation frame; ResizeObserver and MutationObserver keep layout roots current.
+
+Pasted prompt images paint before their bytes are archived. The paste handler
+publishes a composer chip in the paste turn from clipboard item kind and type
+only, then yields one task before reading clipboard bytes. The chip shows a
+blob preview as soon as the file is in hand. Base64 encoding and host archival
+run after that preview and must not replace it with a data URL. An empty,
+generic, or non-SVG `image/*` clipboard type still takes this path; the
+provider payload is sniffed or transcoded to png, jpeg, or webp. A file that
+is not an image leaves the chip and uses the existing file attachment path.
+A full-bleed spinner covers only the still-empty chip. Once the preview is
+visible, upload progress stays a corner mark so the picture is not hidden
+until archival finishes. Sending still omits an image that is encoding or
+uploading.
 
 Composer text transactions may publish the current draft, but the draft value
 must not drive synchronous pre-paint geometry reads or an urgent AgentGUI tree

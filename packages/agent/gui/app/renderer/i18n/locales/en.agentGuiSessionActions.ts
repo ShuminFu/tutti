@@ -3,10 +3,6 @@ export const enAgentGuiSessionActions = {
   archiveView: "Archive",
   restoreArchive: "Restore session",
   archiveEmpty: "No archived sessions",
-  archiveRemaining: "{{days}} days remaining",
-  archiveExpired: "Expired",
-  archiveRetention:
-    "Archived sessions expire after 30 days. They remain available until you delete them.",
   deleteSessionDescription:
     "Delete this conversation and its child conversations? Running work will be interrupted.",
   moreSessionActions: "More session actions",

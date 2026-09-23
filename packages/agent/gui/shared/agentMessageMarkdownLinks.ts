@@ -8,7 +8,10 @@ import {
   parseRichTextMentionHref
 } from "@tutti-os/ui-rich-text/core";
 import { managedAgentRoundedIconUrl } from "./managedAgentIcons";
-import { isDirectAgentGeneratedMediaPath } from "../actions/workspaceFilePathCandidate";
+import {
+  fileUrlToLocalPath,
+  isDirectAgentGeneratedMediaPath
+} from "../actions/workspaceFilePathCandidate";
 import {
   resolveAgentTargetPresentation,
   type AgentMessageMarkdownAgentTarget
@@ -301,11 +304,42 @@ function normalizeLocalPathMarkdownLinkAt(
   content: string,
   index: number
 ): { markdown: string; end: number } | null {
+  const link = readMarkdownLinkDestination(content, index);
+  if (!link) return null;
+  const localPath = fileUrlToLocalPath(link.target) ?? link.target;
+  const fromFileUrl = localPath !== link.target;
+  if (
+    !localPath ||
+    /[<>]/.test(localPath) ||
+    !isPotentialLocalMarkdownPathHref(localPath) ||
+    (!fromFileUrl && !/\s/.test(localPath))
+  ) {
+    return null;
+  }
+  const destination = /\s/.test(localPath) ? `<${localPath}>` : localPath;
+  return {
+    markdown: `${content.slice(index, link.hrefStart)}${destination})`,
+    end: link.hrefEnd + 1
+  };
+}
+
+function readMarkdownLinkDestination(
+  content: string,
+  index: number
+): { hrefStart: number; hrefEnd: number; target: string } | null {
   if (content[index] !== "[") return null;
   const labelEnd = content.indexOf("]", index + 1);
   if (labelEnd < 0 || content[labelEnd + 1] !== "(") return null;
   const hrefStart = labelEnd + 2;
-  if (content[hrefStart] === "<") return null;
+  if (content[hrefStart] === "<") {
+    const close = content.indexOf(">", hrefStart + 1);
+    if (close < 0 || content[close + 1] !== ")") return null;
+    return {
+      hrefStart,
+      hrefEnd: close + 1,
+      target: content.slice(hrefStart + 1, close).trim()
+    };
+  }
   let hrefEnd = hrefStart;
   while (hrefEnd < content.length) {
     const current = content[hrefEnd];
@@ -318,18 +352,10 @@ function normalizeLocalPathMarkdownLinkAt(
     hrefEnd += 1;
   }
   if (content[hrefEnd] !== ")") return null;
-  const target = content.slice(hrefStart, hrefEnd).trim();
-  if (
-    !target ||
-    !/\s/.test(target) ||
-    /[<>]/.test(target) ||
-    !isPotentialLocalMarkdownPathHref(target)
-  ) {
-    return null;
-  }
   return {
-    markdown: `${content.slice(index, hrefStart)}<${target}>)`,
-    end: hrefEnd + 1
+    hrefStart,
+    hrefEnd,
+    target: content.slice(hrefStart, hrefEnd).trim()
   };
 }
 

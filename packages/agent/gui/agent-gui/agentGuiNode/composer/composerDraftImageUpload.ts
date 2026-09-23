@@ -1,4 +1,5 @@
 import type { AgentGUIRuntime } from "../../../agentActivityRuntime";
+import { encodeAgentRichTextPromptImage } from "../agentRichText/agentRichTextPromptImages";
 import type {
   AgentComposerDraft,
   AgentComposerDraftImage
@@ -9,6 +10,10 @@ import {
 } from "../model/agentComposerDraft";
 import { reportAgentComposerDiagnostic } from "./agentComposerDiagnostics";
 import { settleWithTimeout } from "./composerAssetUploadTimeout";
+import {
+  revokeComposerImagePreviewUrl,
+  type PastedComposerImageJob
+} from "./composerPastedImagePreview";
 
 /**
  * Applies the provider-readable locator returned by an image upload onto the
@@ -160,4 +165,99 @@ export function uploadComposerDraftImage(input: {
         markImageUploadFailed(currentDraft, draftImage.id, message)
       );
     });
+}
+
+/**
+ * Encodes a pasted image after its preview is already on screen, then uploads
+ * when the host can archive it. The base64 payload is not copied onto the
+ * draft while an upload is in flight.
+ */
+export function settlePastedComposerImage(input: {
+  job: PastedComposerImageJob;
+  runtime: AgentGUIRuntime | null;
+  updateScopedDraft: (
+    update: (current: AgentComposerDraft) => AgentComposerDraft
+  ) => AgentComposerDraft | null;
+  uploadPromptContent:
+    | NonNullable<AgentGUIRuntime["uploadPromptContent"]>
+    | undefined;
+  workspaceId: string;
+}): void {
+  void encodePastedComposerImage(input.job)
+    .then((encoded) => {
+      if (!encoded) {
+        input.updateScopedDraft((draft) =>
+          markImageUploadFailed(
+            draft,
+            input.job.id,
+            "This image could not be read."
+          )
+        );
+        return;
+      }
+      input.updateScopedDraft((draft) => {
+        const current = agentComposerDraftImages(draft).find(
+          (image) => image.id === input.job.id
+        );
+        if (
+          current &&
+          encoded.previewUrl &&
+          current.previewUrl !== encoded.previewUrl
+        ) {
+          revokeComposerImagePreviewUrl(current.previewUrl);
+        }
+        return updateAgentComposerDraft(draft, {
+          images: agentComposerDraftImages(draft).map((image) =>
+            image.id === input.job.id
+              ? {
+                  ...image,
+                  mimeType: encoded.mimeType,
+                  ...(encoded.previewUrl
+                    ? { previewUrl: encoded.previewUrl }
+                    : {}),
+                  ...(input.job.upload ? {} : { data: encoded.data }),
+                  uploading: input.job.upload
+                }
+              : image
+          )
+        });
+      });
+      if (!input.job.upload || !input.uploadPromptContent) {
+        return;
+      }
+      uploadComposerDraftImage({
+        draftImage: {
+          id: input.job.id,
+          name: input.job.name,
+          mimeType: encoded.mimeType,
+          data: encoded.data,
+          previewUrl: "",
+          uploading: true
+        },
+        runtime: input.runtime,
+        updateScopedDraft: input.updateScopedDraft,
+        uploadPromptContent: input.uploadPromptContent,
+        workspaceId: input.workspaceId
+      });
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      input.updateScopedDraft((draft) =>
+        markImageUploadFailed(draft, input.job.id, message)
+      );
+    });
+}
+
+async function encodePastedComposerImage(job: PastedComposerImageJob): Promise<{
+  mimeType: PastedComposerImageJob["mimeType"];
+  data: string;
+  previewUrl?: string;
+} | null> {
+  if (job.data.trim()) {
+    return { mimeType: job.mimeType, data: job.data };
+  }
+  if (!job.sourceFile) {
+    return null;
+  }
+  return encodeAgentRichTextPromptImage(job.sourceFile);
 }

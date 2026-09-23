@@ -80,24 +80,32 @@ export function attentionReadStateReducer(
       return reconcileAuthoritativeHistoryAttention(state, intent, context);
     case "session/snapshotReceived": {
       let next = state;
+      const commands: EngineCommand[] = [];
       for (const session of intent.sessions) {
-        if (session.latestTurn) {
-          const turn = acceptedCanonicalTurn(session.latestTurn, context);
-          const id = session.agentSessionId.trim();
-          const key = canonicalTurnKey(id, session.latestTurn.turnId);
-          const snapshotAccepted =
-            context.sessionsById[id] !== context.previousSessionsById[id] ||
-            turn !== context.previousTurnsById[key];
-          if (!turn || !snapshotAccepted) continue;
-          next = observeTurn(
-            next,
-            context.sessionsById[turn.agentSessionId]?.userId ?? "",
-            turn,
-            false
-          ).state;
-        }
+        if (!session.latestTurn) continue;
+        const turn = acceptedCanonicalTurn(session.latestTurn, context);
+        const id = session.agentSessionId.trim();
+        const key = canonicalTurnKey(id, session.latestTurn.turnId);
+        const snapshotAccepted =
+          context.sessionsById[id] !== context.previousSessionsById[id] ||
+          turn !== context.previousTurnsById[key];
+        if (!turn || !snapshotAccepted) continue;
+        const userId = context.sessionsById[turn.agentSessionId]?.userId ?? "";
+        const previousTurn = context.previousTurnsById[key];
+        const alreadySettled =
+          previousTurn !== undefined &&
+          previousTurn.phase === "settled" &&
+          completionKind(previousTurn) === completionKind(turn);
+        // Already on the list and this settlement is new: unread. A session
+        // seen for the first time stays historical so startup does not light
+        // every old row.
+        const live =
+          context.previousSessionsById[id] !== undefined && !alreadySettled;
+        const observed = observeTurn(next, userId, turn, live);
+        if (live) commands.push(...observed.commands);
+        next = observed.state;
       }
-      return next === state ? unchanged(state) : changed(next);
+      return next === state ? unchanged(state) : changed(next, commands);
     }
     case "session/removed": {
       const id = intent.agentSessionId.trim();

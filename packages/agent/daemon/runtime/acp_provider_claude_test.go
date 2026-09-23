@@ -3,6 +3,8 @@ package agentruntime
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -181,5 +183,109 @@ func TestClaudeCodeACPAllowsDeclaredImagePromptWithoutLiveSession(t *testing.T) 
 		Path:     "/managed/agent-prompt-assets/screen.png",
 	}}); err != nil {
 		t.Fatalf("ValidatePromptContent without live session = %v, want nil", err)
+	}
+}
+
+// TestClaudeCodeACPSessionMetaInjectsPreparedSurface pins the ACP half of the
+// DinTalDock injection. claude-agent-acp builds its query options out of the
+// session/new `_meta` it receives: `_meta.claudeCode.options` is spread straight
+// into the SDK options, and `_meta.systemPrompt` replaces the default
+// `{type:"preset", preset:"claude_code"}` while preserving every other preset
+// key. So the plugin dir and the routing prompt that runtimeprep prepares only
+// reach the model when the daemon puts them in that `_meta`. Before this wiring
+// the ACP runtime dropped both, which is why no `tutti-cli:*` Skill and no
+// `mention://` routing contract ever showed up in a session started under
+// TUTTI_CLAUDE_CODE_RUNTIME=acp.
+func TestClaudeCodeACPSessionMetaInjectsPreparedSurface(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	pluginDir := filepath.Join(root, "claude-plugin", "tutti-cli")
+	if err := os.MkdirAll(pluginDir, 0o700); err != nil {
+		t.Fatalf("mkdir plugin dir: %v", err)
+	}
+	promptPath := filepath.Join(root, "claude-system-prompt.md")
+	if err := os.WriteFile(promptPath, []byte("  routing table  \n"), 0o600); err != nil {
+		t.Fatalf("write system prompt: %v", err)
+	}
+
+	meta := claudeACPSessionMeta(Session{Env: []string{
+		claudePluginDirEnv + "=" + pluginDir,
+		claudeSystemPromptFileEnv + "=" + promptPath,
+	}})
+
+	claudeCode, _ := meta["claudeCode"].(map[string]any)
+	options, _ := claudeCode["options"].(map[string]any)
+	plugins, _ := options["plugins"].([]map[string]any)
+	if len(plugins) != 1 || plugins[0]["type"] != "local" || plugins[0]["path"] != pluginDir {
+		t.Fatalf("plugins = %#v, want one local plugin at %q", options["plugins"], pluginDir)
+	}
+
+	systemPrompt, _ := meta["systemPrompt"].(map[string]any)
+	if systemPrompt["type"] != "preset" || systemPrompt["preset"] != "claude_code" {
+		t.Fatalf("systemPrompt = %#v, want the locked claude_code preset", systemPrompt)
+	}
+	if got := systemPrompt["append"]; got != "routing table" {
+		t.Fatalf("systemPrompt append = %#v, want the trimmed prompt file body", got)
+	}
+}
+
+// TestClaudeCodeACPSessionMetaDegradesWithoutPreparedEnv keeps the injection
+// fail-open: a session without the DinTalDock surface is still usable, so a
+// missing prompt file must drop only that half instead of failing session/new.
+// The injected routing prompt itself tells the model to fall back to the
+// materialized SKILL.md, so degrading is strictly better than refusing.
+func TestClaudeCodeACPSessionMetaDegradesWithoutPreparedEnv(t *testing.T) {
+	t.Parallel()
+
+	if meta := claudeACPSessionMeta(Session{}); len(meta) != 0 {
+		t.Fatalf("meta = %#v, want empty for a session with no prepared env", meta)
+	}
+
+	root := t.TempDir()
+	meta := claudeACPSessionMeta(Session{Env: []string{
+		claudePluginDirEnv + "=" + filepath.Join(root, "plugin"),
+		claudeSystemPromptFileEnv + "=" + filepath.Join(root, "absent.md"),
+	}})
+	if _, ok := meta["systemPrompt"]; ok {
+		t.Fatalf("meta = %#v, want no systemPrompt for a missing prompt file", meta)
+	}
+	if _, ok := meta["claudeCode"]; !ok {
+		t.Fatalf("meta = %#v, want the plugin to survive a missing prompt file", meta)
+	}
+}
+
+// TestClaudeCodeACPApplySessionMetaMergesIntoParams covers the adapter wiring:
+// the claude ACP target must actually register the hook, and the hook must merge
+// into an existing `_meta` (other callbacks put keys there) rather than replace
+// it.
+func TestClaudeCodeACPApplySessionMetaMergesIntoParams(t *testing.T) {
+	t.Parallel()
+
+	adapter := newClaudeCodeACPAdapterFromProviderDescriptor(
+		claudeCodeTestDescriptor(t),
+		newStandardACPTransport("Claude Agent", "claude-session-meta"),
+		LegacyHostMetadata(),
+		nil,
+	)
+	if adapter.config.applySessionMeta == nil {
+		t.Fatal("claude ACP adapter must register applySessionMeta")
+	}
+	promptPath := filepath.Join(t.TempDir(), "prompt.md")
+	if err := os.WriteFile(promptPath, []byte("routing"), 0o600); err != nil {
+		t.Fatalf("write system prompt: %v", err)
+	}
+
+	params := map[string]any{"_meta": map[string]any{"keep": "me"}}
+	adapter.config.applySessionMeta(params, Session{Env: []string{
+		claudeSystemPromptFileEnv + "=" + promptPath,
+	}}, LegacyHostMetadata())
+
+	meta, _ := params["_meta"].(map[string]any)
+	if meta["keep"] != "me" {
+		t.Fatalf("_meta = %#v, want the pre-existing key preserved", meta)
+	}
+	if _, ok := meta["systemPrompt"]; !ok {
+		t.Fatalf("_meta = %#v, want the injected systemPrompt", meta)
 	}
 }
