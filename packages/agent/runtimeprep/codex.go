@@ -33,6 +33,13 @@ func (p CodexPreparer) Prepare(ctx context.Context, input ProviderPrepareInput) 
 	if err := prepareCodexHome(codexHome, input.PrepareInput); err != nil {
 		return ProviderPrepareResult{}, err
 	}
+	// Share one copy of codex's curated plugin marketplace (~89MB) across
+	// sessions instead of letting each CODEX_HOME download its own. First
+	// offer this run's previous sync (resume) back to the shared seed, then
+	// hand a brand-new home a copy-on-write clone. Best effort, never fails.
+	seedRoot := codexCuratedPluginsSeedRoot(input.RuntimeRoot)
+	refreshCodexCuratedPluginsSeed(codexHome, seedRoot)
+	seedCodexCuratedPlugins(codexHome, seedRoot)
 	var cleanup func(context.Context) error
 	if !codexRuntimeIsolated(input.PrepareInput) {
 		cleanup, err = projectCodexAuth(ctx, codexHome, p.AuthProjector)
@@ -86,9 +93,10 @@ func (p CodexPreparer) Prepare(ctx context.Context, input ProviderPrepareInput) 
 		env = append(env, codexModelPlanAPIKeyEnv+"="+input.ModelEndpoint.APIKey)
 	}
 	return ProviderPrepareResult{
-		Cwd:     input.Cwd,
-		Env:     env,
-		Cleanup: cleanup,
+		Cwd: input.Cwd,
+		Env: env,
+		// Session end also publishes a fresher marketplace sync to the seed.
+		Cleanup: codexPluginSeedCleanup(cleanup, codexHome, seedRoot),
 	}, nil
 }
 
