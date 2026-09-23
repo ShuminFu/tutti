@@ -24,6 +24,8 @@ import {
   setHostThemeTokens,
   setHostWindowInsets
 } from "@renderer/theme/runtime";
+import { createTuttidClient } from "@tutti-os/client-tuttid-ts";
+import { createRestartAwareFetch } from "../../tuttid/createRestartAwareFetch.ts";
 import { resolveWebBackendConfigFrom } from "./resolveWebBackendConfig";
 import {
   HostBridgeUnavailableError,
@@ -71,13 +73,14 @@ export function createWebDesktopApi(): DesktopApi {
   installHostVisibilityBridge();
   installHostWorkbenchLayoutNotifications();
 
+  const runtime = createWebRuntimeApi(backendConfig);
   return {
     computerUse: createWebComputerUseApi(),
     developer: createWebDeveloperApi(),
     dockPreviewCache: createWebDockPreviewCacheApi(),
-    host: createWebHostApi(),
+    host: createWebHostApi(runtime),
     platform: createWebPlatformApi(),
-    runtime: createWebRuntimeApi(backendConfig),
+    runtime,
     update: createWebUpdateApi(),
     wallpaper: createWebWallpaperApi()
   };
@@ -339,7 +342,29 @@ function createWebPlatformApi(): DesktopPlatformApi {
   };
 }
 
-function createWebHostApi(): DesktopHostApi {
+function createWebHostApi(
+  runtimeApi: Pick<DesktopRuntimeApi, "getBackendConfig">
+): DesktopHostApi {
+  // The web build has no Electron main process to read disk, so preview bytes
+  // come from tuttid's workspace preview endpoint (same auth as the rest of the
+  // renderer's tuttid traffic). Created lazily: most sessions never preview.
+  let previewClient: Pick<
+    ReturnType<typeof createTuttidClient>,
+    "readWorkspaceFilePreview"
+  > | null = null;
+  const readPreviewBytes = async (
+    workspaceID: string,
+    path: string
+  ): Promise<Uint8Array> => {
+    previewClient ??= createTuttidClient({
+      fetch: createRestartAwareFetch(runtimeApi)
+    });
+    const preview = await previewClient.readWorkspaceFilePreview(
+      workspaceID,
+      path
+    );
+    return decodeBase64Bytes(preview.bytesBase64);
+  };
   return {
     files: {
       agentPromptFileArchiveSupported: isHostBridgeAvailable(),
@@ -539,8 +564,8 @@ function createWebHostApi(): DesktopHostApi {
           }
         );
       },
-      readPreviewFile() {
-        return Promise.reject(electronDebugRequired("readPreviewFile"));
+      readPreviewFile(workspaceID, path) {
+        return readPreviewBytes(workspaceID, path);
       },
       resolveEntryIcon() {
         return Promise.resolve(null);
@@ -722,6 +747,15 @@ function resolveWebSocketUrl(
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.searchParams.set("access_token", backendConfig.accessToken);
   return url;
+}
+
+function decodeBase64Bytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 }
 
 function electronDebugRequired(action: string): Error & { code: string } {
