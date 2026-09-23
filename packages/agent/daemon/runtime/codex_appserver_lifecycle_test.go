@@ -320,6 +320,34 @@ func TestCodexAppServerAdapterResumeOverLiveSessionClosesPreviousProcess(t *test
 	}
 }
 
+func TestCodexAppServerAdapterUnexpectedProcessExitClearsLiveProbeAndResumes(t *testing.T) {
+	t.Parallel()
+	transport := &multiProcAppServerTransport{}
+	adapter := NewCodexAppServerAdapter(transport)
+	session := testAppServerSession()
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatal(err)
+	}
+	session.ProviderSessionID = "codex-thread-1"
+	if !adapter.HasLiveSession(session) {
+		t.Fatal("fresh process is not live")
+	}
+	if err := transport.conn(0).Close(); err != nil {
+		t.Fatal(err)
+	}
+	waitForCondition(t, func() bool { return !adapter.HasLiveSession(session) })
+	if err := adapter.Resume(context.Background(), session); err != nil {
+		t.Fatalf("resume after unexpected exit: %v", err)
+	}
+	if !adapter.HasLiveSession(session) {
+		t.Fatal("resumed process is not live")
+	}
+	if spawned, live := transport.snapshot(); spawned != 2 || len(live) != 1 || live[0] != transport.conn(1) {
+		t.Fatalf("after resume: spawned=%d live=%d", spawned, len(live))
+	}
+	_ = adapter.Close(context.Background(), session)
+}
+
 func TestCodexAppServerAdapterResumeSpawnFailureKeepsPreviousSessionLive(t *testing.T) {
 	t.Parallel()
 

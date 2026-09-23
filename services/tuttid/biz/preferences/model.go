@@ -107,6 +107,14 @@ type DesktopPreferences struct {
 	WorkbenchShortcuts                          DesktopWorkbenchShortcuts
 }
 
+// AgentRuntimeRetentionPatch changes only explicitly supplied retention fields.
+// Pointer values preserve the difference between omitted and false or zero.
+type AgentRuntimeRetentionPatch struct {
+	KeepAliveEnabled *bool
+	IdleMinutes      *int
+	MaxResident      *int
+}
+
 type AgentComposerDefaults struct {
 	CodexSaverMode   bool
 	Model            string

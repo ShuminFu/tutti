@@ -170,6 +170,13 @@ func RegisterRoutes(mux *http.ServeMux, routes Routes) {
 			tuttitypes.WriteMethodNotAllowed(w)
 		}
 	})
+	mux.HandleFunc("/v1/preferences/desktop/agent-runtime", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			tuttitypes.WriteMethodNotAllowed(w)
+			return
+		}
+		wrapper.PatchDesktopAgentRuntimeRetention(w, r)
+	})
 
 	mux.HandleFunc("/v1/desktop-update-admission", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

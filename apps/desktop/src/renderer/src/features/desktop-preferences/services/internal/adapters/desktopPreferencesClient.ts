@@ -2,7 +2,7 @@ import type {
   DesktopPreferencesStateResponse,
   TuttidEventStreamClient,
   TuttidClient,
-  PutDesktopPreferencesRequest,
+  PutDesktopPreferencesRequest
 } from "@tutti-os/client-tuttid-ts";
 import {
   defaultDesktopMinimizeAnimation,
@@ -13,17 +13,17 @@ import {
   normalizeDesktopAgentConversationDetailMode,
   normalizeDesktopFeatureFlags,
   normalizeDesktopWorkbenchShortcuts,
-  normalizeDesktopWorkbenchWindowSnapping,
+  normalizeDesktopWorkbenchWindowSnapping
 } from "../../../../../../../shared/preferences/index.ts";
 import type {
   DesktopAgentComposerDefaultsPatch,
-  DesktopAgentSessionLaunchMode,
+  DesktopAgentSessionLaunchMode
 } from "../../../../../../../shared/preferences/index.ts";
 import { desktopAgentComposerDefaultsFields } from "../../../../../../../shared/preferences/index.ts";
 import type {
   DesktopAgentComposerDefaultsField,
   DesktopAgentComposerDefaultsPatchOutcome,
-  DesktopAgentComposerDefaultsRejectedField,
+  DesktopAgentComposerDefaultsRejectedField
 } from "../../desktopPreferencesService.interface.ts";
 
 export interface DesktopPreferencesClient {
@@ -41,12 +41,10 @@ export interface DesktopPreferencesClient {
     mode: DesktopAgentSessionLaunchMode;
   }): Promise<void>;
   updateDesktopPreferences(
-    request: PutDesktopPreferencesRequest,
+    request: PutDesktopPreferencesRequest
   ): Promise<PutDesktopPreferencesRequest["preferences"]>;
   subscribeToDesktopPreferencesUpdated(
-    listener: (
-      preferences: PutDesktopPreferencesRequest["preferences"],
-    ) => void,
+    listener: (preferences: PutDesktopPreferencesRequest["preferences"]) => void
   ): () => void;
 }
 
@@ -75,7 +73,7 @@ interface PendingComposerDefaultsPatch {
 export function createDesktopPreferencesClient(
   tuttidClient: Pick<TuttidClient, "getDesktopPreferences">,
   eventStreamClient: TuttidEventStreamClient,
-  options: CreateDesktopPreferencesClientOptions = {},
+  options: CreateDesktopPreferencesClientOptions = {}
 ): DesktopPreferencesClient {
   const authoritativeEventTimeoutMs =
     options.authoritativeEventTimeoutMs ?? 1_000;
@@ -93,7 +91,7 @@ export function createDesktopPreferencesClient(
     "preferences.desktop.updated",
     (event) => {
       applyAuthoritativePreferences(event.payload.preferences);
-    },
+    }
   );
   const unsubscribeComposerDefaultsResolved = eventStreamClient.subscribe(
     "preferences.agent.composer.defaults.resolved",
@@ -111,10 +109,10 @@ export function createDesktopPreferencesClient(
       pending.resolve(
         normalizeComposerDefaultsPatchOutcome(
           event.payload.applied,
-          event.payload.rejected ?? [],
-        ),
+          event.payload.rejected ?? []
+        )
       );
-    },
+    }
   );
 
   return {
@@ -125,7 +123,7 @@ export function createDesktopPreferencesClient(
       unsubscribeEventStream();
       unsubscribeComposerDefaultsResolved();
       const disposeError = new Error(
-        "Desktop preferences client was disposed.",
+        "Desktop preferences client was disposed."
       );
       for (const pendingUpdate of pendingUpdates.values()) {
         rejectPendingUpdate(pendingUpdate, disposeError);
@@ -148,23 +146,23 @@ export function createDesktopPreferencesClient(
         patch: input.patch,
         reject: () => {},
         resolve: () => {},
-        timeoutHandle: null,
+        timeoutHandle: null
       };
       const promise = new Promise<DesktopAgentComposerDefaultsPatchOutcome>(
         (resolve, reject) => {
           pending.resolve = resolve;
           pending.reject = reject;
-        },
+        }
       );
       pendingComposerDefaultsPatches.set(input.clientMutationId, pending);
       void eventStreamClient
         .publishIntent(
           "preferences.agent.composer.defaults.patch.requested",
-          input,
+          input
         )
         .then(() => {
           const current = pendingComposerDefaultsPatches.get(
-            input.clientMutationId,
+            input.clientMutationId
           );
           if (current !== pending) {
             return;
@@ -182,14 +180,14 @@ export function createDesktopPreferencesClient(
         })
         .catch((error: unknown) => {
           const current = pendingComposerDefaultsPatches.get(
-            input.clientMutationId,
+            input.clientMutationId
           );
           if (current !== pending) {
             return;
           }
           pendingComposerDefaultsPatches.delete(input.clientMutationId);
           pending.reject(
-            error instanceof Error ? error : new Error(String(error)),
+            error instanceof Error ? error : new Error(String(error))
           );
         });
       return promise;
@@ -197,7 +195,7 @@ export function createDesktopPreferencesClient(
     patchAgentSessionLaunchMode(input) {
       return eventStreamClient.publishIntent(
         "preferences.agent.session.launch.mode.patch.requested",
-        input,
+        input
       );
     },
     async updateDesktopPreferences(request) {
@@ -214,14 +212,14 @@ export function createDesktopPreferencesClient(
         await eventStreamClient.publishIntent(
           "preferences.desktop.update.requested",
           {
-            preferences: request.preferences,
-          },
+            preferences: request.preferences
+          }
         );
       } catch (error) {
         if (pendingUpdates.get(key) === pendingUpdate) {
           rejectPendingUpdate(
             pendingUpdate,
-            error instanceof Error ? error : new Error(String(error)),
+            error instanceof Error ? error : new Error(String(error))
           );
         }
       }
@@ -237,7 +235,7 @@ export function createDesktopPreferencesClient(
       return () => {
         listeners.delete(listener);
       };
-    },
+    }
   };
 
   // The resolved event is the precise per-field outcome. When it never arrives
@@ -245,13 +243,13 @@ export function createDesktopPreferencesClient(
   // stored defaults and diff them against the requested patch: fields that
   // landed are applied, fields that did not are rejected with internal_error.
   async function confirmComposerDefaultsOutcomeFromServer(
-    pending: PendingComposerDefaultsPatch,
+    pending: PendingComposerDefaultsPatch
   ): Promise<void> {
     try {
       const state = await tuttidClient.getDesktopPreferences();
       if (state.initialized) {
         pending.resolve(
-          diffComposerDefaultsPatchOutcome(state.preferences, pending),
+          diffComposerDefaultsPatchOutcome(state.preferences, pending)
         );
         return;
       }
@@ -260,12 +258,12 @@ export function createDesktopPreferencesClient(
       return;
     }
     pending.reject(
-      new Error("Composer defaults outcome could not be confirmed."),
+      new Error("Composer defaults outcome could not be confirmed.")
     );
   }
 
   function clearPendingComposerDefaultsTimeout(
-    pending: PendingComposerDefaultsPatch,
+    pending: PendingComposerDefaultsPatch
   ): void {
     if (pending.timeoutHandle !== null) {
       clearTimeout(pending.timeoutHandle);
@@ -275,17 +273,17 @@ export function createDesktopPreferencesClient(
 
   function createPendingUpdate(
     key: string,
-    preferences: PutDesktopPreferencesRequest["preferences"],
+    preferences: PutDesktopPreferencesRequest["preferences"]
   ): PendingDesktopPreferencesUpdate {
     let rejectFn: (error: Error) => void = () => {};
     let resolveFn: (
-      authoritativePreferences: PutDesktopPreferencesRequest["preferences"],
+      authoritativePreferences: PutDesktopPreferencesRequest["preferences"]
     ) => void = () => {};
     const promise = new Promise<PutDesktopPreferencesRequest["preferences"]>(
       (resolve, reject) => {
         resolveFn = resolve;
         rejectFn = reject;
-      },
+      }
     );
 
     return {
@@ -294,12 +292,12 @@ export function createDesktopPreferencesClient(
       promise,
       reject: rejectFn,
       resolve: resolveFn,
-      timeoutHandle: null,
+      timeoutHandle: null
     };
   }
 
   function scheduleAuthoritativeConfirmation(
-    pendingUpdate: PendingDesktopPreferencesUpdate,
+    pendingUpdate: PendingDesktopPreferencesUpdate
   ): void {
     pendingUpdate.timeoutHandle = setTimeout(() => {
       void confirmPendingUpdateFromServer(pendingUpdate);
@@ -307,7 +305,7 @@ export function createDesktopPreferencesClient(
   }
 
   async function confirmPendingUpdateFromServer(
-    pendingUpdate: PendingDesktopPreferencesUpdate,
+    pendingUpdate: PendingDesktopPreferencesUpdate
   ): Promise<void> {
     if (pendingUpdates.get(pendingUpdate.key) !== pendingUpdate) {
       return;
@@ -317,7 +315,10 @@ export function createDesktopPreferencesClient(
       const currentState = await tuttidClient.getDesktopPreferences();
       if (
         currentState.initialized &&
-        preferencesEqual(currentState.preferences, pendingUpdate.preferences)
+        preferencesEqualRequested(
+          currentState.preferences,
+          pendingUpdate.preferences
+        )
       ) {
         applyAuthoritativePreferences(currentState.preferences);
         return;
@@ -328,8 +329,8 @@ export function createDesktopPreferencesClient(
         new Error(
           error instanceof Error
             ? `Desktop preferences update could not be confirmed: ${error.message}`
-            : "Desktop preferences update could not be confirmed.",
-        ),
+            : "Desktop preferences update could not be confirmed."
+        )
       );
       return;
     }
@@ -337,27 +338,28 @@ export function createDesktopPreferencesClient(
     rejectPendingUpdate(
       pendingUpdate,
       new Error(
-        "Desktop preferences update was acknowledged, but the authoritative update did not arrive.",
-      ),
+        "Desktop preferences update was acknowledged, but the authoritative update did not arrive."
+      )
     );
   }
 
   function applyAuthoritativePreferences(
-    preferences: PutDesktopPreferencesRequest["preferences"],
+    preferences: PutDesktopPreferencesRequest["preferences"]
   ): void {
     for (const listener of listeners) {
       listener(preferences);
     }
 
-    const pendingUpdate = pendingUpdates.get(createPreferencesKey(preferences));
-    if (pendingUpdate) {
-      resolvePendingUpdate(pendingUpdate, preferences);
+    for (const pendingUpdate of pendingUpdates.values()) {
+      if (preferencesEqualRequested(preferences, pendingUpdate.preferences)) {
+        resolvePendingUpdate(pendingUpdate, preferences);
+      }
     }
   }
 
   function resolvePendingUpdate(
     pendingUpdate: PendingDesktopPreferencesUpdate,
-    preferences: PutDesktopPreferencesRequest["preferences"],
+    preferences: PutDesktopPreferencesRequest["preferences"]
   ): void {
     clearPendingUpdateTimeout(pendingUpdate);
     pendingUpdates.delete(pendingUpdate.key);
@@ -366,7 +368,7 @@ export function createDesktopPreferencesClient(
 
   function rejectPendingUpdate(
     pendingUpdate: PendingDesktopPreferencesUpdate,
-    error: Error,
+    error: Error
   ): void {
     clearPendingUpdateTimeout(pendingUpdate);
     pendingUpdates.delete(pendingUpdate.key);
@@ -374,7 +376,7 @@ export function createDesktopPreferencesClient(
   }
 
   function clearPendingUpdateTimeout(
-    pendingUpdate: PendingDesktopPreferencesUpdate,
+    pendingUpdate: PendingDesktopPreferencesUpdate
   ): void {
     if (pendingUpdate.timeoutHandle !== null) {
       clearTimeout(pendingUpdate.timeoutHandle);
@@ -383,11 +385,28 @@ export function createDesktopPreferencesClient(
   }
 }
 
+function preferencesEqualRequested(
+  authoritative: PutDesktopPreferencesRequest["preferences"],
+  requested: PutDesktopPreferencesRequest["preferences"]
+): boolean {
+  return preferencesEqual(authoritative, {
+    ...requested,
+    agentRuntimeKeepAliveEnabled:
+      requested.agentRuntimeKeepAliveEnabled ??
+      authoritative.agentRuntimeKeepAliveEnabled,
+    agentRuntimeIdleMinutes:
+      requested.agentRuntimeIdleMinutes ??
+      authoritative.agentRuntimeIdleMinutes,
+    agentRuntimeMaxResident:
+      requested.agentRuntimeMaxResident ?? authoritative.agentRuntimeMaxResident
+  });
+}
+
 function createPreferencesKey(
-  preferences: PutDesktopPreferencesRequest["preferences"],
+  preferences: PutDesktopPreferencesRequest["preferences"]
 ): string {
   const workbenchWindowSnapping = normalizeDesktopWorkbenchWindowSnapping(
-    preferences.workbenchWindowSnapping,
+    preferences.workbenchWindowSnapping
   );
   return [
     preferences.agentCliUpdateCheckEnabled
@@ -395,22 +414,20 @@ function createPreferencesKey(
       : "agent-cli-updates:off",
     // 这三项必须进 key：不进的话「只改了 TTL」的写入会和改之前算出同一个 key，
     // 于是一条更早的权威回声就能把它兑现掉，界面看着成功、值却没落地。
-    (preferences.agentRuntimeKeepAliveEnabled ?? true)
-      ? "agent-runtime-keep-alive:on"
-      : "agent-runtime-keep-alive:off",
-    `agent-runtime-idle:${preferences.agentRuntimeIdleMinutes ?? 30}`,
-    `agent-runtime-max-resident:${preferences.agentRuntimeMaxResident ?? 10}`,
+    `agent-runtime-keep-alive:${preferences.agentRuntimeKeepAliveEnabled ?? "omitted"}`,
+    `agent-runtime-idle:${preferences.agentRuntimeIdleMinutes ?? "omitted"}`,
+    `agent-runtime-max-resident:${preferences.agentRuntimeMaxResident ?? "omitted"}`,
     // agentComposerDefaultsByProvider is deliberately excluded: the daemon
     // freezes that legacy field (client input is ignored), so including it
     // would make authoritative responses never match pending updates.
     stableAgentGuiConversationRailCollapsedByProviderKey(
-      preferences.agentGuiConversationRailCollapsedByProvider,
+      preferences.agentGuiConversationRailCollapsedByProvider
     ),
     stableAgentSessionLaunchModesByWorkspaceKey(
-      preferences.agentSessionLaunchModesByWorkspace,
+      preferences.agentSessionLaunchModesByWorkspace
     ),
     normalizeDesktopAgentConversationDetailMode(
-      preferences.agentConversationDetailMode,
+      preferences.agentConversationDetailMode
     ),
     preferences.appCatalogChannel,
     preferences.browserUseConnectionMode ?? "isolated",
@@ -420,7 +437,7 @@ function createPreferencesKey(
     preferences.deletedAgentConversationRetentionDays ?? 30,
     preferences.minimizeAnimation ?? defaultDesktopMinimizeAnimation,
     stableFileDefaultOpenersByExtensionKey(
-      preferences.fileDefaultOpenersByExtension,
+      preferences.fileDefaultOpenersByExtension
     ),
     stableDesktopFeatureFlagsKey(preferences.featureFlags),
     stableDesktopWorkbenchShortcutsKey(preferences.workbenchShortcuts),
@@ -431,13 +448,13 @@ function createPreferencesKey(
     preferences.updateChannel,
     preferences.updatePolicy,
     workbenchWindowSnapping.enabled ? "snapping:on" : "snapping:off",
-    workbenchWindowSnapping.shortcutPreset,
+    workbenchWindowSnapping.shortcutPreset
   ].join("::");
 }
 
 function preferencesEqual(
   left: PutDesktopPreferencesRequest["preferences"],
-  right: PutDesktopPreferencesRequest["preferences"],
+  right: PutDesktopPreferencesRequest["preferences"]
 ): boolean {
   return (
     left.agentCliUpdateCheckEnabled === right.agentCliUpdateCheckEnabled &&
@@ -447,22 +464,22 @@ function preferencesEqual(
     // agentComposerDefaultsByProvider is deliberately excluded (frozen
     // server-side; see createPreferencesKey).
     stableAgentGuiConversationRailCollapsedByProviderKey(
-      left.agentGuiConversationRailCollapsedByProvider,
+      left.agentGuiConversationRailCollapsedByProvider
     ) ===
       stableAgentGuiConversationRailCollapsedByProviderKey(
-        right.agentGuiConversationRailCollapsedByProvider,
+        right.agentGuiConversationRailCollapsedByProvider
       ) &&
     stableAgentSessionLaunchModesByWorkspaceKey(
-      left.agentSessionLaunchModesByWorkspace,
+      left.agentSessionLaunchModesByWorkspace
     ) ===
       stableAgentSessionLaunchModesByWorkspaceKey(
-        right.agentSessionLaunchModesByWorkspace,
+        right.agentSessionLaunchModesByWorkspace
       ) &&
     normalizeDesktopAgentConversationDetailMode(
-      left.agentConversationDetailMode,
+      left.agentConversationDetailMode
     ) ===
       normalizeDesktopAgentConversationDetailMode(
-        right.agentConversationDetailMode,
+        right.agentConversationDetailMode
       ) &&
     (left.browserUseConnectionMode ?? "isolated") ===
       (right.browserUseConnectionMode ?? "isolated") &&
@@ -475,15 +492,15 @@ function preferencesEqual(
     (left.minimizeAnimation ?? defaultDesktopMinimizeAnimation) ===
       (right.minimizeAnimation ?? defaultDesktopMinimizeAnimation) &&
     stableFileDefaultOpenersByExtensionKey(
-      left.fileDefaultOpenersByExtension,
+      left.fileDefaultOpenersByExtension
     ) ===
       stableFileDefaultOpenersByExtensionKey(
-        right.fileDefaultOpenersByExtension,
+        right.fileDefaultOpenersByExtension
       ) &&
     desktopFeatureFlagsEqual(left.featureFlags, right.featureFlags) &&
     desktopWorkbenchShortcutsEqual(
       left.workbenchShortcuts,
-      right.workbenchShortcuts,
+      right.workbenchShortcuts
     ) &&
     left.locale === right.locale &&
     left.sleepPreventionMode === right.sleepPreventionMode &&
@@ -494,7 +511,7 @@ function preferencesEqual(
     left.updatePolicy === right.updatePolicy &&
     desktopWorkbenchWindowSnappingEqual(
       left.workbenchWindowSnapping,
-      right.workbenchWindowSnapping,
+      right.workbenchWindowSnapping
     )
   );
 }
@@ -505,11 +522,11 @@ const desktopAgentProviderKeys = [
   "tutti-agent",
   "cursor",
   "nexight",
-  "openclaw",
+  "openclaw"
 ] as const;
 
 function stableAgentGuiConversationRailCollapsedByProviderKey(
-  value: unknown,
+  value: unknown
 ): string {
   if (!value || typeof value !== "object") {
     return "{}";
@@ -572,10 +589,10 @@ function stableDesktopWorkbenchShortcutsKey(value: unknown): string {
 }
 
 function isDesktopAgentComposerDefaultsField(
-  value: string,
+  value: string
 ): value is DesktopAgentComposerDefaultsField {
   return (desktopAgentComposerDefaultsFields as readonly string[]).includes(
-    value,
+    value
   );
 }
 
@@ -585,7 +602,7 @@ function normalizeComposerDefaultsPatchOutcome(
     field: string;
     reasonCode: string;
     message?: string;
-  }[],
+  }[]
 ): DesktopAgentComposerDefaultsPatchOutcome {
   const normalizedRejected: DesktopAgentComposerDefaultsRejectedField[] = [];
   for (const entry of rejected) {
@@ -594,12 +611,12 @@ function normalizeComposerDefaultsPatchOutcome(
     }
     normalizedRejected.push({
       field: entry.field,
-      reasonCode: entry.reasonCode,
+      reasonCode: entry.reasonCode
     });
   }
   return {
     applied: applied.filter(isDesktopAgentComposerDefaultsField),
-    rejected: normalizedRejected,
+    rejected: normalizedRejected
   };
 }
 
@@ -610,7 +627,7 @@ function normalizeComposerDefaultsPatchOutcome(
 // already validated it before storing.
 function diffComposerDefaultsPatchOutcome(
   preferences: PutDesktopPreferencesRequest["preferences"],
-  pending: PendingComposerDefaultsPatch,
+  pending: PendingComposerDefaultsPatch
 ): DesktopAgentComposerDefaultsPatchOutcome {
   const stored =
     preferences.agentComposerDefaultsByAgentTarget?.[pending.agentTargetId] ??

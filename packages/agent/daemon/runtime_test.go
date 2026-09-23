@@ -136,6 +136,62 @@ func TestNewRuntimeCanDisableLiveSessionReaper(t *testing.T) {
 	}
 }
 
+func TestRuntimeWakeLiveSessionReaperRetriesBusyRelease(t *testing.T) {
+	t.Parallel()
+	adapter := &busyReleaseTestAdapter{
+		liveSessionTestAdapter: &liveSessionTestAdapter{provider: "test-agent", live: make(map[string]bool)},
+		busy:                   true,
+		attempted:              make(chan struct{}, 1),
+	}
+	runtime, err := NewRuntime(Config{
+		Adapters: []agentruntime.Adapter{adapter},
+		LiveSessionReaperLoad: func() LiveSessionReaperConfig {
+			return LiveSessionReaperConfig{
+				SweepInterval: time.Hour,
+				IdleAfterFor:  func(agentruntime.Session) time.Duration { return 0 },
+			}
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(runtime.Close)
+	_, err = runtime.Controller().Resume(context.Background(), agentruntime.ResumeInput{
+		RoomID: "workspace-1", AgentSessionID: "busy-session",
+		Provider: "test-agent", ProviderSessionID: "provider-busy",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter.setLive("busy-session", true)
+	runtime.WakeLiveSessionReaper()
+	select {
+	case <-adapter.attempted:
+	case <-time.After(time.Second):
+		t.Fatal("wake did not attempt release")
+	}
+	adapter.mu.Lock()
+	adapter.busy = false
+	adapter.mu.Unlock()
+	deadline := time.After(2 * time.Second)
+	for adapter.isLive("busy-session") {
+		select {
+		case <-deadline:
+			t.Fatal("busy release was not retried before the hourly sweep")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func TestLiveSessionReaperPolicyAfterLockKeepsDefaultTTL(t *testing.T) {
+	t.Parallel()
+	policy := liveSessionReaperPolicyAfterLock(func() LiveSessionReaperConfig { return LiveSessionReaperConfig{} })
+	threshold, maxLive := policy(agentruntime.Session{})
+	if threshold != defaultLiveSessionReaperIdleAfter || maxLive != 0 {
+		t.Fatalf("default policy = (%s, %d), want (%s, 0)", threshold, maxLive, defaultLiveSessionReaperIdleAfter)
+	}
+}
+
 // TestRuntimeCloseForceClosesLiveProviderSessions guards against orphaned
 // provider subprocesses (e.g. a Codex app-server) surviving daemon
 // shutdown. An OS process spawned by the daemon is not killed just because
@@ -279,6 +335,26 @@ type liveSessionTestAdapter struct {
 	mu         sync.Mutex
 	live       map[string]bool
 	closeCalls map[string]int
+}
+
+type busyReleaseTestAdapter struct {
+	*liveSessionTestAdapter
+	busy      bool
+	attempted chan struct{}
+}
+
+func (a *busyReleaseTestAdapter) ReleaseLiveSession(_ context.Context, session agentruntime.Session) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.busy {
+		select {
+		case a.attempted <- struct{}{}:
+		default:
+		}
+		return agentruntime.ErrLiveSessionBusy
+	}
+	a.live[session.AgentSessionID] = false
+	return nil
 }
 
 func (a *liveSessionTestAdapter) Provider() string { return a.provider }

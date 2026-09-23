@@ -113,6 +113,11 @@ type PreferencesStore interface {
 	PutDesktopPreferences(context.Context, preferencesbiz.DesktopPreferences) (preferencesbiz.DesktopPreferences, error)
 }
 
+type AgentRuntimeRetentionPatchStore interface {
+	PatchAgentRuntimeRetention(context.Context, preferencesbiz.AgentRuntimeRetentionPatch) (preferencesbiz.DesktopPreferences, error)
+	PutDesktopPreferencesWithAgentRuntimePatch(context.Context, preferencesbiz.DesktopPreferences, preferencesbiz.AgentRuntimeRetentionPatch) (preferencesbiz.DesktopPreferences, error)
+}
+
 // AgentProviderRuntimeSelectionStore persists an explicit local runtime choice.
 // No value permits only a uniquely ready runtime; multiple ready runtimes
 // require an explicit user choice.

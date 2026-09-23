@@ -360,6 +360,35 @@ paths:
           $ref: "#/components/responses/PreferencesOperationError"
         "503":
           $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/preferences/desktop/agent-runtime:
+    patch:
+      operationId: patchDesktopAgentRuntimeRetention
+      tags:
+        - preferences
+      summary: Update only specified agent runtime retention preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DesktopAgentRuntimeRetentionPatch"
+      responses:
+        "200":
+          description: Current agent runtime retention preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DesktopAgentRuntimeRetention"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/PreferencesOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
   /v1/desktop-update-admission:
     get:
       operationId: getDesktopUpdateAdmissionSnapshot
@@ -8188,6 +8217,34 @@ components:
           minLength: 1
         restored:
           type: boolean
+    DesktopAgentRuntimeRetentionPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        keepAliveEnabled:
+          type: boolean
+        idleMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+        maxResident:
+          type: integer
+          minimum: 0
+          maximum: 100
+    DesktopAgentRuntimeRetention:
+      type: object
+      additionalProperties: false
+      required:
+        - keepAliveEnabled
+        - idleMinutes
+        - maxResident
+      properties:
+        keepAliveEnabled:
+          type: boolean
+        idleMinutes:
+          type: integer
+        maxResident:
+          type: integer
     DesktopPreferences:
       type: object
       additionalProperties: false

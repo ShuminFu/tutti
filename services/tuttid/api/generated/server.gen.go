@@ -164,6 +164,9 @@ type ServerInterface interface {
 	// Persist desktop preferences
 	// (PUT /v1/preferences/desktop)
 	PutDesktopPreferences(w http.ResponseWriter, r *http.Request)
+	// Update only specified agent runtime retention preferences
+	// (PATCH /v1/preferences/desktop/agent-runtime)
+	PatchDesktopAgentRuntimeRetention(w http.ResponseWriter, r *http.Request)
 	// Accept analytics events from approved local clients
 	// (POST /v1/track)
 	TrackEvents(w http.ResponseWriter, r *http.Request)
@@ -2244,6 +2247,26 @@ func (siw *ServerInterfaceWrapper) PutDesktopPreferences(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PutDesktopPreferences(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchDesktopAgentRuntimeRetention operation middleware
+func (siw *ServerInterfaceWrapper) PatchDesktopAgentRuntimeRetention(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchDesktopAgentRuntimeRetention(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11478,6 +11501,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/mobile-remote-access/pairings/{pairingID}", wrapper.RevokeMobileRemotePairing)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/preferences/desktop", wrapper.GetDesktopPreferences)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/preferences/desktop", wrapper.PutDesktopPreferences)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/preferences/desktop/agent-runtime", wrapper.PatchDesktopAgentRuntimeRetention)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/track", wrapper.TrackEvents)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/user-projects", wrapper.DeleteUserProject)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/user-projects", wrapper.ListUserProjects)
@@ -15763,6 +15787,106 @@ type PutDesktopPreferences503JSONResponse struct {
 }
 
 func (response PutDesktopPreferences503JSONResponse) VisitPutDesktopPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchDesktopAgentRuntimeRetentionRequestObject struct {
+	Body *PatchDesktopAgentRuntimeRetentionJSONRequestBody
+}
+
+type PatchDesktopAgentRuntimeRetentionResponseObject interface {
+	VisitPatchDesktopAgentRuntimeRetentionResponse(w http.ResponseWriter) error
+}
+
+type PatchDesktopAgentRuntimeRetention200JSONResponse DesktopAgentRuntimeRetention
+
+func (response PatchDesktopAgentRuntimeRetention200JSONResponse) VisitPatchDesktopAgentRuntimeRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchDesktopAgentRuntimeRetention400JSONResponse struct {
+	InvalidRequestErrorJSONResponse
+}
+
+func (response PatchDesktopAgentRuntimeRetention400JSONResponse) VisitPatchDesktopAgentRuntimeRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchDesktopAgentRuntimeRetention401JSONResponse struct{ UnauthorizedErrorJSONResponse }
+
+func (response PatchDesktopAgentRuntimeRetention401JSONResponse) VisitPatchDesktopAgentRuntimeRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchDesktopAgentRuntimeRetention405JSONResponse struct {
+	MethodNotAllowedErrorJSONResponse
+}
+
+func (response PatchDesktopAgentRuntimeRetention405JSONResponse) VisitPatchDesktopAgentRuntimeRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchDesktopAgentRuntimeRetention502JSONResponse struct {
+	PreferencesOperationErrorJSONResponse
+}
+
+func (response PatchDesktopAgentRuntimeRetention502JSONResponse) VisitPatchDesktopAgentRuntimeRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchDesktopAgentRuntimeRetention503JSONResponse struct {
+	ServiceUnavailableErrorJSONResponse
+}
+
+func (response PatchDesktopAgentRuntimeRetention503JSONResponse) VisitPatchDesktopAgentRuntimeRetentionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -39734,6 +39858,9 @@ type StrictServerInterface interface {
 	// Persist desktop preferences
 	// (PUT /v1/preferences/desktop)
 	PutDesktopPreferences(ctx context.Context, request PutDesktopPreferencesRequestObject) (PutDesktopPreferencesResponseObject, error)
+	// Update only specified agent runtime retention preferences
+	// (PATCH /v1/preferences/desktop/agent-runtime)
+	PatchDesktopAgentRuntimeRetention(ctx context.Context, request PatchDesktopAgentRuntimeRetentionRequestObject) (PatchDesktopAgentRuntimeRetentionResponseObject, error)
 	// Accept analytics events from approved local clients
 	// (POST /v1/track)
 	TrackEvents(ctx context.Context, request TrackEventsRequestObject) (TrackEventsResponseObject, error)
@@ -41746,6 +41873,39 @@ func (sh *strictHandler) PutDesktopPreferences(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PutDesktopPreferencesResponseObject); ok {
 		if err := validResponse.VisitPutDesktopPreferencesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchDesktopAgentRuntimeRetention operation middleware
+func (sh *strictHandler) PatchDesktopAgentRuntimeRetention(w http.ResponseWriter, r *http.Request) {
+	var request PatchDesktopAgentRuntimeRetentionRequestObject
+
+	var body PatchDesktopAgentRuntimeRetentionJSONRequestBody
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchDesktopAgentRuntimeRetention(ctx, request.(PatchDesktopAgentRuntimeRetentionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchDesktopAgentRuntimeRetention")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchDesktopAgentRuntimeRetentionResponseObject); ok {
+		if err := validResponse.VisitPatchDesktopAgentRuntimeRetentionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

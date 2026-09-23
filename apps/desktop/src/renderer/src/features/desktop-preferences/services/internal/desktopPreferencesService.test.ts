@@ -3,12 +3,12 @@ import test from "node:test";
 import type {
   DesktopPreferencesStateResponse,
   TuttidClient,
-  TuttidEventStreamClient,
+  TuttidEventStreamClient
 } from "@tutti-os/client-tuttid-ts";
 import type { DesktopLocale } from "@shared/i18n";
 import {
   defaultDesktopWorkbenchShortcuts,
-  desktopFeatureFlagsEqual,
+  desktopFeatureFlagsEqual
 } from "../../../../../../shared/preferences/index.ts";
 import type { DesktopThemeSource, DesktopThemeState } from "@shared/theme";
 import type { DesktopPreferencesClient } from "./adapters/desktopPreferencesClient.ts";
@@ -59,22 +59,22 @@ test("DesktopPreferencesService bootstraps persisted preferences before connecti
           showAppDeveloperSources: false,
           themeSource: "dark",
           updateChannel: "stable",
-          updatePolicy: "prompt",
-        },
+          updatePolicy: "prompt"
+        }
       };
-    },
+    }
   });
   const { service, cleanup } = await createServiceHarness({
     appliedLocales,
     appliedThemes,
-    client,
+    client
   });
 
   assert.deepEqual(calls, ["get", "connect"]);
   assert.equal(service.store.locale, "zh-CN");
   assert.deepEqual(service.store.theme, {
     appearance: "dark",
-    source: "dark",
+    source: "dark"
   });
   assert.deepEqual(appliedLocales, ["zh-CN"]);
   assert.deepEqual(appliedThemes, [{ appearance: "dark", source: "dark" }]);
@@ -83,15 +83,15 @@ test("DesktopPreferencesService bootstraps persisted preferences before connecti
 
 test("initial preference hydration exposes persisted feature flags before composition", async () => {
   let resolvePreferences: (
-    value: DesktopPreferencesStateResponse,
+    value: DesktopPreferencesStateResponse
   ) => void = () => {};
   const preferencesResponse = new Promise<DesktopPreferencesStateResponse>(
     (resolve) => {
       resolvePreferences = resolve;
-    },
+    }
   );
   const client = createDesktopPreferencesClient({
-    getDesktopPreferences: () => preferencesResponse,
+    getDesktopPreferences: () => preferencesResponse
   });
   const service = new DesktopPreferencesService({
     applyLocale() {},
@@ -99,7 +99,7 @@ test("initial preference hydration exposes persisted feature flags before compos
     client,
     initialLocale: "en",
     initialTheme: { appearance: "light", source: "system" },
-    resolveTheme,
+    resolveTheme
   });
   let hydrationCompleted = false;
   const hydration = service.whenInitialPreferencesHydrated().then(() => {
@@ -113,8 +113,8 @@ test("initial preference hydration exposes persisted feature flags before compos
   resolvePreferences({
     initialized: true,
     preferences: createPreferences({
-      featureFlags: { "test.persisted": true },
-    }),
+      featureFlags: { "test.persisted": true }
+    })
   });
   await hydration;
 
@@ -126,7 +126,7 @@ test("initial preference hydration failure releases startup with defaults", asyn
   const client = createDesktopPreferencesClient({
     getDesktopPreferences: async () => {
       throw new Error("preferences unavailable");
-    },
+    }
   });
   const service = new DesktopPreferencesService({
     applyLocale() {},
@@ -134,7 +134,7 @@ test("initial preference hydration failure releases startup with defaults", asyn
     client,
     initialLocale: "en",
     initialTheme: { appearance: "light", source: "system" },
-    resolveTheme,
+    resolveTheme
   });
 
   await service.whenInitialPreferencesHydrated();
@@ -148,24 +148,24 @@ test("DesktopPreferencesService keeps in-memory defaults when preferences are no
   const client = createDesktopPreferencesClient({
     getDesktopPreferences: async () => ({
       initialized: false,
-      preferences: createPreferences(),
+      preferences: createPreferences()
     }),
     updateDesktopPreferences: async (request) => {
       updatedRequests.push(request.preferences);
       return request.preferences;
-    },
+    }
   });
   const { service, cleanup } = await createServiceHarness({
     client,
     initialLocale: "zh-CN",
-    initialTheme: { appearance: "dark", source: "dark" },
+    initialTheme: { appearance: "dark", source: "dark" }
   });
 
   assert.deepEqual(updatedRequests, []);
   assert.equal(service.store.locale, "zh-CN");
   assert.deepEqual(service.store.theme, {
     appearance: "dark",
-    source: "dark",
+    source: "dark"
   });
   cleanup();
 });
@@ -179,9 +179,9 @@ test("DesktopPreferencesService discards persisted legacy provider defaults from
         agentRuntimeKeepAliveEnabled: true,
         agentRuntimeIdleMinutes: 30,
         agentRuntimeMaxResident: 10,
-        agentComposerDefaultsByProvider: { codex: { model: "gpt-5" } },
-      }),
-    }),
+        agentComposerDefaultsByProvider: { codex: { model: "gpt-5" } }
+      })
+    })
   });
   const { service, cleanup } = await createServiceHarness({ client });
 
@@ -190,12 +190,9 @@ test("DesktopPreferencesService discards persisted legacy provider defaults from
   assert.deepEqual(client.updatedRequests, [
     createPublishedPreferences({
       agentCliUpdateCheckEnabled: true,
-      agentRuntimeKeepAliveEnabled: true,
-      agentRuntimeIdleMinutes: 30,
-      agentRuntimeMaxResident: 10,
       agentComposerDefaultsByProvider: {},
-      locale: "zh-CN",
-    }),
+      locale: "zh-CN"
+    })
   ]);
   client.emitDesktopPreferencesUpdated(createPreferences({ locale: "zh-CN" }));
   await savedLocale;
@@ -207,16 +204,13 @@ test("DesktopPreferencesService publishes locale writes and converges on the aut
   const client = createDesktopPreferencesClient({});
   const { service, cleanup } = await createServiceHarness({
     appliedLocales,
-    client,
+    client
   });
 
   const savedLocale = service.setLocale("zh-CN");
   assert.deepEqual(client.updatedRequests, [
     {
       agentCliUpdateCheckEnabled: true,
-      agentRuntimeKeepAliveEnabled: true,
-      agentRuntimeIdleMinutes: 30,
-      agentRuntimeMaxResident: 10,
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
       agentConversationDetailMode: "coding",
@@ -236,8 +230,8 @@ test("DesktopPreferencesService publishes locale writes and converges on the aut
       showAppDeveloperSources: false,
       themeSource: "system",
       updateChannel: "stable",
-      updatePolicy: "prompt",
-    },
+      updatePolicy: "prompt"
+    }
   ]);
   assert.equal(service.store.locale, "zh-CN");
   assert.deepEqual(appliedLocales, ["zh-CN"]);
@@ -267,7 +261,7 @@ test("DesktopPreferencesService publishes locale writes and converges on the aut
     showAppDeveloperSources: false,
     themeSource: "system",
     updateChannel: "stable",
-    updatePolicy: "prompt",
+    updatePolicy: "prompt"
   });
 
   assert.equal(await savedLocale, "zh-CN");
@@ -280,11 +274,11 @@ test("DesktopPreferencesService rolls back optimistic locale changes when publis
   const client = createDesktopPreferencesClient({
     updateDesktopPreferences: async () => {
       throw new Error("publish failed");
-    },
+    }
   });
   const { service, cleanup } = await createServiceHarness({
     appliedLocales,
-    client,
+    client
   });
 
   await assert.rejects(() => service.setLocale("zh-CN"), /publish failed/);
@@ -301,16 +295,16 @@ test("DesktopPreferencesService publishes deleted conversation retention changes
   assert.equal(service.store.deletedAgentConversationRetentionDays, 15);
   assert.equal(
     client.updatedRequests[0]?.deletedAgentConversationRetentionDays,
-    15,
+    15
   );
   client.emitDesktopPreferencesUpdated(
-    createPreferences({ deletedAgentConversationRetentionDays: 15 }),
+    createPreferences({ deletedAgentConversationRetentionDays: 15 })
   );
 
   assert.equal(await saved, 15);
   assert.equal(
     service.store.changingDeletedAgentConversationRetentionDays,
-    null,
+    null
   );
   cleanup();
 });
@@ -320,17 +314,17 @@ test("DesktopPreferencesService applies authoritative theme updates from the eve
   const client = createDesktopPreferencesClient({});
   const { service, cleanup } = await createServiceHarness({
     appliedThemes,
-    client,
+    client
   });
 
   const savedTheme = service.setThemeSource("dark");
   assert.deepEqual(client.updatedRequests, [
-    createPublishedPreferences({ themeSource: "dark" }),
+    createPublishedPreferences({ themeSource: "dark" })
   ]);
   assert.deepEqual(service.store.theme, { appearance: "dark", source: "dark" });
   assert.deepEqual(appliedThemes, [{ appearance: "dark", source: "dark" }]);
   client.emitDesktopPreferencesUpdated(
-    createPreferences({ themeSource: "dark" }),
+    createPreferences({ themeSource: "dark" })
   );
 
   assert.deepEqual(await savedTheme, { appearance: "dark", source: "dark" });
@@ -343,21 +337,21 @@ test("DesktopPreferencesService rolls back optimistic theme changes when publish
   const client = createDesktopPreferencesClient({
     updateDesktopPreferences: async () => {
       throw new Error("publish failed");
-    },
+    }
   });
   const { service, cleanup } = await createServiceHarness({
     appliedThemes,
-    client,
+    client
   });
 
   await assert.rejects(() => service.setThemeSource("dark"), /publish failed/);
   assert.deepEqual(service.store.theme, {
     appearance: "light",
-    source: "system",
+    source: "system"
   });
   assert.deepEqual(appliedThemes, [
     { appearance: "dark", source: "dark" },
-    { appearance: "light", source: "system" },
+    { appearance: "light", source: "system" }
   ]);
   cleanup();
 });
@@ -367,14 +361,14 @@ test("DesktopPreferencesService publishes scalar preference writes", async (t) =
     {
       name: "agent CLI update check",
       request: createPublishedPreferences({
-        agentCliUpdateCheckEnabled: false,
+        agentCliUpdateCheckEnabled: false
       }),
       event: createPreferences({ agentCliUpdateCheckEnabled: false }),
       publish: (service: DesktopPreferencesService) =>
         service.setAgentCliUpdateCheckEnabled(false),
       read: (service: DesktopPreferencesService) =>
         service.store.agentCliUpdateCheckEnabled,
-      expected: false,
+      expected: false
     },
     // DINTAL-5308：三个旋钮走的是与其它标量项同一条「乐观写 + 权威回声收敛」的路。
     // 0 这两档单独列出来，是因为它们是合法值而不是「没填」：TTL 的 0 = 永不回收、
@@ -382,14 +376,14 @@ test("DesktopPreferencesService publishes scalar preference writes", async (t) =
     {
       name: "agent runtime keep-alive",
       request: createPublishedPreferences({
-        agentRuntimeKeepAliveEnabled: false,
+        agentRuntimeKeepAliveEnabled: false
       }),
       event: createPreferences({ agentRuntimeKeepAliveEnabled: false }),
       publish: (service: DesktopPreferencesService) =>
         service.setAgentRuntimeKeepAliveEnabled(false),
       read: (service: DesktopPreferencesService) =>
         service.store.agentRuntimeKeepAliveEnabled,
-      expected: false,
+      expected: false
     },
     {
       name: "agent runtime idle minutes",
@@ -399,7 +393,7 @@ test("DesktopPreferencesService publishes scalar preference writes", async (t) =
         service.setAgentRuntimeIdleMinutes(5),
       read: (service: DesktopPreferencesService) =>
         service.store.agentRuntimeIdleMinutes,
-      expected: 5,
+      expected: 5
     },
     {
       name: "agent runtime idle minutes set to never",
@@ -409,7 +403,7 @@ test("DesktopPreferencesService publishes scalar preference writes", async (t) =
         service.setAgentRuntimeIdleMinutes(0),
       read: (service: DesktopPreferencesService) =>
         service.store.agentRuntimeIdleMinutes,
-      expected: 0,
+      expected: 0
     },
     {
       name: "agent runtime max resident set to unlimited",
@@ -419,19 +413,19 @@ test("DesktopPreferencesService publishes scalar preference writes", async (t) =
         service.setAgentRuntimeMaxResident(0),
       read: (service: DesktopPreferencesService) =>
         service.store.agentRuntimeMaxResident,
-      expected: 0,
+      expected: 0
     },
     {
       name: "sleep prevention mode",
       request: createPublishedPreferences({
-        sleepPreventionMode: "whileAgentRunning",
+        sleepPreventionMode: "whileAgentRunning"
       }),
       event: createPreferences({ sleepPreventionMode: "whileAgentRunning" }),
       publish: (service: DesktopPreferencesService) =>
         service.setSleepPreventionMode("whileAgentRunning"),
       read: (service: DesktopPreferencesService) =>
         service.store.sleepPreventionMode,
-      expected: "whileAgentRunning",
+      expected: "whileAgentRunning"
     },
     {
       name: "update policy",
@@ -440,7 +434,7 @@ test("DesktopPreferencesService publishes scalar preference writes", async (t) =
       publish: (service: DesktopPreferencesService) =>
         service.setUpdatePolicy("auto"),
       read: (service: DesktopPreferencesService) => service.store.updatePolicy,
-      expected: "auto",
+      expected: "auto"
     },
     {
       name: "update channel",
@@ -449,7 +443,7 @@ test("DesktopPreferencesService publishes scalar preference writes", async (t) =
       publish: (service: DesktopPreferencesService) =>
         service.setUpdateChannel("rc"),
       read: (service: DesktopPreferencesService) => service.store.updateChannel,
-      expected: "rc",
+      expected: "rc"
     },
     {
       name: "app catalog channel",
@@ -459,7 +453,7 @@ test("DesktopPreferencesService publishes scalar preference writes", async (t) =
         service.setAppCatalogChannel("staging"),
       read: (service: DesktopPreferencesService) =>
         service.store.appCatalogChannel,
-      expected: "staging",
+      expected: "staging"
     },
     {
       name: "developer source display",
@@ -469,7 +463,7 @@ test("DesktopPreferencesService publishes scalar preference writes", async (t) =
         service.setShowAppDeveloperSources(true),
       read: (service: DesktopPreferencesService) =>
         service.store.showAppDeveloperSources,
-      expected: true,
+      expected: true
     },
     {
       name: "dock placement",
@@ -478,8 +472,8 @@ test("DesktopPreferencesService publishes scalar preference writes", async (t) =
       publish: (service: DesktopPreferencesService) =>
         service.setDockPlacement("left"),
       read: (service: DesktopPreferencesService) => service.store.dockPlacement,
-      expected: "left",
-    },
+      expected: "left"
+    }
   ];
 
   for (const scenario of cases) {
@@ -504,12 +498,12 @@ test("DesktopPreferencesService tracks agent conversation detail mode while publ
   const savedMode = service.setAgentConversationDetailMode("general");
 
   assert.deepEqual(client.updatedRequests, [
-    createPublishedPreferences({ agentConversationDetailMode: "general" }),
+    createPublishedPreferences({ agentConversationDetailMode: "general" })
   ]);
   assert.equal(service.store.agentConversationDetailMode, "general");
   assert.equal(service.store.changingAgentConversationDetailMode, "general");
   client.emitDesktopPreferencesUpdated(
-    createPreferences({ agentConversationDetailMode: "general" }),
+    createPreferences({ agentConversationDetailMode: "general" })
   );
 
   assert.equal(await savedMode, "general");
@@ -520,7 +514,7 @@ test("DesktopPreferencesService tracks agent conversation detail mode while publ
 test("DesktopPreferencesService publishes non-default and explicit default window snapping", async (t) => {
   for (const snapping of [
     { enabled: true, shortcutPreset: "commandShiftArrows" as const },
-    { enabled: false, shortcutPreset: "commandArrows" as const },
+    { enabled: false, shortcutPreset: "commandArrows" as const }
   ]) {
     await t.test(
       `${snapping.enabled ? "non-default" : "explicit default"} value`,
@@ -530,16 +524,16 @@ test("DesktopPreferencesService publishes non-default and explicit default windo
         const savedPreference = service.setWorkbenchWindowSnapping(snapping);
 
         assert.deepEqual(client.updatedRequests, [
-          createPublishedPreferences({ workbenchWindowSnapping: snapping }),
+          createPublishedPreferences({ workbenchWindowSnapping: snapping })
         ]);
         assert.deepEqual(service.store.workbenchWindowSnapping, snapping);
         client.emitDesktopPreferencesUpdated(
-          createPreferences({ workbenchWindowSnapping: snapping }),
+          createPreferences({ workbenchWindowSnapping: snapping })
         );
         assert.deepEqual(await savedPreference, snapping);
         assert.deepEqual(service.store.workbenchWindowSnapping, snapping);
         cleanup();
-      },
+      }
     );
   }
 });
@@ -547,26 +541,26 @@ test("DesktopPreferencesService publishes non-default and explicit default windo
 test("DesktopPreferencesService refreshes from GET after the authoritative event timeout", async () => {
   const tuttidClient = createSequentialTuttidClient([
     { initialized: true, preferences: createPreferences() },
-    { initialized: true, preferences: createPreferences({ locale: "zh-CN" }) },
+    { initialized: true, preferences: createPreferences({ locale: "zh-CN" }) }
   ]);
   const client = createDesktopPreferencesFeatureClient(
     tuttidClient,
     createFallbackConfirmingEventStreamClient(),
-    { authoritativeEventTimeoutMs: 0 },
+    { authoritativeEventTimeoutMs: 0 }
   );
   const appliedLocales: DesktopLocale[] = [];
   const appliedThemes: DesktopThemeState[] = [];
   const { service, cleanup } = await createServiceHarness({
     appliedLocales,
     appliedThemes,
-    client,
+    client
   });
 
   assert.equal(await service.setLocale("zh-CN"), "zh-CN");
   assert.equal(service.store.locale, "zh-CN");
   assert.deepEqual(service.store.theme, {
     appearance: "light",
-    source: "system",
+    source: "system"
   });
   assert.deepEqual(appliedLocales, ["zh-CN"]);
   assert.deepEqual(appliedThemes, []);
@@ -582,9 +576,9 @@ test("DesktopPreferencesService keeps featureFlags identity when authoritative f
       preferences: createPreferences({
         agentDockLayout: "legacySplit",
         deletedAgentConversationRetentionDays: 30,
-        featureFlags: initialFeatureFlags,
-      }),
-    }),
+        featureFlags: initialFeatureFlags
+      })
+    })
   });
   const { service, cleanup } = await createServiceHarness({ client });
   const featureFlagsBeforeUpdate = service.store.featureFlags;
@@ -594,13 +588,13 @@ test("DesktopPreferencesService keeps featureFlags identity when authoritative f
       agentDockLayout: "legacySplit",
       deletedAgentConversationRetentionDays: 30,
       featureFlags: { "lab.enabled": true },
-      locale: "zh-CN",
-    }),
+      locale: "zh-CN"
+    })
   );
 
   assert.equal(service.store.locale, "zh-CN");
   assert.ok(
-    desktopFeatureFlagsEqual(service.store.featureFlags, initialFeatureFlags),
+    desktopFeatureFlagsEqual(service.store.featureFlags, initialFeatureFlags)
   );
   assert.equal(service.store.featureFlags, featureFlagsBeforeUpdate);
   cleanup();
@@ -609,18 +603,18 @@ test("DesktopPreferencesService keeps featureFlags identity when authoritative f
 test("DesktopPreferencesService rejects mismatched App Center source confirmations and rolls back", async () => {
   const tuttidClient = createSequentialTuttidClient([
     { initialized: true, preferences: createPreferences() },
-    { initialized: true, preferences: createPreferences() },
+    { initialized: true, preferences: createPreferences() }
   ]);
   const client = createDesktopPreferencesFeatureClient(
     tuttidClient,
     createFallbackConfirmingEventStreamClient(),
-    { authoritativeEventTimeoutMs: 0 },
+    { authoritativeEventTimeoutMs: 0 }
   );
   const { service, cleanup } = await createServiceHarness({ client });
 
   await assert.rejects(
     () => service.setAppCatalogChannel("staging"),
-    /authoritative update did not arrive/u,
+    /authoritative update did not arrive/u
   );
   assert.equal(service.store.appCatalogChannel, "production");
   assert.equal(tuttidClient.getDesktopPreferencesCalls, 2);
@@ -639,11 +633,11 @@ test("DesktopPreferencesService remembers trimmed and nullable composer defaults
       }
       return {
         applied: Object.keys(
-          input.patch,
+          input.patch
         ) as DesktopAgentComposerDefaultsField[],
-        rejected: [],
+        rejected: []
       };
-    },
+    }
   });
   const { service, cleanup } = await createServiceHarness({ client });
 
@@ -653,18 +647,18 @@ test("DesktopPreferencesService remembers trimmed and nullable composer defaults
       model: " gpt-5 ",
       permissionModeId: " full-access ",
       reasoningEffort: " high ",
-      speed: " fast ",
-    },
+      speed: " fast "
+    }
   );
   assert.deepEqual(firstResult, {
     acknowledgedFields: [
       "model",
       "permissionModeId",
       "reasoningEffort",
-      "speed",
+      "speed"
     ],
     rejectedFields: [],
-    supersededFields: [],
+    supersededFields: []
   });
   assert.deepEqual(patches, [
     {
@@ -673,41 +667,41 @@ test("DesktopPreferencesService remembers trimmed and nullable composer defaults
         model: "gpt-5",
         permissionModeId: "full-access",
         reasoningEffort: "high",
-        speed: "fast",
-      },
-    },
+        speed: "fast"
+      }
+    }
   ]);
   assert.equal(client.updatedRequests.length, 0);
 
   const secondResult =
     await service.rememberAgentComposerDefaultsForAgentTarget("local:codex", {
       model: "gpt-5-codex",
-      speed: null,
+      speed: null
     });
   assert.deepEqual(secondResult, {
     acknowledgedFields: ["model", "speed"],
     rejectedFields: [],
-    supersededFields: [],
+    supersededFields: []
   });
   assert.deepEqual(patches.at(-1), {
     agentTargetId: "local:codex",
-    patch: { model: "gpt-5-codex", speed: null },
+    patch: { model: "gpt-5-codex", speed: null }
   });
   assert.equal(client.updatedRequests.length, 0);
 
   deferPublishes = true;
   const superseded = service.rememberAgentComposerDefaultsForAgentTarget(
     "local:codex",
-    { permissionModeId: "ask" },
+    { permissionModeId: "ask" }
   );
   const latest = service.rememberAgentComposerDefaultsForAgentTarget(
     "local:codex",
-    { permissionModeId: "full-access" },
+    { permissionModeId: "full-access" }
   );
   assert.deepEqual(await superseded, {
     acknowledgedFields: [],
     rejectedFields: [],
-    supersededFields: ["permissionModeId"],
+    supersededFields: ["permissionModeId"]
   });
   deferredPublishes[0]!();
   await settle();
@@ -715,7 +709,7 @@ test("DesktopPreferencesService remembers trimmed and nullable composer defaults
   assert.deepEqual(await latest, {
     acknowledgedFields: ["permissionModeId"],
     rejectedFields: [],
-    supersededFields: [],
+    supersededFields: []
   });
   assert.equal(client.updatedRequests.length, 0);
   cleanup();
@@ -727,7 +721,7 @@ test("DesktopPreferencesService merges conversation rail collapsed state per pro
     updateDesktopPreferences: async (request) => {
       requests.push(request.preferences);
       return request.preferences;
-    },
+    }
   });
   const { service, cleanup } = await createServiceHarness({ client });
   await service.rememberAgentGuiConversationRailCollapsed("codex", true);
@@ -735,13 +729,10 @@ test("DesktopPreferencesService merges conversation rail collapsed state per pro
 
   assert.deepEqual(requests.at(-1), {
     agentCliUpdateCheckEnabled: true,
-    agentRuntimeKeepAliveEnabled: true,
-    agentRuntimeIdleMinutes: 30,
-    agentRuntimeMaxResident: 10,
     agentComposerDefaultsByProvider: {},
     agentGuiConversationRailCollapsedByProvider: {
       codex: true,
-      "claude-code": true,
+      "claude-code": true
     },
     agentConversationDetailMode: "coding",
     agentDockLayout: "unified",
@@ -760,11 +751,11 @@ test("DesktopPreferencesService merges conversation rail collapsed state per pro
     showAppDeveloperSources: false,
     themeSource: "system",
     updateChannel: "stable",
-    updatePolicy: "prompt",
+    updatePolicy: "prompt"
   });
   assert.deepEqual(service.store.agentGuiConversationRailCollapsedByProvider, {
     codex: true,
-    "claude-code": true,
+    "claude-code": true
   });
   cleanup();
 });
@@ -778,38 +769,38 @@ test("DesktopPreferencesService remembers launch mode by workspace and project s
   const client = createDesktopPreferencesClient({
     patchAgentSessionLaunchMode: async (input) => {
       patches.push(input);
-    },
+    }
   });
   const { service, cleanup } = await createServiceHarness({ client });
 
   await service.rememberAgentSessionLaunchMode(
     "workspace-a",
     "project:/alpha",
-    "worktree",
+    "worktree"
   );
   await service.rememberAgentSessionLaunchMode(
     "workspace-a",
     "project:/beta",
-    "local",
+    "local"
   );
 
   assert.deepEqual(patches, [
     {
       workspaceId: "workspace-a",
       projectSectionKey: "project:/alpha",
-      mode: "worktree",
+      mode: "worktree"
     },
     {
       workspaceId: "workspace-a",
       projectSectionKey: "project:/beta",
-      mode: "local",
-    },
+      mode: "local"
+    }
   ]);
   assert.deepEqual(service.store.agentSessionLaunchModesByWorkspace, {
     "workspace-a": {
       "project:/alpha": "worktree",
-      "project:/beta": "local",
-    },
+      "project:/beta": "local"
+    }
   });
   cleanup();
 });
@@ -846,18 +837,15 @@ function createPreferences(overrides: Partial<Preferences> = {}): Preferences {
     themeSource: "system",
     updateChannel: "stable",
     updatePolicy: "prompt",
-    ...overrides,
+    ...overrides
   };
 }
 
 function createPublishedPreferences(
-  overrides: Partial<PublishedPreferences> = {},
+  overrides: Partial<PublishedPreferences> = {}
 ): PublishedPreferences {
   return {
     agentCliUpdateCheckEnabled: true,
-    agentRuntimeKeepAliveEnabled: true,
-    agentRuntimeIdleMinutes: 30,
-    agentRuntimeMaxResident: 10,
     agentComposerDefaultsByProvider: {},
     agentGuiConversationRailCollapsedByProvider: {},
     agentConversationDetailMode: "coding",
@@ -878,7 +866,7 @@ function createPublishedPreferences(
     themeSource: "system",
     updateChannel: "stable",
     updatePolicy: "prompt",
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -889,7 +877,7 @@ async function createServiceHarness(
     client?: DesktopPreferencesClient;
     initialLocale?: DesktopLocale;
     initialTheme?: DesktopThemeState;
-  } = {},
+  } = {}
 ) {
   const client = options.client ?? createDesktopPreferencesClient({});
   const service = new DesktopPreferencesService({
@@ -903,9 +891,9 @@ async function createServiceHarness(
     initialLocale: options.initialLocale ?? "en",
     initialTheme: options.initialTheme ?? {
       appearance: "light",
-      source: "system",
+      source: "system"
     },
-    resolveTheme,
+    resolveTheme
   });
   await settle();
   return {
@@ -913,12 +901,12 @@ async function createServiceHarness(
     service,
     cleanup() {
       service.dispose();
-    },
+    }
   };
 }
 
 function createDesktopPreferencesClient(
-  overrides: Partial<DesktopPreferencesClient>,
+  overrides: Partial<DesktopPreferencesClient>
 ): FakeDesktopPreferencesClient {
   const listeners = new Set<(preferences: Preferences) => void>();
   const updatedRequests: Preferences[] = [];
@@ -932,7 +920,7 @@ function createDesktopPreferencesClient(
     connect: async () => {},
     dispose: () => {
       const disposeError = new Error(
-        "Desktop preferences client was disposed.",
+        "Desktop preferences client was disposed."
       );
       for (const pendingUpdate of pendingUpdates) {
         pendingUpdate.reject(disposeError);
@@ -950,7 +938,7 @@ function createDesktopPreferencesClient(
     },
     getDesktopPreferences: async () => ({
       initialized: true,
-      preferences: createPreferences(),
+      preferences: createPreferences()
     }),
     updateDesktopPreferences: async (request) => {
       updatedRequests.push(request.preferences);
@@ -968,13 +956,13 @@ function createDesktopPreferencesClient(
       overrides.patchAgentComposerDefaultsForTarget ??
       (async () => ({ applied: [], rejected: [] })),
     patchAgentSessionLaunchMode:
-      overrides.patchAgentSessionLaunchMode ?? (async () => {}),
+      overrides.patchAgentSessionLaunchMode ?? (async () => {})
   };
 }
 
 function preferencesConfirmRequest(
   request: Preferences,
-  preferences: Preferences,
+  preferences: Preferences
 ): boolean {
   const fields = [
     "agentComposerDefaultsByProvider",
@@ -992,11 +980,21 @@ function preferencesConfirmRequest(
     "themeSource",
     "updateChannel",
     "updatePolicy",
-    "workbenchWindowSnapping",
+    "workbenchWindowSnapping"
   ] as const;
-  return fields.every(
-    (field) =>
-      JSON.stringify(request[field]) === JSON.stringify(preferences[field]),
+  return (
+    fields.every(
+      (field) =>
+        JSON.stringify(request[field]) === JSON.stringify(preferences[field])
+    ) &&
+    (request.agentRuntimeKeepAliveEnabled === undefined ||
+      request.agentRuntimeKeepAliveEnabled ===
+        preferences.agentRuntimeKeepAliveEnabled) &&
+    (request.agentRuntimeIdleMinutes === undefined ||
+      request.agentRuntimeIdleMinutes ===
+        preferences.agentRuntimeIdleMinutes) &&
+    (request.agentRuntimeMaxResident === undefined ||
+      request.agentRuntimeMaxResident === preferences.agentRuntimeMaxResident)
   );
 }
 
@@ -1005,7 +1003,7 @@ function resolveTheme(source: DesktopThemeSource): DesktopThemeState {
 }
 
 function createSequentialTuttidClient(
-  responses: DesktopPreferencesStateResponse[],
+  responses: DesktopPreferencesStateResponse[]
 ): Pick<TuttidClient, "getDesktopPreferences"> & {
   getDesktopPreferencesCalls: number;
 } {
@@ -1019,7 +1017,7 @@ function createSequentialTuttidClient(
     getDesktopPreferences: async () => {
       getDesktopPreferencesCalls += 1;
       return responses[getDesktopPreferencesCalls - 1] ?? fallbackResponse;
-    },
+    }
   };
 }
 
@@ -1049,7 +1047,7 @@ function createFallbackConfirmingEventStreamClient(): TuttidEventStreamClient {
     },
     subscribeConnectionState() {
       return () => {};
-    },
+    }
   };
 }
 

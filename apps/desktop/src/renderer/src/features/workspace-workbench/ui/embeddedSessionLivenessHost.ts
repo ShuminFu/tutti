@@ -8,11 +8,19 @@ import {
   requestHostSessionLiveness
 } from "../../../platform/desktop/web/webHostBridgeClient.ts";
 
-// 桥不可用（未嵌入 / 宿主没实现这个能力 / 超时）统一归一成 "unsupported"，
-// gui 侧只认这一个词就永久停拍。
+// 仅能力确实不存在时归一成 "unsupported"，让 gui 永久停拍；超时仍可重试。
 function normalizeBridgeError(error: unknown): never {
   if (error instanceof HostBridgeUnavailableError) {
-    throw new Error("unsupported");
+    const code = (error as { code?: unknown }).code;
+    if (
+      code === "host_capability_unsupported" ||
+      code === "host_bridge_unavailable"
+    ) {
+      throw new Error("unsupported");
+    }
+    // A timeout says nothing about provider liveness. Keep polling so a
+    // temporary busy host can recover without reloading the panel.
+    throw error;
   }
   if (error instanceof Error && error.message === "unsupported") {
     throw new Error("unsupported");

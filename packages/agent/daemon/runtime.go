@@ -92,7 +92,20 @@ type Runtime struct {
 	processTransport ProcessTransport
 	cancel           context.CancelFunc
 	done             chan struct{}
+	wakeReaper       chan struct{}
 	closeOnce        sync.Once
+}
+
+// WakeLiveSessionReaper coalesces turn-settlement and preference-change signals.
+// The worker always loads the latest policy and rechecks session activity.
+func (r *Runtime) WakeLiveSessionReaper() {
+	if r == nil || r.wakeReaper == nil {
+		return
+	}
+	select {
+	case r.wakeReaper <- struct{}{}:
+	default:
+	}
 }
 
 func NewRuntime(config Config) (*Runtime, error) {
@@ -236,18 +249,29 @@ func (r *Runtime) startLiveSessionReaper(config LiveSessionReaperConfig, load fu
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	r.done = make(chan struct{})
+	r.wakeReaper = make(chan struct{}, 1)
 	go func() {
 		defer close(r.done)
 		// 用 Timer 而不是 Ticker：扫描间隔本身也可能被用户改，每轮按当前配置重置。
 		timer := time.NewTimer(liveSessionReaperSweepInterval(load()))
 		defer timer.Stop()
+		busyRetries := 0
 		for {
+			woken := false
 			select {
 			case <-ctx.Done():
 				return
+			case <-r.wakeReaper:
+				woken = true
 			case <-timer.C:
 			}
 			current := load()
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
 			timer.Reset(liveSessionReaperSweepInterval(current))
 			if !liveSessionReaperEnabled(current) {
 				continue
@@ -259,10 +283,26 @@ func (r *Runtime) startLiveSessionReaper(config LiveSessionReaperConfig, load fu
 			result := r.controller.ReleaseIdleLiveSessions(ctx, agentruntime.ReleaseIdleLiveSessionsInput{
 				IdleAfter:       idleAfter,
 				IdleAfterFor:    current.IdleAfterFor,
+				PolicyAfterLock: liveSessionReaperPolicyAfterLock(load),
 				MaxLiveSessions: current.MaxLiveSessions,
 				EvictionGrace:   current.EvictionGrace,
 				Now:             time.Now(),
 			})
+			// A canonical turn may settle just before its adapter drops the final
+			// pending RPC. Retry only a short bounded window after a wake signal.
+			if woken && result.SkippedBusy > 0 && busyRetries < 8 {
+				busyRetries++
+				retry := time.NewTimer(250 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					retry.Stop()
+					return
+				case <-retry.C:
+					r.WakeLiveSessionReaper()
+				}
+			} else {
+				busyRetries = 0
+			}
 			if result.Scanned == 0 {
 				continue
 			}
@@ -289,6 +329,23 @@ func liveSessionReaperSweepInterval(config LiveSessionReaperConfig) time.Duratio
 		return config.SweepInterval
 	}
 	return defaultLiveSessionReaperSweepInterval
+}
+
+func liveSessionReaperPolicyAfterLock(load func() LiveSessionReaperConfig) func(agentruntime.Session) (time.Duration, int) {
+	return func(session agentruntime.Session) (time.Duration, int) {
+		latest := load()
+		if !liveSessionReaperEnabled(latest) {
+			return -1, 0
+		}
+		threshold := latest.IdleAfter
+		if threshold <= 0 {
+			threshold = defaultLiveSessionReaperIdleAfter
+		}
+		if latest.IdleAfterFor != nil {
+			threshold = latest.IdleAfterFor(session)
+		}
+		return threshold, latest.MaxLiveSessions
+	}
 }
 
 func liveSessionReaperEnabled(config LiveSessionReaperConfig) bool {

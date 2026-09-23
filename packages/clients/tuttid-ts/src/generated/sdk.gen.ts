@@ -523,6 +523,9 @@ import type {
   OpenWorkspaceData,
   OpenWorkspaceErrors,
   OpenWorkspaceResponses,
+  PatchDesktopAgentRuntimeRetentionData,
+  PatchDesktopAgentRuntimeRetentionErrors,
+  PatchDesktopAgentRuntimeRetentionResponses,
   PinUserProjectData,
   PinUserProjectErrors,
   PinUserProjectResponses,
@@ -1026,6 +1029,28 @@ export const putDesktopPreferences = <ThrowOnError extends boolean = false>(
   >({
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/preferences/desktop",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Update only specified agent runtime retention preferences
+ */
+export const patchDesktopAgentRuntimeRetention = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<PatchDesktopAgentRuntimeRetentionData, ThrowOnError>
+) =>
+  (options.client ?? client).patch<
+    PatchDesktopAgentRuntimeRetentionResponses,
+    PatchDesktopAgentRuntimeRetentionErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/preferences/desktop/agent-runtime",
     ...options,
     headers: {
       "Content-Type": "application/json",

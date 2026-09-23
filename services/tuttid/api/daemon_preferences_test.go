@@ -11,8 +11,47 @@ import (
 )
 
 type stubPreferencesService struct {
-	getFn func(context.Context) (preferencesbiz.DesktopPreferences, error)
-	putFn func(context.Context, preferencesservice.PutInput) (preferencesbiz.DesktopPreferences, error)
+	getFn   func(context.Context) (preferencesbiz.DesktopPreferences, error)
+	putFn   func(context.Context, preferencesservice.PutInput) (preferencesbiz.DesktopPreferences, error)
+	patchFn func(context.Context, preferencesbiz.AgentRuntimeRetentionPatch) (preferencesbiz.DesktopPreferences, error)
+}
+
+func (s stubPreferencesService) PatchAgentRuntimeRetention(ctx context.Context, patch preferencesbiz.AgentRuntimeRetentionPatch) (preferencesbiz.DesktopPreferences, error) {
+	if s.patchFn != nil {
+		return s.patchFn(ctx, patch)
+	}
+	return preferencesbiz.DefaultDesktopPreferences(), nil
+}
+
+func TestDaemonAPIPatchAgentRuntimeRetentionValidatesAndPreservesFalseZero(t *testing.T) {
+	t.Parallel()
+	var received preferencesbiz.AgentRuntimeRetentionPatch
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, NewRoutes(DaemonAPI{PreferencesService: stubPreferencesService{
+		patchFn: func(_ context.Context, patch preferencesbiz.AgentRuntimeRetentionPatch) (preferencesbiz.DesktopPreferences, error) {
+			received = patch
+			result := preferencesbiz.DefaultDesktopPreferences()
+			result.AgentRuntimeKeepAliveEnabled = *patch.KeepAliveEnabled
+			result.AgentRuntimeIdleMinutes = *patch.IdleMinutes
+			result.AgentRuntimeMaxResident = *patch.MaxResident
+			return result, nil
+		},
+	}}))
+	for _, body := range []map[string]any{{}, {"idleMinutes": -1}, {"maxResident": 101}} {
+		response := performGeneratedRouteRequest(t, mux, http.MethodPatch, "/v1/preferences/desktop/agent-runtime", body)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("body %v: status %d", body, response.Code)
+		}
+	}
+	response := performGeneratedRouteRequest(t, mux, http.MethodPatch, "/v1/preferences/desktop/agent-runtime", map[string]any{
+		"keepAliveEnabled": false, "idleMinutes": 0, "maxResident": 0,
+	})
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if received.KeepAliveEnabled == nil || *received.KeepAliveEnabled || received.IdleMinutes == nil || *received.IdleMinutes != 0 || received.MaxResident == nil || *received.MaxResident != 0 {
+		t.Fatalf("false and zero not preserved: %+v", received)
+	}
 }
 
 func (s stubPreferencesService) Get(ctx context.Context) (preferencesbiz.DesktopPreferences, error) {

@@ -87,10 +87,10 @@ func (c *Controller) ReleaseIdleLiveSessions(ctx context.Context, input ReleaseI
 			}
 			idleAfterMS = idleAfter.Milliseconds()
 		}
-		result.add(c.releaseIdleLiveSession(ctx, candidate.session, candidate.adapter, nowUnixMS, idleAfterMS))
+		result.add(c.releaseIdleLiveSession(ctx, candidate.session, candidate.adapter, nowUnixMS, idleAfterMS, input.PolicyAfterLock, false, 0))
 	}
 	if input.MaxLiveSessions > 0 {
-		result.add(c.evictLiveSessionsOverCap(ctx, input.MaxLiveSessions, input.EvictionGrace, nowUnixMS))
+		result.add(c.evictLiveSessionsOverCap(ctx, input.MaxLiveSessions, input.EvictionGrace, nowUnixMS, input.PolicyAfterLock))
 	}
 	return result
 }
@@ -109,6 +109,7 @@ func (c *Controller) evictLiveSessionsOverCap(
 	maxLive int,
 	grace time.Duration,
 	nowUnixMS int64,
+	policyAfterLock func(Session) (time.Duration, int),
 ) ReleaseIdleLiveSessionsResult {
 	var result ReleaseIdleLiveSessionsResult
 	if c == nil || maxLive <= 0 {
@@ -161,11 +162,15 @@ func (c *Controller) evictLiveSessionsOverCap(
 		}
 		// 复用 TTL 那条路径的全部守卫（重新取一次会话、再确认没有在飞的回合、
 		// 适配器喊忙就放弃）；阈值传 0，因为「该不该走」已经由上面的护身符判完了。
-		single := c.releaseIdleLiveSession(ctx, item.session, item.adapter, nowUnixMS, 0)
+		single := c.releaseIdleLiveSession(ctx, item.session, item.adapter, nowUnixMS, 0, policyAfterLock, true, maxLive)
 		if single.Released > 0 {
 			result.EvictedOverCap += single.Released
 			overflow -= single.Released
 			continue
+		}
+		if single.SkippedRetained > 0 {
+			result.add(single)
+			break // the latest cap now permits the remaining live processes
 		}
 		// 没放成的原因（忙 / 已经不在了 / 不支持）照原样并进结果，别吞掉。
 		single.Released = 0
@@ -180,6 +185,9 @@ func (c *Controller) releaseIdleLiveSession(
 	adapter Adapter,
 	nowUnixMS int64,
 	idleAfterMS int64,
+	policyAfterLock func(Session) (time.Duration, int),
+	overCap bool,
+	capLimit int,
 ) ReleaseIdleLiveSessionsResult {
 	var result ReleaseIdleLiveSessionsResult
 	_, probe, ok := liveSessionReleaseAdapter(adapter)
@@ -225,6 +233,28 @@ func (c *Controller) releaseIdleLiveSession(
 		result.SkippedActiveTurn = 1
 		return result
 	}
+	liveCount := 0
+	if overCap {
+		// Other sessions may have started or exited since the candidate list was
+		// built. Recount under the controller lock immediately before eviction.
+		liveCount = c.countLiveSessions()
+	}
+	if policyAfterLock != nil {
+		currentIdleAfter, currentMaxLive := policyAfterLock(refreshed)
+		if overCap {
+			capLimit = currentMaxLive
+		} else {
+			if currentIdleAfter < 0 {
+				result.SkippedRetained = 1
+				return result
+			}
+			idleAfterMS = currentIdleAfter.Milliseconds()
+		}
+	}
+	if overCap && (capLimit <= 0 || liveCount <= capLimit) {
+		result.SkippedRetained = 1
+		return result
+	}
 	if !sessionIdleFor(refreshed, nowUnixMS, idleAfterMS) {
 		result.SkippedFresh = 1
 		return result
@@ -248,6 +278,20 @@ func (c *Controller) releaseIdleLiveSession(
 	c.invalidateAppliedGoalGenerationFences(refreshed)
 	result.Released = 1
 	return result
+}
+
+func (c *Controller) countLiveSessions() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	count := 0
+	for _, session := range c.sessions {
+		adapter := c.adapterForSessionLocked(session)
+		_, probe, ok := liveSessionReleaseAdapter(adapter)
+		if ok && strings.TrimSpace(session.ProviderSessionID) != "" && probe.HasLiveSession(session) {
+			count++
+		}
+	}
+	return count
 }
 
 func liveSessionReleaseAdapter(adapter Adapter) (LiveSessionReleaseAdapter, LiveSessionProbeAdapter, bool) {

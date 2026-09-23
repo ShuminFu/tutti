@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -67,6 +68,23 @@ func TestSQLiteStoreGetDesktopPreferencesDefaultsWhenUnset(t *testing.T) {
 	}
 	if preferences.UpdateChannel != "rc" {
 		t.Fatalf("GetDesktopPreferences() updateChannel = %q, want rc", preferences.UpdateChannel)
+	}
+}
+
+func TestSQLiteStoreFirstAgentRuntimePatchKeepsAllBusinessDefaults(t *testing.T) {
+	t.Parallel()
+	store := openTestSQLiteStore(t)
+	ctx := context.Background()
+	falseValue := false
+	got, err := store.PatchAgentRuntimeRetention(ctx, preferencesbiz.AgentRuntimeRetentionPatch{KeepAliveEnabled: &falseValue})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := preferencesbiz.DefaultDesktopPreferences()
+	want.Initialized = true
+	want.AgentRuntimeKeepAliveEnabled = false
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("first retention patch changed unrelated defaults:\ngot:  %+v\nwant: %+v", got, want)
 	}
 }
 
@@ -700,5 +718,42 @@ INSERT INTO desktop_preferences (
 		reloaded.AgentRuntimeIdleMinutes != 0 ||
 		reloaded.AgentRuntimeMaxResident != 0 {
 		t.Fatalf("round trip lost the chosen values: %#v", reloaded)
+	}
+}
+
+func TestSQLiteStoreAgentRuntimePatchPreservesOmittedFieldsAcrossLegacyPut(t *testing.T) {
+	t.Parallel()
+	store := openTestSQLiteStore(t)
+	ctx := context.Background()
+	falseValue, zero, fifteen := false, 0, 15
+	if _, err := store.PatchAgentRuntimeRetention(ctx, preferencesbiz.AgentRuntimeRetentionPatch{
+		KeepAliveEnabled: &falseValue, IdleMinutes: &zero,
+	}); err != nil {
+		t.Fatalf("initial patch: %v", err)
+	}
+	// Simulate an old desktop client reading before another entry changes the
+	// retention fields, then saving only its theme. Its stale retention values
+	// must not enter the conflict update.
+	stale, err := store.GetDesktopPreferences(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PatchAgentRuntimeRetention(ctx, preferencesbiz.AgentRuntimeRetentionPatch{IdleMinutes: &fifteen}); err != nil {
+		t.Fatalf("interleaved TTL patch: %v", err)
+	}
+	stale.ThemeSource = "light"
+	if _, err := store.PutDesktopPreferencesWithAgentRuntimePatch(ctx, stale, preferencesbiz.AgentRuntimeRetentionPatch{}); err != nil {
+		t.Fatalf("legacy theme PUT: %v", err)
+	}
+	// Two entry points changing distinct fields must merge, including zero.
+	if _, err := store.PatchAgentRuntimeRetention(ctx, preferencesbiz.AgentRuntimeRetentionPatch{MaxResident: &zero}); err != nil {
+		t.Fatalf("max patch: %v", err)
+	}
+	got, err := store.GetDesktopPreferences(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AgentRuntimeKeepAliveEnabled || got.AgentRuntimeIdleMinutes != fifteen || got.AgentRuntimeMaxResident != zero || got.ThemeSource != "light" {
+		t.Fatalf("partial writes clobbered another field: %+v", got)
 	}
 }

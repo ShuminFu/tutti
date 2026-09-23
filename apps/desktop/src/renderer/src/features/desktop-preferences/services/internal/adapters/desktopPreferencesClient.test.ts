@@ -32,6 +32,33 @@ test("desktop preferences client resolves writes from the authoritative event", 
   client.dispose();
 });
 
+test("unrelated desktop write confirms even when retention changed concurrently", async () => {
+  const events = createFakeEventStreamClient();
+  const client = createDesktopPreferencesClient(
+    createFakeTuttidClient(),
+    events
+  );
+  const request = createUpdateRequest({ themeSource: "light" });
+  const completion = client.updateDesktopPreferences(request);
+  assert.equal(
+    Object.hasOwn(request.preferences, "agentRuntimeKeepAliveEnabled"),
+    false
+  );
+  events.emitDesktopPreferencesUpdated(
+    createStateResponse({
+      themeSource: "light",
+      agentRuntimeKeepAliveEnabled: false,
+      agentRuntimeIdleMinutes: 0,
+      agentRuntimeMaxResident: 0
+    })
+  );
+  const result = await completion;
+  assert.equal(result.agentRuntimeKeepAliveEnabled, false);
+  assert.equal(result.agentRuntimeIdleMinutes, 0);
+  assert.equal(result.agentRuntimeMaxResident, 0);
+  client.dispose();
+});
+
 test("desktop preferences client patches target defaults through the dedicated acknowledged intent", async () => {
   const eventStreamClient = createFakeEventStreamClient();
   const client = createDesktopPreferencesClient(

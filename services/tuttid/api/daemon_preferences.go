@@ -37,6 +37,52 @@ func (api DaemonAPI) GetDesktopPreferences(ctx context.Context, _ tuttigenerated
 	), nil
 }
 
+func (api DaemonAPI) PatchDesktopAgentRuntimeRetention(ctx context.Context, request tuttigenerated.PatchDesktopAgentRuntimeRetentionRequestObject) (tuttigenerated.PatchDesktopAgentRuntimeRetentionResponseObject, error) {
+	if api.PreferencesService == nil {
+		return tuttigenerated.PatchDesktopAgentRuntimeRetention503JSONResponse{ServiceUnavailableErrorJSONResponse: serviceUnavailableError(
+			apierrors.PreferencesServiceUnavailable(apierrors.WithDeveloperMessage("desktop preferences service is unavailable")),
+		)}, nil
+	}
+	if request.Body == nil || (request.Body.KeepAliveEnabled == nil && request.Body.IdleMinutes == nil && request.Body.MaxResident == nil) {
+		return tuttigenerated.PatchDesktopAgentRuntimeRetention400JSONResponse{InvalidRequestErrorJSONResponse: invalidRequestError(
+			apierrors.EmptyBody(apierrors.WithDeveloperMessage("agent runtime retention patch is empty")),
+		)}, nil
+	}
+	if request.Body.IdleMinutes != nil && !preferencesbiz.IsDesktopAgentRuntimeIdleMinutes(*request.Body.IdleMinutes) {
+		return tuttigenerated.PatchDesktopAgentRuntimeRetention400JSONResponse{InvalidRequestErrorJSONResponse: invalidRequestError(
+			apierrors.InvalidRequest(apierrors.ReasonUnsupportedAgentRuntimeIdleMinutes, apierrors.WithDeveloperMessage("agent runtime idle minutes is out of range")),
+		)}, nil
+	}
+	if request.Body.MaxResident != nil && !preferencesbiz.IsDesktopAgentRuntimeMaxResident(*request.Body.MaxResident) {
+		return tuttigenerated.PatchDesktopAgentRuntimeRetention400JSONResponse{InvalidRequestErrorJSONResponse: invalidRequestError(
+			apierrors.InvalidRequest(apierrors.ReasonUnsupportedAgentRuntimeMaxResident, apierrors.WithDeveloperMessage("agent runtime maximum resident sessions is out of range")),
+		)}, nil
+	}
+	patcher, ok := api.PreferencesService.(interface {
+		PatchAgentRuntimeRetention(context.Context, preferencesbiz.AgentRuntimeRetentionPatch) (preferencesbiz.DesktopPreferences, error)
+	})
+	if !ok {
+		return tuttigenerated.PatchDesktopAgentRuntimeRetention503JSONResponse{ServiceUnavailableErrorJSONResponse: serviceUnavailableError(
+			apierrors.PreferencesServiceUnavailable(apierrors.WithDeveloperMessage("agent runtime retention patch is unavailable")),
+		)}, nil
+	}
+	current, err := patcher.PatchAgentRuntimeRetention(ctx, preferencesbiz.AgentRuntimeRetentionPatch{
+		KeepAliveEnabled: request.Body.KeepAliveEnabled,
+		IdleMinutes:      request.Body.IdleMinutes,
+		MaxResident:      request.Body.MaxResident,
+	})
+	if err != nil {
+		return tuttigenerated.PatchDesktopAgentRuntimeRetention502JSONResponse{PreferencesOperationErrorJSONResponse: preferencesOperationError(
+			apierrors.PreferencesOperationFailed(apierrors.WithCause(err)),
+		)}, nil
+	}
+	return tuttigenerated.PatchDesktopAgentRuntimeRetention200JSONResponse{
+		KeepAliveEnabled: current.AgentRuntimeKeepAliveEnabled,
+		IdleMinutes:      current.AgentRuntimeIdleMinutes,
+		MaxResident:      current.AgentRuntimeMaxResident,
+	}, nil
+}
+
 func (api DaemonAPI) PutDesktopPreferences(ctx context.Context, request tuttigenerated.PutDesktopPreferencesRequestObject) (tuttigenerated.PutDesktopPreferencesResponseObject, error) {
 	if api.PreferencesService == nil {
 		return tuttigenerated.PutDesktopPreferences503JSONResponse{

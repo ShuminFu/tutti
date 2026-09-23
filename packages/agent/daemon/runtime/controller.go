@@ -166,6 +166,10 @@ type ReleaseIdleLiveSessionsInput struct {
 	// 返回值语义：>0 = 空闲这么久之后回收；0 = 只要不在跑回合就立刻回收；
 	// <0 = 这条会话不回收（用户选了常驻）。留 nil 则所有会话都用 IdleAfter。
 	IdleAfterFor func(session Session) time.Duration
+	// PolicyAfterLock re-reads the current retention policy after the session's
+	// lifecycle lock is acquired. A queued sweep must not apply a stale policy
+	// after a preference change or a newly admitted turn.
+	PolicyAfterLock func(session Session) (idleAfter time.Duration, maxLive int)
 	// MaxLiveSessions 是常驻进程的条数上限（DINTAL-5308）。
 	//
 	// 光有 TTL 挡不住这种情况：半小时里开了几十条会话、每条都刚聊过所以都没到

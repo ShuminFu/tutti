@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -195,6 +196,55 @@ func TestControllerReleaseIdleLiveSessionsWaitsForExecLifecycle(t *testing.T) {
 	}
 	adapter.releaseNext()
 	waitForSessionStatus(t, controller, started.Session.RoomID, started.Session.AgentSessionID, SessionStatusReady)
+}
+
+func TestControllerReleaseIdleLiveSessionsRechecksPolicyAfterLifecycleLock(t *testing.T) {
+	t.Parallel()
+	adapter := newReleasableAdapter()
+	controller := NewController([]Adapter{adapter}, nil)
+	started := startReleasableSession(t, controller, "policy-changed")
+	seenOldPolicy := make(chan struct{})
+	releaseLock := controller.acquireLifecycleLock(started.Session.RoomID, started.Session.AgentSessionID)
+	held := true
+	defer func() {
+		if held {
+			releaseLock()
+		}
+	}()
+	var nowRetained bool
+	done := make(chan ReleaseIdleLiveSessionsResult, 1)
+	go func() {
+		done <- controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
+			IdleAfter:    time.Hour,
+			IdleAfterFor: func(Session) time.Duration { close(seenOldPolicy); return 0 },
+			PolicyAfterLock: func(Session) (time.Duration, int) {
+				if nowRetained {
+					return -1, 10
+				}
+				return 0, 10
+			},
+			Now: time.Now(),
+		})
+	}()
+	select {
+	case <-seenOldPolicy:
+	case <-time.After(2 * time.Second):
+		t.Fatal("sweep never read old policy")
+	}
+	nowRetained = true
+	releaseLock()
+	held = false
+	select {
+	case result := <-done:
+		if result.Released != 0 || result.SkippedRetained != 1 {
+			t.Fatalf("stale sweep released process: %+v", result)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("sweep did not finish")
+	}
+	if !adapter.hasLiveSession(started.Session.AgentSessionID) {
+		t.Fatal("live session was released after policy changed")
+	}
 }
 
 func TestControllerCloseAllLiveSessionsClosesEveryLiveSession(t *testing.T) {
@@ -615,6 +665,35 @@ func TestControllerReleaseIdleLiveSessionsEvictsLeastRecentlyUsedOverCap(t *test
 	}
 	if !adapter.hasLiveSession(newest.Session.AgentSessionID) {
 		t.Fatal("newest session was evicted: the most recently used one must survive")
+	}
+}
+
+func TestControllerOverCapSweepStopsWhenCapRisesMidSweep(t *testing.T) {
+	t.Parallel()
+	adapter := newReleasableAdapter()
+	controller := NewController([]Adapter{adapter}, nil)
+	for i := 0; i < 20; i++ {
+		started := startReleasableSession(t, controller, fmt.Sprintf("cap-rise-%02d", i))
+		setSessionUpdatedAt(t, controller, started.Session, time.Now().Add(-10*time.Minute))
+	}
+	policyChecks := 0
+	result := controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
+		IdleAfter:       time.Hour,
+		MaxLiveSessions: 10,
+		PolicyAfterLock: func(Session) (time.Duration, int) {
+			policyChecks++
+			if policyChecks > 5 {
+				return time.Hour, 15
+			}
+			return time.Hour, 10
+		},
+		Now: time.Now(),
+	})
+	if result.EvictedOverCap != 5 || result.Released != 0 {
+		t.Fatalf("cap raised to 15 after five releases: result=%+v, want five evictions", result)
+	}
+	if live := controller.countLiveSessions(); live != 15 {
+		t.Fatalf("live sessions = %d, want 15", live)
 	}
 }
 

@@ -77,10 +77,10 @@ describe("agentGUIConversationPresence", () => {
     );
   });
 
-  it("宿主判 unknown / 没数据（不支持）：都当没这回事", () => {
-    expect(agentGUIConversationPresence({ status: "ready" }, "unknown")).toBe(
-      "idle"
-    );
+  it("宿主判 unknown 时不画旧绿点；真正不支持时才回退", () => {
+    expect(
+      agentGUIConversationPresence({ status: "ready" }, "unknown")
+    ).toBeNull();
     expect(agentGUIConversationPresence({ status: "ready" }, null)).toBe(
       "idle"
     );
@@ -88,6 +88,12 @@ describe("agentGUIConversationPresence", () => {
       "idle"
     );
     expect(agentGUIConversationPresence({ status: "ready" })).toBe("idle");
+  });
+
+  it("宿主状态未知，但当前轮次在跑时保留蓝点", () => {
+    expect(agentGUIConversationPresence({ status: "working" }, "unknown")).toBe(
+      "working"
+    );
   });
 
   it("加载中：未加载 ≠ 空闲，不画绿点", () => {

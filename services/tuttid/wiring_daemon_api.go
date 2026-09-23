@@ -270,6 +270,13 @@ func buildDaemonAPI(
 	if err != nil {
 		return tuttiapi.DaemonAPI{}, nil, nil, nil, fmt.Errorf("create agent runtime: %w", err)
 	}
+	preferences.RegisterChangeObserver(func(_ context.Context, previous, current preferencesbiz.DesktopPreferences) {
+		if previous.AgentRuntimeKeepAliveEnabled != current.AgentRuntimeKeepAliveEnabled ||
+			previous.AgentRuntimeIdleMinutes != current.AgentRuntimeIdleMinutes ||
+			previous.AgentRuntimeMaxResident != current.AgentRuntimeMaxResident {
+			agentRuntime.WakeLiveSessionReaper()
+		}
+	})
 	agentRuntimePreparer := runtimeprep.NewDefaultPreparer(tuttitypes.DefaultStateDir())
 	agentRuntimePreparer.RegisterProvider(runtimeprep.CodexPreparer{AuthProjector: runtimeprep.MutagenAuthFileProjector{StateDir: tuttitypes.DefaultStateDir()}})
 	agentRuntimePreparer.RegisterProvider(tuttiagentservice.NewPreparer(tuttitypes.DefaultStateDir()))
@@ -461,7 +468,10 @@ func buildDaemonAPI(
 	// One owner for "is this session's turn slot free?": the runtime tells the
 	// Host, and the Host admits the prompts parked behind it. Without this the
 	// admission queue never drains and a busy-session prompt hangs forever.
-	agentRuntime.Controller().SetTurnSlotObserver(agentHost)
+	agentRuntime.Controller().SetTurnSlotObserver(agentruntime.TurnSlotObserverFunc(func(roomID, sessionID string) {
+		agentHost.ObserveTurnSlotReleased(roomID, sessionID)
+		agentRuntime.WakeLiveSessionReaper()
+	}))
 	agentActivityProjection.SetTurnForkabilityResolver(agentHost)
 	agentSessionConfig.Host = agentservice.ServiceHostConfig{
 		ApplicationHost: agentHost,

@@ -478,6 +478,18 @@ export type RestoreWorkspaceDeletedAgentSessionResponse = {
   restored: boolean;
 };
 
+export type DesktopAgentRuntimeRetentionPatch = {
+  keepAliveEnabled?: boolean;
+  idleMinutes?: number;
+  maxResident?: number;
+};
+
+export type DesktopAgentRuntimeRetention = {
+  keepAliveEnabled: boolean;
+  idleMinutes: number;
+  maxResident: number;
+};
+
 export type DesktopPreferences = {
   /**
    * Whether tuttid may periodically discover newer managed agent CLI releases on this device. This never authorizes automatic installation.
@@ -5781,6 +5793,49 @@ export type PutDesktopPreferencesResponses = {
 
 export type PutDesktopPreferencesResponse =
   PutDesktopPreferencesResponses[keyof PutDesktopPreferencesResponses];
+
+export type PatchDesktopAgentRuntimeRetentionData = {
+  body: DesktopAgentRuntimeRetentionPatch;
+  path?: never;
+  query?: never;
+  url: "/v1/preferences/desktop/agent-runtime";
+};
+
+export type PatchDesktopAgentRuntimeRetentionErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Desktop preferences operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type PatchDesktopAgentRuntimeRetentionError =
+  PatchDesktopAgentRuntimeRetentionErrors[keyof PatchDesktopAgentRuntimeRetentionErrors];
+
+export type PatchDesktopAgentRuntimeRetentionResponses = {
+  /**
+   * Current agent runtime retention preferences
+   */
+  200: DesktopAgentRuntimeRetention;
+};
+
+export type PatchDesktopAgentRuntimeRetentionResponse =
+  PatchDesktopAgentRuntimeRetentionResponses[keyof PatchDesktopAgentRuntimeRetentionResponses];
 
 export type GetDesktopUpdateAdmissionSnapshotData = {
   body?: never;

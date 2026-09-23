@@ -6745,6 +6745,20 @@ type DesktopAgentGuiConversationRailCollapsedByProvider struct {
 	TuttiAgent *bool `json:"tutti-agent,omitempty"`
 }
 
+// DesktopAgentRuntimeRetention defines model for DesktopAgentRuntimeRetention.
+type DesktopAgentRuntimeRetention struct {
+	IdleMinutes      int  `json:"idleMinutes"`
+	KeepAliveEnabled bool `json:"keepAliveEnabled"`
+	MaxResident      int  `json:"maxResident"`
+}
+
+// DesktopAgentRuntimeRetentionPatch defines model for DesktopAgentRuntimeRetentionPatch.
+type DesktopAgentRuntimeRetentionPatch struct {
+	IdleMinutes      *int  `json:"idleMinutes,omitempty"`
+	KeepAliveEnabled *bool `json:"keepAliveEnabled,omitempty"`
+	MaxResident      *int  `json:"maxResident,omitempty"`
+}
+
 // DesktopAgentSessionLaunchMode defines model for DesktopAgentSessionLaunchMode.
 type DesktopAgentSessionLaunchMode string
 
@@ -10646,6 +10660,9 @@ type RefreshDesktopUpdateAdmissionJSONRequestBody = DesktopUpdateAdmissionRefres
 
 // PutDesktopPreferencesJSONRequestBody defines body for PutDesktopPreferences for application/json ContentType.
 type PutDesktopPreferencesJSONRequestBody = PutDesktopPreferencesRequest
+
+// PatchDesktopAgentRuntimeRetentionJSONRequestBody defines body for PatchDesktopAgentRuntimeRetention for application/json ContentType.
+type PatchDesktopAgentRuntimeRetentionJSONRequestBody = DesktopAgentRuntimeRetentionPatch
 
 // TrackEventsJSONRequestBody defines body for TrackEvents for application/json ContentType.
 type TrackEventsJSONRequestBody = TrackEventsRequest

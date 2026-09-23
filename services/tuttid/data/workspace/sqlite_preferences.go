@@ -119,6 +119,16 @@ WHERE id = ?
 }
 
 func (s *SQLiteStore) PutDesktopPreferences(ctx context.Context, preferences preferencesbiz.DesktopPreferences) (preferencesbiz.DesktopPreferences, error) {
+	keepAlive, idleMinutes, maxResident := preferences.AgentRuntimeKeepAliveEnabled, preferences.AgentRuntimeIdleMinutes, preferences.AgentRuntimeMaxResident
+	return s.PutDesktopPreferencesWithAgentRuntimePatch(ctx, preferences, preferencesbiz.AgentRuntimeRetentionPatch{
+		KeepAliveEnabled: &keepAlive, IdleMinutes: &idleMinutes, MaxResident: &maxResident,
+	})
+}
+
+// PutDesktopPreferencesWithAgentRuntimePatch keeps omitted retention fields in
+// the conflict update itself, so a concurrent retention PATCH cannot be undone
+// by an older full-preferences caller's earlier read.
+func (s *SQLiteStore) PutDesktopPreferencesWithAgentRuntimePatch(ctx context.Context, preferences preferencesbiz.DesktopPreferences, patch preferencesbiz.AgentRuntimeRetentionPatch) (preferencesbiz.DesktopPreferences, error) {
 	if s == nil || s.writeDB == nil {
 		return preferencesbiz.DesktopPreferences{}, errors.New("workspace database is not initialized")
 	}
@@ -188,9 +198,9 @@ INSERT INTO desktop_preferences (
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   agent_cli_update_check_enabled = excluded.agent_cli_update_check_enabled,
-  agent_runtime_keep_alive_enabled = excluded.agent_runtime_keep_alive_enabled,
-  agent_runtime_idle_minutes = excluded.agent_runtime_idle_minutes,
-  agent_runtime_max_resident = excluded.agent_runtime_max_resident,
+  agent_runtime_keep_alive_enabled = COALESCE(?, desktop_preferences.agent_runtime_keep_alive_enabled),
+  agent_runtime_idle_minutes = COALESCE(?, desktop_preferences.agent_runtime_idle_minutes),
+  agent_runtime_max_resident = COALESCE(?, desktop_preferences.agent_runtime_max_resident),
   default_agent_provider = excluded.default_agent_provider,
   agent_conversation_detail_mode = excluded.agent_conversation_detail_mode,
   agent_dock_layout = excluded.agent_dock_layout,
@@ -214,7 +224,7 @@ ON CONFLICT(id) DO UPDATE SET
   feature_flags_json = excluded.feature_flags_json,
   workbench_shortcuts_json = excluded.workbench_shortcuts_json,
   updated_at_unix_ms = excluded.updated_at_unix_ms
-`, desktopPreferencesRowID, preferences.AgentCLIUpdateCheckEnabled, preferences.AgentRuntimeKeepAliveEnabled, preferencesbiz.NormalizeDesktopAgentRuntimeIdleMinutes(preferences.AgentRuntimeIdleMinutes), preferencesbiz.NormalizeDesktopAgentRuntimeMaxResident(preferences.AgentRuntimeMaxResident), preferences.DefaultAgentProvider, preferencesbiz.NormalizeDesktopAgentConversationDetailMode(preferences.AgentConversationDetailMode), preferencesbiz.NormalizeDesktopAgentDockLayout(preferences.AgentDockLayout), preferences.DockIconStyle, preferences.DockPlacement, preferencesbiz.NormalizeDeletedAgentConversationRetentionDays(preferences.DeletedAgentConversationRetentionDays), preferences.Locale, preferences.ThemeSource, preferences.SleepPreventionMode, preferences.UpdateChannel, preferences.UpdatePolicy, agentComposerDefaultsJSON, agentComposerDefaultsByAgentTargetJSON, agentGUIConversationRailCollapsedJSON, agentSessionLaunchModesJSON, fileDefaultOpenersJSON, preferences.AppCatalogChannel, preferences.BrowserUseConnectionMode, preferences.MinimizeAnimation, preferences.ShowAppDeveloperSources, preferences.WindowSnappingEnabled, preferences.WindowSnappingShortcutPreset, featureFlagsJSON, workbenchShortcutsJSON, now)
+`, desktopPreferencesRowID, preferences.AgentCLIUpdateCheckEnabled, preferences.AgentRuntimeKeepAliveEnabled, preferencesbiz.NormalizeDesktopAgentRuntimeIdleMinutes(preferences.AgentRuntimeIdleMinutes), preferencesbiz.NormalizeDesktopAgentRuntimeMaxResident(preferences.AgentRuntimeMaxResident), preferences.DefaultAgentProvider, preferencesbiz.NormalizeDesktopAgentConversationDetailMode(preferences.AgentConversationDetailMode), preferencesbiz.NormalizeDesktopAgentDockLayout(preferences.AgentDockLayout), preferences.DockIconStyle, preferences.DockPlacement, preferencesbiz.NormalizeDeletedAgentConversationRetentionDays(preferences.DeletedAgentConversationRetentionDays), preferences.Locale, preferences.ThemeSource, preferences.SleepPreventionMode, preferences.UpdateChannel, preferences.UpdatePolicy, agentComposerDefaultsJSON, agentComposerDefaultsByAgentTargetJSON, agentGUIConversationRailCollapsedJSON, agentSessionLaunchModesJSON, fileDefaultOpenersJSON, preferences.AppCatalogChannel, preferences.BrowserUseConnectionMode, preferences.MinimizeAnimation, preferences.ShowAppDeveloperSources, preferences.WindowSnappingEnabled, preferences.WindowSnappingShortcutPreset, featureFlagsJSON, workbenchShortcutsJSON, now, patch.KeepAliveEnabled, patch.IdleMinutes, patch.MaxResident)
 	if err != nil {
 		return preferencesbiz.DesktopPreferences{}, fmt.Errorf("put desktop preferences: %w", err)
 	}
@@ -223,6 +233,84 @@ ON CONFLICT(id) DO UPDATE SET
 	// patch may have committed between a full preferences caller's read and this
 	// update. The conflict clause deliberately preserves those columns, so
 	// returning the input object here would publish a stale snapshot.
+	return s.GetDesktopPreferences(ctx)
+}
+
+func (s *SQLiteStore) PatchAgentRuntimeRetention(ctx context.Context, patch preferencesbiz.AgentRuntimeRetentionPatch) (preferencesbiz.DesktopPreferences, error) {
+	if s == nil || s.writeDB == nil {
+		return preferencesbiz.DesktopPreferences{}, errors.New("workspace database is not initialized")
+	}
+	defaults := preferencesbiz.DefaultDesktopPreferences()
+	fileOpeners, err := encodeFileDefaultOpenersByExtension(defaults.FileDefaultOpenersByExtension)
+	if err != nil {
+		return preferencesbiz.DesktopPreferences{}, err
+	}
+	composerDefaults, err := encodeAgentComposerDefaultsByProvider(defaults.AgentComposerDefaultsByProvider)
+	if err != nil {
+		return preferencesbiz.DesktopPreferences{}, err
+	}
+	composerTargetDefaults, err := encodeAgentComposerDefaultsByProvider(defaults.AgentComposerDefaultsByAgentTarget)
+	if err != nil {
+		return preferencesbiz.DesktopPreferences{}, err
+	}
+	railCollapsed, err := encodeAgentGUIConversationRailCollapsedByProvider(defaults.AgentGUIConversationRailCollapsedByProvider)
+	if err != nil {
+		return preferencesbiz.DesktopPreferences{}, err
+	}
+	launchModes, err := encodeAgentSessionLaunchModesByWorkspace(defaults.AgentSessionLaunchModesByWorkspace)
+	if err != nil {
+		return preferencesbiz.DesktopPreferences{}, err
+	}
+	featureFlags, err := encodeFeatureFlags(defaults.FeatureFlags)
+	if err != nil {
+		return preferencesbiz.DesktopPreferences{}, err
+	}
+	shortcuts, err := encodeWorkbenchShortcuts(defaults.WorkbenchShortcuts)
+	if err != nil {
+		return preferencesbiz.DesktopPreferences{}, err
+	}
+	initialKeepAlive := defaults.AgentRuntimeKeepAliveEnabled
+	if patch.KeepAliveEnabled != nil {
+		initialKeepAlive = *patch.KeepAliveEnabled
+	}
+	initialIdleMinutes := defaults.AgentRuntimeIdleMinutes
+	if patch.IdleMinutes != nil {
+		initialIdleMinutes = *patch.IdleMinutes
+	}
+	initialMaxResident := defaults.AgentRuntimeMaxResident
+	if patch.MaxResident != nil {
+		initialMaxResident = *patch.MaxResident
+	}
+	// A PATCH may be the first preference write. Initialize every column from
+	// business defaults; SQLite's DDL defaults differ for some unrelated fields.
+	// On conflict, only the supplied retention columns change atomically.
+	_, err = s.writeDB.ExecContext(ctx, `
+INSERT INTO desktop_preferences (
+  id, agent_cli_update_check_enabled, agent_runtime_keep_alive_enabled, agent_runtime_idle_minutes, agent_runtime_max_resident,
+  default_agent_provider, agent_conversation_detail_mode, agent_dock_layout, dock_icon_style, dock_placement,
+  deleted_agent_conversation_retention_days, locale, theme_source, sleep_prevention_mode, update_channel, update_policy,
+  agent_composer_defaults_by_provider_json, agent_composer_defaults_by_agent_target_json,
+  agent_gui_conversation_rail_collapsed_by_provider_json, agent_session_launch_modes_by_workspace_json,
+  file_default_openers_by_extension_json, app_catalog_channel, browser_use_connection_mode, minimize_animation,
+  show_app_developer_sources, workbench_window_snapping_enabled, workbench_window_snapping_shortcut_preset,
+  feature_flags_json, workbench_shortcuts_json, updated_at_unix_ms
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  agent_runtime_keep_alive_enabled = COALESCE(?, desktop_preferences.agent_runtime_keep_alive_enabled),
+  agent_runtime_idle_minutes = COALESCE(?, desktop_preferences.agent_runtime_idle_minutes),
+  agent_runtime_max_resident = COALESCE(?, desktop_preferences.agent_runtime_max_resident),
+  updated_at_unix_ms = excluded.updated_at_unix_ms
+`, desktopPreferencesRowID, defaults.AgentCLIUpdateCheckEnabled, initialKeepAlive,
+		initialIdleMinutes, initialMaxResident, defaults.DefaultAgentProvider,
+		defaults.AgentConversationDetailMode, defaults.AgentDockLayout, defaults.DockIconStyle, defaults.DockPlacement,
+		defaults.DeletedAgentConversationRetentionDays, defaults.Locale, defaults.ThemeSource, defaults.SleepPreventionMode,
+		defaults.UpdateChannel, defaults.UpdatePolicy, composerDefaults, composerTargetDefaults, railCollapsed, launchModes,
+		fileOpeners, defaults.AppCatalogChannel, defaults.BrowserUseConnectionMode, defaults.MinimizeAnimation,
+		defaults.ShowAppDeveloperSources, defaults.WindowSnappingEnabled, defaults.WindowSnappingShortcutPreset,
+		featureFlags, shortcuts, unixMs(time.Now().UTC()), patch.KeepAliveEnabled, patch.IdleMinutes, patch.MaxResident)
+	if err != nil {
+		return preferencesbiz.DesktopPreferences{}, fmt.Errorf("patch agent runtime retention: %w", err)
+	}
 	return s.GetDesktopPreferences(ctx)
 }
 

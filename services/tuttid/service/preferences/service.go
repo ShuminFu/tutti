@@ -316,7 +316,17 @@ func (s Service) Put(ctx context.Context, input PutInput) (preferencesbiz.Deskto
 	}
 
 	windowSnapping := resolveWindowSnapping(stored, input.WindowSnapping)
-	preferences, err := s.Store.PutDesktopPreferences(ctx, preferencesbiz.DesktopPreferences{
+	write := func(value preferencesbiz.DesktopPreferences) (preferencesbiz.DesktopPreferences, error) {
+		if patchStore, ok := s.Store.(workspacedata.AgentRuntimeRetentionPatchStore); ok {
+			return patchStore.PutDesktopPreferencesWithAgentRuntimePatch(ctx, value, preferencesbiz.AgentRuntimeRetentionPatch{
+				KeepAliveEnabled: input.AgentRuntimeKeepAliveEnabled,
+				IdleMinutes:      input.AgentRuntimeIdleMinutes,
+				MaxResident:      input.AgentRuntimeMaxResident,
+			})
+		}
+		return s.Store.PutDesktopPreferences(ctx, value)
+	}
+	preferences, err := write(preferencesbiz.DesktopPreferences{
 		AgentCLIUpdateCheckEnabled:   input.AgentCLIUpdateCheckEnabled,
 		AgentRuntimeKeepAliveEnabled: resolveAgentRuntimeKeepAlive(stored, input.AgentRuntimeKeepAliveEnabled),
 		AgentRuntimeIdleMinutes:      resolveAgentRuntimeIdleMinutes(stored, input.AgentRuntimeIdleMinutes),
@@ -365,6 +375,39 @@ func (s Service) Put(ctx context.Context, input PutInput) (preferencesbiz.Deskto
 		_ = s.Publisher.PublishDesktopPreferencesUpdated(ctx, preferences)
 	}
 	return preferences, nil
+}
+
+// PatchAgentRuntimeRetention is the narrow write used by the RnDMaster runtime
+// settings. The store updates only supplied columns in one SQLite statement.
+func (s Service) PatchAgentRuntimeRetention(ctx context.Context, patch preferencesbiz.AgentRuntimeRetentionPatch) (preferencesbiz.DesktopPreferences, error) {
+	store, ok := s.Store.(workspacedata.AgentRuntimeRetentionPatchStore)
+	if !ok {
+		return preferencesbiz.DesktopPreferences{}, errors.New("agent runtime retention patch store is not configured")
+	}
+	if patch.KeepAliveEnabled == nil && patch.IdleMinutes == nil && patch.MaxResident == nil {
+		return preferencesbiz.DesktopPreferences{}, errors.New("agent runtime retention patch is empty")
+	}
+	if patch.IdleMinutes != nil && !preferencesbiz.IsDesktopAgentRuntimeIdleMinutes(*patch.IdleMinutes) {
+		return preferencesbiz.DesktopPreferences{}, errors.New("agent runtime idle minutes is out of range")
+	}
+	if patch.MaxResident != nil && !preferencesbiz.IsDesktopAgentRuntimeMaxResident(*patch.MaxResident) {
+		return preferencesbiz.DesktopPreferences{}, errors.New("agent runtime max resident is out of range")
+	}
+	previous, err := s.Store.GetDesktopPreferences(ctx)
+	if err != nil {
+		return preferencesbiz.DesktopPreferences{}, err
+	}
+	current, err := store.PatchAgentRuntimeRetention(ctx, patch)
+	if err != nil {
+		return preferencesbiz.DesktopPreferences{}, err
+	}
+	for _, observer := range s.changeObservers {
+		observer(ctx, previous, current)
+	}
+	if s.Publisher != nil {
+		_ = s.Publisher.PublishDesktopPreferencesUpdated(ctx, current)
+	}
+	return current, nil
 }
 
 func normalizeAgentComposerDefaultsPatch(

@@ -567,7 +567,7 @@ describe("AgentGUIConversationRailItem 在线圆点", () => {
     );
   });
 
-  it("宿主判 live / unknown：照旧按 Tutti 判据画", () => {
+  it("宿主判 live 画点；unknown 不沿用旧绿点", () => {
     const live = renderRailItem({
       hostLiveness: "live",
       isRailInteractionLocked: () => false,
@@ -582,9 +582,7 @@ describe("AgentGUIConversationRailItem 在线圆点", () => {
       isRailInteractionLocked: () => false,
       item: { status: "ready" }
     });
-    expect(presenceDot(unknown.container)?.getAttribute("data-presence")).toBe(
-      "idle"
-    );
+    expect(presenceDot(unknown.container)).toBeNull();
   });
 
   it("圆点挂在 provider 图标的定位盒里，且对读屏隐藏", () => {

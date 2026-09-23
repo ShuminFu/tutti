@@ -28,6 +28,15 @@ export function readHostSessionLivenessCache(
   return cache.get(cacheKey(workspaceId, sessionId));
 }
 
+export function invalidateHostSessionLivenessCache(
+  workspaceId: string,
+  sessionIds: readonly string[]
+): void {
+  for (const sessionId of sessionIds) {
+    cache.delete(cacheKey(workspaceId, sessionId));
+  }
+}
+
 /**
  * 权威回包写入。只覆盖对应 workspace+session，不整表替换。
  * `protectSessionIds` 是这一拍正在问的可见 id，驱逐时跳过它们。

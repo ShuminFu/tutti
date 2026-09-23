@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { attachHostPanelPolling } from "../hostPanelVisibility";
 import {
+  invalidateHostSessionLivenessCache,
   readHostSessionLivenessCache,
   writeHostSessionLivenessCache
 } from "./hostSessionLivenessCache";
@@ -66,8 +67,8 @@ function projectVisibleLiveness(
  *
  * 判定顺序上的几件事，都是踩过的坑：
  *
- * 1. **宿主没这组能力就永久停拍**：桥把「未嵌入 / 老宿主 / 超时」统一归一成
- *    `Error("unsupported")`，收到就再也不发请求，否则老宿主上每 4s 一次白等。
+ * 1. **宿主没这组能力就永久停拍**：桥只把确实不支持的错误归一成
+ *    `Error("unsupported")`；超时与瞬断清旧缓存并在下一拍重试。
  * 2. **不叠请求**：上一拍还没回来时这一拍直接跳过。会话栏行数可以到 200，
  *    宿主那边是一次 SQL 查询，慢一拍比堆积一串在途请求好。
  * 3. **页面不可见不拍**：后台标签页里 WebKit 本来就会把定时器钳到每分钟一拍，
@@ -157,13 +158,18 @@ export function useHostSessionLiveness(
           setRevision((current) => current + 1);
         }
       } catch (cause) {
-        // 桥超时也会归一成 unsupported。被取消的那一拍不能据此停拍，
+        // 被取消的那一拍不能据此停拍，
         // 否则切 Agent 时迟到的超时会把当前视图清成空表、绿点再闪出来。
         if (cancelled) return;
         // 老宿主：停拍，会话栏退回 0119 的纯 Tutti 判据。
         if (cause instanceof Error && cause.message === "unsupported") {
           unsupportedRef.current = true;
           setUnsupported(true);
+        } else {
+          // A failed read is not evidence that the previous live result is
+          // still true. Project pending until a later authoritative response.
+          invalidateHostSessionLivenessCache(workspaceId, ids);
+          setRevision((current) => current + 1);
         }
         // 其余错误（宿主临时忙 / 后端重启）沉默重试：圆点不是关键路径，
         // 报错弹条只会打扰用户。

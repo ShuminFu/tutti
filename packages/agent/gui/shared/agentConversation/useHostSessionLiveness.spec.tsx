@@ -96,6 +96,31 @@ afterEach(() => {
 });
 
 describe("useHostSessionLiveness", () => {
+  it("超时清掉旧 live 缓存，继续轮询并在恢复后重新点亮", async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ sessions: { "sess-a": entry("live") } })
+      .mockRejectedValueOnce(new Error("host request timed out"))
+      .mockResolvedValue({ sessions: { "sess-a": entry("live") } });
+    installHost({ querySessionLiveness: query });
+    const probe = renderProbe(["sess-a"]);
+    await waitFor(() =>
+      expect(probe.latest().get("sess-a")?.state).toBe("live")
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+    await waitFor(() =>
+      expect(probe.latest().get("sess-a")?.state).toBe("pending")
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+    await waitFor(() =>
+      expect(probe.latest().get("sess-a")?.state).toBe("live")
+    );
+    expect(query).toHaveBeenCalledTimes(3);
+  });
   it("只问会话栏里现在画着的会话号，去重并排序", async () => {
     const query = vi.fn(async (_input: { agentSessionIds: string[] }) => ({
       sessions: { "sess-a": entry("closed"), "sess-b": entry("live") }
