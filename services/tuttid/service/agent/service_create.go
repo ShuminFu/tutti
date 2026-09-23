@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -81,7 +82,8 @@ func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, inpu
 	modelExplicit := strings.TrimSpace(value(input.Model)) != ""
 	permissionModeExplicit := strings.TrimSpace(value(input.PermissionModeID)) != ""
 	reasoningEffortExplicit := strings.TrimSpace(value(input.ReasoningEffort)) != ""
-	if err := s.applyCreateSessionComposerDefaults(ctx, &input); err != nil {
+	storedDefaults, err := s.applyCreateSessionComposerDefaults(ctx, &input)
+	if err != nil {
 		return createSessionFailureResult(input, err)
 	}
 	if providerTargetRefKind(input.ProviderTargetRef) == "agent_extension" && !modelExplicit {
@@ -138,6 +140,24 @@ func (s *Service) CreateWithResult(ctx context.Context, workspaceID string, inpu
 	requestedModel := value(input.Model)
 	nodeStartedAt := time.Now()
 	planResolution, err := s.resolveCreateSessionModelForPlanOrProvider(prepCtx, workspaceID, provider, requestedModel, &input)
+	if staleStoredDefaultModel(err, requestedModel, storedDefaults.Model) {
+		// Defaults are keyed by agent target, not by credential mode: a model
+		// saved while this target ran through a company gateway stays stored
+		// after switching to a personal subscription, and the client echoes it
+		// back as the create model. Failing here made every new session of the
+		// target unusable, so fall back to the account's default model instead.
+		// A caller's own invalid pick (not the stored default) stays refused.
+		slog.Warn("stored composer default model is unavailable; falling back to provider default",
+			"event", "agent.create.stale_default_model_fallback",
+			"provider", provider,
+			"agent_target_id", strings.TrimSpace(input.AgentTargetID),
+			"stale_model", strings.TrimSpace(requestedModel),
+			"error", err.Error(),
+		)
+		input.Model = nil
+		requestedModel = ""
+		planResolution, err = s.resolveCreateSessionModelForPlanOrProvider(prepCtx, workspaceID, provider, requestedModel, &input)
+	}
 	if err != nil {
 		err = sessionCreatePreparationError(err)
 		s.reportAgentServiceNodeFailure(ctx, input.AgentSessionID, "session_create", "model_validated", provider, nodeStartedAt, err)
@@ -477,13 +497,16 @@ func decorateIsolatedSession(session Session, isolation *SessionIsolation, warni
 	return session
 }
 
-func (s *Service) applyCreateSessionComposerDefaults(ctx context.Context, input *CreateSessionInput) error {
+// applyCreateSessionComposerDefaults fills unset fields from the target's
+// stored defaults and returns what was stored, so create can tell a stale
+// stored default apart from a caller's own selection.
+func (s *Service) applyCreateSessionComposerDefaults(ctx context.Context, input *CreateSessionInput) (preferencesbiz.AgentComposerDefaults, error) {
 	if input == nil || s.AgentComposerDefaultsReader == nil {
-		return nil
+		return preferencesbiz.AgentComposerDefaults{}, nil
 	}
 	defaults, err := s.AgentComposerDefaultsReader.GetAgentComposerDefaultsForTarget(ctx, input.AgentTargetID)
 	if err != nil {
-		return fmt.Errorf("get agent composer defaults for create: %w", err)
+		return preferencesbiz.AgentComposerDefaults{}, fmt.Errorf("get agent composer defaults for create: %w", err)
 	}
 	if input.Model == nil && strings.TrimSpace(defaults.Model) != "" {
 		input.Model = stringPointer(defaults.Model)
@@ -500,7 +523,7 @@ func (s *Service) applyCreateSessionComposerDefaults(ctx context.Context, input 
 	if input.CodexSaverMode == nil && input.CodexSaverModeAllowed && composerProviderSupportsSaverSubagentMode(input.Provider) {
 		input.CodexSaverMode = boolPointer(defaults.CodexSaverMode)
 	}
-	return nil
+	return defaults, nil
 }
 
 func normalizePermissionModeIDForLaunch(provider string, providerTargetRef map[string]any, value string) string {
@@ -803,4 +826,19 @@ func (s *Service) resolveCwd(ctx context.Context, input *string) (string, error)
 		return "", nil
 	}
 	return s.SessionDirectoryAllocator.CreateSessionDirectory(ctx)
+}
+
+// staleStoredDefaultModel reports whether create failed only because the
+// requested model is the target's stored default and the current catalog
+// (personal subscription, gateway overlay, or model plan) no longer offers it.
+func staleStoredDefaultModel(err error, requestedModel string, storedModel string) bool {
+	if err == nil {
+		return false
+	}
+	requestedModel = strings.TrimSpace(requestedModel)
+	if requestedModel == "" || requestedModel != strings.TrimSpace(storedModel) {
+		return false
+	}
+	var invalid *InvalidModelError
+	return errors.As(err, &invalid)
 }
