@@ -33,6 +33,7 @@ func (s *SQLiteStore) applyDesktopPreferencesMigrations(ctx context.Context) err
 		s.applyDesktopPreferencesFeatureFlagsV1,
 		s.applyDesktopPreferencesDeletedAgentRetentionV1,
 		s.applyDesktopPreferencesAgentCLIUpdateCheckV1,
+		s.applyDesktopPreferencesAgentRuntimeRetentionCompatV2,
 		s.applyDesktopPreferencesAgentRuntimeRetentionV1,
 	}
 	for _, apply := range migrations {
@@ -797,6 +798,74 @@ SET agent_composer_defaults_by_agent_target_json = ?
 WHERE id = ?
 `, migratedJSON, desktopPreferencesRowID)
 	return err
+}
+
+// Some existing databases recorded the V1 migration ID for a different
+// retention schema (keep_alive and idle_ttl_seconds). Run this compatibility
+// migration before V1 so those values are not replaced by V1 defaults.
+func (s *SQLiteStore) applyDesktopPreferencesAgentRuntimeRetentionCompatV2(ctx context.Context) error {
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin desktop runtime retention compatibility migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var applied int
+	err = tx.QueryRowContext(ctx, `SELECT 1 FROM tuttid_schema_migrations WHERE id = ?`, schemaMigrationDesktopPreferencesAgentRuntimeRetentionCompatV2).Scan(&applied)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("check desktop runtime retention compatibility migration: %w", err)
+	}
+
+	rows, err := tx.QueryContext(ctx, `PRAGMA table_info(desktop_preferences)`)
+	if err != nil {
+		return fmt.Errorf("inspect desktop runtime retention columns: %w", err)
+	}
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var id, notNull, primaryKey int
+		var name, columnType string
+		var defaultSQL sql.NullString
+		if err := rows.Scan(&id, &name, &columnType, &notNull, &defaultSQL, &primaryKey); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan desktop runtime retention columns: %w", err)
+		}
+		columns[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("iterate desktop runtime retention columns: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close desktop runtime retention columns: %w", err)
+	}
+	for _, column := range []struct{ name, ddl, legacyName, legacyUpdate string }{
+		{"agent_runtime_keep_alive_enabled", `ALTER TABLE desktop_preferences ADD COLUMN agent_runtime_keep_alive_enabled INTEGER NOT NULL DEFAULT 1`, "agent_runtime_keep_alive", `UPDATE desktop_preferences SET agent_runtime_keep_alive_enabled = agent_runtime_keep_alive WHERE agent_runtime_keep_alive IN (0, 1)`},
+		// Round up fractional minutes so an existing timeout never expires earlier.
+		{"agent_runtime_idle_minutes", `ALTER TABLE desktop_preferences ADD COLUMN agent_runtime_idle_minutes INTEGER NOT NULL DEFAULT 30`, "agent_runtime_idle_ttl_seconds", `UPDATE desktop_preferences SET agent_runtime_idle_minutes = CASE WHEN agent_runtime_idle_ttl_seconds = 0 THEN 0 WHEN agent_runtime_idle_ttl_seconds > 86400 THEN 1440 WHEN agent_runtime_idle_ttl_seconds > 0 THEN (agent_runtime_idle_ttl_seconds + 59) / 60 ELSE 30 END`},
+		{"agent_runtime_max_resident", `ALTER TABLE desktop_preferences ADD COLUMN agent_runtime_max_resident INTEGER NOT NULL DEFAULT 10`, "", ""},
+	} {
+		if columns[column.name] {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, column.ddl); err != nil {
+			return fmt.Errorf("add desktop runtime retention column %s: %w", column.name, err)
+		}
+		if column.legacyName != "" && columns[column.legacyName] {
+			if _, err := tx.ExecContext(ctx, column.legacyUpdate); err != nil {
+				return fmt.Errorf("copy desktop runtime retention column %s: %w", column.name, err)
+			}
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms) VALUES (?, ?)`, schemaMigrationDesktopPreferencesAgentRuntimeRetentionCompatV2, unixMs(time.Now().UTC())); err != nil {
+		return fmt.Errorf("record desktop runtime retention compatibility migration: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit desktop runtime retention compatibility migration: %w", err)
+	}
+	return nil
 }
 
 // DINTAL-5308 的三列。DDL 默认值就是业务默认值（常驻开、30 分钟、最多 10 条），
