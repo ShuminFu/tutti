@@ -117,15 +117,21 @@ export function useAgentGUIConversationRailPeerPairingState(input: {
   const hostRef = useRef(host);
   hostRef.current = host;
 
+  // 只认最后发出的那次：两次重拉返回顺序颠倒时，晚到的旧表不能盖掉新表
+  //（分栏那份也吃这份快照，盖错了点选去向就会跟着错）。
+  const refreshSeqRef = useRef(0);
+
   const refresh = useCallback(() => {
     const activeHost = hostRef.current;
     if (!activeHost) {
       setSupported(false);
       return;
     }
+    const seq = ++refreshSeqRef.current;
     void activeHost
       .listPeerPairs()
       .then((result) => {
+        if (seq !== refreshSeqRef.current) return;
         setSupported(true);
         const next = Array.isArray(result?.pairs) ? result.pairs : [];
         setPairs(next);

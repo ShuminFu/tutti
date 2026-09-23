@@ -10,7 +10,10 @@ import type {
   AgentGUIConversationSummary
 } from "../model/agentGuiConversationModel";
 import type { ConversationRailPeerPair } from "../model/conversationRailPeerPairing";
-import { notifyConversationRailPeerPairsChanged } from "../model/conversationRailPeerPairingHost";
+import {
+  notifyConversationRailPeerPairsChanged,
+  subscribeConversationRailPeerPairsSnapshot
+} from "../model/conversationRailPeerPairingHost";
 import type { ConversationRailPeerPairingHost } from "../model/conversationRailPeerPairingHost";
 import type { AgentGUIViewLabels } from "./AgentGUINodeView.types";
 import { AgentGUIConversationRailItem } from "./AgentGUIConversationRailItem";
@@ -315,6 +318,42 @@ describe("conversation rail peer pairing item presentation", () => {
     expect(
       await screen.findByRole("menuitem", { name: /Unpair \(1\)/ })
     ).not.toHaveAttribute("data-disabled");
+  });
+
+  it("两次重拉返回顺序颠倒时，晚到的旧表不能盖掉新表（分栏也吃这份快照）", async () => {
+    const replies: ((pairs: ConversationRailPeerPair[]) => void)[] = [];
+    const host = {
+      createPeerPair: vi.fn(async () => ({ pairId: "pair-1" })),
+      deletePeerPair: vi.fn(async () => ({ ok: true })),
+      listPeerPairs: vi.fn(
+        () =>
+          new Promise<{ pairs: ConversationRailPeerPair[] }>((resolve) => {
+            replies.push((pairs) => resolve({ pairs }));
+          })
+      )
+    } as never as ConversationRailPeerPairingHost & {
+      listPeerPairs: ReturnType<typeof vi.fn>;
+    };
+    const published: (readonly ConversationRailPeerPair[])[] = [];
+    const unsubscribe = subscribeConversationRailPeerPairsSnapshot((pairs) => {
+      published.push(pairs);
+    });
+    renderPairingRail({ host });
+    await waitFor(() => expect(host.listPeerPairs).toHaveBeenCalledTimes(1));
+    replies[0]?.([]);
+    await waitFor(() => expect(published).toHaveLength(1));
+
+    notifyConversationRailPeerPairsChanged();
+    notifyConversationRailPeerPairsChanged();
+    await waitFor(() => expect(host.listPeerPairs).toHaveBeenCalledTimes(3));
+    // 后发的那次先回（新表），先发的那次晚到（旧表）。
+    replies[2]?.([PAIR_AB]);
+    await waitFor(() => expect(published).toHaveLength(2));
+    replies[1]?.([]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(published.at(-1)).toEqual([PAIR_AB]);
+    unsubscribe();
   });
 });
 
