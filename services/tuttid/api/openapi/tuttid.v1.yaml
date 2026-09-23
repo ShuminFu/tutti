@@ -30,7 +30,58 @@ tags:
   - name: app-factory
   - name: user-project
   - name: agent-quick-prompt
+  - name: skill-import
 paths:
+  /v1/skills/cursor-import/preview:
+    post:
+      operationId: previewCursorSkillImport
+      tags:
+        - skill-import
+      summary: Preview Cursor skills for explicit import into sibling .agents/skills
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CursorSkillImportPreviewRequest"
+      responses:
+        "200":
+          description: Available skills and conflicts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CursorSkillImportPreviewResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+  /v1/skills/cursor-import/import:
+    post:
+      operationId: importCursorSkills
+      tags:
+        - skill-import
+      summary: Copy selected Cursor skills without replacing existing skills
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CursorSkillImportRequest"
+      responses:
+        "200":
+          description: Per-skill import results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CursorSkillImportResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
   /v1/health:
     get:
       operationId: getHealth
@@ -7256,6 +7307,74 @@ components:
                   code: tutti_mode_archive_conflict
                   reason: tutti_archive_request_conflict
   schemas:
+    CursorSkillImportPreviewRequest:
+      type: object
+      additionalProperties: false
+      required: [sourceDir]
+      properties:
+        sourceDir:
+          type: string
+          minLength: 1
+    CursorSkillImportRequest:
+      type: object
+      additionalProperties: false
+      required: [sourceDir, names]
+      properties:
+        sourceDir:
+          type: string
+          minLength: 1
+        names:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+    CursorSkillImportEntry:
+      type: object
+      additionalProperties: false
+      required: [name, status]
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [ready, exists, invalid, unsafe]
+        reason:
+          type: string
+    CursorSkillImportPreviewResponse:
+      type: object
+      additionalProperties: false
+      required: [destination, skills]
+      properties:
+        destination:
+          type: string
+        skills:
+          type: array
+          items:
+            $ref: "#/components/schemas/CursorSkillImportEntry"
+    CursorSkillImportResult:
+      type: object
+      additionalProperties: false
+      required: [name, status]
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [imported, exists, invalid, unsafe, failed]
+        reason:
+          type: string
+    CursorSkillImportResponse:
+      type: object
+      additionalProperties: false
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/CursorSkillImportResult"
     SwitchTuttiModeGoalReviewToSelfRequest:
       type: object
       additionalProperties: false

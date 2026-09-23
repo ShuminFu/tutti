@@ -12,14 +12,14 @@ import {
   AGENT_QUICK_PROMPT_LIBRARY_FLAG,
   LAB_CONNECTORS_FLAG,
   LAB_ENABLED_FLAG,
-  MOBILE_REMOTE_ACCESS_SETTINGS_FLAG,
+  MOBILE_REMOTE_ACCESS_SETTINGS_FLAG
 } from "../../../../../../shared/featureFlags/catalog.ts";
 import type { DesktopWorkspaceSettingsClient } from "./adapters/desktopWorkspaceSettingsClient.ts";
 import { WorkspaceSettingsService } from "./workspaceSettingsService.ts";
 
 test("WorkspaceSettingsService keeps the selected section while the same workspace stays active", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
 
   service.openPanel({ id: "workspace-1" });
@@ -32,7 +32,7 @@ test("WorkspaceSettingsService keeps the selected section while the same workspa
 
 test("WorkspaceSettingsService resets panel-local state when switching workspaces", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
 
   service.openPanel({ id: "workspace-1" });
@@ -48,7 +48,7 @@ test("WorkspaceSettingsService resets panel-local state when switching workspace
 
 test("WorkspaceSettingsService hides the developer panel by default", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
 
   assert.equal(service.store.developerPanelVisible, false);
@@ -63,18 +63,18 @@ test("WorkspaceSettingsService persists a system Agent Target enabled state and 
     iconKey: "codex",
     launchRef: { provider: "codex", type: "builtin_local" },
     name: "Codex",
-    provider: "codex",
+    provider: "codex"
   };
   const service = new WorkspaceSettingsService({
     client: createWorkspaceSettingsClient({
       setSystemAgentTargetEnabled: async (agentTargetID, enabled) => {
         writes.push({ agentTargetID, enabled });
         return { ...codexTarget, enabled };
-      },
+      }
     }),
     onAgentTargetsChanged: async () => {
       refreshes += 1;
-    },
+    }
   });
 
   await service.setAgentTargetEnabled(" local:codex ", false);
@@ -85,7 +85,7 @@ test("WorkspaceSettingsService persists a system Agent Target enabled state and 
 
 test("WorkspaceSettingsService reveals the developer panel", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
 
   service.setDeveloperPanelVisible(true);
@@ -95,7 +95,7 @@ test("WorkspaceSettingsService reveals the developer panel", () => {
 
 test("WorkspaceSettingsService leaves the developer panel when it is hidden", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
 
   service.setDeveloperPanelVisible(true);
@@ -110,7 +110,7 @@ test("WorkspaceSettingsService leaves the developer panel when it is hidden", ()
 
 test("WorkspaceSettingsService keeps the active section when hiding from elsewhere", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
 
   service.setDeveloperPanelVisible(true);
@@ -124,15 +124,15 @@ test("WorkspaceSettingsService keeps the active section when hiding from elsewhe
 
 test("WorkspaceSettingsService opens the model plans pane for managed-models requests", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
 
   service.openPanel(
     { id: "workspace-1" },
     {
       pane: "managed-models",
-      section: "general",
-    },
+      section: "general"
+    }
   );
 
   assert.equal(service.store.activeSection, "model");
@@ -140,14 +140,14 @@ test("WorkspaceSettingsService opens the model plans pane for managed-models req
 
 test("WorkspaceSettingsService maps the legacy Account section to Connection", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
 
   service.openPanel(
     { id: "workspace-1" },
     {
-      section: "account",
-    },
+      section: "account"
+    }
   );
 
   assert.equal(service.store.activeSection, "connection");
@@ -155,15 +155,15 @@ test("WorkspaceSettingsService maps the legacy Account section to Connection", (
 
 test("WorkspaceSettingsService opens agent settings with a focused anchor", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
 
   service.openPanel(
     { id: "workspace-1" },
     {
       anchor: "browser-use",
-      section: "appearance",
-    },
+      section: "appearance"
+    }
   );
 
   assert.equal(service.store.activeSection, "agent");
@@ -174,8 +174,8 @@ test("WorkspaceSettingsService opens agent settings with a focused anchor", () =
   service.openPanel(
     { id: "workspace-1" },
     {
-      anchor: "computer-use",
-    },
+      anchor: "computer-use"
+    }
   );
 
   assert.equal(service.store.activeSection, "agent");
@@ -195,10 +195,10 @@ test("WorkspaceSettingsService refreshes developer logs when opening the panel",
           files: [],
           logsDir: "",
           totalFiles: 0,
-          totalSizeBytes: 0,
+          totalSizeBytes: 0
         };
-      },
-    }),
+      }
+    })
   });
 
   service.openPanel({ id: "workspace-1" });
@@ -220,10 +220,10 @@ test("WorkspaceSettingsService does not restart log refresh while already open",
           files: [],
           logsDir: "",
           totalFiles: 0,
-          totalSizeBytes: 0,
+          totalSizeBytes: 0
         };
-      },
-    }),
+      }
+    })
   });
 
   service.openPanel({ id: "workspace-1" });
@@ -237,7 +237,7 @@ test("WorkspaceSettingsService skips unchanged locale writes", async () => {
   const writes: string[] = [];
   const service = new WorkspaceSettingsService(
     {
-      client: createWorkspaceSettingsClient({}),
+      client: createWorkspaceSettingsClient({})
     },
     createDesktopPreferencesService({
       onSetLocale: async (locale) => {
@@ -245,9 +245,9 @@ test("WorkspaceSettingsService skips unchanged locale writes", async () => {
         return locale;
       },
       state: createPreferencesState({
-        locale: "zh-CN",
-      }),
-    }),
+        locale: "zh-CN"
+      })
+    })
   );
 
   await service.changeLocale("zh-CN");
@@ -259,7 +259,7 @@ test("WorkspaceSettingsService skips pending locale writes", async () => {
   const writes: string[] = [];
   const service = new WorkspaceSettingsService(
     {
-      client: createWorkspaceSettingsClient({}),
+      client: createWorkspaceSettingsClient({})
     },
     createDesktopPreferencesService({
       onSetLocale: async (locale) => {
@@ -267,9 +267,9 @@ test("WorkspaceSettingsService skips pending locale writes", async () => {
         return locale;
       },
       state: createPreferencesState({
-        changingLocale: "en",
-      }),
-    }),
+        changingLocale: "en"
+      })
+    })
   );
 
   await service.changeLocale("en");
@@ -281,7 +281,7 @@ test("WorkspaceSettingsService writes changed preferences", async () => {
   const writes: string[] = [];
   const service = new WorkspaceSettingsService(
     {
-      client: createWorkspaceSettingsClient({}),
+      client: createWorkspaceSettingsClient({})
     },
     createDesktopPreferencesService({
       onSetLocale: async (locale) => {
@@ -304,8 +304,8 @@ test("WorkspaceSettingsService writes changed preferences", async () => {
         writes.push(source);
         return createTheme(source);
       },
-      state: createPreferencesState({}),
-    }),
+      state: createPreferencesState({})
+    })
   );
 
   await service.changeLocale("zh-CN");
@@ -333,7 +333,7 @@ test("WorkspaceSettingsService enables Agent mode, preserves other flags, and ha
       replaceWorkspaceWindow: async (input) => {
         effects.push("replace");
         replacements.push(input);
-      },
+      }
     },
     createDesktopPreferencesService({
       onSetFeatureFlags: async (flags) => {
@@ -342,18 +342,18 @@ test("WorkspaceSettingsService enables Agent mode, preserves other flags, and ha
         return flags;
       },
       state: createPreferencesState({
-        featureFlags: { "lab.enabled": true },
-      }),
+        featureFlags: { "lab.enabled": true }
+      })
     }),
     createNotificationRecorder().service,
     {
       async trackEvents(events) {
         effects.push("track");
         reporterCalls.push(events);
-      },
+      }
     },
     null,
-    () => 1749124800000,
+    () => 1749124800000
   );
 
   service.openPanel({ id: "workspace-1" });
@@ -364,16 +364,16 @@ test("WorkspaceSettingsService enables Agent mode, preserves other flags, and ha
   assert.deepEqual(writes, [
     {
       "lab.enabled": true,
-      "workspace.standaloneAgentMode": true,
-    },
+      "workspace.standaloneAgentMode": true
+    }
   ]);
   assert.deepEqual(replacements, [
     {
       clientTs: 1749124800000,
       mode: "agent",
       previousMode: "os",
-      workspaceId: "workspace-1",
-    },
+      workspaceId: "workspace-1"
+    }
   ]);
   assert.deepEqual(reporterCalls, []);
   assert.deepEqual(effects, ["save", "replace"]);
@@ -393,7 +393,7 @@ test("WorkspaceSettingsService hands off the reverse Agent-to-OS transition", as
       client: createWorkspaceSettingsClient({}),
       replaceWorkspaceWindow: async (input) => {
         replacements.push(input);
-      },
+      }
     },
     createDesktopPreferencesService({
       onSetFeatureFlags: async (flags) => {
@@ -401,13 +401,13 @@ test("WorkspaceSettingsService hands off the reverse Agent-to-OS transition", as
         return flags;
       },
       state: createPreferencesState({
-        featureFlags: { "workspace.standaloneAgentMode": true },
-      }),
+        featureFlags: { "workspace.standaloneAgentMode": true }
+      })
     }),
     createNotificationRecorder().service,
     createReporterService(reporterCalls),
     null,
-    () => 1749124800000,
+    () => 1749124800000
   );
 
   service.openPanel({ id: "workspace-1" });
@@ -420,8 +420,8 @@ test("WorkspaceSettingsService hands off the reverse Agent-to-OS transition", as
       clientTs: 1749124800000,
       mode: "os",
       previousMode: "agent",
-      workspaceId: "workspace-1",
-    },
+      workspaceId: "workspace-1"
+    }
   ]);
   assert.deepEqual(reporterCalls, []);
 });
@@ -435,17 +435,17 @@ test("WorkspaceSettingsService does not persist, replace, or track an already se
       client: createWorkspaceSettingsClient({}),
       replaceWorkspaceWindow: async () => {
         replacements += 1;
-      },
+      }
     },
     createDesktopPreferencesService({
       onSetFeatureFlags: async (flags) => {
         writes += 1;
         return flags;
       },
-      state: createPreferencesState({ featureFlags: {} }),
+      state: createPreferencesState({ featureFlags: {} })
     }),
     createNotificationRecorder().service,
-    createReporterService(reporterCalls),
+    createReporterService(reporterCalls)
   );
 
   service.openPanel({ id: "workspace-1" });
@@ -466,7 +466,7 @@ test("WorkspaceSettingsService does not duplicate a UI mode change that is alrea
       client: createWorkspaceSettingsClient({}),
       replaceWorkspaceWindow: async () => {
         replacements += 1;
-      },
+      }
     },
     createDesktopPreferencesService({
       onSetFeatureFlags: async (flags) => {
@@ -475,11 +475,11 @@ test("WorkspaceSettingsService does not duplicate a UI mode change that is alrea
       },
       state: createPreferencesState({
         changingFeatureFlags: { "workspace.standaloneAgentMode": true },
-        featureFlags: {},
-      }),
+        featureFlags: {}
+      })
     }),
     createNotificationRecorder().service,
-    createReporterService(reporterCalls),
+    createReporterService(reporterCalls)
   );
 
   service.openPanel({ id: "workspace-1" });
@@ -509,16 +509,16 @@ test("WorkspaceSettingsService does not replace or track when UI mode persistenc
       },
       onWorkspaceUiModeChangeError: (input) => {
         modeErrors.push(input);
-      },
+      }
     },
     createDesktopPreferencesService({
       onSetFeatureFlags: async () => {
         throw new Error("save failed");
       },
-      state: createPreferencesState({ featureFlags: {} }),
+      state: createPreferencesState({ featureFlags: {} })
     }),
     notifications.service,
-    createReporterService(reporterCalls),
+    createReporterService(reporterCalls)
   );
 
   service.openPanel({ id: "workspace-1" });
@@ -535,10 +535,10 @@ test("WorkspaceSettingsService does not replace or track when UI mode persistenc
     error: modeError.error,
     mode: "agent",
     previousMode: "os",
-    workspaceId: "workspace-1",
+    workspaceId: "workspace-1"
   });
   assert.deepEqual(notifications.items, [
-    "We couldn't update the startup interface right now.",
+    "We couldn't update the startup interface right now."
   ]);
 });
 
@@ -552,15 +552,15 @@ test("WorkspaceSettingsService hands off a persisted UI mode change even when re
       replaceWorkspaceWindow: async (input) => {
         replacements.push(input);
         throw new Error("replace failed");
-      },
+      }
     },
     createDesktopPreferencesService({
-      state: createPreferencesState({ featureFlags: {} }),
+      state: createPreferencesState({ featureFlags: {} })
     }),
     notifications.service,
     createReporterService(reporterCalls),
     null,
-    () => 1749124800000,
+    () => 1749124800000
   );
 
   service.openPanel({ id: "workspace-1" });
@@ -572,12 +572,12 @@ test("WorkspaceSettingsService hands off a persisted UI mode change even when re
       clientTs: 1749124800000,
       mode: "agent",
       previousMode: "os",
-      workspaceId: "workspace-1",
-    },
+      workspaceId: "workspace-1"
+    }
   ]);
   assert.deepEqual(reporterCalls, []);
   assert.deepEqual(notifications.items, [
-    "We couldn't update the startup interface right now.",
+    "We couldn't update the startup interface right now."
   ]);
 });
 
@@ -585,7 +585,7 @@ for (const flag of AGENT_EXTENSION_ACTIVATION_FLAGS) {
   test(`WorkspaceSettingsService refreshes Agent Targets after changing ${flag}`, async () => {
     assert.deepEqual(
       await changeFeatureFlagsAndRecordEffects({ next: { [flag]: true } }),
-      ["save", "refresh"],
+      ["save", "refresh"]
     );
   });
 }
@@ -593,9 +593,9 @@ for (const flag of AGENT_EXTENSION_ACTIVATION_FLAGS) {
 test("WorkspaceSettingsService does not refresh Agent Targets after changing an ordinary flag", async () => {
   assert.deepEqual(
     await changeFeatureFlagsAndRecordEffects({
-      next: { [LAB_ENABLED_FLAG]: true },
+      next: { [LAB_ENABLED_FLAG]: true }
     }),
-    ["save"],
+    ["save"]
   );
 });
 
@@ -607,20 +607,20 @@ test("WorkspaceSettingsService reports a quick prompt specific save failure", as
       onSetFeatureFlags: async () => {
         throw new Error("preferences unavailable");
       },
-      state: createPreferencesState({ featureFlags: {} }),
+      state: createPreferencesState({ featureFlags: {} })
     }),
-    notifications.service,
+    notifications.service
   );
 
   await service.changeFeatureFlags({
-    [AGENT_QUICK_PROMPT_LIBRARY_FLAG]: true,
+    [AGENT_QUICK_PROMPT_LIBRARY_FLAG]: true
   });
 
   assert.equal(notifications.items.length, 1);
   assert.ok(
     notifications.items[0] ===
       "We couldn't update quick-prompt library availability." ||
-      notifications.items[0] === "暂时无法更新快捷提示词库可用状态",
+      notifications.items[0] === "暂时无法更新快捷提示词库可用状态"
   );
 });
 
@@ -632,19 +632,19 @@ test("WorkspaceSettingsService reports a mobile remote access settings save fail
       onSetFeatureFlags: async () => {
         throw new Error("preferences unavailable");
       },
-      state: createPreferencesState({ featureFlags: {} }),
+      state: createPreferencesState({ featureFlags: {} })
     }),
-    notifications.service,
+    notifications.service
   );
 
   await service.changeFeatureFlags({
-    [MOBILE_REMOTE_ACCESS_SETTINGS_FLAG]: true,
+    [MOBILE_REMOTE_ACCESS_SETTINGS_FLAG]: true
   });
 
   assert.equal(notifications.items.length, 1);
   assert.ok(
     notifications.items[0] === "We couldn't update mobile remote access." ||
-      notifications.items[0] === "暂时无法更新手机远程访问设置",
+      notifications.items[0] === "暂时无法更新手机远程访问设置"
   );
 });
 
@@ -654,10 +654,10 @@ test("WorkspaceSettingsService compares Agent Extension activation against pendi
       changing: { [AGENT_EXTENSION_GEMINI_FLAG]: true },
       next: {
         [AGENT_EXTENSION_GEMINI_FLAG]: true,
-        [LAB_ENABLED_FLAG]: true,
-      },
+        [LAB_ENABLED_FLAG]: true
+      }
     }),
-    ["save"],
+    ["save"]
   );
 });
 
@@ -671,7 +671,7 @@ async function changeFeatureFlagsAndRecordEffects(input: {
       client: createWorkspaceSettingsClient({}),
       onAgentTargetsChanged: async () => {
         effects.push("refresh");
-      },
+      }
     },
     createDesktopPreferencesService({
       onSetFeatureFlags: async (flags) => {
@@ -680,9 +680,9 @@ async function changeFeatureFlagsAndRecordEffects(input: {
       },
       state: createPreferencesState({
         changingFeatureFlags: input.changing ?? null,
-        featureFlags: {},
-      }),
-    }),
+        featureFlags: {}
+      })
+    })
   );
 
   await service.changeFeatureFlags(input.next);
@@ -693,19 +693,19 @@ test("WorkspaceSettingsService refreshes App Center after changing catalog chann
   const refreshedWorkspaceIDs: string[] = [];
   const service = new WorkspaceSettingsService(
     {
-      client: createWorkspaceSettingsClient({}),
+      client: createWorkspaceSettingsClient({})
     },
     createDesktopPreferencesService({
       onSetAppCatalogChannel: async (channel) => channel,
-      state: createPreferencesState({}),
+      state: createPreferencesState({})
     }),
     createNotificationRecorder().service,
     null,
     {
       refreshCatalog: async (workspaceID) => {
         refreshedWorkspaceIDs.push(workspaceID);
-      },
-    },
+      }
+    }
   );
 
   service.openPanel({ id: "workspace-1" });
@@ -718,7 +718,7 @@ test("WorkspaceSettingsService reports preference save failures", async () => {
   const notifications = createNotificationRecorder();
   const service = new WorkspaceSettingsService(
     {
-      client: createWorkspaceSettingsClient({}),
+      client: createWorkspaceSettingsClient({})
     },
     createDesktopPreferencesService({
       onSetLocale: async () => {
@@ -733,9 +733,9 @@ test("WorkspaceSettingsService reports preference save failures", async () => {
       onSetThemeSource: async () => {
         throw new Error("theme failed");
       },
-      state: createPreferencesState({}),
+      state: createPreferencesState({})
     }),
-    notifications.service,
+    notifications.service
   );
 
   await service.changeLocale("zh-CN");
@@ -747,7 +747,7 @@ test("WorkspaceSettingsService reports preference save failures", async () => {
     "We couldn't switch the app language right now.",
     "We couldn't update the dock layout right now.",
     "We couldn't update the default provider right now.",
-    "We couldn't switch the app appearance right now.",
+    "We couldn't switch the app appearance right now."
   ]);
 });
 
@@ -755,15 +755,15 @@ test("WorkspaceSettingsService tracks settings panel open and section switches",
   const reporterCalls: ReporterEventInput[][] = [];
   const service = new WorkspaceSettingsService(
     {
-      client: createWorkspaceSettingsClient({}),
+      client: createWorkspaceSettingsClient({})
     },
     createDesktopPreferencesService({
-      state: createPreferencesState({}),
+      state: createPreferencesState({})
     }),
     createNotificationRecorder().service,
     createReporterService(reporterCalls),
     null,
-    () => 1749124800000,
+    () => 1749124800000
   );
 
   service.openPanel({ id: "workspace-1" });
@@ -774,18 +774,18 @@ test("WorkspaceSettingsService tracks settings panel open and section switches",
       {
         clientTS: 1749124800000,
         name: "settings.opened",
-        params: {},
-      },
+        params: {}
+      }
     ],
     [
       {
         clientTS: 1749124800000,
         name: "settings.section_switched",
         params: {
-          section: "developer",
-        },
-      },
-    ],
+          section: "developer"
+        }
+      }
+    ]
   ]);
 });
 
@@ -793,18 +793,18 @@ test("WorkspaceSettingsService tracks theme changes without developer log clear 
   const reporterCalls: ReporterEventInput[][] = [];
   const service = new WorkspaceSettingsService(
     {
-      client: createWorkspaceSettingsClient({}),
+      client: createWorkspaceSettingsClient({})
     },
     createDesktopPreferencesService({
       onSetThemeSource: async (source) => createTheme(source),
       state: createPreferencesState({
-        theme: createTheme("system"),
-      }),
+        theme: createTheme("system")
+      })
     }),
     createNotificationRecorder().service,
     createReporterService(reporterCalls),
     null,
-    () => 1749124800000,
+    () => 1749124800000
   );
 
   await service.changeThemeSource("dark");
@@ -817,10 +817,10 @@ test("WorkspaceSettingsService tracks theme changes without developer log clear 
         name: "settings.theme_changed",
         params: {
           from_theme: "system",
-          to_theme: "dark",
-        },
-      },
-    ],
+          to_theme: "dark"
+        }
+      }
+    ]
   ]);
 });
 
@@ -836,19 +836,19 @@ test("WorkspaceSettingsService forwards the selected developer log export option
         return {
           canceled: true,
           fileCount: 0,
-          filePath: null,
+          filePath: null
         };
-      },
-    }),
+      }
+    })
   });
 
   await service.exportDeveloperLogs({
     includeAgentSessions: true,
-    scope: "recent-3-days",
+    scope: "recent-3-days"
   });
 
   assert.deepEqual(inputs, [
-    { includeAgentSessions: true, scope: "recent-3-days" },
+    { includeAgentSessions: true, scope: "recent-3-days" }
   ]);
 });
 
@@ -860,12 +860,12 @@ test("WorkspaceSettingsService clears workspace conversation history", async () 
         async clearWorkspaceAgentSessions(workspaceID) {
           calls.push(workspaceID);
           return { removedMessages: 3, removedSessions: 2 };
-        },
-      }),
+        }
+      })
     },
     createDesktopPreferencesService({
-      state: createPreferencesState({}),
-    }),
+      state: createPreferencesState({})
+    })
   );
 
   service.openPanel({ id: "workspace-1" });
@@ -887,11 +887,11 @@ test("WorkspaceSettingsService purges deleted conversations once and reports the
         purgeWorkspaceDeletedAgentSessions: async (workspaceID) => {
           calls.push(workspaceID);
           return { removedSessions: 2 };
-        },
-      }),
+        }
+      })
     },
     createDesktopPreferencesService({ state: createPreferencesState({}) }),
-    notifications.service,
+    notifications.service
   );
 
   service.openPanel({ id: "workspace-1" });
@@ -901,7 +901,7 @@ test("WorkspaceSettingsService purges deleted conversations once and reports the
   assert.deepEqual(calls, ["workspace-1"]);
   assert.equal(service.store.deletedConversations.purgingAll, false);
   assert.deepEqual(notifications.items, [
-    "Permanently deleted 2 conversations.",
+    "Permanently deleted 2 conversations."
   ]);
 });
 
@@ -909,18 +909,18 @@ test("WorkspaceSettingsService tracks language changes", async () => {
   const reporterCalls: ReporterEventInput[][] = [];
   const service = new WorkspaceSettingsService(
     {
-      client: createWorkspaceSettingsClient({}),
+      client: createWorkspaceSettingsClient({})
     },
     createDesktopPreferencesService({
       onSetLocale: async (locale) => locale,
       state: createPreferencesState({
-        locale: "en",
-      }),
+        locale: "en"
+      })
     }),
     createNotificationRecorder().service,
     createReporterService(reporterCalls),
     null,
-    () => 1749124800000,
+    () => 1749124800000
   );
 
   await service.changeLocale("zh-CN");
@@ -932,10 +932,10 @@ test("WorkspaceSettingsService tracks language changes", async () => {
         name: "settings.language_changed",
         params: {
           from_language: "en",
-          to_language: "zh-CN",
-        },
-      },
-    ],
+          to_language: "zh-CN"
+        }
+      }
+    ]
   ]);
 });
 
@@ -944,19 +944,19 @@ test("WorkspaceSettingsService keeps reporter clock separate from App Center inj
   const refreshedWorkspaceIDs: string[] = [];
   const service = new WorkspaceSettingsService(
     {
-      client: createWorkspaceSettingsClient({}),
+      client: createWorkspaceSettingsClient({})
     },
     createDesktopPreferencesService({
-      state: createPreferencesState({}),
+      state: createPreferencesState({})
     }),
     createNotificationRecorder().service,
     createReporterService(reporterCalls),
     {
       refreshCatalog: async (workspaceID) => {
         refreshedWorkspaceIDs.push(workspaceID);
-      },
+      }
     },
-    () => 1749124800000,
+    () => 1749124800000
   );
 
   assert.doesNotThrow(() => {
@@ -969,9 +969,9 @@ test("WorkspaceSettingsService keeps reporter clock separate from App Center inj
       {
         clientTS: 1749124800000,
         name: "settings.opened",
-        params: {},
-      },
-    ],
+        params: {}
+      }
+    ]
   ]);
 });
 
@@ -985,10 +985,10 @@ test("WorkspaceSettingsService passes driver restarts through to the client", as
         accessibility: true,
         screenRecording: true,
         screenRecordingCapturable: true,
-        source: "driver-daemon" as const,
+        source: "driver-daemon" as const
       },
-      authorization: "authorized" as const,
-    },
+      authorization: "authorized" as const
+    }
   };
   const service = new WorkspaceSettingsService(
     {
@@ -996,13 +996,13 @@ test("WorkspaceSettingsService passes driver restarts through to the client", as
         restartComputerUseDriver: async () => {
           restartCalls += 1;
           return restartResult;
-        },
-      }),
+        }
+      })
     },
     createDesktopPreferencesService({
-      state: createPreferencesState({}),
+      state: createPreferencesState({})
     }),
-    createNotificationRecorder().service,
+    createNotificationRecorder().service
   );
 
   assert.deepEqual(await service.restartComputerUseDriver(), restartResult);
@@ -1010,14 +1010,16 @@ test("WorkspaceSettingsService passes driver restarts through to the client", as
 });
 
 function createWorkspaceSettingsClient(
-  overrides: Partial<DesktopWorkspaceSettingsClient>,
+  overrides: Partial<DesktopWorkspaceSettingsClient>
 ): DesktopWorkspaceSettingsClient {
   return {
+    previewCursorSkills: async () => ({ destination: "", skills: [] }),
+    importCursorSkills: async () => [],
     checkComputerUseStatus: async () => ({
       installed: false,
       permissions: null,
       authorization: "unknown",
-      reason: "not-installed",
+      reason: "not-installed"
     }),
     installComputerUse: async () => ({ success: false, output: "" }),
     uninstallComputerUse: async () => ({ success: false, output: "" }),
@@ -1027,7 +1029,7 @@ function createWorkspaceSettingsClient(
       running: false,
       startedAtUnixMs: 0,
       elapsedMs: 0,
-      result: { success: false, output: "" },
+      result: { success: false, output: "" }
     }),
     getComputerUsePermissionGrantStatus: async () => null,
     logComputerUsePermissionDiagnostic: async () => {},
@@ -1038,8 +1040,8 @@ function createWorkspaceSettingsClient(
         installed: false,
         permissions: null,
         authorization: "unknown",
-        reason: "not-installed",
-      },
+        reason: "not-installed"
+      }
     }),
     listAgentTargets: async () => [],
     listWorkspaceAgents: async () => [],
@@ -1053,7 +1055,7 @@ function createWorkspaceSettingsClient(
     listAutomationRules: async () => [],
     getAutomationTargetCatalog: async () => ({
       permissionModes: [],
-      tools: [],
+      tools: []
     }),
     createAutomationRule: async () => {
       throw new Error("not used");
@@ -1068,18 +1070,18 @@ function createWorkspaceSettingsClient(
     clearLogs: async () => ({
       clearedFiles: 0,
       clearedPaths: [],
-      clearedSizeBytes: 0,
+      clearedSizeBytes: 0
     }),
     clearWorkspaceAgentSessions: async () => ({
       removedMessages: 0,
-      removedSessions: 0,
+      removedSessions: 0
     }),
     listWorkspaceDeletedAgentSessions: async () => ({
       hasMore: false,
       projectOptions: [],
       sessions: [],
       totalCount: 0,
-      workspaceTotalCount: 0,
+      workspaceTotalCount: 0
     }),
     purgeWorkspaceDeletedAgentSession: async () => {},
     purgeWorkspaceDeletedAgentSessions: async () => ({ removedSessions: 0 }),
@@ -1087,14 +1089,14 @@ function createWorkspaceSettingsClient(
     exportLogs: async () => ({
       canceled: true,
       fileCount: 0,
-      filePath: null,
+      filePath: null
     }),
     getLogsState: async () => ({
       desktopVersion: "0.0.0",
       files: [],
       logsDir: "",
       totalFiles: 0,
-      totalSizeBytes: 0,
+      totalSizeBytes: 0
     }),
     openLogDirectory: async () => {},
     openLogFile: async () => {},
@@ -1115,9 +1117,9 @@ function createWorkspaceSettingsClient(
     listModelPlanReferences: async () => [],
     detectModelPlan: async () => ({
       detection: { stages: [] },
-      discoveredModels: [],
+      discoveredModels: []
     }),
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -1132,7 +1134,7 @@ function createTuttiAgentTarget(enabled: boolean): AgentTarget {
     provider: "tutti-agent",
     sortOrder: 30,
     source: "system",
-    updatedAtUnixMs: 1,
+    updatedAtUnixMs: 1
   };
 }
 
@@ -1168,7 +1170,7 @@ function createDesktopPreferencesService(input: {
     rememberAgentComposerDefaultsForAgentTarget: async () => ({
       acknowledgedFields: [],
       rejectedFields: [],
-      supersededFields: [],
+      supersededFields: []
     }),
     rememberAgentGuiConversationRailCollapsed: async () => {},
     rememberAgentSessionLaunchMode: async () => {},
@@ -1203,12 +1205,12 @@ function createDesktopPreferencesService(input: {
     setThemeSource:
       input.onSetThemeSource ?? (async (source) => createTheme(source)),
     setUpdateChannel: input.onSetUpdateChannel ?? (async (channel) => channel),
-    setUpdatePolicy: input.onSetUpdatePolicy ?? (async (policy) => policy),
+    setUpdatePolicy: input.onSetUpdatePolicy ?? (async (policy) => policy)
   };
 }
 
 function createPreferencesState(
-  overrides: Partial<DesktopPreferencesReadableStoreState>,
+  overrides: Partial<DesktopPreferencesReadableStoreState>
 ): DesktopPreferencesReadableStoreState {
   return {
     agentCliUpdateCheckEnabled: true,
@@ -1258,13 +1260,13 @@ function createPreferencesState(
     workbenchShortcuts: {
       newAgentConversation: null,
       newSameTypeWindow: null,
-      captureScreenshot: null,
+      captureScreenshot: null
     },
     workbenchWindowSnapping: {
       enabled: false,
-      shortcutPreset: "commandArrows",
+      shortcutPreset: "commandArrows"
     },
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -1287,8 +1289,8 @@ function createNotificationRecorder(): {
       success() {},
       warning(input) {
         items.push(input.title);
-      },
-    },
+      }
+    }
   };
 }
 
@@ -1296,14 +1298,14 @@ function createReporterService(calls: ReporterEventInput[][] = []) {
   return {
     async trackEvents(events: ReporterEventInput[]) {
       calls.push(events);
-    },
+    }
   };
 }
 
 function createTheme(source: DesktopThemeState["source"]): DesktopThemeState {
   return {
     appearance: source === "dark" ? "dark" : "light",
-    source,
+    source
   };
 }
 
@@ -1323,7 +1325,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 test("WorkspaceSettingsService selects the agent sub-tab without side effects", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
   service.openPanel({ id: "workspace-1" });
   assert.equal(service.store.agentTab, "general");
@@ -1336,12 +1338,12 @@ test("WorkspaceSettingsService selects the agent sub-tab without side effects", 
 
 test("WorkspaceSettingsService deep-links openPanel to the Agents tab and focuses a provider", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
   const before = service.store.agentFocusRequestID;
   service.openPanel(
     { id: "workspace-1" },
-    { pane: "agents", provider: "hermes" },
+    { pane: "agents", provider: "hermes" }
   );
   assert.equal(service.store.activeSection, "agent");
   assert.equal(service.store.agentTab, "agents");
@@ -1351,7 +1353,7 @@ test("WorkspaceSettingsService deep-links openPanel to the Agents tab and focuse
 
 test("WorkspaceSettingsService Agents deep-link works without a provider (blank focus)", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
   service.openPanel({ id: "workspace-1" }, { pane: "agents" });
   assert.equal(service.store.activeSection, "agent");
@@ -1363,8 +1365,8 @@ test("WorkspaceSettingsService gates the Connectors deep-link with its Lab flag"
   const disabled = new WorkspaceSettingsService(
     { client: createWorkspaceSettingsClient({}) },
     createDesktopPreferencesService({
-      state: createPreferencesState({ featureFlags: {} }),
-    }),
+      state: createPreferencesState({ featureFlags: {} })
+    })
   );
   disabled.openPanel({ id: "workspace-1" }, { pane: "connectors" });
   assert.equal(disabled.store.activeSection, "agent");
@@ -1374,9 +1376,9 @@ test("WorkspaceSettingsService gates the Connectors deep-link with its Lab flag"
     { client: createWorkspaceSettingsClient({}) },
     createDesktopPreferencesService({
       state: createPreferencesState({
-        featureFlags: { [LAB_CONNECTORS_FLAG]: true },
-      }),
-    }),
+        featureFlags: { [LAB_CONNECTORS_FLAG]: true }
+      })
+    })
   );
   enabled.openPanel({ id: "workspace-1" }, { pane: "connectors" });
   assert.equal(enabled.store.open, true);
@@ -1386,7 +1388,7 @@ test("WorkspaceSettingsService gates the Connectors deep-link with its Lab flag"
 
 test("WorkspaceSettingsService deep-links to Custom Agents and Automation", () => {
   const service = new WorkspaceSettingsService({
-    client: createWorkspaceSettingsClient({}),
+    client: createWorkspaceSettingsClient({})
   });
 
   service.openPanel({ id: "workspace-1" }, { pane: "custom-agents" });
@@ -1412,8 +1414,8 @@ test("WorkspaceSettingsService hands off a model plan into a prefilled agent dra
           provider: "claude-code",
           sortOrder: 1,
           source: "system",
-          updatedAtUnixMs: 1,
-        },
+          updatedAtUnixMs: 1
+        }
       ],
       listModelPlans: async () => [
         {
@@ -1430,17 +1432,17 @@ test("WorkspaceSettingsService hands off a model plan into a prefilled agent dra
           status: "undetected",
           templateKind: "custom",
           updatedAt: "2026-07-12T00:00:00Z",
-          workspaceId: "workspace-1",
-        },
-      ],
-    }),
+          workspaceId: "workspace-1"
+        }
+      ]
+    })
   });
 
   service.openPanel({ id: "workspace-1" });
   await service.modelPlans.refresh();
   service.store.modelPlans.createdPlanHandoff = {
     planID: "plan-1",
-    planName: "Anthropic plan",
+    planName: "Anthropic plan"
   };
 
   await service.openAgentDraftForModelPlan("plan-1");
@@ -1450,7 +1452,7 @@ test("WorkspaceSettingsService hands off a model plan into a prefilled agent dra
   assert.equal(service.store.modelPlans.createdPlanHandoff, null);
   assert.equal(
     service.store.agents.draft?.harnessAgentTargetId,
-    "local:claude-code",
+    "local:claude-code"
   );
   assert.equal(service.store.agents.draft?.modelPlanId, "plan-1");
 });
@@ -1467,8 +1469,8 @@ test("WorkspaceSettingsService loads Plans only on the Model surface", async () 
       listWorkspaceAgents: async () => {
         listWorkspaceAgentsCalls += 1;
         return [];
-      },
-    }),
+      }
+    })
   });
 
   service.openPanel({ id: "workspace-1" });
@@ -1492,8 +1494,8 @@ test("WorkspaceSettingsService refreshes Custom Agents and Automation by tab", a
       listWorkspaceAgents: async () => {
         listWorkspaceAgentsCalls += 1;
         return [];
-      },
-    }),
+      }
+    })
   });
 
   service.openPanel({ id: "workspace-1" });

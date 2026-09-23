@@ -167,6 +167,12 @@ type ServerInterface interface {
 	// Update only specified agent runtime retention preferences
 	// (PATCH /v1/preferences/desktop/agent-runtime)
 	PatchDesktopAgentRuntimeRetention(w http.ResponseWriter, r *http.Request)
+	// Copy selected Cursor skills without replacing existing skills
+	// (POST /v1/skills/cursor-import/import)
+	ImportCursorSkills(w http.ResponseWriter, r *http.Request)
+	// Preview Cursor skills for explicit import into sibling .agents/skills
+	// (POST /v1/skills/cursor-import/preview)
+	PreviewCursorSkillImport(w http.ResponseWriter, r *http.Request)
 	// Accept analytics events from approved local clients
 	// (POST /v1/track)
 	TrackEvents(w http.ResponseWriter, r *http.Request)
@@ -2267,6 +2273,46 @@ func (siw *ServerInterfaceWrapper) PatchDesktopAgentRuntimeRetention(w http.Resp
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PatchDesktopAgentRuntimeRetention(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ImportCursorSkills operation middleware
+func (siw *ServerInterfaceWrapper) ImportCursorSkills(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportCursorSkills(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewCursorSkillImport operation middleware
+func (siw *ServerInterfaceWrapper) PreviewCursorSkillImport(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewCursorSkillImport(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11502,6 +11548,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/preferences/desktop", wrapper.GetDesktopPreferences)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/preferences/desktop", wrapper.PutDesktopPreferences)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/preferences/desktop/agent-runtime", wrapper.PatchDesktopAgentRuntimeRetention)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/skills/cursor-import/import", wrapper.ImportCursorSkills)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/skills/cursor-import/preview", wrapper.PreviewCursorSkillImport)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/track", wrapper.TrackEvents)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/user-projects", wrapper.DeleteUserProject)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/user-projects", wrapper.ListUserProjects)
@@ -15894,6 +15942,142 @@ func (response PatchDesktopAgentRuntimeRetention503JSONResponse) VisitPatchDeskt
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCursorSkillsRequestObject struct {
+	Body *ImportCursorSkillsJSONRequestBody
+}
+
+type ImportCursorSkillsResponseObject interface {
+	VisitImportCursorSkillsResponse(w http.ResponseWriter) error
+}
+
+type ImportCursorSkills200JSONResponse CursorSkillImportResponse
+
+func (response ImportCursorSkills200JSONResponse) VisitImportCursorSkillsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCursorSkills400JSONResponse struct {
+	InvalidRequestErrorJSONResponse
+}
+
+func (response ImportCursorSkills400JSONResponse) VisitImportCursorSkillsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCursorSkills401JSONResponse struct{ UnauthorizedErrorJSONResponse }
+
+func (response ImportCursorSkills401JSONResponse) VisitImportCursorSkillsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCursorSkills405JSONResponse struct {
+	MethodNotAllowedErrorJSONResponse
+}
+
+func (response ImportCursorSkills405JSONResponse) VisitImportCursorSkillsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewCursorSkillImportRequestObject struct {
+	Body *PreviewCursorSkillImportJSONRequestBody
+}
+
+type PreviewCursorSkillImportResponseObject interface {
+	VisitPreviewCursorSkillImportResponse(w http.ResponseWriter) error
+}
+
+type PreviewCursorSkillImport200JSONResponse CursorSkillImportPreviewResponse
+
+func (response PreviewCursorSkillImport200JSONResponse) VisitPreviewCursorSkillImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewCursorSkillImport400JSONResponse struct {
+	InvalidRequestErrorJSONResponse
+}
+
+func (response PreviewCursorSkillImport400JSONResponse) VisitPreviewCursorSkillImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewCursorSkillImport401JSONResponse struct{ UnauthorizedErrorJSONResponse }
+
+func (response PreviewCursorSkillImport401JSONResponse) VisitPreviewCursorSkillImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewCursorSkillImport405JSONResponse struct {
+	MethodNotAllowedErrorJSONResponse
+}
+
+func (response PreviewCursorSkillImport405JSONResponse) VisitPreviewCursorSkillImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -39861,6 +40045,12 @@ type StrictServerInterface interface {
 	// Update only specified agent runtime retention preferences
 	// (PATCH /v1/preferences/desktop/agent-runtime)
 	PatchDesktopAgentRuntimeRetention(ctx context.Context, request PatchDesktopAgentRuntimeRetentionRequestObject) (PatchDesktopAgentRuntimeRetentionResponseObject, error)
+	// Copy selected Cursor skills without replacing existing skills
+	// (POST /v1/skills/cursor-import/import)
+	ImportCursorSkills(ctx context.Context, request ImportCursorSkillsRequestObject) (ImportCursorSkillsResponseObject, error)
+	// Preview Cursor skills for explicit import into sibling .agents/skills
+	// (POST /v1/skills/cursor-import/preview)
+	PreviewCursorSkillImport(ctx context.Context, request PreviewCursorSkillImportRequestObject) (PreviewCursorSkillImportResponseObject, error)
 	// Accept analytics events from approved local clients
 	// (POST /v1/track)
 	TrackEvents(ctx context.Context, request TrackEventsRequestObject) (TrackEventsResponseObject, error)
@@ -41906,6 +42096,72 @@ func (sh *strictHandler) PatchDesktopAgentRuntimeRetention(w http.ResponseWriter
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PatchDesktopAgentRuntimeRetentionResponseObject); ok {
 		if err := validResponse.VisitPatchDesktopAgentRuntimeRetentionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ImportCursorSkills operation middleware
+func (sh *strictHandler) ImportCursorSkills(w http.ResponseWriter, r *http.Request) {
+	var request ImportCursorSkillsRequestObject
+
+	var body ImportCursorSkillsJSONRequestBody
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ImportCursorSkills(ctx, request.(ImportCursorSkillsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ImportCursorSkills")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ImportCursorSkillsResponseObject); ok {
+		if err := validResponse.VisitImportCursorSkillsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewCursorSkillImport operation middleware
+func (sh *strictHandler) PreviewCursorSkillImport(w http.ResponseWriter, r *http.Request) {
+	var request PreviewCursorSkillImportRequestObject
+
+	var body PreviewCursorSkillImportJSONRequestBody
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewCursorSkillImport(ctx, request.(PreviewCursorSkillImportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewCursorSkillImport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewCursorSkillImportResponseObject); ok {
+		if err := validResponse.VisitPreviewCursorSkillImportResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

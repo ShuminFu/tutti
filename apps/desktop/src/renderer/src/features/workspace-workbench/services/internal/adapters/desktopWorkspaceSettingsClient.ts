@@ -109,6 +109,23 @@ export interface DetectModelPlanResult {
   discoveredModels: WorkspaceModelPlanModel[];
 }
 
+export interface CursorSkillImportEntry {
+  name: string;
+  status: "ready" | "exists" | "invalid" | "unsafe";
+  reason?: string;
+}
+
+export interface CursorSkillImportPreview {
+  destination: string;
+  skills: CursorSkillImportEntry[];
+}
+
+export interface CursorSkillImportResult {
+  name: string;
+  status: "imported" | "exists" | "invalid" | "unsafe" | "failed";
+  reason?: string;
+}
+
 export class DesktopWorkspaceSettingsDaemonError extends Error {
   readonly code: string | null;
   readonly status: number;
@@ -132,6 +149,11 @@ export function isModelPlanReferencedError(error: unknown): boolean {
 }
 
 export interface DesktopWorkspaceSettingsClient {
+  previewCursorSkills(sourceDir: string): Promise<CursorSkillImportPreview>;
+  importCursorSkills(
+    sourceDir: string,
+    names: string[]
+  ): Promise<CursorSkillImportResult[]>;
   checkComputerUseStatus(): Promise<DesktopComputerUseStatus>;
   installComputerUse(): Promise<DesktopComputerUseActionResult>;
   uninstallComputerUse(): Promise<DesktopComputerUseActionResult>;
@@ -267,6 +289,25 @@ export function createDesktopWorkspaceSettingsClient(input: {
   >;
 }): DesktopWorkspaceSettingsClient {
   return {
+    previewCursorSkills(sourceDir) {
+      return requestDaemon<CursorSkillImportPreview>(
+        input.runtimeApi,
+        "/v1/skills/cursor-import/preview",
+        {
+          body: { sourceDir },
+          method: "POST"
+        }
+      );
+    },
+    async importCursorSkills(sourceDir, names) {
+      const response = await requestDaemon<{
+        results: CursorSkillImportResult[];
+      }>(input.runtimeApi, "/v1/skills/cursor-import/import", {
+        body: { sourceDir, names },
+        method: "POST"
+      });
+      return response.results;
+    },
     checkComputerUseStatus() {
       return input.computerUseApi.checkStatus();
     },

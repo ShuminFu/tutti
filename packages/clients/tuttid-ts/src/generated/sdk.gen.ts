@@ -364,6 +364,9 @@ import type {
   ImportAgentSessionCassettesData,
   ImportAgentSessionCassettesErrors,
   ImportAgentSessionCassettesResponses,
+  ImportCursorSkillsData,
+  ImportCursorSkillsErrors,
+  ImportCursorSkillsResponses,
   ImportWorkspaceAppData,
   ImportWorkspaceAppErrors,
   ImportWorkspaceAppResponses,
@@ -541,6 +544,9 @@ import type {
   PrepareWorkspaceAppUploadData,
   PrepareWorkspaceAppUploadErrors,
   PrepareWorkspaceAppUploadResponses,
+  PreviewCursorSkillImportData,
+  PreviewCursorSkillImportErrors,
+  PreviewCursorSkillImportResponses,
   ProbeAgentProviderData,
   ProbeAgentProviderErrors,
   ProbeAgentProviderResponses,
@@ -794,6 +800,46 @@ export type Options<
    */
   meta?: Record<string, unknown>;
 };
+
+/**
+ * Preview Cursor skills for explicit import into sibling .agents/skills
+ */
+export const previewCursorSkillImport = <ThrowOnError extends boolean = false>(
+  options: Options<PreviewCursorSkillImportData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    PreviewCursorSkillImportResponses,
+    PreviewCursorSkillImportErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/skills/cursor-import/preview",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Copy selected Cursor skills without replacing existing skills
+ */
+export const importCursorSkills = <ThrowOnError extends boolean = false>(
+  options: Options<ImportCursorSkillsData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    ImportCursorSkillsResponses,
+    ImportCursorSkillsErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/skills/cursor-import/import",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
 
 /**
  * Get daemon health status

@@ -29,6 +29,20 @@ func RegisterRoutes(mux *http.ServeMux, routes Routes) {
 		Handler:          routes,
 		ErrorHandlerFunc: requestServerErrorHandler,
 	}
+	mux.HandleFunc("/v1/skills/cursor-import/preview", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			tuttitypes.WriteMethodNotAllowed(w)
+			return
+		}
+		wrapper.PreviewCursorSkillImport(w, r)
+	})
+	mux.HandleFunc("/v1/skills/cursor-import/import", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			tuttitypes.WriteMethodNotAllowed(w)
+			return
+		}
+		wrapper.ImportCursorSkills(w, r)
+	})
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

@@ -5,7 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
+  useSyncExternalStore
 } from "react";
 import { createPortal } from "react-dom";
 import { useService } from "@tutti-os/infra/di";
@@ -17,7 +17,7 @@ import { IConnectorMarketModule } from "@tutti-os/connector-market/services";
 import type {
   DesktopComputerUsePermissionPane,
   DesktopComputerUsePermissionsStatus,
-  DesktopComputerUseStatus,
+  DesktopComputerUseStatus
 } from "@shared/contracts/ipc";
 import {
   ArrowLeftIcon,
@@ -48,21 +48,21 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  UploadIcon,
+  UploadIcon
 } from "@tutti-os/ui-system";
 import { useDesktopPreferencesService } from "@renderer/features/desktop-preferences/ui/useDesktopPreferencesService";
 import { useTranslation } from "@renderer/i18n";
 import { cn } from "@renderer/lib/format";
 import {
   setAgentDiagnosticsConsent,
-  useAgentDiagnosticsConsent,
+  useAgentDiagnosticsConsent
 } from "@renderer/lib/agentDiagnosticsConsent";
 import type { WorkspaceSettingsDeveloperLogsSnapshotState } from "../services/workspaceSettingsTypes";
 import type { WorkspaceSettingsGeneralFocusAnchor } from "../services/workspaceSettingsTypes";
 import {
   desktopLocales,
   type DesktopI18nKey,
-  type DesktopLocale,
+  type DesktopLocale
 } from "../../../../../shared/i18n/index.ts";
 import {
   type DesktopDefaultAgentProvider,
@@ -83,7 +83,7 @@ import {
   type DesktopSleepPreventionMode,
   type DesktopWorkbenchShortcuts,
   type DesktopWorkbenchWindowSnapping,
-  type DesktopWorkbenchWindowSnappingShortcutPreset,
+  type DesktopWorkbenchWindowSnappingShortcutPreset
 } from "../../../../../shared/preferences/index.ts";
 import {
   EARLY_ACCESS_AGENT_INTEGRATIONS_FLAG,
@@ -93,17 +93,18 @@ import {
   LAB_WORKBENCH_SHORTCUTS_FLAG,
   LAB_AUTOMATION_RULES_FLAG,
   MOBILE_REMOTE_ACCESS_SETTINGS_FLAG,
-  resolveDesktopWorkspaceUiMode,
+  resolveDesktopWorkspaceUiMode
 } from "../../../../../shared/featureFlags/catalog.ts";
 import { resolveWorkspaceAgentGuiLabel } from "../services/workspaceAgentProviderCatalog";
 import { IAgentEnvService } from "../../workspace-agent/services/agentEnvService.interface.ts";
 import { IAgentsService } from "../../workspace-agent/services/agentsService.interface.ts";
 import { IAgentProviderStatusService } from "../../workspace-agent/services/agentProviderStatusService.interface.ts";
 import { WorkspaceAgentsSettingsTab } from "./WorkspaceAgentsSettingsTab.tsx";
+import { WorkspaceCursorSkillsImportSettingsRow } from "./WorkspaceCursorSkillsImportSettingsRow.tsx";
 import {
   desktopThemeSources,
   type DesktopThemeAppearance,
-  type DesktopThemeSource,
+  type DesktopThemeSource
 } from "../../../../../shared/theme/index.ts";
 import { useWorkspaceSettingsService } from "./useWorkspaceSettingsService";
 import { useWorkspaceWorkbenchHostService } from "./useWorkspaceWorkbenchHostService";
@@ -114,11 +115,11 @@ import { WorkspaceAutomationRulesSection } from "./WorkspaceAutomationRulesSecti
 import { SettingsRows } from "./WorkspaceSettingsRows";
 import {
   normalizeWorkspaceSettingsDefaultAgentProvider,
-  workspaceSettingsDefaultAgentProviders,
+  workspaceSettingsDefaultAgentProviders
 } from "./workspaceSettingsDefaultAgentProviders";
 import {
   WorkspaceSettingsActionButton,
-  workspaceSettingsControlColumnClass,
+  workspaceSettingsControlColumnClass
 } from "./WorkspaceSettingsActionButton";
 import { CustomWallpaperImageError } from "../services/customWallpaper";
 import {
@@ -128,7 +129,7 @@ import {
   type WorkspaceWallpaperDisplayMode,
   type WorkspaceWallpaperId,
   workspaceWallpaperDisplayModes,
-  workspaceWallpaperOptions,
+  workspaceWallpaperOptions
 } from "../services/workspaceWallpaper";
 import { WorkspaceModelPlansSection } from "./WorkspaceModelPlansSection";
 import { WorkspaceConnectionSettingsSection } from "./WorkspaceConnectionSettingsSection";
@@ -137,7 +138,7 @@ import { useAccountService } from "./useAccountService";
 import {
   workspaceSettingsInputClass,
   workspaceSettingsSelectContentClass,
-  workspaceSettingsSelectTriggerClass,
+  workspaceSettingsSelectTriggerClass
 } from "./workspaceSettingsFieldStyles";
 
 const developerPanelUnlockTaps = 7;
@@ -147,14 +148,14 @@ const computerUseAutoCheckMaxMs = 120_000;
 const computerUseFocusRefreshMinIntervalMs = 5_000;
 const tuttiDesktopIconUrl = new URL(
   "../../../../../../build/icon.png",
-  import.meta.url,
+  import.meta.url
 ).href;
 // Screen recording of the System Settings permission row (icon © Cua AI,
 // Inc., MIT) showing the CuaDriver toggle being switched on — the exact
 // action users must perform after "Open Settings".
 const cuaDriverToggleDemoUrl = new URL(
   "../../../assets/cua-driver-toggle-demo.gif",
-  import.meta.url,
+  import.meta.url
 ).href;
 export function WorkspaceSettingsPanel({
   embedded = false,
@@ -163,13 +164,13 @@ export function WorkspaceSettingsPanel({
   onSelectWallpaperDisplayMode,
   selectedWallpaperDisplayMode,
   selectedWallpaperID,
-  workspace,
+  workspace
 }: {
   embedded?: boolean;
   onOpenExternalAgentImport: () => void;
   onSelectWallpaper: (id: WorkspaceWallpaperId) => void;
   onSelectWallpaperDisplayMode: (
-    displayMode: WorkspaceWallpaperDisplayMode,
+    displayMode: WorkspaceWallpaperDisplayMode
   ) => void;
   selectedWallpaperDisplayMode: WorkspaceWallpaperDisplayMode;
   selectedWallpaperID: WorkspaceWallpaperId;
@@ -178,13 +179,13 @@ export function WorkspaceSettingsPanel({
   const { i18n: appI18n, t } = useTranslation();
   const connectorMarketI18n = useMemo(
     () => createConnectorMarketI18nRuntime(appI18n),
-    [appI18n],
+    [appI18n]
   );
   const { t: translateConnectorMarket } = connectorMarketI18n;
   const notifications = useService(INotificationService);
   const handleConnectorMarketError = useCallback(
     (message: string) => notifications.error({ title: message }),
-    [notifications],
+    [notifications]
   );
   // 常驻那一排三个控件共用一条失败提示：写失败时 store 已经自己回滚了，
   // 这里只负责告诉用户「没存上」，不再各写一份文案。
@@ -195,10 +196,10 @@ export function WorkspaceSettingsPanel({
           error instanceof Error && error.message.trim()
             ? error.message
             : undefined,
-        title: t("workspace.settings.agent.agents.keepAliveFailed"),
+        title: t("workspace.settings.agent.agents.keepAliveFailed")
       });
     },
-    [notifications, t],
+    [notifications, t]
   );
   const { service: desktopPreferencesService, state: desktopPreferencesState } =
     useDesktopPreferencesService();
@@ -215,7 +216,7 @@ export function WorkspaceSettingsPanel({
     isFeatureEnabled(pendingFeatureFlags, LAB_ENABLED_FLAG);
   const earlyAccessIntegrationsEnabled = isFeatureEnabled(
     pendingFeatureFlags,
-    EARLY_ACCESS_AGENT_INTEGRATIONS_FLAG,
+    EARLY_ACCESS_AGENT_INTEGRATIONS_FLAG
   );
   const agentsService = useService(IAgentsService);
   const agentProviderStatusService = useService(IAgentProviderStatusService);
@@ -226,7 +227,7 @@ export function WorkspaceSettingsPanel({
     isFeatureEnabled(pendingFeatureFlags, LAB_CONNECTORS_FLAG);
   const automationRulesEnabled = isFeatureEnabled(
     pendingFeatureFlags,
-    LAB_AUTOMATION_RULES_FLAG,
+    LAB_AUTOMATION_RULES_FLAG
   );
   const mobileRemoteAccessSettingsEnabled =
     !embedded &&
@@ -256,15 +257,13 @@ export function WorkspaceSettingsPanel({
 
   useEffect(() => {
     if (!labSectionVisible && settingsState.activeSection === "lab") {
-      embedded
-        ? settingsService.selectSection("agent")
-        : settingsService.selectSection("general");
+      settingsService.selectSection(embedded ? "agent" : "general");
     }
   }, [
     embedded,
     labSectionVisible,
     settingsService,
-    settingsState.activeSection,
+    settingsState.activeSection
   ]);
 
   useEffect(() => {
@@ -272,35 +271,29 @@ export function WorkspaceSettingsPanel({
       !mobileRemoteAccessSettingsEnabled &&
       settingsState.activeSection === "connection"
     ) {
-      embedded
-        ? settingsService.selectSection("agent")
-        : settingsService.selectSection("general");
+      settingsService.selectSection(embedded ? "agent" : "general");
     }
   }, [
     mobileRemoteAccessSettingsEnabled,
     settingsService,
     settingsState.activeSection,
-    embedded,
+    embedded
   ]);
 
   useEffect(() => {
     if (!automationRulesEnabled && settingsState.agentTab === "automation") {
-      embedded
-        ? settingsService.selectAgentTab("agents")
-        : settingsService.selectAgentTab("general");
+      settingsService.selectAgentTab(embedded ? "agents" : "general");
     }
   }, [
     automationRulesEnabled,
     embedded,
     settingsService,
-    settingsState.agentTab,
+    settingsState.agentTab
   ]);
 
   useEffect(() => {
     if (!connectorsVisible && settingsState.agentTab === "connectors") {
-      embedded
-        ? settingsService.selectAgentTab("agents")
-        : settingsService.selectAgentTab("general");
+      settingsService.selectAgentTab(embedded ? "agents" : "general");
     }
   }, [connectorsVisible, embedded, settingsService, settingsState.agentTab]);
 
@@ -317,7 +310,7 @@ export function WorkspaceSettingsPanel({
       versionTapCountRef.current = 0;
       settingsService.setDeveloperPanelVisible(true);
       notifications.success({
-        title: t("workspace.settings.about.developerModeEnabled"),
+        title: t("workspace.settings.about.developerModeEnabled")
       });
     }
   };
@@ -371,62 +364,62 @@ export function WorkspaceSettingsPanel({
               ? [
                   {
                     id: "general" as const,
-                    label: t("workspace.settings.nav.general"),
-                  },
+                    label: t("workspace.settings.nav.general")
+                  }
                 ]
               : []),
             {
               id: "agent" as const,
-              label: t("workspace.settings.nav.agent"),
+              label: t("workspace.settings.nav.agent")
             },
             {
               id: "model" as const,
-              label: t("workspace.settings.nav.model"),
+              label: t("workspace.settings.nav.model")
             },
             ...(!embedded
               ? [
                   {
                     id: "appearance" as const,
-                    label: t("workspace.settings.nav.appearance"),
-                  },
+                    label: t("workspace.settings.nav.appearance")
+                  }
                 ]
               : []),
             ...(mobileRemoteAccessSettingsEnabled
               ? [
                   {
                     id: "connection" as const,
-                    label: t("workspace.settings.nav.connection"),
-                  },
+                    label: t("workspace.settings.nav.connection")
+                  }
                 ]
               : []),
             ...(!embedded
               ? [
                   {
                     id: "deletedConversations" as const,
-                    label: t("workspace.settings.nav.deletedConversations"),
+                    label: t("workspace.settings.nav.deletedConversations")
                   },
                   {
                     id: "about" as const,
-                    label: t("workspace.settings.nav.about"),
-                  },
+                    label: t("workspace.settings.nav.about")
+                  }
                 ]
               : []),
             ...(!embedded && settingsState.developerPanelVisible
               ? [
                   {
                     id: "developer" as const,
-                    label: t("workspace.settings.nav.developer"),
-                  },
+                    label: t("workspace.settings.nav.developer")
+                  }
                 ]
               : []),
             ...(!embedded && labSectionVisible
               ? [
                   {
                     id: "lab" as const,
-                    label: t("workspace.settings.nav.lab"),
-                  },
+                    label: t("workspace.settings.nav.lab")
+                  }
                 ]
-              : []),
+              : [])
           ].map((section) => {
             const selected = settingsState.activeSection === section.id;
             return (
@@ -437,7 +430,7 @@ export function WorkspaceSettingsPanel({
                   "block w-full min-w-0 truncate whitespace-nowrap rounded-md border-0 px-2.5 py-1.5 text-left text-[13px] font-semibold leading-[1.35] outline-none transition-colors duration-150 hover:bg-[var(--transparency-block)] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-focus)]",
                   selected
                     ? "bg-[var(--transparency-block)] text-[var(--text-primary)]"
-                    : "bg-transparent text-[var(--text-secondary)]",
+                    : "bg-transparent text-[var(--text-secondary)]"
                 )}
                 type="button"
                 onClick={() => settingsService.selectSection(section.id)}
@@ -454,7 +447,7 @@ export function WorkspaceSettingsPanel({
               "flex min-h-0 flex-1 flex-col gap-0",
               settingsState.activeSection === "deletedConversations"
                 ? "overflow-hidden"
-                : "overflow-y-auto px-[22px] pb-[22px] pt-0",
+                : "overflow-y-auto px-[22px] pb-[22px] pt-0"
             )}
           >
             {settingsState.activeSection === "general" && !embedded ? (
@@ -495,44 +488,45 @@ export function WorkspaceSettingsPanel({
                       ? [
                           {
                             value: "general" as const,
-                            label: t("workspace.settings.agent.tabs.general"),
-                          },
+                            label: t("workspace.settings.agent.tabs.general")
+                          }
                         ]
                       : []),
                     {
                       value: "agents" as const,
-                      label: t("workspace.settings.agent.tabs.agents"),
+                      label: t("workspace.settings.agent.tabs.agents")
                     },
                     ...(connectorsVisible
                       ? [
                           {
                             value: "connectors" as const,
-                            label: translateConnectorMarket("title"),
-                          },
+                            label: translateConnectorMarket("title")
+                          }
                         ]
                       : []),
                     {
                       value: "customAgents" as const,
-                      label: t("workspace.settings.agent.tabs.customAgents"),
+                      label: t("workspace.settings.agent.tabs.customAgents")
                     },
                     ...(automationRulesEnabled
                       ? [
                           {
                             value: "automation" as const,
-                            label: t(
-                              "workspace.settings.agent.tabs.automation",
-                            ),
-                          },
+                            label: t("workspace.settings.agent.tabs.automation")
+                          }
                         ]
-                      : []),
+                      : [])
                   ]}
                   value={settingsState.agentTab}
                   onValueChange={(tab) => settingsService.selectAgentTab(tab)}
                 />
                 {embedded && settingsState.agentTab === "agents" ? (
-                  <WorkspaceExternalAgentImportSettingsRow
-                    onOpenExternalAgentImport={onOpenExternalAgentImport}
-                  />
+                  <>
+                    <WorkspaceExternalAgentImportSettingsRow
+                      onOpenExternalAgentImport={onOpenExternalAgentImport}
+                    />
+                    <WorkspaceCursorSkillsImportSettingsRow />
+                  </>
                 ) : null}
                 {settingsState.agentTab === "agents" ? (
                   <WorkspaceAgentsSettingsTab
@@ -576,7 +570,7 @@ export function WorkspaceSettingsPanel({
                     onAgentEnabledChange={(agentTargetID, enabled) =>
                       settingsService.setAgentTargetEnabled(
                         agentTargetID,
-                        enabled,
+                        enabled
                       )
                     }
                     onAutoCheckEnabledChange={(enabled) => {
@@ -589,8 +583,8 @@ export function WorkspaceSettingsPanel({
                                 ? error.message
                                 : undefined,
                             title: t(
-                              "workspace.settings.agent.agents.autoCheckUpdatesFailed",
-                            ),
+                              "workspace.settings.agent.agents.autoCheckUpdatesFailed"
+                            )
                           });
                         });
                     }}
@@ -612,7 +606,7 @@ export function WorkspaceSettingsPanel({
                     onExtensionEnabledChange={(flag, enabled) => {
                       return settingsService.changeFeatureFlags({
                         ...pendingFeatureFlags,
-                        [flag]: enabled,
+                        [flag]: enabled
                       });
                     }}
                     onOpenEnvironment={
@@ -666,7 +660,7 @@ export function WorkspaceSettingsPanel({
                     }}
                     onAgentConversationDetailModeChange={(mode) => {
                       void settingsService.changeAgentConversationDetailMode(
-                        mode,
+                        mode
                       );
                     }}
                     onDefaultAgentProviderChange={(provider) => {
@@ -750,7 +744,7 @@ export function WorkspaceSettingsPanel({
                 state={settingsState.deletedConversations}
                 onRetentionDaysChange={(days) => {
                   void settingsService.changeDeletedAgentConversationRetentionDays(
-                    days,
+                    days
                   );
                 }}
               />
@@ -782,7 +776,7 @@ function WorkspaceLabSettingsSection({
   featureFlags,
   onFeatureFlagsChange,
   onWorkbenchShortcutsChange,
-  workbenchShortcuts,
+  workbenchShortcuts
 }: {
   changingFeatureFlags: DesktopFeatureFlags | null;
   featureFlags: DesktopFeatureFlags;
@@ -795,7 +789,7 @@ function WorkspaceLabSettingsSection({
   const isUpdatingFlags = changingFeatureFlags !== null;
   const workbenchShortcutsEnabled = isFeatureEnabled(
     pendingFeatureFlags,
-    LAB_WORKBENCH_SHORTCUTS_FLAG,
+    LAB_WORKBENCH_SHORTCUTS_FLAG
   );
 
   // The two shortcut bindings live on a secondary page reached from the Labs
@@ -836,7 +830,7 @@ function WorkspaceLabSettingsSection({
           onChange={(binding) => {
             onWorkbenchShortcutsChange({
               ...workbenchShortcuts,
-              newAgentConversation: binding,
+              newAgentConversation: binding
             });
           }}
         />
@@ -848,7 +842,7 @@ function WorkspaceLabSettingsSection({
           onChange={(binding) => {
             onWorkbenchShortcutsChange({
               ...workbenchShortcuts,
-              newSameTypeWindow: binding,
+              newSameTypeWindow: binding
             });
           }}
         />
@@ -894,7 +888,7 @@ function WorkspaceLabShortcutRow({
   placeholder,
   requireNonShiftModifier = false,
   value,
-  onChange,
+  onChange
 }: {
   className?: string;
   description?: string;
@@ -915,7 +909,7 @@ function WorkspaceLabShortcutRow({
     <div
       className={cn(
         "flex w-full items-center justify-between gap-4 max-[560px]:flex-col max-[560px]:items-stretch",
-        className,
+        className
       )}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1 max-[560px]:w-full">
@@ -934,7 +928,7 @@ function WorkspaceLabShortcutRow({
           className={cn(
             workspaceSettingsInputClass,
             "font-mono text-[12px]",
-            disabled && "opacity-70",
+            disabled && "opacity-70"
           )}
           disabled={disabled}
           placeholder={
@@ -969,7 +963,7 @@ function WorkspaceLabShortcutRow({
               ctrlKey: event.ctrlKey,
               key: event.key,
               metaKey: event.metaKey,
-              shiftKey: event.shiftKey,
+              shiftKey: event.shiftKey
             });
             if (binding) {
               onChange(binding);
@@ -994,7 +988,7 @@ function WorkspaceLabShortcutRow({
 }
 
 function workspaceSettingsMinimizeAnimationOptionLabelKey(
-  animation: DesktopMinimizeAnimation,
+  animation: DesktopMinimizeAnimation
 ): DesktopI18nKey {
   switch (animation) {
     case "scale":
@@ -1007,7 +1001,7 @@ function workspaceSettingsMinimizeAnimationOptionLabelKey(
 }
 
 function workspaceSettingsWindowSnappingShortcutLabelKey(
-  preset: DesktopWorkbenchWindowSnappingShortcutPreset,
+  preset: DesktopWorkbenchWindowSnappingShortcutPreset
 ): DesktopI18nKey {
   switch (preset) {
     case "commandArrows":
@@ -1024,7 +1018,7 @@ type WorkspaceSettingsWindowSnappingSelectValue =
 function WorkspaceSettingsPanelPortal({
   children,
   dialogOpen,
-  onClose,
+  onClose
 }: {
   children: React.ReactNode;
   dialogOpen: boolean;
@@ -1068,7 +1062,7 @@ function WorkspaceSettingsPanelPortal({
 
 function ComputerUseSetupRow({
   anchorRef,
-  attentionRequestID,
+  attentionRequestID
 }: {
   anchorRef?: React.Ref<HTMLDivElement>;
   attentionRequestID: number;
@@ -1081,7 +1075,7 @@ function ComputerUseSetupRow({
   const [computerUseStatus, setComputerUseStatus] =
     useState<DesktopComputerUseStatus | null>(null);
   const [operation, setOperation] = useState<"install" | "uninstall" | null>(
-    null,
+    null
   );
   const [operationProgress, setOperationProgress] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
@@ -1093,12 +1087,12 @@ function ComputerUseSetupRow({
   const [wizardStep, setWizardStep] =
     useState<ComputerUseWizardStep>("install");
   const [wizardVerifyMessage, setWizardVerifyMessage] = useState<string | null>(
-    null,
+    null
   );
   const [checkingPermissionStatus, setCheckingPermissionStatus] =
     useState(false);
   const [lastCheckedAtUnixMs, setLastCheckedAtUnixMs] = useState<number | null>(
-    null,
+    null
   );
   const handledAttentionRequestRef = useRef(0);
   const autoCheckStartedAtRef = useRef<number | null>(null);
@@ -1131,25 +1125,25 @@ function ComputerUseSetupRow({
     operationProgress,
     panelStatus: status,
     status: summarizeComputerUseStatusForDiagnostic(computerUseStatus),
-    wizardStep,
+    wizardStep
   };
 
   const logPermissionDiagnostic = useCallback(
     (
       event: string,
       details?: Record<string, unknown>,
-      level?: "debug" | "error" | "info" | "warn",
+      level?: "debug" | "error" | "info" | "warn"
     ) => {
       settingsService.logComputerUsePermissionDiagnostic({
         details: {
           ...diagnosticContextRef.current,
-          ...details,
+          ...details
         },
         event,
-        level,
+        level
       });
     },
-    [settingsService],
+    [settingsService]
   );
 
   useEffect(() => {
@@ -1158,7 +1152,7 @@ function ComputerUseSetupRow({
     }
     const timer = window.setInterval(() => {
       setOperationProgress((current) =>
-        nextComputerUseOperationProgress(current),
+        nextComputerUseOperationProgress(current)
       );
     }, 180);
     return () => {
@@ -1187,7 +1181,7 @@ function ComputerUseSetupRow({
         logPermissionDiagnostic("computer_use.permission_status_checked", {
           nextPanelStatus: nextStatus,
           result: summarizeComputerUseStatusForDiagnostic(result),
-          trigger: options?.diagnosticTrigger ?? "unknown",
+          trigger: options?.diagnosticTrigger ?? "unknown"
         });
         return result;
       } catch {
@@ -1197,22 +1191,20 @@ function ComputerUseSetupRow({
           setStatus("check-failed");
         } else if (!options?.silent) {
           setStatus(
-            lastKnownStatusRef.current.installed
-              ? "installed"
-              : "not-installed",
+            lastKnownStatusRef.current.installed ? "installed" : "not-installed"
           );
         }
         logPermissionDiagnostic(
           "computer_use.permission_status_check_failed",
           {
-            trigger: options?.diagnosticTrigger ?? "unknown",
+            trigger: options?.diagnosticTrigger ?? "unknown"
           },
-          "warn",
+          "warn"
         );
         return null;
       }
     },
-    [logPermissionDiagnostic, settingsService],
+    [logPermissionDiagnostic, settingsService]
   );
 
   useEffect(() => {
@@ -1244,7 +1236,7 @@ function ComputerUseSetupRow({
       setStatus(nextStatus.installed ? "installed" : "not-installed");
       setLastCheckedAtUnixMs(Date.now());
       logPermissionDiagnostic("computer_use.wizard_verify_resolved", {
-        nextStatus: summarizeComputerUseStatusForDiagnostic(nextStatus),
+        nextStatus: summarizeComputerUseStatusForDiagnostic(nextStatus)
       });
       if (isComputerUseFullyAuthorized(nextStatus)) {
         setWizardStep("done");
@@ -1252,7 +1244,7 @@ function ComputerUseSetupRow({
     } catch {
       logPermissionDiagnostic("computer_use.wizard_verify_failed", {}, "warn");
       setWizardVerifyMessage(
-        t("workspace.settings.general.computerUseStatusCheckFailed"),
+        t("workspace.settings.general.computerUseStatusCheckFailed")
       );
     } finally {
       restartInFlightRef.current = false;
@@ -1289,7 +1281,7 @@ function ComputerUseSetupRow({
       void checkStatus({
         clearMessage: false,
         diagnosticTrigger: "auto-poll",
-        silent: true,
+        silent: true
       });
     }, computerUseAutoCheckIntervalMs);
 
@@ -1322,7 +1314,7 @@ function ComputerUseSetupRow({
       void checkStatus({
         clearMessage: false,
         diagnosticTrigger: "window-focus",
-        silent: true,
+        silent: true
       });
     };
     window.addEventListener("focus", refreshOnVisibility);
@@ -1342,11 +1334,11 @@ function ComputerUseSetupRow({
       const currentStatus = await checkStatus({
         clearMessage: false,
         diagnosticTrigger: "install-preflight",
-        silent: true,
+        silent: true
       });
       if (currentStatus === null) {
         setMessage(
-          t("workspace.settings.general.computerUseStatusCheckFailed"),
+          t("workspace.settings.general.computerUseStatusCheckFailed")
         );
         return;
       }
@@ -1365,7 +1357,7 @@ function ComputerUseSetupRow({
       if (result.success) {
         const nextStatus = await checkStatus({
           clearMessage: false,
-          diagnosticTrigger: "install-completed",
+          diagnosticTrigger: "install-completed"
         });
         setMessage(null);
         // macOS installs continue into the TCC wizard; Windows uses doctor
@@ -1376,7 +1368,7 @@ function ComputerUseSetupRow({
             // macOS-style TCC grant flow or permission panes to open.
             if (!isComputerUseFullyAuthorized(nextStatus)) {
               setMessage(
-                t("workspace.settings.general.computerUseStatusCheckFailed"),
+                t("workspace.settings.general.computerUseStatusCheckFailed")
               );
             }
           } else if (isComputerUseFullyAuthorized(nextStatus)) {
@@ -1384,7 +1376,7 @@ function ComputerUseSetupRow({
           } else {
             logPermissionDiagnostic(
               "computer_use.permission_dialog_open_changed",
-              { open: true, trigger: "install-completed" },
+              { open: true, trigger: "install-completed" }
             );
             setWizardStep("accessibility");
             setPermissionDialogOpen(true);
@@ -1411,11 +1403,11 @@ function ComputerUseSetupRow({
       const currentStatus = await checkStatus({
         clearMessage: false,
         diagnosticTrigger: "uninstall-preflight",
-        silent: true,
+        silent: true
       });
       if (currentStatus === null) {
         setMessage(
-          t("workspace.settings.general.computerUseStatusCheckFailed"),
+          t("workspace.settings.general.computerUseStatusCheckFailed")
         );
         return;
       }
@@ -1432,7 +1424,7 @@ function ComputerUseSetupRow({
       if (result.success) {
         await checkStatus({
           clearMessage: false,
-          diagnosticTrigger: "uninstall-completed",
+          diagnosticTrigger: "uninstall-completed"
         });
         setMessage(null);
         setAutoCheckActive(false);
@@ -1448,10 +1440,10 @@ function ComputerUseSetupRow({
   };
 
   const handleOpenPermissionSettings = async (
-    pane: DesktopComputerUsePermissionPane,
+    pane: DesktopComputerUsePermissionPane
   ) => {
     logPermissionDiagnostic("computer_use.permission_settings_open_clicked", {
-      pane,
+      pane
     });
     setOpeningSettingsPane(pane);
     // Fire-and-forget the grant on this user-initiated click: it registers
@@ -1478,7 +1470,7 @@ function ComputerUseSetupRow({
 
   const handlePermissionDialogOpenChange = (open: boolean) => {
     logPermissionDiagnostic("computer_use.permission_dialog_open_changed", {
-      open,
+      open
     });
     setPermissionDialogOpen(open);
     if (open) {
@@ -1486,7 +1478,7 @@ function ComputerUseSetupRow({
         void checkStatus({
           clearMessage: false,
           diagnosticTrigger: "windows-dialog-open",
-          silent: true,
+          silent: true
         });
         setPermissionDialogOpen(false);
         return;
@@ -1504,7 +1496,7 @@ function ComputerUseSetupRow({
         void checkStatus({
           clearMessage: false,
           diagnosticTrigger: "dialog-opened",
-          silent: true,
+          silent: true
         });
       }
     } else {
@@ -1535,7 +1527,7 @@ function ComputerUseSetupRow({
       window.setTimeout(() => setAttentionActive(true), 80),
       window.setTimeout(() => setAttentionActive(false), 440),
       window.setTimeout(() => setAttentionActive(true), 680),
-      window.setTimeout(() => setAttentionActive(false), 1040),
+      window.setTimeout(() => setAttentionActive(false), 1040)
     ];
     return () => {
       timers.forEach((timer) => window.clearTimeout(timer));
@@ -1562,7 +1554,7 @@ function ComputerUseSetupRow({
             "pointer-events-none absolute -inset-x-3 -inset-y-2 z-0 rounded-[8px] transition-colors duration-200",
             attentionActive
               ? "bg-[color-mix(in_srgb,var(--state-warning)_16%,transparent)]"
-              : "bg-transparent",
+              : "bg-transparent"
           )}
         />
         <div className="relative z-[1] flex min-w-0 flex-1 flex-col gap-1 max-[560px]:w-full">
@@ -1581,7 +1573,7 @@ function ComputerUseSetupRow({
         <div
           className={cn(
             "relative z-[1] flex flex-col items-stretch justify-end gap-2",
-            workspaceSettingsControlColumnClass,
+            workspaceSettingsControlColumnClass
           )}
         >
           {(status === "checking" || status === "idle") && (
@@ -1593,7 +1585,7 @@ function ComputerUseSetupRow({
           {status === "check-failed" && (
             <WorkspaceSettingsActionButton
               label={t(
-                "workspace.settings.general.computerUseStatusRetryButton",
+                "workspace.settings.general.computerUseStatusRetryButton"
               )}
               onClick={() => {
                 void checkStatus({ diagnosticTrigger: "retry" });
@@ -1610,7 +1602,7 @@ function ComputerUseSetupRow({
               }
               progress={operation === "install" ? operationProgress : null}
               progressAriaLabel={t(
-                "workspace.settings.general.computerUseProgressAria",
+                "workspace.settings.general.computerUseProgressAria"
               )}
               onClick={() => {
                 void handleInstall();
@@ -1628,15 +1620,15 @@ function ComputerUseSetupRow({
                       }
                       label={manageLabel}
                       progressAriaLabel={t(
-                        "workspace.settings.general.computerUseProgressAria",
+                        "workspace.settings.general.computerUseProgressAria"
                       )}
                       onClick={() => {
                         logPermissionDiagnostic(
-                          "computer_use.permission_manage_clicked",
+                          "computer_use.permission_manage_clicked"
                         );
                         if (computerUseStatus?.platform === "win32") {
                           void checkStatus({
-                            diagnosticTrigger: "windows-manage-click",
+                            diagnosticTrigger: "windows-manage-click"
                           });
                         } else {
                           handlePermissionDialogOpenChange(true);
@@ -1667,7 +1659,7 @@ function ComputerUseSetupRow({
                 }
                 progress={operation === "uninstall" ? operationProgress : null}
                 progressAriaLabel={t(
-                  "workspace.settings.general.computerUseProgressAria",
+                  "workspace.settings.general.computerUseProgressAria"
                 )}
                 variant="destructive-secondary"
                 onClick={() => {
@@ -1711,13 +1703,13 @@ const computerUseWizardStepOrder: readonly ComputerUseWizardStep[] = [
   "accessibility",
   "screen-recording",
   "verify",
-  "done",
+  "done"
 ];
 
 // Status only assists here: it picks a plausible starting step. The user can
 // navigate freely, so a wrong guess costs nothing.
 function resolveComputerUseWizardInitialStep(
-  status: DesktopComputerUseStatus | null,
+  status: DesktopComputerUseStatus | null
 ): ComputerUseWizardStep {
   if (status?.installed !== true) {
     return "install";
@@ -1733,7 +1725,7 @@ function resolveComputerUseWizardInitialStep(
 
 function computerUseWizardStepLabel(
   step: ComputerUseWizardStep,
-  t: ReturnType<typeof useTranslation>["t"],
+  t: ReturnType<typeof useTranslation>["t"]
 ): string {
   switch (step) {
     case "install":
@@ -1742,7 +1734,7 @@ function computerUseWizardStepLabel(
       return t("workspace.settings.general.computerUsePermissionAccessibility");
     case "screen-recording":
       return t(
-        "workspace.settings.general.computerUsePermissionScreenRecording",
+        "workspace.settings.general.computerUsePermissionScreenRecording"
       );
     case "verify":
       return t("workspace.settings.general.computerUseStatusCheckAgain");
@@ -1766,7 +1758,7 @@ function ComputerUseSetupWizardDialog({
   onOpenChange,
   onOpenSettings,
   onStepChange,
-  onVerify,
+  onVerify
 }: {
   checkingPermissionStatus: boolean;
   computerUseStatus: DesktopComputerUseStatus | null;
@@ -1841,7 +1833,7 @@ function ComputerUseSetupWizardDialog({
               <TooltipTrigger asChild>
                 <button
                   aria-label={t(
-                    "workspace.settings.general.computerUsePermissionDialogRelationshipTitle",
+                    "workspace.settings.general.computerUsePermissionDialogRelationshipTitle"
                   )}
                   className="inline-flex shrink-0 cursor-default text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-secondary)]"
                   type="button"
@@ -1851,14 +1843,14 @@ function ComputerUseSetupWizardDialog({
               </TooltipTrigger>
               <TooltipContent className="max-w-[320px]" side="bottom">
                 {t(
-                  "workspace.settings.general.computerUsePermissionDialogRelationshipBody",
+                  "workspace.settings.general.computerUsePermissionDialogRelationshipBody"
                 )}
               </TooltipContent>
             </Tooltip>
           </div>
           <DialogDescription className="sr-only">
             {t(
-              "workspace.settings.general.computerUsePermissionDialogDescription",
+              "workspace.settings.general.computerUsePermissionDialogDescription"
             )}
           </DialogDescription>
         </DialogHeader>
@@ -1879,7 +1871,7 @@ function ComputerUseSetupWizardDialog({
                       ? "bg-[var(--text-primary)] text-[var(--background-fronted)]"
                       : state === "done"
                         ? "bg-[color-mix(in_srgb,var(--state-success)_16%,transparent)] text-[var(--state-success)]"
-                        : "bg-[var(--transparency-block)] text-[var(--text-tertiary)]",
+                        : "bg-[var(--transparency-block)] text-[var(--text-tertiary)]"
                   )}
                 >
                   {state === "done" ? (
@@ -1893,7 +1885,7 @@ function ComputerUseSetupWizardDialog({
                     "text-[12px] font-medium",
                     state === "current"
                       ? "text-[var(--text-primary)]"
-                      : "text-[var(--text-tertiary)]",
+                      : "text-[var(--text-tertiary)]"
                   )}
                 >
                   {computerUseWizardStepLabel(wizardStep, t)}
@@ -1913,7 +1905,7 @@ function ComputerUseSetupWizardDialog({
                 {t(
                   installed
                     ? "workspace.settings.general.computerUseStatusInstalled"
-                    : "workspace.settings.general.computerUseStatusNotInstalled",
+                    : "workspace.settings.general.computerUseStatusNotInstalled"
                 )}
               </div>
             </>
@@ -1923,13 +1915,13 @@ function ComputerUseSetupWizardDialog({
               <p className="m-0 text-[13px] leading-[1.45] text-[var(--text-secondary)]">
                 {t(
                   "workspace.settings.general.computerUseWizardGrantInstruction",
-                  { permission: computerUseWizardStepLabel(step, t) },
+                  { permission: computerUseWizardStepLabel(step, t) }
                 )}
               </p>
               {step === "screen-recording" && (
                 <p className="m-0 text-[12px] leading-[1.4] text-[var(--text-tertiary)]">
                   {t(
-                    "workspace.settings.general.computerUseWizardScreenRecordingKillNote",
+                    "workspace.settings.general.computerUseWizardScreenRecordingKillNote"
                   )}
                 </p>
               )}
@@ -1943,17 +1935,17 @@ function ComputerUseSetupWizardDialog({
                 label={computerUseWizardStepLabel(step, t)}
                 stateLabel={resolveComputerUsePermissionStateLabel(
                   grantChipState,
-                  t,
+                  t
                 )}
                 tone={computerUsePermissionStateTone(grantChipState)}
                 action={{
                   label: t(
-                    "workspace.settings.general.computerUseOpenPaneButton",
+                    "workspace.settings.general.computerUseOpenPaneButton"
                   ),
                   loading: openingSettingsPane === grantPane,
                   onClick: () => {
                     void onOpenSettings(grantPane);
-                  },
+                  }
                 }}
               />
             </>
@@ -1964,19 +1956,19 @@ function ComputerUseSetupWizardDialog({
                 {t(
                   step === "verify"
                     ? "workspace.settings.general.computerUseWizardVerifyBody"
-                    : "workspace.settings.general.computerUseWizardDoneBody",
+                    : "workspace.settings.general.computerUseWizardDoneBody"
                 )}
               </p>
               <ComputerUsePermissionStatusRow
                 label={t(
-                  "workspace.settings.general.computerUseDriverRowLabel",
+                  "workspace.settings.general.computerUseDriverRowLabel"
                 )}
                 stateLabel={t(
                   driverState === "running"
                     ? "workspace.settings.general.computerUseDriverStatusRunning"
                     : driverState === "not-running"
                       ? "workspace.settings.general.computerUseDriverStatusNotRunning"
-                      : "workspace.settings.general.computerUsePermissionStatusUnknown",
+                      : "workspace.settings.general.computerUsePermissionStatusUnknown"
                 )}
                 tone={
                   driverState === "running"
@@ -1988,11 +1980,11 @@ function ComputerUseSetupWizardDialog({
               />
               <ComputerUsePermissionStatusRow
                 label={t(
-                  "workspace.settings.general.computerUsePermissionAccessibility",
+                  "workspace.settings.general.computerUsePermissionAccessibility"
                 )}
                 stateLabel={resolveComputerUsePermissionStateLabel(
                   accessibilityState,
-                  t,
+                  t
                 )}
                 tone={computerUsePermissionStateTone(accessibilityState)}
                 action={
@@ -2001,22 +1993,22 @@ function ComputerUseSetupWizardDialog({
                     "warning"
                     ? {
                         label: t(
-                          "workspace.settings.general.computerUseWizardGrantStepReturn",
+                          "workspace.settings.general.computerUseWizardGrantStepReturn"
                         ),
                         onClick: () => {
                           onStepChange("accessibility");
-                        },
+                        }
                       }
                     : null
                 }
               />
               <ComputerUsePermissionStatusRow
                 label={t(
-                  "workspace.settings.general.computerUsePermissionScreenRecording",
+                  "workspace.settings.general.computerUsePermissionScreenRecording"
                 )}
                 stateLabel={resolveComputerUsePermissionStateLabel(
                   screenRecordingState,
-                  t,
+                  t
                 )}
                 tone={computerUsePermissionStateTone(screenRecordingState)}
                 action={
@@ -2025,11 +2017,11 @@ function ComputerUseSetupWizardDialog({
                     "warning"
                     ? {
                         label: t(
-                          "workspace.settings.general.computerUseWizardGrantStepReturn",
+                          "workspace.settings.general.computerUseWizardGrantStepReturn"
                         ),
                         onClick: () => {
                           onStepChange("screen-recording");
-                        },
+                        }
                       }
                     : null
                 }
@@ -2042,7 +2034,7 @@ function ComputerUseSetupWizardDialog({
               {step === "verify" && lastCheckedAtUnixMs !== null && (
                 <p className="m-0 text-[12px] leading-[1.35] text-[var(--text-tertiary)]">
                   {t("workspace.settings.general.computerUseLastCheckedAt", {
-                    time: new Date(lastCheckedAtUnixMs).toLocaleTimeString(),
+                    time: new Date(lastCheckedAtUnixMs).toLocaleTimeString()
                   })}
                 </p>
               )}
@@ -2086,7 +2078,7 @@ function ComputerUseSetupWizardDialog({
                 {t(
                   installRunning
                     ? "workspace.settings.general.computerUseInstalling"
-                    : "workspace.settings.general.computerUseInstallButton",
+                    : "workspace.settings.general.computerUseInstallButton"
                 )}
               </Button>
             ))}
@@ -2110,7 +2102,7 @@ function ComputerUseSetupWizardDialog({
               {t(
                 checkingPermissionStatus
                   ? "workspace.settings.general.computerUseWizardVerifyChecking"
-                  : "workspace.settings.general.computerUseStatusCheckAgain",
+                  : "workspace.settings.general.computerUseStatusCheckAgain"
               )}
             </Button>
           )}
@@ -2138,7 +2130,7 @@ type ComputerUsePermissionState =
   | "capture-unavailable";
 
 function computerUsePermissionStateTone(
-  state: ComputerUsePermissionState,
+  state: ComputerUsePermissionState
 ): "success" | "warning" | "neutral" {
   switch (state) {
     case "granted":
@@ -2155,7 +2147,7 @@ function ComputerUsePermissionStatusRow({
   action,
   label,
   stateLabel,
-  tone,
+  tone
 }: {
   action?: {
     disabled?: boolean;
@@ -2218,7 +2210,7 @@ function nextComputerUseOperationProgress(current: number): number {
 }
 
 function summarizeComputerUseStatusForDiagnostic(
-  status: DesktopComputerUseStatus | null,
+  status: DesktopComputerUseStatus | null
 ): Record<string, unknown> | null {
   if (!status) {
     return null;
@@ -2232,7 +2224,7 @@ function summarizeComputerUseStatusForDiagnostic(
     permissionScreenRecordingCapturable:
       status.permissions?.screenRecordingCapturable ?? null,
     permissionSource: status.permissions?.source ?? null,
-    reason: status.reason ?? null,
+    reason: status.reason ?? null
   };
 }
 
@@ -2241,7 +2233,7 @@ function delay(ms: number): Promise<void> {
 }
 
 function isComputerUseFullyAuthorized(
-  status: DesktopComputerUseStatus | null,
+  status: DesktopComputerUseStatus | null
 ): boolean {
   if (status?.platform === "win32" && status.authorization === "authorized") {
     return status.installed;
@@ -2265,7 +2257,7 @@ type ComputerUseGrantStep =
   | "unknown";
 
 function resolveComputerUseGrantStep(
-  status: DesktopComputerUseStatus | null,
+  status: DesktopComputerUseStatus | null
 ): ComputerUseGrantStep {
   if (isComputerUseFullyAuthorized(status)) {
     return "authorized";
@@ -2291,7 +2283,7 @@ function resolveComputerUseGrantStep(
 
 function resolveComputerUseGrantTooltip(
   status: DesktopComputerUseStatus | null,
-  t: ReturnType<typeof useTranslation>["t"],
+  t: ReturnType<typeof useTranslation>["t"]
 ): string {
   if (isComputerUseFullyAuthorized(status)) {
     return t("workspace.settings.general.computerUseAuthorizedTooltip");
@@ -2304,7 +2296,7 @@ function resolveComputerUseGrantTooltip(
   const missingPermissions: string[] = [];
   if (permissions.accessibility !== true) {
     missingPermissions.push(
-      t("workspace.settings.general.computerUsePermissionAccessibility"),
+      t("workspace.settings.general.computerUsePermissionAccessibility")
     );
   }
   if (
@@ -2312,18 +2304,18 @@ function resolveComputerUseGrantTooltip(
     permissions.screenRecordingCapturable !== true
   ) {
     missingPermissions.push(
-      t("workspace.settings.general.computerUsePermissionScreenRecording"),
+      t("workspace.settings.general.computerUsePermissionScreenRecording")
     );
   }
   return t("workspace.settings.general.computerUsePermissionMissingTooltip", {
     permissions: missingPermissions.join(
-      t("workspace.settings.general.computerUsePermissionListSeparator"),
-    ),
+      t("workspace.settings.general.computerUsePermissionListSeparator")
+    )
   });
 }
 
 function resolveComputerUsePermissionState(
-  value: boolean | null,
+  value: boolean | null
 ): ComputerUsePermissionState {
   if (value === true) {
     return "granted";
@@ -2335,7 +2327,7 @@ function resolveComputerUsePermissionState(
 }
 
 function resolveComputerUseScreenRecordingState(
-  permissions: DesktopComputerUsePermissionsStatus | null,
+  permissions: DesktopComputerUsePermissionsStatus | null
 ): ComputerUsePermissionState {
   if (!permissions || permissions.screenRecording === null) {
     return "unknown";
@@ -2351,7 +2343,7 @@ function resolveComputerUseScreenRecordingState(
 
 function resolveComputerUsePermissionStateLabel(
   state: ComputerUsePermissionState,
-  t: ReturnType<typeof useTranslation>["t"],
+  t: ReturnType<typeof useTranslation>["t"]
 ): string {
   switch (state) {
     case "granted":
@@ -2362,13 +2354,13 @@ function resolveComputerUsePermissionStateLabel(
       return t("workspace.settings.general.computerUsePermissionStatusUnknown");
     case "capture-unavailable":
       return t(
-        "workspace.settings.general.computerUsePermissionStatusCaptureUnavailable",
+        "workspace.settings.general.computerUsePermissionStatusCaptureUnavailable"
       );
   }
 }
 
 function WorkspaceExternalAgentImportSettingsRow({
-  onOpenExternalAgentImport,
+  onOpenExternalAgentImport
 }: {
   onOpenExternalAgentImport: () => void;
 }) {
@@ -2386,7 +2378,7 @@ function WorkspaceExternalAgentImportSettingsRow({
       <div
         className={cn(
           "flex justify-end max-[560px]:justify-start",
-          workspaceSettingsControlColumnClass,
+          workspaceSettingsControlColumnClass
         )}
       >
         <WorkspaceSettingsActionButton
@@ -2412,7 +2404,7 @@ function WorkspaceAgentSettingsSection({
   onAgentConversationDetailModeChange,
   onDefaultAgentProviderChange,
   onBrowserUseConnectionModeChange,
-  onOpenExternalAgentImport,
+  onOpenExternalAgentImport
 }: {
   agentConversationDetailMode: DesktopAgentConversationDetailMode;
   browserUseConnectionMode: DesktopBrowserUseConnectionMode;
@@ -2423,10 +2415,10 @@ function WorkspaceAgentSettingsSection({
   focusedAnchor: WorkspaceSettingsGeneralFocusAnchor | null;
   focusRequestID: number;
   onAgentConversationDetailModeChange: (
-    mode: DesktopAgentConversationDetailMode,
+    mode: DesktopAgentConversationDetailMode
   ) => void;
   onBrowserUseConnectionModeChange: (
-    mode: DesktopBrowserUseConnectionMode,
+    mode: DesktopBrowserUseConnectionMode
   ) => void;
   onDefaultAgentProviderChange: (provider: DesktopDefaultAgentProvider) => void;
   onOpenExternalAgentImport: () => void;
@@ -2439,7 +2431,7 @@ function WorkspaceAgentSettingsSection({
     changingDefaultAgentProvider ?? defaultAgentProvider;
   const pendingDefaultAgentProvider =
     normalizeWorkspaceSettingsDefaultAgentProvider(
-      rawPendingDefaultAgentProvider,
+      rawPendingDefaultAgentProvider
     );
   const isUpdatingBrowserUseConnectionMode =
     changingBrowserUseConnectionMode !== null;
@@ -2472,7 +2464,7 @@ function WorkspaceAgentSettingsSection({
         </div>
         <div
           aria-label={t(
-            "workspace.settings.general.agentConversationDetailModeLabel",
+            "workspace.settings.general.agentConversationDetailModeLabel"
           )}
           className="grid w-full grid-cols-2 gap-2 max-[430px]:grid-cols-1"
           role="radiogroup"
@@ -2487,7 +2479,7 @@ function WorkspaceAgentSettingsSection({
                   "flex min-h-[72px] min-w-0 items-center justify-between gap-3 rounded-[8px] border-solid px-3 py-2.5 text-left transition-colors duration-150 disabled:cursor-default disabled:opacity-70",
                   selected
                     ? "border border-[var(--tutti-purple)] bg-[color-mix(in_srgb,var(--tutti-purple)_8%,transparent)] text-[var(--text-primary)]"
-                    : "border border-transparent bg-[var(--transparency-block)] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)]",
+                    : "border border-transparent bg-[var(--transparency-block)] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)]"
                 )}
                 disabled={isUpdatingAgentConversationDetailMode}
                 role="radio"
@@ -2498,19 +2490,19 @@ function WorkspaceAgentSettingsSection({
                   <span className="text-[13px] font-semibold leading-4">
                     {mode === "coding"
                       ? t(
-                          "workspace.settings.general.agentConversationDetailModeOptions.codingTitle",
+                          "workspace.settings.general.agentConversationDetailModeOptions.codingTitle"
                         )
                       : t(
-                          "workspace.settings.general.agentConversationDetailModeOptions.generalTitle",
+                          "workspace.settings.general.agentConversationDetailModeOptions.generalTitle"
                         )}
                   </span>
                   <span className="text-[12px] leading-[1.3] text-[var(--text-secondary)]">
                     {mode === "coding"
                       ? t(
-                          "workspace.settings.general.agentConversationDetailModeOptions.codingDescription",
+                          "workspace.settings.general.agentConversationDetailModeOptions.codingDescription"
                         )
                       : t(
-                          "workspace.settings.general.agentConversationDetailModeOptions.generalDescription",
+                          "workspace.settings.general.agentConversationDetailModeOptions.generalDescription"
                         )}
                   </span>
                 </span>
@@ -2528,6 +2520,7 @@ function WorkspaceAgentSettingsSection({
       <WorkspaceExternalAgentImportSettingsRow
         onOpenExternalAgentImport={onOpenExternalAgentImport}
       />
+      <WorkspaceCursorSkillsImportSettingsRow />
 
       <div className="flex w-full items-center justify-between gap-4 max-[560px]:flex-col max-[560px]:items-stretch">
         <div className="flex min-w-0 flex-1 flex-col gap-1 max-[560px]:w-full">
@@ -2548,7 +2541,7 @@ function WorkspaceAgentSettingsSection({
           >
             <SelectTrigger
               aria-label={t(
-                "workspace.settings.general.defaultAgentProviderLabel",
+                "workspace.settings.general.defaultAgentProviderLabel"
               )}
               className={workspaceSettingsSelectTriggerClass}
             >
@@ -2580,7 +2573,7 @@ function WorkspaceAgentSettingsSection({
           </strong>
           <p className="m-0 text-[13px] leading-[1.3] text-[var(--text-secondary)]">
             {t(
-              "workspace.settings.general.browserUseConnectionModeDescription",
+              "workspace.settings.general.browserUseConnectionModeDescription"
             )}
           </p>
         </div>
@@ -2590,13 +2583,13 @@ function WorkspaceAgentSettingsSection({
             value={pendingBrowserUseConnectionMode}
             onValueChange={(value) =>
               onBrowserUseConnectionModeChange(
-                value as DesktopBrowserUseConnectionMode,
+                value as DesktopBrowserUseConnectionMode
               )
             }
           >
             <SelectTrigger
               aria-label={t(
-                "workspace.settings.general.browserUseConnectionModeLabel",
+                "workspace.settings.general.browserUseConnectionModeLabel"
               )}
               className={workspaceSettingsSelectTriggerClass}
             >
@@ -2612,20 +2605,20 @@ function WorkspaceAgentSettingsSection({
                     <SelectItem value={mode}>
                       {mode === "autoConnect"
                         ? t(
-                            "workspace.settings.general.browserUseConnectionModeOptions.autoConnect",
+                            "workspace.settings.general.browserUseConnectionModeOptions.autoConnect"
                           )
                         : t(
-                            "workspace.settings.general.browserUseConnectionModeOptions.isolated",
+                            "workspace.settings.general.browserUseConnectionModeOptions.isolated"
                           )}
                     </SelectItem>
                   </TooltipTrigger>
                   <TooltipContent side="left" className="max-w-[260px]">
                     {mode === "autoConnect"
                       ? t(
-                          "workspace.settings.general.browserUseConnectionModeOptionHints.autoConnect",
+                          "workspace.settings.general.browserUseConnectionModeOptionHints.autoConnect"
                         )
                       : t(
-                          "workspace.settings.general.browserUseConnectionModeOptionHints.isolated",
+                          "workspace.settings.general.browserUseConnectionModeOptionHints.isolated"
                         )}
                   </TooltipContent>
                 </Tooltip>
@@ -2656,7 +2649,7 @@ function WorkspaceGeneralSettingsSection({
   onWorkbenchShortcutsChange,
   onWorkspaceUiModeChange,
   sleepPreventionMode,
-  workbenchShortcuts,
+  workbenchShortcuts
 }: {
   changingFeatureFlags: DesktopFeatureFlags | null;
   changingLocale: DesktopLocale | null;
@@ -2679,7 +2672,7 @@ function WorkspaceGeneralSettingsSection({
     changingSleepPreventionMode ?? sleepPreventionMode;
   const isUpdatingWorkspaceUiMode = changingFeatureFlags !== null;
   const pendingWorkspaceUiMode = resolveDesktopWorkspaceUiMode(
-    changingFeatureFlags ?? featureFlags,
+    changingFeatureFlags ?? featureFlags
   );
 
   return (
@@ -2703,7 +2696,7 @@ function WorkspaceGeneralSettingsSection({
                   "flex min-h-[72px] min-w-0 items-center justify-between gap-3 rounded-[8px] border-solid px-3 py-2.5 text-left transition-colors duration-150 disabled:cursor-default disabled:opacity-70",
                   selected
                     ? "border border-[var(--tutti-purple)] bg-[color-mix(in_srgb,var(--tutti-purple)_8%,transparent)] text-[var(--text-primary)]"
-                    : "border border-transparent bg-[var(--transparency-block)] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)]",
+                    : "border border-transparent bg-[var(--transparency-block)] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)]"
                 )}
                 disabled={isUpdatingWorkspaceUiMode}
                 role="radio"
@@ -2715,16 +2708,16 @@ function WorkspaceGeneralSettingsSection({
                     <span className="text-[13px] font-semibold leading-4">
                       {mode === "agent"
                         ? t(
-                            "workspace.settings.general.workspaceUiModeOptions.agentTitle",
+                            "workspace.settings.general.workspaceUiModeOptions.agentTitle"
                           )
                         : t(
-                            "workspace.settings.general.workspaceUiModeOptions.osTitle",
+                            "workspace.settings.general.workspaceUiModeOptions.osTitle"
                           )}
                     </span>
                     {mode === "agent" ? (
                       <span className="inline-flex h-4 shrink-0 items-center rounded-[4px] bg-[color-mix(in_srgb,var(--tutti-purple)_12%,transparent)] px-1.5 text-[10px] font-semibold leading-none text-[var(--tutti-purple)]">
                         {t(
-                          "workspace.settings.general.workspaceUiModeOptions.agentBadge",
+                          "workspace.settings.general.workspaceUiModeOptions.agentBadge"
                         )}
                       </span>
                     ) : null}
@@ -2732,10 +2725,10 @@ function WorkspaceGeneralSettingsSection({
                   <span className="text-[12px] leading-[1.3] text-[var(--text-secondary)]">
                     {mode === "agent"
                       ? t(
-                          "workspace.settings.general.workspaceUiModeOptions.agentDescription",
+                          "workspace.settings.general.workspaceUiModeOptions.agentDescription"
                         )
                       : t(
-                          "workspace.settings.general.workspaceUiModeOptions.osDescription",
+                          "workspace.settings.general.workspaceUiModeOptions.osDescription"
                         )}
                   </span>
                 </span>
@@ -2783,10 +2776,10 @@ function WorkspaceGeneralSettingsSection({
                     ? t("workspace.settings.general.preventSleepOptions.never")
                     : mode === "whileAgentRunning"
                       ? t(
-                          "workspace.settings.general.preventSleepOptions.whileAgentRunning",
+                          "workspace.settings.general.preventSleepOptions.whileAgentRunning"
                         )
                       : t(
-                          "workspace.settings.general.preventSleepOptions.always",
+                          "workspace.settings.general.preventSleepOptions.always"
                         )}
                 </SelectItem>
               ))}
@@ -2839,13 +2832,13 @@ function WorkspaceGeneralSettingsSection({
           </strong>
           <p className="m-0 text-[13px] leading-[1.3] text-[var(--text-secondary)]">
             {t(
-              "workspace.settings.general.agentDiagnosticsReportingDescription",
+              "workspace.settings.general.agentDiagnosticsReportingDescription"
             )}
           </p>
         </div>
         <Switch
           aria-label={t(
-            "workspace.settings.general.agentDiagnosticsReportingLabel",
+            "workspace.settings.general.agentDiagnosticsReportingLabel"
           )}
           checked={agentDiagnosticsReporting}
           onCheckedChange={setAgentDiagnosticsConsent}
@@ -2857,14 +2850,14 @@ function WorkspaceGeneralSettingsSection({
         disabled={false}
         label={t("workspace.settings.general.captureShortcutLabel")}
         placeholder={t(
-          "workspace.settings.general.captureShortcutDefaultPlaceholder",
+          "workspace.settings.general.captureShortcutDefaultPlaceholder"
         )}
         requireNonShiftModifier
         value={workbenchShortcuts.captureScreenshot}
         onChange={(binding) => {
           onWorkbenchShortcutsChange({
             ...workbenchShortcuts,
-            captureScreenshot: binding,
+            captureScreenshot: binding
           });
         }}
       />
@@ -2874,7 +2867,7 @@ function WorkspaceGeneralSettingsSection({
 
 function WorkspaceAboutSettingsSection({
   developerLogs,
-  onVersionTap,
+  onVersionTap
 }: {
   developerLogs: WorkspaceSettingsDeveloperLogsSnapshotState;
   onVersionTap: () => void;
@@ -2934,7 +2927,7 @@ function WorkspaceAppearanceSettingsSection({
   selectedWallpaperID,
   themeAppearance,
   themeSource,
-  workbenchWindowSnapping,
+  workbenchWindowSnapping
 }: {
   changingDockPlacement: DesktopDockPlacement | null;
   changingMinimizeAnimation: DesktopMinimizeAnimation | null;
@@ -2945,11 +2938,11 @@ function WorkspaceAppearanceSettingsSection({
   onDockPlacementChange: (placement: DesktopDockPlacement) => void;
   onMinimizeAnimationChange: (animation: DesktopMinimizeAnimation) => void;
   onWorkbenchWindowSnappingChange: (
-    value: DesktopWorkbenchWindowSnapping,
+    value: DesktopWorkbenchWindowSnapping
   ) => void;
   onSelectWallpaper: (id: WorkspaceWallpaperId) => void;
   onSelectWallpaperDisplayMode: (
-    displayMode: WorkspaceWallpaperDisplayMode,
+    displayMode: WorkspaceWallpaperDisplayMode
   ) => void;
   onThemeChange: (source: DesktopThemeSource) => void;
   selectedWallpaperDisplayMode: WorkspaceWallpaperDisplayMode;
@@ -3045,10 +3038,10 @@ function WorkspaceAppearanceSettingsSection({
                 <SelectItem key={placement} value={placement}>
                   {placement === "bottom"
                     ? t(
-                        "workspace.settings.appearance.dockPlacementOptions.bottom",
+                        "workspace.settings.appearance.dockPlacementOptions.bottom"
                       )
                     : t(
-                        "workspace.settings.appearance.dockPlacementOptions.left",
+                        "workspace.settings.appearance.dockPlacementOptions.left"
                       )}
                 </SelectItem>
               ))}
@@ -3076,7 +3069,7 @@ function WorkspaceAppearanceSettingsSection({
           >
             <SelectTrigger
               aria-label={t(
-                "workspace.settings.appearance.minimizeAnimationLabel",
+                "workspace.settings.appearance.minimizeAnimationLabel"
               )}
               className={workspaceSettingsSelectTriggerClass}
             >
@@ -3089,7 +3082,7 @@ function WorkspaceAppearanceSettingsSection({
               {desktopMinimizeAnimations.map((animation) => (
                 <SelectItem key={animation} value={animation}>
                   {t(
-                    workspaceSettingsMinimizeAnimationOptionLabelKey(animation),
+                    workspaceSettingsMinimizeAnimationOptionLabelKey(animation)
                   )}
                 </SelectItem>
               ))}
@@ -3105,7 +3098,7 @@ function WorkspaceAppearanceSettingsSection({
           </strong>
           <p className="m-0 text-[13px] leading-[1.3] text-[var(--text-secondary)]">
             {t(
-              "workspace.settings.appearance.workbenchWindowSnappingDescription",
+              "workspace.settings.appearance.workbenchWindowSnappingDescription"
             )}
           </p>
         </div>
@@ -3126,13 +3119,13 @@ function WorkspaceAppearanceSettingsSection({
                 shortcutPreset:
                   nextValue === "off"
                     ? pendingWorkbenchWindowSnapping.shortcutPreset
-                    : nextValue,
+                    : nextValue
               });
             }}
           >
             <SelectTrigger
               aria-label={t(
-                "workspace.settings.appearance.workbenchWindowSnappingLabel",
+                "workspace.settings.appearance.workbenchWindowSnappingLabel"
               )}
               className={workspaceSettingsSelectTriggerClass}
             >
@@ -3144,7 +3137,7 @@ function WorkspaceAppearanceSettingsSection({
             >
               <SelectItem value="off">
                 {t(
-                  "workspace.settings.appearance.workbenchWindowSnappingShortcutOptions.off",
+                  "workspace.settings.appearance.workbenchWindowSnappingShortcutOptions.off"
                 )}
               </SelectItem>
               {desktopWorkbenchWindowSnappingShortcutPresets.map((preset) => (
@@ -3188,11 +3181,11 @@ function WorkspaceWallpaperPicker({
   onSelectWallpaperDisplayMode,
   selectedWallpaperDisplayMode,
   selectedWallpaperID,
-  themeAppearance,
+  themeAppearance
 }: {
   onSelectWallpaper: (id: WorkspaceWallpaperId) => void;
   onSelectWallpaperDisplayMode: (
-    displayMode: WorkspaceWallpaperDisplayMode,
+    displayMode: WorkspaceWallpaperDisplayMode
   ) => void;
   selectedWallpaperDisplayMode: WorkspaceWallpaperDisplayMode;
   selectedWallpaperID: WorkspaceWallpaperId;
@@ -3203,7 +3196,7 @@ function WorkspaceWallpaperPicker({
   const customWallpaper = useSyncExternalStore(
     (listener) => hostService.subscribeWallpaperChanges(listener),
     () => hostService.getCustomWallpaperSnapshot(),
-    () => hostService.getCustomWallpaperSnapshot(),
+    () => hostService.getCustomWallpaperSnapshot()
   );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -3212,7 +3205,7 @@ function WorkspaceWallpaperPicker({
   const customSelected = selectedWallpaperID === customWorkspaceWallpaperId;
 
   const handleFilesSelected = async (
-    event: React.ChangeEvent<HTMLInputElement>,
+    event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0] ?? null;
     event.target.value = "";
@@ -3250,7 +3243,7 @@ function WorkspaceWallpaperPicker({
         {workspaceWallpaperOptions.map((option) => {
           const resolvedOption = getWorkspaceWallpaperOption(
             option.id,
-            themeAppearance,
+            themeAppearance
           );
           const selected = option.id === selectedWallpaperID;
           return (
@@ -3261,7 +3254,7 @@ function WorkspaceWallpaperPicker({
               className={cn(
                 wallpaperTileBaseClass,
                 wallpaperTileSelectedClass,
-                selected && "before:opacity-100",
+                selected && "before:opacity-100"
               )}
               role="option"
               type="button"
@@ -3285,7 +3278,7 @@ function WorkspaceWallpaperPicker({
               className={cn(
                 wallpaperTileBaseClass,
                 wallpaperTileSelectedClass,
-                customSelected && "before:opacity-100",
+                customSelected && "before:opacity-100"
               )}
               role="option"
               type="button"
@@ -3321,7 +3314,7 @@ function WorkspaceWallpaperPicker({
           aria-label={t("workspace.settings.appearance.wallpaperUpload")}
           className={cn(
             wallpaperTileBaseClass,
-            "flex flex-col items-center justify-center gap-2 border border-dashed border-[var(--border-1)] bg-[var(--transparency-block)] px-3 text-center text-[var(--text-secondary)] hover:bg-[var(--transparency-hover)] disabled:cursor-default disabled:opacity-60",
+            "flex flex-col items-center justify-center gap-2 border border-dashed border-[var(--border-1)] bg-[var(--transparency-block)] px-3 text-center text-[var(--text-secondary)] hover:bg-[var(--transparency-hover)] disabled:cursor-default disabled:opacity-60"
           )}
           disabled={isSaving}
           title={t("workspace.settings.appearance.wallpaperUpload")}
@@ -3363,13 +3356,13 @@ function WorkspaceWallpaperPicker({
               value={selectedWallpaperDisplayMode}
               onValueChange={(value) =>
                 onSelectWallpaperDisplayMode(
-                  value as WorkspaceWallpaperDisplayMode,
+                  value as WorkspaceWallpaperDisplayMode
                 )
               }
             >
               <SelectTrigger
                 aria-label={t(
-                  "workspace.settings.appearance.wallpaperDisplayModeLabel",
+                  "workspace.settings.appearance.wallpaperDisplayModeLabel"
                 )}
                 className={workspaceSettingsSelectTriggerClass}
               >
@@ -3401,7 +3394,7 @@ function WorkspaceWallpaperPicker({
 
 function resolveWallpaperUploadErrorMessage(
   t: ReturnType<typeof useTranslation>["t"],
-  error: unknown,
+  error: unknown
 ): string {
   if (error instanceof CustomWallpaperImageError) {
     if (error.code === "unsupported-type") {

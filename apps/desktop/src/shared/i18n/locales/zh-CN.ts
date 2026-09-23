@@ -6,8 +6,8 @@ export const zhCN = {
       completed: "已导入 {{imported}} 项登录 Cookie",
       failed: "登录 Cookie 导入未完成",
       partial: "已导入 {{imported}} 项登录 Cookie，部分条目被跳过或失败",
-      title: "登录状态导入",
-    },
+      title: "登录状态导入"
+    }
   },
   common: {
     cancel: "取消",
@@ -21,7 +21,7 @@ export const zhCN = {
     unknownError: "未知错误",
     unreachable: "不可达",
     workspace: "工作区",
-    zipArchive: "ZIP 压缩包",
+    zipArchive: "ZIP 压缩包"
   },
   capture: {
     error: "Agent 启动失败，请重试",
@@ -32,7 +32,7 @@ export const zhCN = {
       "开始处理前，请创建一个 Qute Task 来记录这项请求；随后立即执行请求，把 Task 作为持续跟进的工作记录，并及时更新状态和备注，不要在创建 Task 后停止",
     taskPromptAction: "创建 Task 并跟进",
     taskPromptHint: "Agent 会立即处理，并持续更新 Task",
-    title: "Tutti",
+    title: "Tutti"
   },
   dashboard: {
     chooseWorkspaceTitle: "选择一个工作区",
@@ -66,7 +66,7 @@ export const zhCN = {
     featurePerformanceDescription: "快速响应，流畅体验",
     featureExtensibleTitle: "可扩展生态",
     featureExtensibleDescription: "灵活集成，持续进化",
-    workspaceCountNote: "当前记录了 {{count}} 个最近工作区",
+    workspaceCountNote: "当前记录了 {{count}} 个最近工作区"
   },
   updates: {
     availableTitle: "发现可用新版本",
@@ -78,7 +78,7 @@ export const zhCN = {
     errorTitle: "无法检查更新",
     restartAction: "重启安装",
     retryAction: "重试",
-    storeManaged: "更新由 Microsoft Store 管理",
+    storeManaged: "更新由 Microsoft Store 管理"
   },
   desktop: {
     installGuard: {
@@ -91,7 +91,7 @@ export const zhCN = {
       moveAction: "移动到 Applications 并重新打开",
       quitAction: "退出",
       showInFinderAction: "在 Finder 中显示",
-      title: "安装 Tutti",
+      title: "安装 Tutti"
     },
     logsExport: {
       actionHint: "你可以复制 Agent 调试指令，或打开导出文件所在目录。",
@@ -106,14 +106,14 @@ export const zhCN = {
           "4. 如果需要改代码或配置，请直接实现修复，并解释改了什么、为什么这样改。",
         stepInspect:
           "1. 先查看日志包里的 runtime-context、export-summary 和日志文件，概括最可能的问题。",
-        stepsHeader: "请按下面的顺序处理：",
+        stepsHeader: "请按下面的顺序处理："
       },
       copyAgentPrompt: "复制 Agent Prompt",
       ok: "好的",
       openFolder: "打开目录",
       savedTitle: "日志已保存",
       savedTo: "已保存 {{count}} 个日志文件到：",
-      title: "导出日志",
+      title: "导出日志"
     },
     menu: {
       checkForUpdates: "检查更新...",
@@ -137,11 +137,11 @@ export const zhCN = {
       upToDateDetail: "Tutti {{version}} 是当前的最新版本。",
       upToDateMessage: "您使用的就是最新版本！",
       view: "显示",
-      window: "窗口",
+      window: "窗口"
     },
     quitShortcut: {
-      confirmToastTitle: "再次敲击 Command + Q 即可退出Tutti",
-    },
+      confirmToastTitle: "再次敲击 Command + Q 即可退出Tutti"
+    }
   },
   workspace: {
     fallback: {
@@ -151,7 +151,7 @@ export const zhCN = {
         "这个窗口打开时没有携带工作区目标。请从工作区页面重新打开一个工作区。",
       missingContextTitle: "缺少工作区上下文",
       retryAction: "重试",
-      unavailableTitle: "工作区当前不可用",
+      unavailableTitle: "工作区当前不可用"
     },
     chrome: {
       currentWorkspace: "当前工作区",
@@ -159,7 +159,7 @@ export const zhCN = {
       openWorkspaceFailed: "无法打开工作区。",
       renameFailed: "无法重命名工作区。",
       switchWorkspace: "切换工作区",
-      switchWorkspaceUnavailable: "暂时无法加载工作区列表。",
+      switchWorkspaceUnavailable: "暂时无法加载工作区列表。"
     },
     agentGui: {
       agentDirectoryLoadFailed: "Agent 目录加载失败，请重试",
@@ -191,7 +191,7 @@ export const zhCN = {
           reveal: "在 Finder 中显示磁带",
           revealFailed: "无法在 Finder 中显示磁带",
           start: "开始录制",
-          stop: "停止并保存录制",
+          stop: "停止并保存录制"
         },
         replay: {
           automatic: "自动播放",
@@ -223,8 +223,8 @@ export const zhCN = {
           toolbar: "回放控制",
           validationComplete: "回放校验通过",
           validationFailed: "回放校验失败",
-          verifying: "正在校验",
-        },
+          verifying: "正在校验"
+        }
       },
       collapseConversationRail: "隐藏侧边栏",
       expandConversationRail: "显示侧边栏",
@@ -236,12 +236,12 @@ export const zhCN = {
         copyAsMarkdown: "复制为 Markdown",
         copyAsReference: "复制为引用",
         moreActions: "更多会话操作",
-        rename: "重命名会话",
+        rename: "重命名会话"
       },
       browserElementContext: {
         cancel: "取消选择元素",
         failed: "无法将这个页面元素添加到 Agent 输入框",
-        select: "选择页面元素",
+        select: "选择页面元素"
       },
       toolSidebar: {
         apps: "应用",
@@ -258,8 +258,8 @@ export const zhCN = {
         tasks: "任务",
         terminal: "终端",
         tool: "工具",
-        unavailable: "Agent 独立窗口暂未接入{{tool}}。",
-      },
+        unavailable: "Agent 独立窗口暂未接入{{tool}}。"
+      }
     },
     accountMenu: {
       title: "Tutti Agent",
@@ -289,7 +289,7 @@ export const zhCN = {
         "您账户下可用的积分额度已耗尽，升级会员可获取更多额度",
       insufficientCreditsRechargeMessage:
         "Tutti 积分不足，充值积分后可继续使用",
-      insufficientCreditsUnknownMessage: "Tutti 积分不足，请查看积分方案后继续",
+      insufficientCreditsUnknownMessage: "Tutti 积分不足，请查看积分方案后继续"
     },
     agentEnv: {
       configTitle: "{{provider}} 环境",
@@ -391,7 +391,7 @@ export const zhCN = {
       reportConsentBody:
         "将上报更完整的诊断信息（CLI 路径、端点、代理地址、错误详情）以帮助排查。是否上报？可随时在「设置 → 通用」中更改。",
       reportConsentAgree: "同意并上报",
-      reportConsentCancel: "暂不",
+      reportConsentCancel: "暂不"
     },
     referenceSources: {
       appSourceLabel: "应用",
@@ -402,7 +402,7 @@ export const zhCN = {
       sidebarDocuments: "文稿",
       sidebarDownloads: "下载",
       sidebarPersonal: "个人",
-      sidebarRecent: "最近访问",
+      sidebarRecent: "最近访问"
     },
     agentMessageCenter: {
       openAria: "打开 Agent 消息",
@@ -429,7 +429,7 @@ export const zhCN = {
       waitingNotificationStatus: "等待中",
       waitingNotificationTitle: "{{title}} 需要你决策",
       runningCount: "{{count}} 个运行中",
-      waitingCount: "{{count}} 个等待",
+      waitingCount: "{{count}} 个等待"
     },
     externalImport: {
       archiveEmpty: "这个 Claude 导出中没有找到受支持的对话",
@@ -505,7 +505,7 @@ export const zhCN = {
       settingsDescription:
         "将本机 Codex、Claude Code、Grok 历史或 Claude 导出对话导入 Tutti",
       settingsLabel: "导入会话历史",
-      title: "从 AI 应用导入",
+      title: "从 AI 应用导入"
     },
     analyticsDebug: {
       clear: "清空",
@@ -514,7 +514,7 @@ export const zhCN = {
       count: "{{count}} 条事件",
       empty: "暂无埋点事件",
       open: "打开埋点调试事件",
-      title: "埋点事件",
+      title: "埋点事件"
     },
     appCenter: {
       backToApps: "返回应用",
@@ -522,8 +522,8 @@ export const zhCN = {
       tabs: {
         close: "关闭应用标签页",
         label: "已打开的应用",
-        new: "打开其他应用",
-      },
+        new: "打开其他应用"
+      }
     },
     info: {
       idDescription: "用于 preload 和 daemon 协调的稳定标识。",
@@ -533,11 +533,11 @@ export const zhCN = {
       rendererRoleDescription:
         "桌面 UI 保持为展示层，durable state 仍由 tuttid 持有。",
       rendererRoleLabel: "Renderer 角色",
-      rendererRoleValue: "UI 外壳",
+      rendererRoleValue: "UI 外壳"
     },
     meta: {
       daemonLabel: "daemon",
-      platformLabel: "平台",
+      platformLabel: "平台"
     },
     ready: {
       description:
@@ -546,7 +546,7 @@ export const zhCN = {
         "导航、富内容和工作区模块现在可以构建在 React、Tailwind 和共享 primitives 上，不需要继续扩张旧的全局样式表。",
       panelTwo:
         "preload bridge 和 daemon API 都保持不变，所以这次迁移只影响 renderer 的组合方式和视觉基础设施。",
-      title: "工作区已准备就绪",
+      title: "工作区已准备就绪"
     },
     routeDescription:
       "窗口路由仍通过 query 参数解析，以便保持 Electron shell 简单清晰。",
@@ -555,7 +555,7 @@ export const zhCN = {
       pendingDescription: "健康检查尚未完成。",
       statusDescription:
         "健康状态和 shell 元数据现在通过共享 tokens 和组件来渲染。",
-      statusTitle: "运行时状态",
+      statusTitle: "运行时状态"
     },
     wallpaper: {
       options: {
@@ -567,12 +567,32 @@ export const zhCN = {
         peaks: "雪峰夜空",
         sand: "流沙纹理",
         sky: "云层",
-        tutti: "Tutti",
-      },
+        tutti: "Tutti"
+      }
     },
     settings: {
       close: "关闭设置",
       agent: {
+        cursorSkills: {
+          label: "导入 Cursor 技能",
+          description:
+            "选择项目或个人目录中的 .cursor/skills，复制到同级 .agents/skills；已有技能不会被覆盖",
+          choose: "选择 Cursor 技能目录",
+          working: "正在检查技能…",
+          previewFailed:
+            "无法读取所选 Cursor 技能目录；请选择 .cursor 或 .cursor/skills",
+          importFailed: "导入失败，请检查目录权限后重试",
+          destination: "导入到 {{path}}",
+          empty: "未找到有效的 SKILL.md 技能",
+          import: "导入所选技能",
+          result: "已导入 {{imported}} 个技能，跳过 {{skipped}} 个",
+          status: {
+            ready: "可导入",
+            exists: "已存在",
+            invalid: "无效技能",
+            unsafe: "含不安全文件"
+          }
+        },
         agents: {
           autoCheckUpdates: "自动检查更新",
           autoCheckUpdatesFailed: "无法保存自动检查更新设置",
@@ -618,21 +638,21 @@ export const zhCN = {
           updateAvailableSummary: "{{current}} → {{latest}}",
           updateCheckFailed: "暂时无法检查更新",
           updateCheckFailedSummary: "{{current}} · 暂时无法检查",
-          updateUpToDateSummary: "{{current}} · 已是最新",
+          updateUpToDateSummary: "{{current}} · 已是最新"
         },
         tabs: {
           agents: "Agent Runtime",
           automation: "自动化",
           customAgents: "自定义 Agent",
-          general: "通用设置",
-        },
+          general: "通用设置"
+        }
       },
       appearance: {
         dockPlacementDescription: "控制工作区 dock 栏停靠的位置",
         dockPlacementLabel: "Dock 布局",
         dockPlacementOptions: {
           bottom: "底部",
-          left: "左侧",
+          left: "左侧"
         },
         dockPlacementSaveFailed: "暂时无法更新 Dock 布局",
         dockIconStyleSaveFailed: "暂时无法更新 Dock 图标风格",
@@ -641,7 +661,7 @@ export const zhCN = {
         minimizeAnimationOptions: {
           genie: "Genie",
           off: "关闭",
-          scale: "缩放",
+          scale: "缩放"
         },
         minimizeAnimationSaveFailed: "暂时无法更新最小化动画",
         workbenchWindowSnappingDescription:
@@ -652,14 +672,14 @@ export const zhCN = {
         workbenchWindowSnappingShortcutOptions: {
           off: "关闭",
           commandArrows: "Command + 方向键",
-          commandShiftArrows: "Command + Shift + 方向键",
+          commandShiftArrows: "Command + Shift + 方向键"
         },
         themeDescription: "控制窗口外观以及信息的颜色模式",
         themeLabel: "外观",
         themeOptions: {
           dark: "深色",
           light: "浅色",
-          system: "跟随系统",
+          system: "跟随系统"
         },
         themeSaveFailed: "暂时无法切换应用外观",
         wallpaperDisplayModeLabel: "显示方式",
@@ -667,7 +687,7 @@ export const zhCN = {
           center: "居中",
           fit: "适合于屏幕",
           original: "原图",
-          stretch: "拉伸以充满屏幕",
+          stretch: "拉伸以充满屏幕"
         },
         wallpaperLabel: "壁纸",
         wallpaperRemove: "移除自定义壁纸",
@@ -676,7 +696,7 @@ export const zhCN = {
         wallpaperUploadError: "无法将这张图片用作壁纸",
         wallpaperUploadErrorTooLarge: "图片太大了，请选择更小的文件",
         wallpaperUploadErrorType: "不支持的图片格式，请选择 PNG、JPG 或 WebP",
-        wallpaperUploading: "上传中...",
+        wallpaperUploading: "上传中..."
       },
       general: {
         workspaceUiModeLabel: "窗口交互模式",
@@ -686,7 +706,7 @@ export const zhCN = {
           agentDescription:
             "启动独立的 Agent 窗口，文件、工具等通过右侧面板打开",
           osTitle: "沉浸 OS 模式",
-          osDescription: "保留沉浸式桌面体验，包括多窗口、Dock栏、启动台等",
+          osDescription: "保留沉浸式桌面体验，包括多窗口、Dock栏、启动台等"
         },
         workspaceUiModeSaveFailed: "暂时无法更新启动界面",
         defaultAgentProviderDescription:
@@ -698,7 +718,7 @@ export const zhCN = {
           codingTitle: "适用于编程",
           codingDescription: "更具技术性的回复和控制",
           generalTitle: "适用于日常工作",
-          generalDescription: "同样强大，技术细节更少",
+          generalDescription: "同样强大，技术细节更少"
         },
         agentConversationDetailModeSaveFailed: "暂时无法更新工作模式",
         deletedConversationRetentionLabel: "已删除会话清理",
@@ -835,13 +855,13 @@ export const zhCN = {
         browserUseConnectionModeLabel: "浏览器连接",
         browserUseConnectionModeOptions: {
           autoConnect: "复用我的 Chrome",
-          isolated: "独立浏览器",
+          isolated: "独立浏览器"
         },
         browserUseConnectionModeOptionHints: {
           autoConnect:
             "让 Agent 直接控制你电脑上正在使用的 Chrome需先在 Chrome 的 chrome://inspect/#remote-debugging 中开启远程调试更改会在下一次浏览器会话启动时生效",
           isolated:
-            "由 Tutti 单独启动一个浏览器供 Agent 使用，不影响你日常使用的 Chrome更改会在下一次浏览器会话启动时生效",
+            "由 Tutti 单独启动一个浏览器供 Agent 使用，不影响你日常使用的 Chrome更改会在下一次浏览器会话启动时生效"
         },
         browserUseConnectionModeSaveFailed: "暂时无法更新浏览器连接设置",
         agentDiagnosticsReportingLabel: "针对上报",
@@ -851,7 +871,7 @@ export const zhCN = {
         languageLabel: "语言",
         languageOptions: {
           en: "English",
-          zhCN: "简体中文",
+          zhCN: "简体中文"
         },
         localeSaveFailed: "暂时无法切换应用语言",
         captureShortcutDefaultPlaceholder: "默认：Cmd/Ctrl+Shift+S",
@@ -863,12 +883,12 @@ export const zhCN = {
         preventSleepOptions: {
           always: "始终防止休眠",
           never: "允许电脑休眠",
-          whileAgentRunning: "仅 Agent 运行时防止休眠",
+          whileAgentRunning: "仅 Agent 运行时防止休眠"
         },
         preventSleepSaveFailed: "暂时无法更新防止休眠设置",
         updateChannelSaveFailed: "暂时无法更新发布渠道",
         updatePolicySaveFailed: "暂时无法更新更新方式",
-        versionLabel: "桌面版本",
+        versionLabel: "桌面版本"
       },
       deletedConversations: {
         allProjects: "所有项目",
@@ -914,7 +934,7 @@ export const zhCN = {
         searchPlaceholder: "搜索已删除会话",
         title: "已删除会话",
         unscoped: "聊天（无项目）",
-        untitled: "未命名会话",
+        untitled: "未命名会话"
       },
       nav: {
         about: "关于",
@@ -927,12 +947,12 @@ export const zhCN = {
         developer: "开发者",
         general: "通用",
         lab: "实验室",
-        model: "模型",
+        model: "模型"
       },
       about: {
         appName: "Tutti",
         developerModeEnabled: "开发者模式已打开",
-        versionLabel: "版本",
+        versionLabel: "版本"
       },
       account: {
         description: "登录后可在此设备使用你的 Tutti 账号",
@@ -955,7 +975,7 @@ export const zhCN = {
             list: "暂时无法读取已配对手机",
             revoke: "暂时无法移除这台手机",
             start: "暂时无法开始配对",
-            status: "暂时无法更新配对状态",
+            status: "暂时无法更新配对状态"
           },
           mobileDevice: "移动设备",
           pairedDevices: "已配对手机",
@@ -970,8 +990,8 @@ export const zhCN = {
           start: "配对手机",
           starting: "正在创建...",
           title: "手机远程访问",
-          waitingForScan: "等待手机扫码",
-        },
+          waitingForScan: "等待手机扫码"
+        }
       },
       apps: {
         appCatalogChannelDescription:
@@ -979,7 +999,7 @@ export const zhCN = {
         appCatalogChannelLabel: "应用来源",
         appCatalogChannelOptions: {
           production: "正式应用",
-          staging: "测试应用",
+          staging: "测试应用"
         },
         appCatalogChannelSaveFailed: "暂时无法切换应用来源",
         agents: {
@@ -1022,7 +1042,7 @@ export const zhCN = {
           save: "保存 Agent",
           saveFailed: "Agent 保存失败，请检查配置后重试",
           saving: "保存中...",
-          title: "自定义 Agent",
+          title: "自定义 Agent"
         },
         automationRules: {
           addRule: "添加自动化",
@@ -1075,8 +1095,8 @@ export const zhCN = {
           triggerLabel: "触发条件",
           triggers: {
             onTaskComplete: "任务完成时",
-            onTaskFailed: "任务失败或中断时",
-          },
+            onTaskFailed: "任务失败或中断时"
+          }
         },
         modelPlans: {
           addModel: "添加模型",
@@ -1133,13 +1153,13 @@ export const zhCN = {
           protocolLabel: "接口协议",
           protocols: {
             anthropic: "Anthropic 兼容",
-            openai: "OpenAI 兼容",
+            openai: "OpenAI 兼容"
           },
           referenceKinds: {
             agentTarget: "Agent",
             modelPolicy: "模型策略",
             workspaceAgent: "工作区 Agent",
-            workspaceApp: "应用",
+            workspaceApp: "应用"
           },
           removeModel: "移除模型",
           setDefaultModel: "将 {{model}} 设为默认模型",
@@ -1153,36 +1173,36 @@ export const zhCN = {
             detectionFailed: "检测失败",
             disabled: "已停用",
             ready: "可用",
-            undetected: "待检测",
+            undetected: "待检测"
           },
           templateGroups: {
             codingPlan: {
               guidance:
                 "使用编程套餐（如 Claude Coding Plan）提供的接入点和密钥",
-              label: "Coding Plan",
+              label: "Coding Plan"
             },
             custom: {
               guidance:
                 "填写 OpenAI 或 Anthropic 兼容接口的 Base URL、API 密钥和模型",
-              label: "模型接口",
+              label: "模型接口"
             },
             domestic: {
               guidance: "接入 DeepSeek、MiniMax、MiMo 等国内模型服务",
-              label: "国内模型",
+              label: "国内模型"
             },
             officialSubscription: {
               guidance: "使用服务商官方 API 密钥直连官方订阅",
-              label: "官方订阅",
+              label: "官方订阅"
             },
             relay: {
               guidance: "使用聚合一个或多个服务商的中转/代理服务接入点",
-              label: "中转服务",
-            },
+              label: "中转服务"
+            }
           },
           title: "模型方案",
           toggleFailed: "状态更新失败，请重试",
-          unusedByAgents: "未被任何 Agent 使用",
-        },
+          unusedByAgents: "未被任何 Agent 使用"
+        }
       },
       developer: {
         actionsLabel: "操作",
@@ -1216,7 +1236,7 @@ export const zhCN = {
           appBrowser: "内置浏览器",
           defaultBrowser: "默认浏览器",
           fileViewer: "文件查看器",
-          system: "系统默认",
+          system: "系统默认"
         },
         fileDefaultOpenersDescription:
           "按文件后缀选择工作区文件激活时优先使用的打开方式",
@@ -1269,7 +1289,7 @@ export const zhCN = {
         quickPromptLibrarySaveFailed: "暂时无法更新快捷提示词库可用状态",
         releaseChannelOptions: {
           rc: "预览版",
-          stable: "稳定版",
+          stable: "稳定版"
         },
         showAppDeveloperSourcesDescription:
           "在应用中心卡片中展示应用作者和 GitHub 来源",
@@ -1277,7 +1297,7 @@ export const zhCN = {
         showAppDeveloperSourcesSaveFailed: "暂时无法更新应用中心来源展示设置",
         visibilityDescription:
           "在设置中隐藏此面板在「关于」里连续点击版本号七次即可重新显示",
-        visibilityLabel: "显示开发者面板",
+        visibilityLabel: "显示开发者面板"
       },
       lab: {
         backLabel: "返回",
@@ -1297,30 +1317,30 @@ export const zhCN = {
         shortcutUnbound: "未绑定",
         workbenchShortcutsDescription: "启用可配置的工作台快捷键操作",
         workbenchShortcutsLabel: "工作台快捷键",
-        workbenchShortcutsManageLabel: "配置键盘快捷键",
+        workbenchShortcutsManageLabel: "配置键盘快捷键"
       },
       title: "设置",
-      trigger: "设置",
+      trigger: "设置"
     },
     workbenchDesktop: {
       closeGuard: {
         cancel: "取消",
         confirm: "终止终端",
         description: "这个终端仍有任务在运行。终止会停止当前终端会话。",
-        title: "要终止这个终端吗？",
+        title: "要终止这个终端吗？"
       },
       windowCloseGuard: {
         cancel: "保留窗口",
         confirm: "关闭窗口",
         description:
           "这个窗口里仍有任务在运行。关闭后会退出当前房间，但后台任务可能继续运行。",
-        title: "要关闭这个窗口吗？",
+        title: "要关闭这个窗口吗？"
       },
       windowControls: {
         close: "关闭",
         maximize: "最大化",
         minimize: "最小化",
-        restore: "还原",
+        restore: "还原"
       },
       nodes: {
         agent: "Agent",
@@ -1331,7 +1351,7 @@ export const zhCN = {
         imageFile: "图片文件",
         issues: "事项",
         textFile: "文本文件",
-        terminal: "终端",
+        terminal: "终端"
       },
       filePreview: {
         edit: "编辑",
@@ -1343,11 +1363,11 @@ export const zhCN = {
         saveFailed: "保存失败",
         saving: "保存中...",
         unsaved: "有未保存更改",
-        unsupportedFallback: "暂时不支持预览，使用本地软件打开。",
+        unsupportedFallback: "暂时不支持预览，使用本地软件打开。"
       },
       filesLaunch: {
         openFailedDescription: "无法在对应地址找到该文件或文件夹",
-        openFailedTitle: "文件或文件夹已不存在",
+        openFailedTitle: "文件或文件夹已不存在"
       },
       agentProviders: {
         checking: "正在检测本地 CLI 状态...",
@@ -1397,7 +1417,7 @@ export const zhCN = {
         manageTitle: "管理智能体",
         manageUnsupportedTooltip: "本地支持正在更新中，这个智能体暂时不可用。",
         refresh: "重新检测",
-        unknown: "暂时无法确认本地 CLI 状态，请刷新重新检测",
+        unknown: "暂时无法确认本地 CLI 状态，请刷新重新检测"
       },
       launchpad: {
         agentUnavailable: "不可启动",
@@ -1409,16 +1429,16 @@ export const zhCN = {
         pageDot: "第 {{page}} 页，共 {{pageCount}} 页",
         pages: "启动台分页",
         searchPlaceholder: "搜索",
-        unavailableItem: "{{title}}，{{reason}}",
+        unavailableItem: "{{title}}，{{reason}}"
       },
       missionControl: {
         layoutShortcutDefault: "Ctrl + 2",
         layoutShortcutMac: "Cmd + 2",
         layoutTrigger: "快速布局",
         unavailableTrigger: "仅存在多个窗口时可使用",
-        unlockLayoutTrigger: "解除固定布局",
-      },
-    },
+        unlockLayoutTrigger: "解除固定布局"
+      }
+    }
   },
   errors: {
     daemon_unavailable: "本地运行时当前不可用。",
@@ -1435,7 +1455,7 @@ export const zhCN = {
       agent: {
         prompt_image_unsupported: "这个 Agent 暂时不支持图片输入。",
         permission_mode_unavailable:
-          "当前会话不支持这个权限档位。请改选其他权限后再发送。",
+          "当前会话不支持这个权限档位。请改选其他权限后再发送。"
       },
       malformed_request: "这个请求暂时无法识别。",
       missing_workspace_id: "请先选择一个工作区再重试。",
@@ -1444,7 +1464,7 @@ export const zhCN = {
       root_delete_forbidden: "不能删除工作区根目录。",
       workspace_app_icon_invalid: "请选择 5 MB 以内的 PNG、JPG 或 WebP 图片。",
       workspace_app_icon_replace_forbidden: "只有生成的应用可以替换图标。",
-      workspace_app_package_exists: "这个应用版本已经存在。",
+      workspace_app_package_exists: "这个应用版本已经存在。"
     },
     method_not_allowed: "这个请求当前不支持该操作。",
     logger_file_unavailable: "本地日志服务暂时不可用。",
@@ -1458,7 +1478,7 @@ export const zhCN = {
       default: "对应服务暂时不可用。",
       workspace_file_service_unavailable: "工作区文件服务暂时不可用。",
       workspace_service_unavailable: "工作区服务暂时不可用。",
-      workspace_workbench_service_unavailable: "工作区工作台暂时不可用。",
+      workspace_workbench_service_unavailable: "工作区工作台暂时不可用。"
     },
     transport_connect_failed: "暂时无法连接到本地运行时。",
     transport_request_failed: "非预期内服务报错，请重试",
@@ -1470,7 +1490,7 @@ export const zhCN = {
     workspace_operation_failed: {
       default: "暂时无法完成这个工作区操作。",
       acp_adapter_version_mismatch:
-        "本地 Agent 适配器不可用或版本不匹配。请先在 Dock 中重新连接 Agent，然后重试。",
-    },
-  },
+        "本地 Agent 适配器不可用或版本不匹配。请先在 Dock 中重新连接 Agent，然后重试。"
+    }
+  }
 } as const satisfies TranslationDictionary;

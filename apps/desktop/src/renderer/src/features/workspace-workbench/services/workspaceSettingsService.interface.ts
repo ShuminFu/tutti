@@ -29,6 +29,10 @@ import type {
 } from "@shared/preferences";
 import type { DesktopThemeSource } from "@shared/theme";
 import type {
+  CursorSkillImportPreview,
+  CursorSkillImportResult
+} from "./internal/adapters/desktopWorkspaceSettingsClient";
+import type {
   WorkspaceSettingsReadableStoreState,
   WorkspaceSettingsAgentTab,
   WorkspaceSettingsGeneralFocusAnchor,
@@ -126,6 +130,12 @@ export interface IWorkspaceSettingsService {
   readonly deletedConversations: IWorkspaceDeletedConversationsController;
   readonly modelPlans: IWorkspaceModelPlansController;
   readonly store: WorkspaceSettingsReadableStoreState;
+
+  previewCursorSkills(sourceDir: string): Promise<CursorSkillImportPreview>;
+  importCursorSkills(
+    sourceDir: string,
+    names: string[]
+  ): Promise<CursorSkillImportResult[]>;
 
   checkComputerUseStatus(): Promise<DesktopComputerUseStatus>;
   installComputerUse(): Promise<DesktopComputerUseActionResult>;

@@ -4,6 +4,36 @@ export type ClientOptions = {
   baseUrl: "http://127.0.0.1:4545" | (string & {});
 };
 
+export type CursorSkillImportPreviewRequest = {
+  sourceDir: string;
+};
+
+export type CursorSkillImportRequest = {
+  sourceDir: string;
+  names: Array<string>;
+};
+
+export type CursorSkillImportEntry = {
+  name: string;
+  status: "ready" | "exists" | "invalid" | "unsafe";
+  reason?: string;
+};
+
+export type CursorSkillImportPreviewResponse = {
+  destination: string;
+  skills: Array<CursorSkillImportEntry>;
+};
+
+export type CursorSkillImportResult = {
+  name: string;
+  status: "imported" | "exists" | "invalid" | "unsafe" | "failed";
+  reason?: string;
+};
+
+export type CursorSkillImportResponse = {
+  results: Array<CursorSkillImportResult>;
+};
+
 export type SwitchTuttiModeGoalReviewToSelfRequest = {
   checkpointId: string;
   expectedGraphRevision: number;
@@ -5278,6 +5308,76 @@ export type ConnectorMarketPageToken = string;
 export type MobileRemoteChallengeId = string;
 
 export type MobileRemotePairingId = string;
+
+export type PreviewCursorSkillImportData = {
+  body: CursorSkillImportPreviewRequest;
+  path?: never;
+  query?: never;
+  url: "/v1/skills/cursor-import/preview";
+};
+
+export type PreviewCursorSkillImportErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+};
+
+export type PreviewCursorSkillImportError =
+  PreviewCursorSkillImportErrors[keyof PreviewCursorSkillImportErrors];
+
+export type PreviewCursorSkillImportResponses = {
+  /**
+   * Available skills and conflicts
+   */
+  200: CursorSkillImportPreviewResponse;
+};
+
+export type PreviewCursorSkillImportResponse =
+  PreviewCursorSkillImportResponses[keyof PreviewCursorSkillImportResponses];
+
+export type ImportCursorSkillsData = {
+  body: CursorSkillImportRequest;
+  path?: never;
+  query?: never;
+  url: "/v1/skills/cursor-import/import";
+};
+
+export type ImportCursorSkillsErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+};
+
+export type ImportCursorSkillsError =
+  ImportCursorSkillsErrors[keyof ImportCursorSkillsErrors];
+
+export type ImportCursorSkillsResponses = {
+  /**
+   * Per-skill import results
+   */
+  200: CursorSkillImportResponse;
+};
+
+export type ImportCursorSkillsResponse =
+  ImportCursorSkillsResponses[keyof ImportCursorSkillsResponses];
 
 export type GetHealthData = {
   body?: never;

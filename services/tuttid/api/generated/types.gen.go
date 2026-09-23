@@ -1708,6 +1708,57 @@ func (e CreateIssueManagerImageAttachmentRequestMimeType) Valid() bool {
 	}
 }
 
+// Defines values for CursorSkillImportEntryStatus.
+const (
+	CursorSkillImportEntryStatusExists  CursorSkillImportEntryStatus = "exists"
+	CursorSkillImportEntryStatusInvalid CursorSkillImportEntryStatus = "invalid"
+	CursorSkillImportEntryStatusReady   CursorSkillImportEntryStatus = "ready"
+	CursorSkillImportEntryStatusUnsafe  CursorSkillImportEntryStatus = "unsafe"
+)
+
+// Valid indicates whether the value is a known member of the CursorSkillImportEntryStatus enum.
+func (e CursorSkillImportEntryStatus) Valid() bool {
+	switch e {
+	case CursorSkillImportEntryStatusExists:
+		return true
+	case CursorSkillImportEntryStatusInvalid:
+		return true
+	case CursorSkillImportEntryStatusReady:
+		return true
+	case CursorSkillImportEntryStatusUnsafe:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CursorSkillImportResultStatus.
+const (
+	CursorSkillImportResultStatusExists   CursorSkillImportResultStatus = "exists"
+	CursorSkillImportResultStatusFailed   CursorSkillImportResultStatus = "failed"
+	CursorSkillImportResultStatusImported CursorSkillImportResultStatus = "imported"
+	CursorSkillImportResultStatusInvalid  CursorSkillImportResultStatus = "invalid"
+	CursorSkillImportResultStatusUnsafe   CursorSkillImportResultStatus = "unsafe"
+)
+
+// Valid indicates whether the value is a known member of the CursorSkillImportResultStatus enum.
+func (e CursorSkillImportResultStatus) Valid() bool {
+	switch e {
+	case CursorSkillImportResultStatusExists:
+		return true
+	case CursorSkillImportResultStatusFailed:
+		return true
+	case CursorSkillImportResultStatusImported:
+		return true
+	case CursorSkillImportResultStatusInvalid:
+		return true
+	case CursorSkillImportResultStatusUnsafe:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DecideWorkspaceWorkflowCheckpointRequestDecision.
 const (
 	DecideWorkspaceWorkflowCheckpointRequestDecisionAccepted DecideWorkspaceWorkflowCheckpointRequestDecision = "accepted"
@@ -6589,6 +6640,48 @@ type CreateWorkspaceTerminalRequest struct {
 	Rows         *int    `json:"rows,omitempty"`
 }
 
+// CursorSkillImportEntry defines model for CursorSkillImportEntry.
+type CursorSkillImportEntry struct {
+	Name   string                       `json:"name"`
+	Reason *string                      `json:"reason,omitempty"`
+	Status CursorSkillImportEntryStatus `json:"status"`
+}
+
+// CursorSkillImportEntryStatus defines model for CursorSkillImportEntry.Status.
+type CursorSkillImportEntryStatus string
+
+// CursorSkillImportPreviewRequest defines model for CursorSkillImportPreviewRequest.
+type CursorSkillImportPreviewRequest struct {
+	SourceDir string `json:"sourceDir"`
+}
+
+// CursorSkillImportPreviewResponse defines model for CursorSkillImportPreviewResponse.
+type CursorSkillImportPreviewResponse struct {
+	Destination string                   `json:"destination"`
+	Skills      []CursorSkillImportEntry `json:"skills"`
+}
+
+// CursorSkillImportRequest defines model for CursorSkillImportRequest.
+type CursorSkillImportRequest struct {
+	Names     []string `json:"names"`
+	SourceDir string   `json:"sourceDir"`
+}
+
+// CursorSkillImportResponse defines model for CursorSkillImportResponse.
+type CursorSkillImportResponse struct {
+	Results []CursorSkillImportResult `json:"results"`
+}
+
+// CursorSkillImportResult defines model for CursorSkillImportResult.
+type CursorSkillImportResult struct {
+	Name   string                        `json:"name"`
+	Reason *string                       `json:"reason,omitempty"`
+	Status CursorSkillImportResultStatus `json:"status"`
+}
+
+// CursorSkillImportResultStatus defines model for CursorSkillImportResult.Status.
+type CursorSkillImportResultStatus string
+
 // DecideWorkspaceWorkflowCheckpointRequest defines model for DecideWorkspaceWorkflowCheckpointRequest.
 type DecideWorkspaceWorkflowCheckpointRequest struct {
 	DecidedBy string                                           `json:"decidedBy"`
@@ -10663,6 +10756,12 @@ type PutDesktopPreferencesJSONRequestBody = PutDesktopPreferencesRequest
 
 // PatchDesktopAgentRuntimeRetentionJSONRequestBody defines body for PatchDesktopAgentRuntimeRetention for application/json ContentType.
 type PatchDesktopAgentRuntimeRetentionJSONRequestBody = DesktopAgentRuntimeRetentionPatch
+
+// ImportCursorSkillsJSONRequestBody defines body for ImportCursorSkills for application/json ContentType.
+type ImportCursorSkillsJSONRequestBody = CursorSkillImportRequest
+
+// PreviewCursorSkillImportJSONRequestBody defines body for PreviewCursorSkillImport for application/json ContentType.
+type PreviewCursorSkillImportJSONRequestBody = CursorSkillImportPreviewRequest
 
 // TrackEventsJSONRequestBody defines body for TrackEvents for application/json ContentType.
 type TrackEventsJSONRequestBody = TrackEventsRequest
