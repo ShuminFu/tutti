@@ -19,6 +19,7 @@ interface AgentTurnWorkSectionProps {
   turnKey: string;
   showDivider?: boolean;
   disclosureStore: AgentTurnDisclosureStore;
+  autoExpanded?: boolean;
   onDisclosureMotionChange?: (
     turnKey: string,
     active: boolean,
@@ -38,6 +39,7 @@ export function AgentTurnWorkSection({
   turnKey,
   showDivider = false,
   disclosureStore,
+  autoExpanded = false,
   onDisclosureMotionChange,
   renderRow,
   footer
@@ -45,7 +47,7 @@ export function AgentTurnWorkSection({
   const { t } = useTranslation();
   const disclosureKey = `${sessionId}:${turnKey}`;
   const expanded = model.collapseEligible
-    ? (disclosureStore.expandedOverrides[disclosureKey] ?? false)
+    ? (disclosureStore.expandedOverrides[disclosureKey] ?? autoExpanded)
     : true;
 
   const toggleLabel = expanded

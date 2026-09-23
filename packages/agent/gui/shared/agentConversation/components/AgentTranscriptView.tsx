@@ -30,6 +30,7 @@ import {
 } from "./agentTurnWorkSectionModel";
 import { assessAgentTranscriptComplexity } from "./agentTranscriptComplexity";
 import { useTurnDisclosureMotion } from "./useTurnDisclosureMotion";
+import { useAutoExpandedTurnWork } from "./useAutoExpandedTurnWork";
 import {
   AgentMessageLocatorRail,
   findMessageLocatorScrollParent,
@@ -93,6 +94,7 @@ export interface AgentTranscriptViewProps {
   showRawTimelineJson?: boolean;
   participantPresentation?: AgentConversationParticipantPresentation;
   followEndMode?: AgentConversationFollowEndMode;
+  readFollowEndMode?: () => AgentConversationFollowEndMode;
   forkThroughTurnPendingTurnIds?: readonly string[];
   virtualListLayoutRevision?: number;
   virtualScrollControllerRef?: Ref<AgentTranscriptVirtualScrollController>;
@@ -240,6 +242,7 @@ export function areAgentTranscriptViewPropsEqual(
     editRetryControlsEqual(previous.editRetry, next.editRetry) &&
     previous.showRawTimelineJson === next.showRawTimelineJson &&
     previous.followEndMode === next.followEndMode &&
+    previous.readFollowEndMode === next.readFollowEndMode &&
     previous.virtualListLayoutRevision === next.virtualListLayoutRevision &&
     previous.virtualScrollControllerRef === next.virtualScrollControllerRef &&
     participantPresentationEqual(
@@ -265,6 +268,7 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
   showRawTimelineJson = false,
   participantPresentation,
   followEndMode,
+  readFollowEndMode,
   forkThroughTurnPendingTurnIds = [],
   virtualListLayoutRevision = 0,
   virtualScrollControllerRef,
@@ -358,6 +362,12 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
       turn
     ])
   );
+  const autoExpandedTurnKeys = useAutoExpandedTurnWork(
+    agentSessionId,
+    activeTurnId,
+    canonicalTurnById,
+    readFollowEndMode?.() ?? followEndMode
+  );
   const turnWorkSectionModelByKey = new Map(
     turnGroups.map((group) => {
       const isActiveTurn =
@@ -387,7 +397,7 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
     ? findParticipantHeaderRenderKeys(
         turnGroups,
         rowKeys,
-        turnWorkSectionModelByKey,
+        (group) => turnWorkSectionModelByKey.get(group.key) ?? null,
         participantTurnProjection.turnIndexByRowIndex
       )
     : null;
@@ -545,6 +555,7 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
         }
       >
         <AgentTranscriptItemView
+          sessionId={agentSessionId}
           workspaceRoot={workspaceRoot}
           basePath={basePath}
           row={row}
@@ -677,6 +688,9 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
           dividerRowIndexes.has(rowIndex)
         )}
         disclosureStore={turnDisclosureStore}
+        autoExpanded={autoExpandedTurnKeys.has(
+          `${agentSessionId}:${group.turnId ?? group.key}`
+        )}
         onDisclosureMotionChange={handleDisclosureMotionChange}
         renderRow={(row, rowIndex, renderKey) =>
           renderRow(

@@ -7,6 +7,7 @@ interface AgentThinkingDisclosureProps {
   thinking: AgentThinkingContentVM;
   label: string;
   onLinkClick?: (href: string) => void;
+  disclosureKey?: string;
   showRawTimelineJson?: boolean;
   rawTimelineJsonLabel?: string;
 }
@@ -15,6 +16,7 @@ export function AgentThinkingDisclosure({
   thinking,
   label,
   onLinkClick,
+  disclosureKey,
   showRawTimelineJson = false,
   rawTimelineJsonLabel = ""
 }: AgentThinkingDisclosureProps): JSX.Element {
@@ -26,6 +28,7 @@ export function AgentThinkingDisclosure({
         thinking={thinking}
         label={label}
         onLinkClick={onLinkClick}
+        disclosureKey={disclosureKey}
       />
       {showRawTimelineJson && rawTimelineJsonLabel ? (
         <RawTimelineJsonDisclosure

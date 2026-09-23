@@ -63,6 +63,7 @@ const SYSTEM_NOTICE_CLASS_NAME =
   "border-[var(--on-danger-hover)] bg-[var(--on-danger)]";
 
 interface AgentMessageBlockProps {
+  sessionId?: string;
   workspaceRoot: string | null;
   basePath: string;
   row: AgentMessageRowVM;
@@ -87,6 +88,7 @@ interface AgentMessageBlockProps {
 }
 
 export function AgentMessageBlock({
+  sessionId,
   workspaceRoot,
   basePath,
   row,
@@ -208,6 +210,9 @@ export function AgentMessageBlock({
           key={thinking.id}
           thinking={thinking}
           label={thinkingLabel}
+          disclosureKey={
+            sessionId ? `thinking:${sessionId}:${thinking.id}` : undefined
+          }
           onLinkClick={handleLinkClick}
           showRawTimelineJson={showRawTimelineJson}
           rawTimelineJsonLabel={rawTimelineJsonLabel}

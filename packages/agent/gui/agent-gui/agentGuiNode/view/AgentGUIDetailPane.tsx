@@ -654,6 +654,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     composerSelectedProviderTarget?.provider ?? viewModel.shell.data.provider;
   const {
     followEndMode,
+    readFollowEndMode,
     isTimelineScrolledToBottom,
     isTimelineScrolledToTop,
     setVirtualScrollController,
@@ -739,6 +740,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
         conversationFlowEmpty={conversationFlowEmpty}
         conversationFlowLabels={conversationFlowLabels}
         followEndMode={followEndMode}
+        readFollowEndMode={readFollowEndMode}
         forkedFrom={forkedFrom}
         hasActiveConversation={hasActiveConversation}
         homeContent={homeContent}

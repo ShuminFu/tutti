@@ -15,6 +15,7 @@ import { AgentTurnSummaryRow } from "./AgentTurnSummaryRow";
 import type { AgentUserMessageEditRetryControl } from "./AgentUserMessageEditRetry";
 
 interface AgentTranscriptItemViewProps {
+  sessionId?: string;
   workspaceRoot: string | null;
   basePath: string;
   row: AgentTranscriptRowVM;
@@ -44,6 +45,7 @@ interface AgentTranscriptItemViewProps {
 }
 
 export const AgentTranscriptItemView = memo(function AgentTranscriptItemView({
+  sessionId,
   workspaceRoot,
   basePath,
   row,
@@ -97,6 +99,7 @@ export const AgentTranscriptItemView = memo(function AgentTranscriptItemView({
     case "message":
       return (
         <AgentMessageBlock
+          sessionId={sessionId}
           workspaceRoot={workspaceRoot}
           basePath={basePath}
           row={row}
@@ -120,6 +123,7 @@ export const AgentTranscriptItemView = memo(function AgentTranscriptItemView({
     case "tool-group":
       return (
         <AgentToolGroupRow
+          sessionId={sessionId}
           row={row}
           label={labels.toolCallsLabel}
           thinkingLabel={labels.thinkingLabel}

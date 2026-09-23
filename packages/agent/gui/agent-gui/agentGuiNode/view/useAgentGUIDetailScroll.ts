@@ -722,6 +722,7 @@ export function useAgentGUIDetailScroll(input: AgentGUIDetailScrollInput) {
 
   return {
     followEndMode,
+    readFollowEndMode: followEndController.getSnapshot,
     isTimelineScrolledToBottom: followEndMode === "following",
     isTimelineScrolledToTop,
     setVirtualScrollController,

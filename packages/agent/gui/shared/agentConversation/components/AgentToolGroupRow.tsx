@@ -14,6 +14,7 @@ import { AgentToolCallCard } from "./AgentToolCallCard";
 import { RawTimelineJsonDisclosure } from "./RawTimelineJsonDisclosure";
 
 interface AgentToolGroupRowProps {
+  sessionId?: string;
   row: AgentToolGroupRowVM;
   label: (count: number) => string;
   thinkingLabel: string;
@@ -26,6 +27,7 @@ interface AgentToolGroupRowProps {
 }
 
 export const AgentToolGroupRow = memo(function AgentToolGroupRow({
+  sessionId,
   row,
   label,
   thinkingLabel,
@@ -106,6 +108,11 @@ export const AgentToolGroupRow = memo(function AgentToolGroupRow({
                   <AgentThinkingDisclosure
                     thinking={entry.thinking}
                     label={thinkingLabel}
+                    disclosureKey={
+                      sessionId
+                        ? `thinking:${sessionId}:${entry.thinking.id}`
+                        : undefined
+                    }
                     onLinkClick={onLinkClick}
                     showRawTimelineJson={showRawTimelineJson}
                     rawTimelineJsonLabel={rawTimelineJsonLabel}

@@ -1652,6 +1652,16 @@ and compact-progress mapping; they are not required for intermediate-reply
 folding, and the GUI does not branch on provider name. The file summary owns
 the diff panel and stays at the end of its canonical Turn after the final
 assistant reply.
+When a visible live Turn completes, its initial disclosure reads the current
+follow-end mode. A detached reader keeps that Turn's work expanded and retains
+the reading position; a reader following the end gets the normal collapse.
+Later scrolling does not revise that completion-time choice. Explicit manual
+expansion or collapse takes precedence, and historical settled Turns keep the
+normal collapsed default.
+Thinking disclosure keeps a manual expand/collapse choice in the existing
+session-scoped disclosure store, keyed by session and thinking identity. A
+completion-time regrouping of work rows can remount its component without
+collapsing an open thinking trace or shifting a detached reader's anchor.
 
 High-frequency transcript updates must not pair DOM mutation with unconditional synchronous reads of the timeline's full scroll geometry. Conversation switches, explicit submit-to-bottom requests, skeleton transitions, and older-page prepend restoration may perform pre-paint scroll correction.
 

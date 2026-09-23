@@ -6,20 +6,27 @@ import { CollapsibleReveal } from "./agentConversation/components/CollapsibleRev
 import { AgentMessageMarkdown } from "./AgentMessageMarkdown";
 import type { WorkspaceAgentSessionDetailThinking } from "./workspaceAgentSessionDetailViewModel";
 import { ToolActivityKindIcon } from "./toolActivityKindIcons";
+import { useAgentTurnDisclosureStore } from "./agentConversation/components/AgentTurnDisclosureContext";
 
 interface WorkspaceAgentSessionThinkingDisclosureProps {
   thinking: WorkspaceAgentSessionDetailThinking;
   label: string;
   onLinkClick?: (href: string) => void;
+  disclosureKey?: string;
 }
 
 export function WorkspaceAgentSessionThinkingDisclosure({
   thinking,
   label,
-  onLinkClick
+  onLinkClick,
+  disclosureKey
 }: WorkspaceAgentSessionThinkingDisclosureProps): JSX.Element {
   "use memo";
-  const [expanded, setExpanded] = useState(false);
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const disclosureStore = useAgentTurnDisclosureStore();
+  const expanded = disclosureKey
+    ? (disclosureStore.expandedOverrides[disclosureKey] ?? false)
+    : localExpanded;
   const isActive =
     thinking.statusKind === "working" || thinking.statusKind === "waiting";
   const statusLabel =
@@ -40,7 +47,11 @@ export function WorkspaceAgentSessionThinkingDisclosure({
         aria-expanded={expanded}
         data-active={isActive ? "true" : undefined}
         onClick={() => {
-          setExpanded((value) => !value);
+          if (disclosureKey) {
+            disclosureStore.setExpandedOverride(disclosureKey, !expanded);
+          } else {
+            setLocalExpanded(!expanded);
+          }
         }}
       >
         {isActive ? (

@@ -43,6 +43,7 @@ export interface AgentConversationFlowProps {
   showRawTimelineJson?: boolean;
   participantPresentation?: AgentConversationParticipantPresentation;
   followEndMode?: AgentConversationFollowEndMode;
+  readFollowEndMode?: () => AgentConversationFollowEndMode;
   forkThroughTurnPendingTurnIds?: readonly string[];
   virtualListLayoutRevision?: number;
   virtualScrollControllerRef?: Ref<AgentTranscriptVirtualScrollController>;
@@ -76,6 +77,7 @@ export const AgentConversationFlow = memo(function AgentConversationFlow({
   showRawTimelineJson = false,
   participantPresentation,
   followEndMode,
+  readFollowEndMode,
   forkThroughTurnPendingTurnIds,
   virtualListLayoutRevision,
   virtualScrollControllerRef,
@@ -111,6 +113,7 @@ export const AgentConversationFlow = memo(function AgentConversationFlow({
         labels={labels}
         showRawTimelineJson={showRawTimelineJson}
         followEndMode={followEndMode}
+        readFollowEndMode={readFollowEndMode}
         participantPresentation={participantPresentation}
         virtualListLayoutRevision={virtualListLayoutRevision}
         virtualScrollControllerRef={virtualScrollControllerRef}

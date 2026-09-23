@@ -1668,7 +1668,221 @@ describe("AgentTranscriptView", () => {
     }
   });
 
-  it("remembers manual expansion while switching sessions in one panel", () => {
+  it.each([
+    {
+      path: ["following", "detached"],
+      expandedOnCompletion: true
+    },
+    {
+      path: ["following"],
+      expandedOnCompletion: false
+    },
+    {
+      path: ["following", "detached", "following"],
+      expandedOnCompletion: false
+    },
+    {
+      path: ["following", "detached", "following", "detached"],
+      expandedOnCompletion: true
+    }
+  ] as const)(
+    "uses the current follow state on completion after $path",
+    ({ path, expandedOnCompletion }) => {
+      const labels = {
+        thinkingLabel: "Thought process",
+        toolCallsLabel: (count: number) => `Tool calls (${count})`,
+        processing: "Planning next moves",
+        turnSummary: "Changed files"
+      };
+      const runningTurn = canonicalTurn();
+      const settledTurn = canonicalTurn({
+        phase: "settled",
+        outcome: "completed",
+        settledAtUnixMs: 15_000
+      });
+      const base = detailViewModel();
+      const runningConversation = projectAgentConversationVM(
+        detailViewModel({
+          session: {
+            ...base.session,
+            activeTurnId: runningTurn.turnId,
+            activeTurn: runningTurn
+          },
+          sessionTurns: [runningTurn]
+        })
+      );
+      const settledConversation = projectAgentConversationVM(
+        detailViewModel({ sessionTurns: [settledTurn] })
+      );
+      const renderTurn = (
+        conversation: typeof runningConversation,
+        followEndMode: "following" | "detached"
+      ) => (
+        <AgentTranscriptView
+          conversation={conversation}
+          followEndMode={followEndMode}
+          labels={labels}
+        />
+      );
+      const { rerender } = render(renderTurn(runningConversation, path[0]));
+      for (const mode of path.slice(1)) {
+        rerender(renderTurn(runningConversation, mode));
+      }
+      rerender(renderTurn(settledConversation, path.at(-1)!));
+
+      expect(
+        screen.getByRole("button", {
+          name: expandedOnCompletion
+            ? "Collapse task details"
+            : "Expand task details"
+        })
+      ).toHaveAttribute("aria-expanded", String(expandedOnCompletion));
+
+      rerender(
+        renderTurn(
+          settledConversation,
+          path.at(-1) === "following" ? "detached" : "following"
+        )
+      );
+      expect(
+        screen.getByRole("button", {
+          name: expandedOnCompletion
+            ? "Collapse task details"
+            : "Expand task details"
+        })
+      ).toHaveAttribute("aria-expanded", String(expandedOnCompletion));
+      if (expandedOnCompletion) {
+        fireEvent.click(
+          screen.getByRole("button", { name: "Collapse task details" })
+        );
+        rerender(renderTurn(settledConversation, path.at(-1)!));
+        expect(
+          screen.getByRole("button", { name: "Expand task details" })
+        ).toHaveAttribute("aria-expanded", "false");
+      }
+    }
+  );
+
+  it("reads the scroll controller at completion when the rendered mode is stale", () => {
+    const labels = {
+      thinkingLabel: "Thought process",
+      toolCallsLabel: (count: number) => `Tool calls (${count})`,
+      processing: "Planning next moves",
+      turnSummary: "Changed files"
+    };
+    const runningTurn = canonicalTurn();
+    const settledTurn = canonicalTurn({
+      phase: "settled",
+      outcome: "completed",
+      settledAtUnixMs: 15_000
+    });
+    const base = detailViewModel();
+    let currentMode: "following" | "detached" = "following";
+    const readFollowEndMode = () => currentMode;
+    const { rerender } = render(
+      <AgentTranscriptView
+        conversation={projectAgentConversationVM(
+          detailViewModel({
+            session: {
+              ...base.session,
+              activeTurnId: runningTurn.turnId,
+              activeTurn: runningTurn
+            },
+            sessionTurns: [runningTurn]
+          })
+        )}
+        followEndMode="following"
+        readFollowEndMode={readFollowEndMode}
+        labels={labels}
+      />
+    );
+
+    currentMode = "detached";
+    rerender(
+      <AgentTranscriptView
+        conversation={projectAgentConversationVM(
+          detailViewModel({ sessionTurns: [settledTurn] })
+        )}
+        followEndMode="following"
+        readFollowEndMode={readFollowEndMode}
+        labels={labels}
+      />
+    );
+    expect(
+      screen.getByRole("button", { name: "Collapse task details" })
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("keeps a manually opened thinking trace visible when detached work is regrouped on completion", async () => {
+    const labels = {
+      thinkingLabel: "Thought process",
+      toolCallsLabel: (count: number) => `Tool calls (${count})`,
+      processing: "Planning next moves",
+      turnSummary: "Changed files"
+    };
+    const runningTurn = canonicalTurn();
+    const base = detailViewModel();
+    const runningConversation = projectAgentConversationVM(
+      detailViewModel({
+        session: {
+          ...base.session,
+          activeTurnId: runningTurn.turnId,
+          activeTurn: runningTurn
+        },
+        sessionTurns: [runningTurn]
+      })
+    );
+    const settledConversation = projectAgentConversationVM(
+      detailViewModel({
+        sessionTurns: [
+          canonicalTurn({
+            phase: "settled",
+            outcome: "completed",
+            settledAtUnixMs: 15_000
+          })
+        ]
+      })
+    );
+    const renderTurn = (
+      conversation: typeof runningConversation,
+      followEndMode: "following" | "detached"
+    ) => (
+      <AgentTurnDisclosureProvider>
+        <AgentTranscriptView
+          conversation={conversation}
+          followEndMode={followEndMode}
+          labels={labels}
+        />
+      </AgentTurnDisclosureProvider>
+    );
+    const { rerender } = render(renderTurn(runningConversation, "following"));
+    const thinking = screen.getByRole("button", { name: "Thought process" });
+    expect(thinking).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(thinking);
+    await flushCollapsibleRevealFrames();
+    expect(thinking).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByText("Need to inspect the workspace first.")
+    ).toBeTruthy();
+
+    rerender(renderTurn(runningConversation, "detached"));
+    rerender(renderTurn(settledConversation, "detached"));
+
+    expect(
+      screen.getByRole("button", { name: "Collapse task details" })
+    ).toHaveAttribute("aria-expanded", "true");
+    const settledThinking = screen.getByRole("button", {
+      name: "Thought process"
+    });
+    expect(settledThinking).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByText("Need to inspect the workspace first.")
+    ).toBeTruthy();
+    fireEvent.click(settledThinking);
+    expect(settledThinking).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("remembers manual expansion while switching sessions in one panel", async () => {
     const labels = {
       thinkingLabel: "Thought process",
       toolCallsLabel: (count: number) => `Tool calls (${count})`,
@@ -1712,6 +1926,13 @@ describe("AgentTranscriptView", () => {
     expect(
       screen.getByRole("button", { name: "Collapse task details" })
     ).toBeTruthy();
+    await flushCollapsibleRevealFrames();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Thought process", hidden: true })
+    );
+    expect(
+      screen.getByRole("button", { name: "Thought process", hidden: true })
+    ).toHaveAttribute("aria-expanded", "true");
 
     rerender(
       <AgentTurnDisclosureProvider>
@@ -1721,6 +1942,13 @@ describe("AgentTranscriptView", () => {
     expect(
       screen.getByRole("button", { name: "Expand task details" })
     ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Expand task details" })
+    );
+    await flushCollapsibleRevealFrames();
+    expect(
+      screen.getByRole("button", { name: "Thought process", hidden: true })
+    ).toHaveAttribute("aria-expanded", "false");
 
     rerender(
       <AgentTurnDisclosureProvider>
@@ -1730,6 +1958,9 @@ describe("AgentTranscriptView", () => {
     expect(
       screen.getByRole("button", { name: "Collapse task details" })
     ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Thought process", hidden: true })
+    ).toHaveAttribute("aria-expanded", "true");
   });
 
   it("renders workspace-agent turns with markdown, thinking, and tool disclosures", async () => {
@@ -2905,7 +3136,7 @@ describe("AgentTranscriptView", () => {
     );
   });
 
-  it("renders agent markdown relative links as plain text", () => {
+  it("resolves agent markdown relative links within the session directory", () => {
     const onLinkAction = vi.fn();
     render(
       <AgentTranscriptView
@@ -2948,9 +3179,11 @@ describe("AgentTranscriptView", () => {
     );
 
     expect(
-      screen.queryByRole("link", { name: "stock-dashboard.html" })
-    ).toBeNull();
-    expect(screen.getByText("stock-dashboard.html")).toBeTruthy();
+      screen.getByRole("link", { name: "stock-dashboard.html" })
+    ).toHaveAttribute(
+      "data-agent-link-href",
+      "/workspace/demo/reports/stock-dashboard.html"
+    );
     expect(onLinkAction).not.toHaveBeenCalled();
   });
 

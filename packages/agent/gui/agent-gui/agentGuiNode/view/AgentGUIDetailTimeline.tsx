@@ -48,6 +48,7 @@ interface AgentGUIDetailTimelineProps {
   };
   hasActiveConversation: boolean;
   followEndMode: AgentConversationFollowEndMode;
+  readFollowEndMode?: () => AgentConversationFollowEndMode;
   forkedFrom?: AgentActivitySessionForkLineage | null;
   forkThroughTurnPendingTurnIds?: readonly string[];
   homeContent: ReactNode;
@@ -78,6 +79,7 @@ export const AgentGUIDetailTimeline = memo(function AgentGUIDetailTimeline({
   conversationFlowLabels,
   hasActiveConversation,
   followEndMode,
+  readFollowEndMode,
   forkedFrom,
   forkThroughTurnPendingTurnIds,
   homeContent,
@@ -164,6 +166,7 @@ export const AgentGUIDetailTimeline = memo(function AgentGUIDetailTimeline({
             turnAttachments={forkLineageAttachments}
             editRetry={editRetry?.control}
             followEndMode={followEndMode}
+            readFollowEndMode={readFollowEndMode}
             isLoading={showTimelineSkeleton}
             isLoadingOlderMessages={isLoadingOlderMessages}
             isVisible={isVisible}

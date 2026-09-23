@@ -29,6 +29,7 @@ interface AgentGUIConversationTimelinePaneProps {
   isLoadingOlderMessages: boolean;
   isVisible: boolean;
   followEndMode: AgentConversationFollowEndMode;
+  readFollowEndMode?: () => AgentConversationFollowEndMode;
   forkThroughTurnPendingTurnIds?: readonly string[];
   virtualScrollControllerRef: Ref<AgentTranscriptVirtualScrollController>;
   loadingLabel: string;
@@ -58,6 +59,7 @@ export const AgentGUIConversationTimelinePane = memo(
     isLoadingOlderMessages,
     isVisible,
     followEndMode,
+    readFollowEndMode,
     forkThroughTurnPendingTurnIds,
     virtualScrollControllerRef,
     loadingLabel,
@@ -85,6 +87,7 @@ export const AgentGUIConversationTimelinePane = memo(
         <AgentConversationFlow
           conversation={conversation}
           followEndMode={followEndMode}
+          readFollowEndMode={readFollowEndMode}
           editRetry={editRetry}
           turnAttachments={turnAttachments}
           turnAttachmentLocatorRef={turnAttachmentLocatorRef}
