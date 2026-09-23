@@ -2084,12 +2084,12 @@ failure semantics, or a parallel settings store; the desktop capture window
 is the first adopter.
 
 The Quick Composer uses the Composer's `embedded` layout contract. Unlike
-`dock`, which owns a fixed, bounded bottom-dock viewport, `embedded` keeps the
+`dock`, which owns a bounded bottom-dock viewport, `embedded` keeps the
 entire draft in normal document flow. Compact host surfaces must select that
 layout instead of compensating for dock overflow with consumer-specific offsets
-or clipping. In the existing-Session dock, the outer region is non-shrinking and
-reserves a content-independent border-box height of `min(240px, 40% of the
-definite detail pane height)`. Lifted prompts, session accessories, workflow
+or clipping. In the existing-Session dock, the outer region is non-shrinking,
+fits its visible controls, and is capped at `min(240px, 40% of the definite
+detail pane height)`. Lifted prompts, session accessories, workflow
 cards, queued prompts, and the primary composer share one nested `min-height: 0`
 scroll viewport; a short pane therefore makes every control reachable by dock-
 local scrolling rather than pushing or covering the transcript. The floating

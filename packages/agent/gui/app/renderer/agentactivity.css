@@ -8155,8 +8155,8 @@ button.agent-gui-node__conversation-section-toggle:hover
   }
 }
 
-/* Reserve a content-independent part of the definite-height detail flex pane.
-   All persistent input/interaction surfaces scroll inside it, never over replies. */
+/* Let the dock fit its controls, while bounding tall prompts inside its own
+   scroll viewport so they never cover the transcript. */
 .agent-gui-node__bottom-dock {
   --agent-gui-composer-region-block-size: 240px;
 
@@ -8167,8 +8167,8 @@ button.agent-gui-node__conversation-section-toggle:hover
   flex: 0 0 auto;
   align-self: stretch;
   box-sizing: border-box;
-  height: min(var(--agent-gui-composer-region-block-size), 40%);
-  max-height: 40%;
+  height: fit-content;
+  max-height: min(var(--agent-gui-composer-region-block-size), 40%);
   min-height: 0;
   min-width: 0;
   width: 100%;
