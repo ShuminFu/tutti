@@ -103,6 +103,15 @@ require, and the local-hook text assertions, including one for an absent
 13 tool test cases and their parser regression coverage; it does not claim that
 missing dependencies are random flakes or that those boundaries are now passing.
 
+Desktop also removes eight cases from two unsupported test-runtime suites:
+`createAgentProviderTerminalCommandRunner.test.ts` requires a Vite renderer alias
+that the Node runner cannot resolve, and `useDesktopAgentGUIReadiness.spec.tsx`
+requires undeclared React Testing Library/Vitest dependencies and a DOM runtime.
+The latter is not discovered by Desktop's `*.test.ts` command but breaks its
+typecheck. Their terminal-runner and readiness-hook coverage is removed;
+production behavior is unchanged. Deterministic assertion and static-analysis
+failures remain gates and are not classified as environment failures or flakes.
+
 Repository policy, tool contracts, generated contracts, and architecture
 boundaries are selected from `tools/scripts/repository-checks.mjs`. Both PR CI
 and `check:changed` consume this registry; do not attach a repository-wide
