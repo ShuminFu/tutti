@@ -508,9 +508,18 @@ export function createEmbeddedSplitViewController(
   // 显示的那条」。activateNode 是异步的，中间这几拍它照旧报旧会话号；不记这一笔，
   // 整组切换之后右栏那一拍的旧号会被当成「用户在右栏切了会话」，把刚换掉的那条
   // 塞回来（真机：分支③整组切换退化成只换左栏）。
+  //
+  // `booting`：请它换的时候窗口**还没报过任何会话号**（Dock iframe 重载后 adopt 恢复
+  // 布局就是这样）。这时旧号未知，但 agent-gui 会自己恢复出上次那条并报上来 —— 那是
+  // 开机回声，不是用户在侧栏点的。不挡的话控制器会拿它（配对表往往还没到）判成单列
+  // 并落盘，把耐久布局两栏覆盖成一栏（E2E dintaldock-pair-open-split 约 7% 失败）。
+  // `reissued`：开机回声出现时补发过一次 activate，只补一次，防止来回打转。
+  // adopt 时认领的现成窗口（左栏锚点）。只有它们会在开机时自己恢复上一条会话；
+  // 分栏自己 launch 的新窗口是带着目标会话起的，第一次报号就是真的。
+  const adoptedNodeIds = new Set<string>();
   const pendingActivateByNodeId = new Map<
     string,
-    { expected: string; stale: string }
+    { booting?: boolean; expected: string; reissued?: boolean; stale: string }
   >();
 
   function surfaceWidth(): number {
@@ -822,6 +831,17 @@ export function createEmbeddedSplitViewController(
     const stale = sessionIdByNodeId.get(nodeId) ?? "";
     if (stale && stale !== agentSessionId) {
       pendingActivateByNodeId.set(nodeId, { expected: agentSessionId, stale });
+    } else if (
+      !stale &&
+      adoptedNodeIds.has(nodeId) &&
+      !settledNodeIds.has(nodeId)
+    ) {
+      // 窗口还没报过号：旧号未知，记成 booting（见 pendingActivateByNodeId 的注释）。
+      pendingActivateByNodeId.set(nodeId, {
+        booting: true,
+        expected: agentSessionId,
+        stale
+      });
     } else {
       pendingActivateByNodeId.delete(nodeId);
     }
@@ -1481,7 +1501,13 @@ export function createEmbeddedSplitViewController(
         goingHomeByNodeId.delete(nodeId);
         // 请它换的那条打不开（会话已删，gui 退回首页）也会读成空：待换到此作废。
         // 不清的话，用户下一次在侧栏点回旧那条会被当成旧回声吞掉，栏永远卡住。
-        pendingActivateByNodeId.delete(nodeId);
+        // 例外：还没报过号的窗口开机时本来就先读成空，这不是「打不开」，在途留着。
+        if (
+          settledNodeIds.has(nodeId) ||
+          !pendingActivateByNodeId.get(nodeId)?.booting
+        ) {
+          pendingActivateByNodeId.delete(nodeId);
+        }
         if (settledNodeIds.has(nodeId)) freshNodeIds.add(nodeId);
         continue;
       }
@@ -1493,6 +1519,25 @@ export function createEmbeddedSplitViewController(
         if (observed === pendingActivate.expected) {
           pendingActivateByNodeId.delete(nodeId);
         } else if (observed === pendingActivate.stale) {
+          continue;
+        } else if (
+          pendingActivate.booting &&
+          !pendingActivate.reissued &&
+          !settledNodeIds.has(nodeId)
+        ) {
+          // 开机回声：窗口报的是它自己恢复的上一条，不是用户切的。它可能在我们的
+          // activate 之前就恢复完了、把请求盖掉，所以补发一次把它拉到期待的那条。
+          pendingActivateByNodeId.set(nodeId, {
+            ...pendingActivate,
+            reissued: true
+          });
+          host.activateNode(
+            { nodeId },
+            {
+              payload: { agentSessionId: pendingActivate.expected },
+              type: agentGuiWorkbenchOpenSessionActivationType
+            }
+          );
           continue;
         } else {
           // 报的既不是旧号也不是我们请的那条 = 用户真的又切了别的，待换作废。
@@ -1647,6 +1692,7 @@ export function createEmbeddedSplitViewController(
         right: nodeIds[1] ?? null
       };
       for (const nodeId of nodeIds) {
+        adoptedNodeIds.add(nodeId);
         const node = nodeById(nodeId);
         const observed = node ? sessions.read(node) : null;
         if (observed) sessionIdByNodeId.set(nodeId, observed);

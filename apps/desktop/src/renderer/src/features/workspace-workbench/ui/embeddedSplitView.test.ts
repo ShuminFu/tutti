@@ -453,6 +453,64 @@ test("a session that only surfaces after adopt still fills the empty left pane",
   controller.dispose();
 });
 
+test("a window's own boot-time restore does not overwrite the restored split", async () => {
+  // 真机（E2E 约 7% 失败）：Dock iframe 重载 → 新控制器 adopt 时左栏窗口还没报会话号，
+  // activate(左栏, A) 记不下「在途」（旧号为空）。随后 agent-gui 自己恢复出上次那条 D
+  // 报上来，控制器把它当「用户在侧栏点了 D」：配对表还没到 → 判单列 D 并落盘，
+  // 把耐久布局 A|B 覆盖成 D。开机回声必须当旧号，并补发一次 activate 把窗口拉到 A。
+  const fake = createFakeHost({ seed: ["agent-left"] });
+  const observedByNode = new Map<string, string>();
+  const listeners = new Set<() => void>();
+  const storage = memoryStorage({
+    "agent-gui:split-layout:ws-1:all": JSON.stringify({
+      focus: "left",
+      left: "session-a",
+      ratio: 0.5,
+      right: "session-b"
+    })
+  });
+  const controller = makeController(fake, {
+    sessions: {
+      read: (node) => observedByNode.get(node.id) ?? null,
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      }
+    },
+    storage
+  });
+  await controller.adopt(["agent-left"]);
+  const rightNodeId = fake.launched[0] as string;
+  fake.calls.length = 0;
+
+  // 左栏窗口先读成空（还在恢复），再报出它自己恢复的旧会话 D。
+  fake.notify();
+  observedByNode.set("agent-left", "session-d");
+  fake.notify();
+
+  assert.equal(controller.getSnapshot().panes.left?.sessionId, "session-a");
+  assert.equal(controller.getSnapshot().panes.right?.sessionId, "session-b");
+  assert.deepEqual(activations(fake), [
+    { nodeId: "agent-left", sessionId: "session-a" }
+  ]);
+  const persisted = JSON.parse(
+    storage.map.get("agent-gui:split-layout:ws-1:all") ?? "{}"
+  );
+  assert.equal(
+    persisted.left ?? persisted.layout?.left ?? "session-a",
+    "session-a"
+  );
+
+  // 窗口换到 A 之后，用户在侧栏真点了 C：照常换左栏。
+  observedByNode.set("agent-left", "session-a");
+  observedByNode.set(rightNodeId, "session-b");
+  fake.notify();
+  observedByNode.set("agent-left", "session-c");
+  fake.notify();
+  assert.equal(controller.getSnapshot().panes.left?.sessionId, "session-c");
+  controller.dispose();
+});
+
 test("hitting new session in a pane clears its stale identity without collapsing the split", async () => {
   // 真机：在左栏点「新建会话」，正文换成了首页，栏头标题却还是上一条会话
   // （agent-gui 的 handleCreateConversation 把 lastActiveAgentSessionId 抹成 null，
