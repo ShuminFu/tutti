@@ -640,7 +640,18 @@ test("分栏几何把会话栏的推力算进两栏宽度", () => {
     /width: calc\(\s*\(1 - var\(--rndmaster-split-ratio\) - var\(--rndmaster-split-rail-push\)\)/
   );
   // 缺省值必须是 0：没分栏 / 会话栏收起时，几何要原样退回纯比例式。
-  assert.match(embeddedDintalDockCss, /--rndmaster-split-rail-push: 0;/);
+  // 两个变量都登记成不继承（拖分栏卡顿：写在祖先上会让两整栏跟着重算样式）。
+  for (const [name, initial] of [
+    ["--rndmaster-split-rail-push", "0"],
+    ["--rndmaster-split-ratio", "0.5"]
+  ]) {
+    const block = embeddedDintalDockCss.match(
+      new RegExp(`@property ${name} \\{([^}]*)\\}`)
+    );
+    assert.notEqual(block, null, name);
+    assert.match(String(block?.[1]), /inherits: false;/);
+    assert.match(String(block?.[1]), new RegExp(`initial-value: ${initial};`));
+  }
 });
 
 // 补丁 0073 的窄容器抽屉在分栏左栏里必然生效（半个主区 < 上游 630px 阈值），

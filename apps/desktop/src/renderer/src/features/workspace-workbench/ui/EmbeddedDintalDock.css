@@ -35,7 +35,7 @@
  * 分栏并列（补丁 0108）
  *
  * 两栏 = 两个完整的 agent-gui 窗口壳（见 embeddedSplitView.ts 顶部的取舍说明）。
- * 壳的 left/width 由 `<main>` 上的 `--rndmaster-split-ratio` 决定，
+ * 壳的 left/width 由壳自己身上的 `--rndmaster-split-ratio` 决定（覆盖层逐壳写入），
  * 而「这个壳是左栏还是右栏」由覆盖层 EmbeddedSplitChrome 按 controller 快照
  * 直接把 `data-rndmaster-pane` / `data-rndmaster-pane-focus` 投影到壳元素上。
  *
@@ -45,13 +45,27 @@
  * 主体自己的 data 属性」——这里就是照它说的做。
  * ========================================================================== */
 
+/* 拖分栏卡顿：这两个变量原来写在 `<main>` 上、按默认规则往下继承 —— 拖动中每帧一改，
+   两整栏聊天（几千个节点）的样式就全部重算一遍（本机实测每次拖动约 2s 样式重算）。
+   登记成**不继承**，并由覆盖层直接写到两个窗口壳上：改值只重算壳自己。
+   浏览器不认 @property 时退回普通继承，写在壳上照样生效，只是没有这份省。 */
+@property --rndmaster-split-ratio {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0.5;
+}
+
+/* 左栏会话栏展开时两栏几何整体右移的**占比**（票 05）。会话栏在左栏里当真列，
+   它占的地方从右栏挤出来，所以左栏加宽这么多、右栏同步变窄、分隔线跟着右移。
+   覆盖层量出会话栏真实宽度换算后写进来（栏宽可拖，写死常量会对不上）；
+   没展开时是 0，此时下面几条 calc 全部退回原来的纯比例式。 */
+@property --rndmaster-split-rail-push {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
 .rndmaster-dintaldock-embedded {
-  --rndmaster-split-ratio: 0.5;
-  /* 左栏会话栏展开时两栏几何整体右移的**占比**（票 05）。会话栏在左栏里当真列，
-     它占的地方从右栏挤出来，所以左栏加宽这么多、右栏同步变窄、分隔线跟着右移。
-     覆盖层量出会话栏真实宽度换算后写进来（栏宽可拖，写死常量会对不上）；
-     没展开时是 0，此时下面几条 calc 全部退回原来的纯比例式。 */
-  --rndmaster-split-rail-push: 0;
 
   /* 栏头高度：与上游窗口头部行同高（44px），正文的预留也直接引用它。 */
   --rndmaster-split-header-height: 44px;

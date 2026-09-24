@@ -1,7 +1,7 @@
 // 分栏配对（补丁 0108）的覆盖层：拖影、放下区、分隔线、每栏的栏头（票 04）。
 //
 // 它挂在嵌入 `<main>` 里、盖在两个 agent-gui 窗口壳之上，本身不参与布局：
-// 几何（每栏的 left/width）全部由它投影到 `<main>` 的 `--rndmaster-split-ratio`
+// 几何（每栏的 left/width）全部由它投影到两个窗口壳上的 `--rndmaster-split-ratio`
 // 与壳元素的 `data-rndmaster-pane` 上，由 EmbeddedDintalDock.css 负责画。
 //
 // 票 04 之后：焦点不再画 2px 蓝线、正文里不再叠任何浮动按钮（原来的 ✕ 会压在
@@ -61,6 +61,11 @@ const CLOSED_STATUSES = new Set([
   "cancelled"
 ]);
 
+/** 值没变就不写：同值写 data-* 也会触发属性变更与样式失效检查。 */
+function setDataIfChanged(el: HTMLElement, key: string, value: string): void {
+  if (el.dataset[key] !== value) el.dataset[key] = value;
+}
+
 export function EmbeddedSplitChrome(): ReactNode {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const { i18n } = useTranslation();
@@ -102,15 +107,22 @@ export function EmbeddedSplitChrome(): ReactNode {
     );
     const controller = embeddedSplitViewController();
     if (!main) return;
-    main.dataset.rndmasterSplit = split ? "split" : "single";
+    // 拖分栏卡顿：`<main>` 是两整栏的祖先，它身上的属性一变就可能牵动整棵树的样式
+    // 失效；拖动中每帧都会走到这里，值没变就别写。
+    setDataIfChanged(main, "rndmasterSplit", split ? "split" : "single");
     // 栏头在不在，是「正文要不要让出 44px」的唯一判据。别拿分栏与否代替：单栏也有
     // 栏头，而首页态（左栏空）两者都没有，留了就是一条空白带。
-    main.dataset.rndmasterPaneHeader =
-      snapshot !== null && snapshot.panes.left !== null ? "true" : "false";
-    main.dataset.rndmasterCollapsed = collapsed ? "true" : "false";
-    main.dataset.rndmasterFocus = focus;
-    main.style.setProperty("--rndmaster-split-ratio", String(ratio));
-    main.style.setProperty("--rndmaster-split-rail-push", String(railPush));
+    setDataIfChanged(
+      main,
+      "rndmasterPaneHeader",
+      snapshot !== null && snapshot.panes.left !== null ? "true" : "false"
+    );
+    setDataIfChanged(main, "rndmasterCollapsed", collapsed ? "true" : "false");
+    setDataIfChanged(main, "rndmasterFocus", focus);
+    // 几何变量写到壳上、不写 `<main>`：CSS 里登记成不继承（见 EmbeddedDintalDock.css），
+    // 只有壳读它们，改值不会让两栏里几千个节点跟着重算样式。
+    const ratioValue = String(ratio);
+    const railPushValue = String(railPush);
     const shells = main.querySelectorAll<HTMLElement>(
       '.workbench-window-shell[data-workbench-node-type-id="agent-gui"]'
     );
@@ -122,11 +134,14 @@ export function EmbeddedSplitChrome(): ReactNode {
         shell.removeAttribute("data-rndmaster-pane-focus");
         continue;
       }
-      shell.setAttribute("data-rndmaster-pane", side);
-      shell.setAttribute(
-        "data-rndmaster-pane-focus",
+      setDataIfChanged(shell, "rndmasterPane", side);
+      setDataIfChanged(
+        shell,
+        "rndmasterPaneFocus",
         side === focus ? "true" : "false"
       );
+      shell.style.setProperty("--rndmaster-split-ratio", ratioValue);
+      shell.style.setProperty("--rndmaster-split-rail-push", railPushValue);
     }
   });
 
