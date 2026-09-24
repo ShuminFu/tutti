@@ -1,6 +1,7 @@
 import {
   AGENT_SESSION_ENGINE_LOCAL_ORIGIN,
   createAgentSessionEngine,
+  selectPendingActivations,
   selectWorkspaceAgentConsumerSessions,
   type AgentActivityAdapter,
   type AgentActivityGoalControlInput,
@@ -54,10 +55,8 @@ export function reconcileHostMintedActivation(
   const requested = requestedAgentSessionId.trim();
   const minted = result.session?.agentSessionId?.trim() ?? "";
   if (!requested || !minted || minted === requested) return false;
-  const activations =
-    engine.getSnapshot().pendingIntents.activationsByRequestId;
   let dismissed = false;
-  for (const record of Object.values(activations)) {
+  for (const record of selectPendingActivations(engine.getSnapshot())) {
     if (record.mode !== "new" || record.agentSessionId !== requested) continue;
     engine.dispatch({
       requestId: record.requestId,

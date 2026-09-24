@@ -162,6 +162,7 @@ export class McpAppHostBridge {
           id,
           error: {
             code: JSON_RPC_METHOD_NOT_FOUND,
+            // i18n-check-ignore: JSON-RPC wire diagnostic sent to the MCP View, not host UI copy.
             message: `Method not supported by this host: ${method}`
           }
         });

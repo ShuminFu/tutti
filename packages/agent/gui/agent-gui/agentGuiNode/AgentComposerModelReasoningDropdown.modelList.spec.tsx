@@ -113,7 +113,7 @@ describe("composer model list dropdown", () => {
       </>
     );
 
-    expect(screen.getByText("点击刷新")).toBeInTheDocument();
+    expect(screen.getByText("Refresh")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "发送" })).toBeEnabled();
   });
 
@@ -205,7 +205,7 @@ describe("composer model list dropdown", () => {
     openMenu();
     expect(screen.getAllByText("Opus").length).toBeGreaterThan(0);
     expect(screen.getByText("上次刷新失败")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("刷新"));
+    fireEvent.click(screen.getByText("Refresh"));
     expect(onRequestModelList).toHaveBeenCalledTimes(1);
     expect(onRequestModelList).toHaveBeenCalledWith({ force: true });
   });

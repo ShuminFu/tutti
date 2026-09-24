@@ -103,6 +103,12 @@ Selected links and syntax-colored code use the selection ink to retain at least
 4.5:1 text contrast. Row selection, search matches and keyboard focus keep their
 existing semantic roles.
 
+### Embedded DinTalDock Adapter Styles
+
+The desktop Workbench owns `EmbeddedDintalDock.css` and `EmbeddedHostTheme.css`.
+These files adapt the embedded DinTalDock pane to the host layout and theme;
+they are exact CSS boundary exceptions, not shared UI-system styles.
+
 ## Typography Strategy
 
 Typography should feel closer to a tool than a campaign page.

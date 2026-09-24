@@ -90,7 +90,7 @@ export const generatedProviderIdentityCatalog = [
   },
   {
     providerId: "tutti-agent",
-    displayName: "Tutti Agent",
+    displayName: "DinTalDock Agent",
     iconKey: "tutti",
     localeKey: "agentHost.agentGui.conversationFilterTutti",
     aliases: ["tutti agent"],

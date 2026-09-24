@@ -38,6 +38,9 @@ const forbiddenUISystemPrefixes = [
 ];
 const allowedCssFiles = new Set([
   "apps/desktop/src/renderer/src/style.css",
+  // Embedded DinTalDock adapter styles belong to the desktop host surface.
+  "apps/desktop/src/renderer/src/features/workspace-workbench/ui/EmbeddedDintalDock.css",
+  "apps/desktop/src/renderer/src/features/workspace-workbench/ui/EmbeddedHostTheme.css",
   "apps/ui-storyboard/src/style.css",
   "packages/agent/gui/app/renderer/agentactivity.css",
   "packages/workbench/launchpad/src/styles/workbench-launchpad.css",

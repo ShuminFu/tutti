@@ -246,7 +246,9 @@ export function AgentModelReasoningDropdown({
               />
             ) : null}
             {modelListMissing && !isModelLoading ? (
-              <span className="min-w-0 truncate">点击刷新</span>
+              <span className="min-w-0 truncate">
+                {translate("common.refresh")}
+              </span>
             ) : isModelLoading ? (
               <span className="min-w-0 truncate">{labels.loadingOptions}</span>
             ) : menu.trigger.showCombined ? (
@@ -316,7 +318,7 @@ export function AgentModelReasoningDropdown({
           data-agent-model-list-refresh="true"
           onSelect={() => requestModelList(true)}
         >
-          刷新
+          {translate("common.refresh")}
         </DropdownMenuItem>
         {menu.model.show ? (
           <>

@@ -25,13 +25,15 @@ export function WorkspaceCursorSkillsImportSettingsRow() {
     null
   );
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<"preview" | "import" | null>(null);
+  const [errorStage, setErrorStage] = useState<"preview" | "import" | null>(
+    null
+  );
 
   async function chooseSource() {
     const picked = await projects.selectDirectory();
     if (!picked) return;
     setBusy(true);
-    setError(null);
+    setErrorStage(null);
     setResults(null);
     setPreview(null);
     setSourceDir(picked.path);
@@ -44,7 +46,7 @@ export function WorkspaceCursorSkillsImportSettingsRow() {
           .map((item) => item.name)
       );
     } catch {
-      setError("preview");
+      setErrorStage("preview");
     } finally {
       setBusy(false);
     }
@@ -53,13 +55,13 @@ export function WorkspaceCursorSkillsImportSettingsRow() {
   async function importSelected() {
     if (!sourceDir || !selected.length) return;
     setBusy(true);
-    setError(null);
+    setErrorStage(null);
     try {
       setResults(await settings.importCursorSkills(sourceDir, selected));
       setPreview(await settings.previewCursorSkills(sourceDir));
       setSelected([]);
     } catch {
-      setError("import");
+      setErrorStage("import");
     } finally {
       setBusy(false);
     }
@@ -104,10 +106,10 @@ export function WorkspaceCursorSkillsImportSettingsRow() {
           {t("workspace.settings.agent.cursorSkills.working")}
         </p>
       )}
-      {error && (
+      {errorStage && (
         <p role="alert" className="m-0 text-[12px] text-[var(--state-danger)]">
           {t(
-            error === "preview"
+            errorStage === "preview"
               ? "workspace.settings.agent.cursorSkills.previewFailed"
               : "workspace.settings.agent.cursorSkills.importFailed"
           )}
