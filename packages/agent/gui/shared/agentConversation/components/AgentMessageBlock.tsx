@@ -597,7 +597,7 @@ function AgentSystemNoticeMessage({
       </div>
     );
   }
-  if (notice?.noticeKind === "skills_budget") {
+  if (isSkillsBudgetNotice(message)) {
     return <SkillsBudgetNotice detail={detail} />;
   }
   if (isContextCompactionProgressNotice(message)) {
@@ -734,6 +734,28 @@ function ContextCompactionDivider({
         </div>
       ) : null}
     </div>
+  );
+}
+
+// The daemon tags this advisory as noticeKind "skills_budget". Rows recorded
+// before that (plain "warning") are recognized by codex's wording so old
+// transcripts stop showing it as a red banner too; keep the phrases in sync
+// with isAppServerSkillsBudgetWarning in the daemon.
+function isSkillsBudgetNotice(message: AgentMessageContentVM): boolean {
+  const notice = message.systemNotice;
+  if (notice?.noticeKind === "skills_budget") {
+    return true;
+  }
+  if (notice?.noticeKind !== "warning") {
+    return false;
+  }
+  const text = (notice.detail || notice.title || message.body || "")
+    .trim()
+    .toLowerCase();
+  return (
+    text.includes("skills context budget") &&
+    (text.startsWith("skill descriptions were shortened to fit") ||
+      text.startsWith("exceeded skills context budget"))
   );
 }
 

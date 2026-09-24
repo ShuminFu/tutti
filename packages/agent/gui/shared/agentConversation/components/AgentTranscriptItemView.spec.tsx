@@ -1212,6 +1212,37 @@ describe("AgentTranscriptItemView render stability", () => {
     expect(container.innerHTML).not.toContain("--state-danger");
   });
 
+  it("renders legacy warning rows with the skills-budget wording as the quiet note", () => {
+    const codexText =
+      "Skill descriptions were shortened to fit the skills context budget. Codex can still see every skill, but some descriptions are shorter.";
+    const { container, getByText } = render(
+      <AgentMessageBlock
+        workspaceRoot="/workspace/demo"
+        basePath="/workspace/demo"
+        row={assistantMessageRow({
+          kind: "message-content",
+          id: "assistant-legacy-skills-budget",
+          turnId: "turn-1",
+          body: codexText,
+          occurredAtUnixMs: 1,
+          systemNotice: {
+            noticeKind: "warning",
+            severity: "warning",
+            title: codexText,
+            detail: codexText,
+            retryable: null
+          }
+        })}
+        thinkingLabel="Thought process"
+      />
+    );
+
+    expect(
+      getByText("agentHost.agentGui.systemNoticeSkillsBudget")
+    ).toBeTruthy();
+    expect(container.innerHTML).not.toContain("--on-danger");
+  });
+
   it("renders context compaction notices as an inline divider", () => {
     const { getByRole, getByText, queryByText } = render(
       <AgentMessageBlock
