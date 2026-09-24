@@ -564,6 +564,38 @@ test("restoring a split onto two adopted windows is not undone by the host's syn
   controller.dispose();
 });
 
+test("a host open that arrives before adopt lands in the adopted window, not a stray one", async () => {
+  // 真机（E2E dintaldock-pair-mode）：Dock 开机时 open-session 桥先就绪，reconcile 还在
+  // host.load()/读存档。这时来的 select 被空控制器当成「没有窗口」另起一扇，随后 adopt
+  // 认领原窗口、按存档恢复 —— 要开的那条成了没人管的第三扇窗口，左栏不是它。
+  const fake = createFakeHost({ seed: ["agent-left"] });
+  const observedByNode = new Map<string, string>([
+    ["agent-left", "session-old"]
+  ]);
+  const controller = makeController(fake, {
+    sessions: {
+      read: (node) => observedByNode.get(node.id) ?? null
+    },
+    storage: memoryStorage()
+  });
+  const release = controller.holdSelects();
+  assert.equal(controller.select("session-l"), true);
+  assert.deepEqual(fake.launched, []);
+  await controller.adopt(["agent-left"]);
+  release();
+  await Promise.resolve();
+
+  assert.deepEqual(fake.launched, []);
+  assert.equal(controller.getSnapshot().panes.left?.sessionId, "session-l");
+  assert.deepEqual(activations(fake), [
+    { nodeId: "agent-left", sessionId: "session-l" }
+  ]);
+  // release 可重复调用、不会再落地一次。
+  release();
+  assert.equal(activations(fake).length, 1);
+  controller.dispose();
+});
+
 test("hitting new session in a pane clears its stale identity without collapsing the split", async () => {
   // 真机：在左栏点「新建会话」，正文换成了首页，栏头标题却还是上一条会话
   // （agent-gui 的 handleCreateConversation 把 lastActiveAgentSessionId 抹成 null，

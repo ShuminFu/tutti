@@ -710,9 +710,12 @@ function ReadyWorkspaceWorkbenchWithSession({
         splitControllerRef.current = splitController;
         unregisterSplitControllerRef.current =
           registerEmbeddedSplitViewController(splitController);
-        void reconcileEmbeddedDintalDock(host, splitController).catch(
-          () => undefined
-        );
+        // 认领完窗口之前，宿主 open-session 先记着（见 embeddedSplitView 的 selectHolds）；
+        // finally 里放行：出错也不会把宿主的请求吞掉。
+        const releaseSelects = splitController.holdSelects();
+        void reconcileEmbeddedDintalDock(host, splitController)
+          .catch(() => undefined)
+          .finally(releaseSelects);
       }
     },
     [

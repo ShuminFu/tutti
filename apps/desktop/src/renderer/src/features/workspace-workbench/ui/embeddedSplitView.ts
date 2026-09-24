@@ -214,6 +214,11 @@ export interface EmbeddedSplitViewController {
   adopt(nodeIds: readonly string[]): Promise<void>;
   closePane(side: SplitSide): Promise<void>;
   dispose(): void;
+  /**
+   * reconcile 开始认领窗口前调用：在它 release 之前，宿主 open-session 只记最后一条，
+   * release 时再落地。返回 release（可重复调用）。
+   */
+  holdSelects(): () => void;
   dropSession(
     session: ConversationRailSplitDragSession,
     side: SplitSide
@@ -979,6 +984,13 @@ export function createEmbeddedSplitViewController(
   // （E2E dintaldock-pair-open-split 重载那一步偶发失败）。
   // 所以窗口层的活干完之前先不读，干完再补读一次 —— 那时每扇窗口的在途都记好了。
   let applyingLayoutDepth = 0;
+  // Dock 开机时宿主的 open-session 桥比 adopt 先就绪：reconcile 要先 host.load()、
+  // 再读耐久布局，才认领窗口。这段空档里来的 select 会被空控制器当成「没有窗口」
+  // → 另起一个左栏窗口；随后 adopt 认领原来那扇窗口、按存档恢复布局，刚开的那条
+  // 被挤成没人管的第三扇窗口（E2E dintaldock-pair-mode 开 L 之后左栏不是 L）。
+  // 所以 reconcile 期间先记下，认领完再落地；只记最后一条（用户/宿主最后要看的）。
+  let selectHolds = 0;
+  let queuedSelect: string | null = null;
   let syncDeferredDuringApply = false;
 
   function applyLayout(
@@ -1786,9 +1798,27 @@ export function createEmbeddedSplitViewController(
     resize(ratio) {
       dispatch({ ratio, type: "resize" });
     },
+    holdSelects() {
+      selectHolds += 1;
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        selectHolds -= 1;
+        if (selectHolds > 0 || queuedSelect === null || disposed) return;
+        const id = queuedSelect;
+        queuedSelect = null;
+        dispatch({ id, type: "select" });
+      };
+    },
     select(agentSessionId) {
       const id = agentSessionId.trim();
       if (!id) return false;
+      if (selectHolds > 0) {
+        // 见 selectHolds 的注释：认领完窗口再落地。
+        queuedSelect = id;
+        return true;
+      }
       dispatch({ id, type: "select" });
       return true;
     },
