@@ -67,6 +67,10 @@ func TestDefaultPreparerCodexUsesConfiguredHome(t *testing.T) {
 	if !strings.Contains(string(config), `model_provider = "company"`) || strings.Contains(string(config), `model_provider = "official"`) {
 		t.Fatalf("run config = %q, want configured CODEX_HOME", config)
 	}
+	// Session homes lift codex's skills catalog budget to its maximum.
+	if !strings.Contains(string(config), "[skills]\nmax_context_tokens = 10000") {
+		t.Fatalf("run config = %q, want skills max_context_tokens", config)
+	}
 	auth, err := os.ReadFile(filepath.Join(runHome, "auth.json"))
 	if err != nil || string(auth) != `{"token":"company"}` {
 		t.Fatalf("run auth = %q, err = %v", auth, err)
@@ -981,6 +985,63 @@ func TestCodexConfigWithConversationDetailModeInstructionsRemovesEmptyManagedKey
 		!strings.Contains(next, `model = "gpt-5.5"`) ||
 		!strings.Contains(next, "[tutti]") {
 		t.Fatalf("merged config = %q, want managed developer_instructions key removed", next)
+	}
+}
+
+func TestCodexConfigWithSkillsContextBudget(t *testing.T) {
+	want := "max_context_tokens = 10000"
+	cases := []struct {
+		name        string
+		input       string
+		wantChanged bool
+		check       func(t *testing.T, next string)
+	}{
+		{
+			name:        "appends section when absent",
+			input:       "model = \"gpt-5.5\"\n\n[tutti]\nconversationDetailMode = \"coding\"\n",
+			wantChanged: true,
+			check: func(t *testing.T, next string) {
+				if !strings.HasSuffix(next, "[skills]\n"+want+"\n") || !strings.Contains(next, "[tutti]") {
+					t.Fatalf("next = %q", next)
+				}
+			},
+		},
+		{
+			name:        "adds key to existing section",
+			input:       "[skills]\ninclude_instructions = true\n\n[tutti]\n",
+			wantChanged: true,
+			check: func(t *testing.T, next string) {
+				if !strings.Contains(next, "[skills]\n"+want+"\ninclude_instructions = true") || strings.Count(next, "[skills]") != 1 {
+					t.Fatalf("next = %q", next)
+				}
+			},
+		},
+		{
+			name:  "keeps user value",
+			input: "[skills]\nmax_context_tokens = 3000\n",
+		},
+		{
+			name:  "leaves dotted skills key alone",
+			input: "skills.include_instructions = false\n",
+		},
+		{
+			name:  "leaves inline skills table alone",
+			input: "skills = { include_instructions = false }\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			next, changed := codexConfigWithSkillsContextBudget(tc.input)
+			if changed != tc.wantChanged {
+				t.Fatalf("changed = %v, want %v (next = %q)", changed, tc.wantChanged, next)
+			}
+			if !changed && next != tc.input {
+				t.Fatalf("unchanged config rewritten: %q", next)
+			}
+			if tc.check != nil {
+				tc.check(t, next)
+			}
+		})
 	}
 }
 

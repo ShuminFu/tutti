@@ -157,6 +157,50 @@ func TestCodexAppServerCompactionKeepsUnrelatedWarnings(t *testing.T) {
 	}
 }
 
+// codex's skills-budget advisory is informational: it must become a
+// skills_budget notice (quiet, localized in the GUI), not a red warning.
+func TestCodexAppServerSkillsBudgetWarningBecomesInfoNotice(t *testing.T) {
+	t.Parallel()
+
+	session := reportTestSession()
+	session.ProviderSessionID = "thread-1"
+	reducer := newCodexAppServerReducer(&CodexAppServerAdapter{})
+	reduce := func(message string) activityshared.Event {
+		t.Helper()
+		reduction := reducer.ReduceNotification(nil, session, "turn-1", acpMessage{
+			Method: appServerNotifyWarning,
+			Params: mustJSONRawMessage(t, map[string]any{"threadId": "thread-1", "message": message}),
+		}, newACPTurnNormalizer(), nil)
+		if len(reduction.Events) != 1 {
+			t.Fatalf("events for %q = %#v, want one notice", message, reduction.Events)
+		}
+		return reduction.Events[0]
+	}
+
+	for _, message := range []string{
+		"Skill descriptions were shortened to fit the skills context budget. Codex can still see every skill, but some descriptions are shorter. Disable unused skills or plugins to leave more room for the rest.",
+		"Exceeded skills context budget. All skill descriptions were removed and 3 additional skills were not included in the model-visible skills list.",
+		// Older codex wording.
+		"Skill descriptions were shortened to fit the 2% skills context budget.",
+	} {
+		meta := reduce(message).Payload.Metadata
+		if kind := asString(meta["noticeKind"]); kind != appServerSkillsBudgetNoticeKind {
+			t.Fatalf("noticeKind for %q = %q, want %q", message, kind, appServerSkillsBudgetNoticeKind)
+		}
+		if severity := asString(meta["severity"]); severity != "info" {
+			t.Fatalf("severity for %q = %q, want info", message, severity)
+		}
+		if detail := asString(meta["detail"]); detail != message {
+			t.Fatalf("detail = %q, want original codex wording kept for the disclosure", detail)
+		}
+	}
+
+	other := reduce("Model fell back to a smaller context window.").Payload.Metadata
+	if kind := asString(other["noticeKind"]); kind != "warning" {
+		t.Fatalf("unrelated warning noticeKind = %q, want warning", kind)
+	}
+}
+
 func TestCodexAppServerCommandOutputDeltaUsesToolOutputFastLane(t *testing.T) {
 	t.Parallel()
 	session := reportTestSession()

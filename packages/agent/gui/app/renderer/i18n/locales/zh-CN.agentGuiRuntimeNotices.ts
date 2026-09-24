@@ -56,6 +56,11 @@ export const zhCNAgentGuiRuntimeNotices = {
   systemNoticePlanImplementationCompleted: "计划实现已开始",
   systemNoticeWarning: "Agent 警告",
   systemNoticeDefault: "Agent 通知",
+  systemNoticeSkillsBudget:
+    "技能较多，部分技能的简介被缩短了。所有技能仍然可用。",
+  systemNoticeSkillsBudgetGuide:
+    "想让简介完整显示，可以把不常用的技能移出 ~/.agents/skills（或项目里的 .agents/skills 文件夹）。",
+  systemNoticeSkillsBudgetOriginal: "Codex 原文：",
   sharedDeviceLabel: "共享设备",
   agentSharingRevoked: "{{owner}} 已取消共享该智能体",
   runtimeConnecting: "正在连接 {{device}}…",

@@ -1,5 +1,6 @@
 import { Fragment, useCallback, type JSX, type ReactNode } from "react";
 import { Avatar, toast } from "@tutti-os/ui-system";
+import { Info } from "lucide-react";
 import { AgentPlanCard } from "./AgentPlanCard";
 import { AgentCollaborationRow } from "./AgentCollaborationRow";
 import { translate } from "../../../i18n/index";
@@ -596,6 +597,9 @@ function AgentSystemNoticeMessage({
       </div>
     );
   }
+  if (notice?.noticeKind === "skills_budget") {
+    return <SkillsBudgetNotice detail={detail} />;
+  }
   if (isContextCompactionProgressNotice(message)) {
     return (
       <ContextCompactionProgressDivider
@@ -729,6 +733,42 @@ function ContextCompactionDivider({
           {detail}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// codex's "skills catalog over budget" advisory. Every skill is still usable,
+// so it is a quiet, localized one-liner (not the red notice banner) with the
+// fix and the original codex wording tucked into a neutral disclosure. There
+// is no in-app skill toggle yet, so the guide points at the skill folders.
+function SkillsBudgetNotice({ detail }: { detail: string }): JSX.Element {
+  "use memo";
+  const guide = translate("agentHost.agentGui.systemNoticeSkillsBudgetGuide");
+  const disclosure = detail
+    ? `${guide}\n\n${translate("agentHost.agentGui.systemNoticeSkillsBudgetOriginal")}\n${detail}`
+    : guide;
+  return (
+    <div
+      role="status"
+      data-notice-kind="skills_budget"
+      className="box-border w-full min-w-0 py-1 text-[12px] leading-5 text-[var(--text-secondary)]"
+    >
+      <div className="flex min-w-0 items-start gap-1.5">
+        <Info
+          size={13}
+          strokeWidth={2}
+          aria-hidden="true"
+          className="mt-[3px] shrink-0"
+        />
+        <span className="min-w-0">
+          {translate("agentHost.agentGui.systemNoticeSkillsBudget")}
+        </span>
+      </div>
+      <AgentMessageDetailsDisclosure
+        detail={disclosure}
+        tone="neutral"
+        className="ml-[19px] mt-0.5"
+      />
     </div>
   );
 }

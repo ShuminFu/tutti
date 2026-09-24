@@ -1177,6 +1177,41 @@ describe("AgentTranscriptItemView render stability", () => {
     ).toBeTruthy();
   });
 
+  it("renders the codex skills-budget notice as a quiet localized note, not a red banner", () => {
+    const codexText =
+      "Skill descriptions were shortened to fit the skills context budget. Codex can still see every skill, but some descriptions are shorter.";
+    const { container, getByRole, getByText, queryByText } = render(
+      <AgentMessageBlock
+        workspaceRoot="/workspace/demo"
+        basePath="/workspace/demo"
+        row={assistantMessageRow({
+          kind: "message-content",
+          id: "assistant-skills-budget",
+          turnId: "turn-1",
+          body: codexText,
+          occurredAtUnixMs: 1,
+          systemNotice: {
+            noticeKind: "skills_budget",
+            severity: "info",
+            title: codexText,
+            detail: codexText,
+            retryable: null
+          }
+        })}
+        thinkingLabel="Thought process"
+      />
+    );
+
+    expect(getByRole("status").dataset.noticeKind).toBe("skills_budget");
+    expect(
+      getByText("agentHost.agentGui.systemNoticeSkillsBudget")
+    ).toBeTruthy();
+    // The raw English codex text only lives inside the collapsed disclosure.
+    expect(queryByText(codexText)).toBeNull();
+    expect(container.innerHTML).not.toContain("--on-danger");
+    expect(container.innerHTML).not.toContain("--state-danger");
+  });
+
   it("renders context compaction notices as an inline divider", () => {
     const { getByRole, getByText, queryByText } = render(
       <AgentMessageBlock

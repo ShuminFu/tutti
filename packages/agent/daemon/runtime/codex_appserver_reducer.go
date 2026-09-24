@@ -274,6 +274,10 @@ func (r codexAppServerReducer) reduceNotification(
 		if normalizer.HasCompactionNotice() && message == appServerCompactionAdvisoryMessage {
 			return emit(nil)
 		}
+		if isAppServerSkillsBudgetWarning(message) {
+			return emit([]activityshared.Event{appServerSystemNoticeEvent(session, turnID, appServerSkillsBudgetNoticeKind, "", message,
+				map[string]any{"severity": "info"})})
+		}
 		return emit([]activityshared.Event{appServerSystemNoticeEvent(session, turnID, "warning", "", message)})
 	case appServerNotifyDeprecation:
 		return emit([]activityshared.Event{appServerSystemNoticeEvent(session, turnID, "warning",

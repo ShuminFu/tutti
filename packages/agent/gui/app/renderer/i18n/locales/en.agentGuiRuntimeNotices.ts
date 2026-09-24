@@ -65,6 +65,11 @@ export const enAgentGuiRuntimeNotices = {
   systemNoticePlanImplementationCompleted: "Plan implementation started",
   systemNoticeWarning: "Agent warning",
   systemNoticeDefault: "Agent notice",
+  systemNoticeSkillsBudget:
+    "Many skills are installed, so some skill descriptions were shortened. Every skill is still available.",
+  systemNoticeSkillsBudgetGuide:
+    "To keep full descriptions, move skills you rarely use out of ~/.agents/skills (or the project's .agents/skills folder).",
+  systemNoticeSkillsBudgetOriginal: "Original Codex message:",
   sharedDeviceLabel: "shared device",
   agentSharingRevoked: "{{owner}} stopped sharing this agent",
   runtimeConnecting: "Connecting to {{device}}…",

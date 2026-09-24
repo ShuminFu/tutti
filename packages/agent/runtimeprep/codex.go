@@ -17,6 +17,12 @@ const (
 	managedCodexRuntimeEnv                = "TUTTI_CODEX_MANAGED"
 	managedCodexConfigTemplateEnv         = "TUTTI_CODEX_CONFIG_TEMPLATE"
 	codexFastStartEnv                     = "TUTTI_CODEX_FAST_START"
+	// codex caps the model-visible skills catalog at 2% of the context window
+	// by default (~5.4k tokens on a 272k model) and truncates descriptions past
+	// that. DinTalDock sessions see every ~/.agents/skills entry plus bundled
+	// skills, which routinely overflows, so raise it to codex's hard maximum
+	// (MAX_CONFIGURED_SKILL_METADATA_TOKEN_BUDGET = 10_000).
+	codexSkillsMaxContextTokens = 10000
 )
 
 type CodexPreparer struct {
@@ -518,6 +524,10 @@ func ensureCodexSessionConfig(configPath string, input PrepareInput) error {
 		next = mcpNext
 		changed = true
 	}
+	if skillsNext, skillsChanged := codexConfigWithSkillsContextBudget(next); skillsChanged {
+		next = skillsNext
+		changed = true
+	}
 	// DinTalDock launches the Codex app-server from the non-elevated desktop daemon.
 	// On Windows, the elevated sandbox implementation invokes a separate setup
 	// helper through ShellExecuteExW, which requires an interactive UAC consent
@@ -589,6 +599,55 @@ func codexConfigWithTuttiWindowsSandbox(content string) (string, bool) {
 	}
 	next += "[windows]\nsandbox = \"unelevated\"\n"
 	return next, true
+}
+
+// codexConfigWithSkillsContextBudget sets [skills] max_context_tokens unless the
+// user already chose a value or declares `skills` some other way (dotted key or
+// inline table) that a new [skills] header would collide with. Older codex
+// builds without this field still load the config: the struct's
+// deny_unknown_fields is a schemars (JSON schema) attribute, not a serde one.
+func codexConfigWithSkillsContextBudget(content string) (string, bool) {
+	line := "max_context_tokens = " + strconv.Itoa(codexSkillsMaxContextTokens)
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+	skillsSection := -1
+	inRootTable := true
+	for index, existingLine := range lines {
+		trimmed := strings.TrimSpace(existingLine)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "[") {
+			inRootTable = false
+			if trimmed == "[skills]" {
+				skillsSection = index
+			}
+			continue
+		}
+		if inRootTable && (codexConfigLineHasKey(trimmed, "skills") || strings.HasPrefix(trimmed, "skills.")) {
+			return content, false
+		}
+	}
+	if skillsSection < 0 {
+		next := strings.TrimRight(strings.Join(lines, "\n"), "\n")
+		if next != "" {
+			next += "\n\n"
+		}
+		return next + "[skills]\n" + line + "\n", true
+	}
+	for index := skillsSection + 1; index < len(lines); index++ {
+		trimmed := strings.TrimSpace(lines[index])
+		if strings.HasPrefix(trimmed, "[") {
+			break
+		}
+		if codexConfigLineHasKey(trimmed, "max_context_tokens") {
+			return content, false
+		}
+	}
+	next := make([]string, 0, len(lines)+1)
+	next = append(next, lines[:skillsSection+1]...)
+	next = append(next, line)
+	next = append(next, lines[skillsSection+1:]...)
+	return strings.Join(next, "\n"), true
 }
 
 func codexConfigWithTuttiConversationDetailMode(content string, conversationDetailMode string) (string, bool) {

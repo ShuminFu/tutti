@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
 	"github.com/tutti-os/tutti/packages/agent/daemon/runtime/codexproto"
@@ -108,7 +109,36 @@ const (
 	appServerContextCompactedTitle      = "Context compacted."
 	appServerCompactionInterruptedTitle = "Context compaction interrupted."
 	appServerCompactionAdvisoryMessage  = "Heads up: Long threads and multiple compactions can cause the model to be less accurate. Start a new thread when possible to keep threads small and targeted."
+
+	// appServerSkillsBudgetNoticeKind marks codex's advisory that the skills
+	// catalog overflowed its context budget. It is informational (every skill
+	// is still usable), so the GUI renders it as a quiet localized note rather
+	// than a red warning banner.
+	appServerSkillsBudgetNoticeKind = "skills_budget"
 )
+
+// codex (ext/skills/src/render.rs) sends the skills-budget advisory as a plain
+// `warning` with no machine-readable code, so the only stable handle is the
+// wording. It has changed across releases (older builds said "the 2% skills
+// context budget"), so match the stable openings plus the shared phrase rather
+// than one exact sentence.
+var appServerSkillsBudgetWarningPrefixes = []string{
+	"skill descriptions were shortened to fit",
+	"exceeded skills context budget",
+}
+
+func isAppServerSkillsBudgetWarning(message string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(message))
+	if !strings.Contains(normalized, "skills context budget") {
+		return false
+	}
+	for _, prefix := range appServerSkillsBudgetWarningPrefixes {
+		if strings.HasPrefix(normalized, prefix) {
+			return true
+		}
+	}
+	return false
+}
 
 // appServerCompactionNoticeEvent emits the compaction banner for both item
 // lifecycle events. Both banners share one messageId keyed to the thread item
