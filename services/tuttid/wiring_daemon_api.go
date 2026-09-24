@@ -555,6 +555,7 @@ func buildDaemonAPI(
 		agentMaintenance = &agentmaintenanceservice.Service{
 			Host: agentHost, Preferences: preferences, State: maintenanceState,
 			Resources: agentSessionService,
+			Artifacts: codexSandboxBinSweeper{Store: runtimeprep.LocalStore{StateDir: tuttitypes.DefaultStateDir()}},
 			IsIdle:    agentSessionService.IdleForDataMaintenance,
 		}
 		if compactor, ok := store.(agentmaintenanceservice.DatabaseCompactor); ok {

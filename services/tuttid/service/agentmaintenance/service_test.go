@@ -373,3 +373,31 @@ func TestManualPurgeKeepsCommittedResultWhenOptionalCompactionFails(t *testing.T
 		t.Fatalf("PurgeNow() result=%#v compactor calls=%d error=%v", result, compactor.calls, err)
 	}
 }
+
+type recordingArtifactSweeper struct{ calls []time.Time }
+
+func (s *recordingArtifactSweeper) SweepStaleRunArtifacts(_ context.Context, now time.Time) {
+	s.calls = append(s.calls, now)
+}
+
+func TestResourceCleanupPassSweepsRunArtifactsOnlyWhenIdle(t *testing.T) {
+	now := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	sweeper := &recordingArtifactSweeper{}
+	idle := false
+	service := &Service{
+		Artifacts: sweeper,
+		IsIdle:    func(context.Context) bool { return idle },
+		Now:       func() time.Time { return now },
+	}
+
+	service.runResourceCleanupOnce(context.Background())
+	if len(sweeper.calls) != 0 {
+		t.Fatalf("swept while a turn was active: %v", sweeper.calls)
+	}
+
+	idle = true
+	service.runResourceCleanupOnce(context.Background())
+	if len(sweeper.calls) != 1 || !sweeper.calls[0].Equal(now) {
+		t.Fatalf("sweep calls = %v, want one call at %v", sweeper.calls, now)
+	}
+}

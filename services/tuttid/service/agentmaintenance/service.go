@@ -47,6 +47,13 @@ type SessionResourceCleaner interface {
 	CleanupPurgedSessionResources(context.Context, string, string) error
 }
 
+// RunArtifactSweeper reclaims disposable files that agent run folders keep
+// after a session goes quiet (today: Codex's per-session `.sandbox-bin`
+// helper copy). It must never delete what resume needs.
+type RunArtifactSweeper interface {
+	SweepStaleRunArtifacts(context.Context, time.Time)
+}
+
 type DatabaseCompactor interface {
 	CompactDeletedDataIfSafe(context.Context) (bool, error)
 }
@@ -64,6 +71,7 @@ type Service struct {
 	State       StateStore
 	Compactor   DatabaseCompactor
 	Resources   SessionResourceCleaner
+	Artifacts   RunArtifactSweeper
 	IsIdle      func(context.Context) bool
 	Now         func() time.Time
 	mu          sync.Mutex
@@ -280,6 +288,10 @@ func (s *Service) runResourceCleanupOnce(ctx context.Context) {
 	defer s.mu.Unlock()
 	if s.idle(ctx) {
 		s.drainResourceCleanup(ctx)
+		// Same idle re-check after taking the lock: never sweep while a turn runs.
+		if s.Artifacts != nil {
+			s.Artifacts.SweepStaleRunArtifacts(ctx, s.now())
+		}
 	}
 }
 
