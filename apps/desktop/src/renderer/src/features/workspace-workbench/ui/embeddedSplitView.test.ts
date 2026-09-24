@@ -511,6 +511,59 @@ test("a window's own boot-time restore does not overwrite the restored split", a
   controller.dispose();
 });
 
+test("restoring a split onto two adopted windows is not undone by the host's synchronous echo", async () => {
+  // 真机（E2E 重载那一步偶发）：Dock 重载后 adopt 两扇窗口，左栏报 D、右栏报 A，
+  // 耐久布局是 A|B。applyLayout 先请右栏 A→B，宿主**同步**回调 syncFromNodes：
+  // 那时左栏还没被请去换 A、没有在途，它的 D 被当成用户切换 → 收成单列 D 并落盘。
+  const fake = createFakeHost({ seed: ["agent-left", "agent-right"] });
+  const observedByNode = new Map<string, string>([
+    ["agent-left", "session-d"],
+    ["agent-right", "session-a"]
+  ]);
+  const listeners = new Set<() => void>();
+  const activateNode = fake.host.activateNode;
+  fake.host.activateNode = (target, activation) => {
+    activateNode(target, activation);
+    // 宿主在 activateNode 里同步通知订阅者（真机就是这样重入的）。
+    fake.notify();
+    for (const listener of [...listeners]) listener();
+  };
+  const storage = memoryStorage({
+    "agent-gui:split-layout:ws-1:all": JSON.stringify({
+      focus: "left",
+      left: "session-a",
+      ratio: 0.5,
+      right: "session-b"
+    })
+  });
+  const controller = makeController(fake, {
+    sessions: {
+      read: (node) => observedByNode.get(node.id) ?? null,
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      }
+    },
+    storage
+  });
+  await controller.adopt(["agent-left", "agent-right"]);
+
+  assert.equal(controller.getSnapshot().panes.left?.sessionId, "session-a");
+  assert.equal(controller.getSnapshot().panes.right?.sessionId, "session-b");
+  assert.deepEqual(
+    activations(fake).filter((call) => call.nodeId === "agent-left"),
+    [{ nodeId: "agent-left", sessionId: "session-a" }]
+  );
+  const persisted = JSON.parse(
+    storage.map.get("agent-gui:split-layout:ws-1:all") ?? "{}"
+  );
+  assert.equal(
+    persisted.left ?? persisted.layout?.left ?? "session-a",
+    "session-a"
+  );
+  controller.dispose();
+});
+
 test("hitting new session in a pane clears its stale identity without collapsing the split", async () => {
   // 真机：在左栏点「新建会话」，正文换成了首页，栏头标题却还是上一条会话
   // （agent-gui 的 handleCreateConversation 把 lastActiveAgentSessionId 抹成 null，

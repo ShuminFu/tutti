@@ -972,7 +972,32 @@ export function createEmbeddedSplitViewController(
     );
   }
 
+  // applyLayout 往窗口发 activate 时，宿主会**同步**回调 syncFromNodes。那一刻只有
+  // 先发的那扇窗口记了在途，后面那扇还没请它换：它报的旧号会被当成用户切换。
+  // 真机（Dock 重载后 adopt 两扇窗口，左 D、右 A，恢复 A|B）：先请右栏 A→B，
+  // 同步回调里左栏的 D 没有在途 → 判成用户点了 D → 收成单列并落盘，恢复的两栏丢了
+  // （E2E dintaldock-pair-open-split 重载那一步偶发失败）。
+  // 所以窗口层的活干完之前先不读，干完再补读一次 —— 那时每扇窗口的在途都记好了。
+  let applyingLayoutDepth = 0;
+  let syncDeferredDuringApply = false;
+
   function applyLayout(
+    next: SplitLayoutState,
+    options: { persist: boolean }
+  ): void {
+    applyingLayoutDepth += 1;
+    try {
+      applyLayoutNow(next, options);
+    } finally {
+      applyingLayoutDepth -= 1;
+    }
+    if (applyingLayoutDepth === 0 && syncDeferredDuringApply) {
+      syncDeferredDuringApply = false;
+      syncFromNodes();
+    }
+  }
+
+  function applyLayoutNow(
     next: SplitLayoutState,
     options: { persist: boolean }
   ): void {
@@ -1478,6 +1503,11 @@ export function createEmbeddedSplitViewController(
   }
 
   function syncFromNodes(): void {
+    if (applyingLayoutDepth > 0) {
+      // 见 applyingLayoutDepth 的注释：applyLayout 收尾时补读。
+      syncDeferredDuringApply = true;
+      return;
+    }
     // 折叠是纯显示态：只影响 CSS（藏起非焦点栏），两个槽、焦点、比例一个不改，
     // 也绝不写本地记录 —— 面板拉宽回来必须原样恢复两栏（PRD 故事 33/36）。
     collapsed =
