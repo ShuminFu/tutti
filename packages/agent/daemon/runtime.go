@@ -79,12 +79,9 @@ type LiveSessionReaperConfig struct {
 	// MaxLiveSessions 是常驻会话数的上限（DINTAL-5308 的 LRU 那一档）。
 	//
 	// 为什么光有 TTL 不够：半小时里开二十条会话、每条都刚聊过，按 TTL 它们全都
-	// 「还新鲜」，可二十个 CLI 进程已经把内存吃光了。上限管的是「一共留了多少条」，
-	// 超了就从最久没说话的那条开始挤（LRU）。0 = 不限。
+	// 「还新鲜」，可二十个 CLI 进程已经把内存吃光了。上限管的是 idle 池条数，
+	// 每轮扫描超了就从最久没说话的那条开始挤（LRU）；运行中的回合不占池。0 = 不限。
 	MaxLiveSessions int
-	// EvictionGrace 是挤人时的护身符：刚说过话的会话即使超限也不动，
-	// 因为用户很可能正要接着打字。留 0 用默认一分钟。只对上限这一档生效。
-	EvictionGrace time.Duration
 }
 
 type Runtime struct {
@@ -285,7 +282,6 @@ func (r *Runtime) startLiveSessionReaper(config LiveSessionReaperConfig, load fu
 				IdleAfterFor:    current.IdleAfterFor,
 				PolicyAfterLock: liveSessionReaperPolicyAfterLock(load),
 				MaxLiveSessions: current.MaxLiveSessions,
-				EvictionGrace:   current.EvictionGrace,
 				Now:             time.Now(),
 			})
 			// A canonical turn may settle just before its adapter drops the final
@@ -317,7 +313,6 @@ func (r *Runtime) startLiveSessionReaper(config LiveSessionReaperConfig, load fu
 				"skipped_busy", result.SkippedBusy,
 				"skipped_retained", result.SkippedRetained,
 				"evicted_over_cap", result.EvictedOverCap,
-				"skipped_over_cap_protected", result.SkippedOverCapProtected,
 				"failed", result.Failed,
 			)
 		}

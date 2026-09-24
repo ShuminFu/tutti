@@ -629,7 +629,7 @@ func TestControllerReleaseIdleLiveSessionsHonoursPerSessionIdleAfter(t *testing.
 }
 
 // DINTAL-5308（LRU 那一档）：半小时里开了一堆会话、每条都刚聊过所以都没到 TTL，
-// 按 TTL 它们全都「还新鲜」，可进程已经把内存吃光了。上限管的是「一共留了多少条」，
+// 按 TTL 它们全都「还新鲜」，可进程已经把内存吃光了。上限管的是「idle 池留了多少条」，
 // 超了就从最久没说话的那条开始挤。
 func TestControllerReleaseIdleLiveSessionsEvictsLeastRecentlyUsedOverCap(t *testing.T) {
 	t.Parallel()
@@ -640,7 +640,7 @@ func TestControllerReleaseIdleLiveSessionsEvictsLeastRecentlyUsedOverCap(t *test
 	middle := startReleasableSession(t, controller, "middle-session")
 	newest := startReleasableSession(t, controller, "newest-session")
 
-	// 三条都安静了 10 分钟：远没到 30 分钟 TTL，但都过了护身符。
+	// 三条都安静了 10 分钟：远没到 30 分钟 TTL。
 	quiet := time.Now().Add(-10 * time.Minute)
 	setSessionUpdatedAt(t, controller, oldest.Session, quiet.Add(-2*time.Minute))
 	setSessionUpdatedAt(t, controller, middle.Session, quiet.Add(-time.Minute))
@@ -692,55 +692,155 @@ func TestControllerOverCapSweepStopsWhenCapRisesMidSweep(t *testing.T) {
 	if result.EvictedOverCap != 5 || result.Released != 0 {
 		t.Fatalf("cap raised to 15 after five releases: result=%+v, want five evictions", result)
 	}
-	if live := controller.countLiveSessions(); live != 15 {
-		t.Fatalf("live sessions = %d, want 15", live)
+	if idle := controller.countIdleLiveSessions(); idle != 15 {
+		t.Fatalf("idle live sessions = %d, want 15", idle)
 	}
 }
 
-// 防止误杀：刚说完话的会话即使超限也不挤 —— 用户很可能正要接着打字。
-func TestControllerReleaseIdleLiveSessionsKeepsJustActiveSessionsOverCap(t *testing.T) {
+func TestControllerOverCapSweepRecountsOnlyIdleAfterTurnStarts(t *testing.T) {
+	t.Parallel()
+	adapter := newReleasableAdapter()
+	controller := NewController([]Adapter{adapter}, nil)
+	oldest := startReleasableSession(t, controller, "oldest-idle")
+	middle := startReleasableSession(t, controller, "middle-idle")
+	newest := startReleasableSession(t, controller, "newest-idle")
+	setSessionUpdatedAt(t, controller, oldest.Session, time.Now().Add(-30*time.Minute))
+	setSessionUpdatedAt(t, controller, middle.Session, time.Now().Add(-20*time.Minute))
+	setSessionUpdatedAt(t, controller, newest.Session, time.Now().Add(-10*time.Minute))
+
+	execDone := make(chan error, 1)
+	startedTurn := false
+	result := controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
+		IdleAfter:       time.Hour,
+		IdleAfterFor:    func(Session) time.Duration { return -1 },
+		MaxLiveSessions: 1,
+		PolicyAfterLock: func(Session) (time.Duration, int) {
+			if !startedTurn {
+				startedTurn = true
+				go func() {
+					_, err := controller.Exec(context.Background(), ExecInput{
+						RoomID:         newest.Session.RoomID,
+						AgentSessionID: newest.Session.AgentSessionID,
+						Content:        textPrompt("became active"),
+					})
+					execDone <- err
+				}()
+				adapter.waitForExec(t, "became active")
+			}
+			return time.Hour, 1
+		},
+		Now: time.Now(),
+	})
+	if !startedTurn {
+		t.Fatal("capacity policy was not rechecked")
+	}
+	adapter.releaseNext()
+	if err := <-execDone; err != nil {
+		t.Fatalf("active Exec: %v", err)
+	}
+	if result.EvictedOverCap != 1 || adapter.hasLiveSession(oldest.Session.AgentSessionID) ||
+		!adapter.hasLiveSession(middle.Session.AgentSessionID) || !adapter.hasLiveSession(newest.Session.AgentSessionID) {
+		t.Fatalf("active transition caused excess eviction: %#v", result)
+	}
+}
+
+func TestControllerReleaseIdleLiveSessionsCapsOnlyIdlePool(t *testing.T) {
 	t.Parallel()
 
 	adapter := newReleasableAdapter()
 	controller := NewController([]Adapter{adapter}, nil)
-	stale := startReleasableSession(t, controller, "stale-session")
-	justSpoke := startReleasableSession(t, controller, "just-spoke-session")
-	setSessionUpdatedAt(t, controller, stale.Session, time.Now().Add(-10*time.Minute))
-	setSessionUpdatedAt(t, controller, justSpoke.Session, time.Now())
+	active := make([]StartResult, 0, 4)
+	for index := 0; index < 4; index++ {
+		active = append(active, startReleasableSession(t, controller, fmt.Sprintf("active-session-%d", index)))
+	}
+	idle := make([]StartResult, 0, 3)
+	for index := 0; index < 3; index++ {
+		session := startReleasableSession(t, controller, fmt.Sprintf("idle-session-%d", index))
+		setSessionUpdatedAt(t, controller, session.Session, time.Now().Add(-10*time.Minute))
+		idle = append(idle, session)
+	}
+
+	execDone := make(chan error, len(active))
+	for index, started := range active {
+		go func(index int, started StartResult) {
+			_, err := controller.Exec(context.Background(), ExecInput{
+				RoomID:         started.Session.RoomID,
+				AgentSessionID: started.Session.AgentSessionID,
+				Content:        textPrompt(fmt.Sprintf("active-%d", index)),
+			})
+			execDone <- err
+		}(index, started)
+		adapter.waitForExec(t, fmt.Sprintf("active-%d", index))
+	}
 
 	result := controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
 		IdleAfter:       30 * time.Minute,
-		MaxLiveSessions: 0, // 关掉上限先确认基线：一个都不动
+		MaxLiveSessions: 3,
 		Now:             time.Now(),
 	})
-	if result.Released != 0 || result.EvictedOverCap != 0 {
-		t.Fatalf("cap off should touch nothing: %#v", result)
+	if result.EvictedOverCap != 0 || result.SkippedActiveTurn != 4 {
+		t.Fatalf("running sessions affected idle cap: %#v", result)
+	}
+	for _, started := range active {
+		if !adapter.hasLiveSession(started.Session.AgentSessionID) {
+			t.Fatalf("running session %q was released", started.Session.AgentSessionID)
+		}
+	}
+	for _, started := range idle {
+		if !adapter.hasLiveSession(started.Session.AgentSessionID) {
+			t.Fatalf("idle session %q was released at an exact cap", started.Session.AgentSessionID)
+		}
 	}
 
-	// 上限压到 0 条可留？上限是 1：超出 1 条，最久没说话的是 stale，它该走；
-	// 再压到 0 条时 justSpoke 也超限，但它在护身符里，必须留下。
+	for range active {
+		adapter.releaseNext()
+	}
+	for range active {
+		if err := <-execDone; err != nil {
+			t.Fatalf("active Exec: %v", err)
+		}
+	}
+	waitForCondition(t, func() bool {
+		for _, started := range active {
+			if controller.HasActiveTurn(started.Session.RoomID, started.Session.AgentSessionID) {
+				return false
+			}
+		}
+		return true
+	})
+	for _, started := range active {
+		setSessionUpdatedAt(t, controller, started.Session, time.Now().Add(-10*time.Minute))
+	}
 	result = controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
 		IdleAfter:       30 * time.Minute,
-		MaxLiveSessions: 1,
-		EvictionGrace:   time.Minute,
+		MaxLiveSessions: 3,
 		Now:             time.Now(),
 	})
-	if result.EvictedOverCap != 1 || !adapter.hasLiveSession(justSpoke.Session.AgentSessionID) {
-		t.Fatalf("want only the stale one evicted: %#v", result)
+	if result.EvictedOverCap != 4 {
+		t.Fatalf("sessions did not enter the idle pool after their turns settled: %#v", result)
 	}
+}
 
-	result = controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
+// 扫描时容量上限对刚结束的 idle 会话也生效；TTL 仍单独控制定时回收。
+func TestControllerReleaseIdleLiveSessionsEvictsFreshIdleOverCap(t *testing.T) {
+	t.Parallel()
+
+	adapter := newReleasableAdapter()
+	controller := NewController([]Adapter{adapter}, nil)
+	older := startReleasableSession(t, controller, "older-fresh-session")
+	newer := startReleasableSession(t, controller, "newer-fresh-session")
+	setSessionUpdatedAt(t, controller, older.Session, time.Now().Add(-30*time.Second))
+	setSessionUpdatedAt(t, controller, newer.Session, time.Now())
+
+	result := controller.ReleaseIdleLiveSessions(context.Background(), ReleaseIdleLiveSessionsInput{
 		IdleAfter:       30 * time.Minute,
 		MaxLiveSessions: 1,
-		EvictionGrace:   time.Minute,
 		Now:             time.Now(),
 	})
-	// 现在只剩 justSpoke 一条，正好等于上限，不该有人被挤；
-	// 就算上限更小，它也该落进 SkippedOverCapProtected 而不是被掐掉。
-	if result.EvictedOverCap != 0 {
-		t.Fatalf("evicted = %d, want 0 once back at the cap: %#v", result.EvictedOverCap, result)
+	if result.Released != 0 || result.EvictedOverCap != 1 {
+		t.Fatalf("fresh idle session must be evicted over cap, independent of TTL: %#v", result)
 	}
-	if !adapter.hasLiveSession(justSpoke.Session.AgentSessionID) {
-		t.Fatal("the session that just spoke was evicted")
+	if adapter.hasLiveSession(older.Session.AgentSessionID) || !adapter.hasLiveSession(newer.Session.AgentSessionID) {
+		t.Fatal("capacity eviction did not release the oldest fresh idle session")
 	}
 }

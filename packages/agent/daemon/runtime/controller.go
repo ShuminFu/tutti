@@ -150,10 +150,6 @@ type reportRequest struct {
 	done             chan error
 }
 
-// defaultLiveSessionEvictionGrace 是超限回收的默认护身符：刚说完话不到一分钟的
-// 会话不会被挤掉。一分钟足够盖住「回完一轮、用户正在打字」这段。
-const defaultLiveSessionEvictionGrace = time.Minute
-
 type ReleaseIdleLiveSessionsInput struct {
 	// IdleAfter 是所有会话的默认空闲阈值；IdleAfterFor 为某条会话另行表态时以后者为准。
 	IdleAfter time.Duration
@@ -177,16 +173,10 @@ type ReleaseIdleLiveSessionsInput struct {
 	// 它们已经把机器吃光了。所以再加一道按条数的闸：超出上限时，从**最久没说话
 	// 的那条**开始回收，直到回到上限以内（LRU）。
 	//
-	// 0 表示不限条数。
+	// 正在运行的回合不占 idle 池；0 表示不限条数。
 	MaxLiveSessions int
-	// EvictionGrace 是超限回收的护身符：只有「安静超过这么久」的会话才会被挤掉。
-	// 防的是刚回完一轮、用户正要接着打字就被掐掉进程。留 0 用
-	// defaultLiveSessionEvictionGrace。
-	//
-	// 注意它只管超限回收这一档；TTL 那档本来就有自己的阈值。
-	EvictionGrace time.Duration
-	Now           time.Time
-	Limit         int
+	Now             time.Time
+	Limit           int
 }
 
 type ReleaseIdleLiveSessionsResult struct {
@@ -203,10 +193,7 @@ type ReleaseIdleLiveSessionsResult struct {
 	// EvictedOverCap 是因为超出 MaxLiveSessions 而被挤掉的会话数（LRU 那一档），
 	// 与 Released（到点回收）分开记：一个说明上限太紧，一个说明 TTL 到了。
 	EvictedOverCap int
-	// SkippedOverCapProtected 是超限了、但因为刚说完话还在护身符里而没动的会话。
-	// 它不为 0 却还在超限，说明上限设得比「同时在用的会话数」还小。
-	SkippedOverCapProtected int
-	Failed                  int
+	Failed         int
 }
 
 // CloseAllLiveSessionsResult reports the outcome of CloseAllLiveSessions.
