@@ -271,6 +271,22 @@ test("desktop agent host api writes images through the host clipboard", async ()
   assert.deepEqual(copiedImages, [{ data: "cG5n", mimeType: "image/png" }]);
 });
 
+test("desktop agent host api exposes native paste only when the host provides it", async () => {
+  let pasteCalls = 0;
+  const supported = createAgentHostApi({
+    hostFilesApi: createHostFilesApi({
+      async paste() {
+        pasteCalls += 1;
+      }
+    })
+  });
+  await supported.clipboard.paste?.();
+  assert.equal(pasteCalls, 1);
+
+  const unsupported = createAgentHostApi();
+  assert.equal(unsupported.clipboard.paste, undefined);
+});
+
 test("desktop agent host api does not inject legacy agent data host apis", () => {
   const api = createAgentHostApi();
 

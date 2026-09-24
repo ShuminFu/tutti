@@ -37,6 +37,7 @@ export interface AgentRichTextEditorProps {
   onLinkClick?: (href: string) => void;
   promptImagesSupported?: boolean;
   onPromptImagesUnsupported?: () => void;
+  onClipboardFileUnavailable?: () => void;
   onPasteImages?: (images: AgentRichTextPastedImage[]) => void;
   onPasteLargeText?: (text: string) => void;
   onPasteFiles?: (files: readonly File[]) => void;

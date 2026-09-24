@@ -150,6 +150,7 @@ export function AgentComposerView(input: Props): React.JSX.Element {
     onRemoveQueuedPrompt,
     onEditQueuedPrompt,
     onPromptImagesUnsupported,
+    onClipboardFileUnavailable,
     onRequestWorkspaceReferences,
     referenceProvenanceFilters,
     selectProjectDirectory,
@@ -512,6 +513,7 @@ export function AgentComposerView(input: Props): React.JSX.Element {
                     onLinkClick={handleLinkClick}
                     promptImagesSupported={promptImagesSupported}
                     onPromptImagesUnsupported={onPromptImagesUnsupported}
+                    onClipboardFileUnavailable={onClipboardFileUnavailable}
                     onPasteImages={handlePastedImages}
                     onPasteLargeText={handlePastedLargeText}
                     onPasteFiles={

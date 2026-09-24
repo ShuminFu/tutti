@@ -252,6 +252,9 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   const showPromptImagesUnsupported = useStableEventCallback(
     actions.showPromptImagesUnsupported
   );
+  const showClipboardFileUnavailable = useStableEventCallback(
+    actions.showClipboardFileUnavailable
+  );
   const sendQueuedPromptNext = useStableEventCallback(
     actions.sendQueuedPromptNext
   );
@@ -510,6 +513,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
           : undefined,
       onSubmitGuidance: submitGuidancePromptAndScrollToBottom,
       onPromptImagesUnsupported: showPromptImagesUnsupported,
+      onClipboardFileUnavailable: showClipboardFileUnavailable,
       onSendQueuedPromptNext: sendQueuedPromptNext,
       onRemoveQueuedPrompt: removeQueuedPrompt,
       onEditQueuedPrompt: editQueuedPrompt,
@@ -567,6 +571,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       promptAssetLimit,
       sendQueuedPromptNext,
       showPromptImagesUnsupported,
+      showClipboardFileUnavailable,
       showStopButton,
       sourceActiveTurn?.turnId,
       showHandoffTargetOwnershipLabels,

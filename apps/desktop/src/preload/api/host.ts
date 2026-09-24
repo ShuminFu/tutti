@@ -187,6 +187,9 @@ export function createHostDesktopApi(): DesktopHostApi {
           desktopIpcChannels.host.files.copyFilesToClipboard,
           paths
         );
+      },
+      paste(): Promise<void> {
+        return invokeDesktopApi(desktopIpcChannels.host.files.paste);
       }
     },
     window: {

@@ -471,6 +471,7 @@ export interface AgentComposerProps {
   onEditQueuedPrompt: (queuedPromptId: string) => void;
   onInterruptCurrentTurn: () => void;
   onPromptImagesUnsupported?: () => void;
+  onClipboardFileUnavailable?: () => void;
   onSubmitInteractivePrompt: (input: AgentInteractionResponseInput) => boolean;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
   onRequestWorkspaceReferences?:

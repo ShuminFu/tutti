@@ -288,7 +288,8 @@ export const desktopIpcChannels = {
       selectDirectory: "host:files:selectDirectory",
       selectUploadFiles: "host:files:selectUploadFiles",
       copyImageToClipboard: "host:files:copyImageToClipboard",
-      copyFilesToClipboard: "host:files:copyFilesToClipboard"
+      copyFilesToClipboard: "host:files:copyFilesToClipboard",
+      paste: "host:files:paste"
     },
     window: {
       approveClose: "host:window:approveClose",
@@ -1289,6 +1290,7 @@ export interface DesktopInvokePayloadByChannel {
   [desktopIpcChannels.host.files
     .copyImageToClipboard]: DesktopClipboardImagePayload;
   [desktopIpcChannels.host.files.copyFilesToClipboard]: string[];
+  [desktopIpcChannels.host.files.paste]: undefined;
   [desktopIpcChannels.host.window.approveClose]: undefined;
   [desktopIpcChannels.host.window
     .capturePreview]: DesktopHostWindowCapturePreviewInput;
@@ -1491,6 +1493,7 @@ export interface DesktopInvokeResultByChannel {
   [desktopIpcChannels.host.files.selectUploadFiles]: string[];
   [desktopIpcChannels.host.files.copyImageToClipboard]: void;
   [desktopIpcChannels.host.files.copyFilesToClipboard]: void;
+  [desktopIpcChannels.host.files.paste]: void;
   [desktopIpcChannels.host.window.approveClose]: void;
   [desktopIpcChannels.host.window.capturePreview]: string | null;
   [desktopIpcChannels.host.window

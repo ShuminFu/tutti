@@ -18,6 +18,8 @@ type AgentHostUnsubscribe = () => void;
 export type AgentHostClipboardApi = {
   /** Let the host's native edit menu dispatch trusted clipboard events. */
   useNativeContextMenu?: boolean;
+  /** Ask the host to paste into the currently focused editor window. */
+  paste?: () => AgentHostAsyncResult<void>;
   writeImage?: (input: {
     data: string;
     mimeType: "image/png";

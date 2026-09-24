@@ -695,6 +695,7 @@ export interface AgentGUINodeViewProps extends AgentGUIComposerExternalPromptPro
     ) => void;
     loadOlderConversationMessages: () => void;
     showPromptImagesUnsupported: () => void;
+    showClipboardFileUnavailable: () => void;
     submitApprovalOption: (input: AgentInteractionResponseInput) => boolean;
     submitInteractivePrompt: (input: AgentInteractionResponseInput) => boolean;
     interruptCurrentTurn: (noRunningResponseMessage: string) => void;

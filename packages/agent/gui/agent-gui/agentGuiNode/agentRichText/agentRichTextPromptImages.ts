@@ -10,7 +10,6 @@ export interface AgentRichTextPromptImage {
   readError?: string;
 }
 
-const IMAGE_FILE_NAME = /\.(png|jpe?g|webp|gif|tiff?|bmp|heic|heif|avif)$/i;
 const GENERIC_CLIPBOARD_IMAGE_NAME =
   /^(image|clipboard-image|blob|pasted-image)(\.[a-z0-9]+)?$/i;
 
@@ -20,12 +19,12 @@ export interface ClipboardPromptImageDelivery {
   onFiles: (files: readonly File[]) => void;
   onImages: (images: AgentRichTextPromptImage[]) => void;
   onUnsupported: () => void;
+  onFileUnavailable: () => void;
 }
 
 interface ClipboardFileSource {
   type: string;
-  file: File | null;
-  materialize: () => File | null;
+  file: File;
 }
 
 export function imageFilesFromDataTransfer(
@@ -36,7 +35,9 @@ export function imageFilesFromDataTransfer(
   }
   const items = fileItems(dataTransfer);
   if (!items) {
-    return Array.from(dataTransfer.files ?? []).filter(isPromptImageFile);
+    return Array.from(dataTransfer.files ?? []).filter((file) =>
+      isClipboardImageFile(file)
+    );
   }
   const files: File[] = [];
   for (const item of items) {
@@ -44,12 +45,14 @@ export function imageFilesFromDataTransfer(
       continue;
     }
     const file = item.getAsFile();
-    if (file && isClipboardImageFile(file)) {
+    if (file && isClipboardImageFile(file, item.type)) {
       files.push(file);
     }
   }
   if (files.length === 0) {
-    return Array.from(dataTransfer.files ?? []).filter(isPromptImageFile);
+    return Array.from(dataTransfer.files ?? []).filter((file) =>
+      isClipboardImageFile(file)
+    );
   }
   return files;
 }
@@ -72,7 +75,7 @@ export function nonImageFilesFromDataTransfer(
       continue;
     }
     const file = item.getAsFile();
-    if (!file || isClipboardImageFile(file)) {
+    if (!file || isClipboardImageFile(file, item.type)) {
       continue;
     }
     files.push(file);
@@ -167,17 +170,17 @@ export function stageAgentRichTextPromptImages(
   files: readonly File[]
 ): AgentRichTextPromptImage[] {
   return files
-    .filter(isClipboardImageFile)
+    .filter((file) => isClipboardImageFile(file))
     .map((file) => stagePromptImage(file));
 }
 
 /**
  * Publishes a composer chip before clipboard bytes are read.
  *
- * Item kind and type are enough for the placeholder. `getAsFile()` and
- * base64 stay on a later task so a large or unlabeled paste can paint first.
- * When a provider image type is present, extra representations of the same
- * paste (often TIFF beside PNG) are ignored.
+ * Capture File handles while the trusted paste event is active. Placeholders
+ * paint before preview creation, byte reads, and base64 encoding on later tasks.
+ * Every File remains independent; clipboard metadata cannot prove that two
+ * image representations describe the same OS file.
  */
 export function deliverClipboardPromptImages(
   dataTransfer: DataTransfer | null,
@@ -186,40 +189,42 @@ export function deliverClipboardPromptImages(
   if (!dataTransfer) {
     return false;
   }
-  const sources = clipboardFileSources(dataTransfer);
+  const { sources, unavailable } = clipboardFileSources(dataTransfer);
+  if (unavailable) {
+    options.onFileUnavailable();
+  }
   if (sources.length === 0) {
     return false;
   }
-  const imageSources = preferProviderImageSources(
-    sources.filter(sourceMightBeImage)
-  );
+  const imageSources = sources.filter(sourceMightBeImage);
   const regularSources = sources.filter(
     (source) => !sourceMightBeImage(source)
   );
   if (!options.promptImagesSupported) {
-    return deliverImagesAsFiles(imageSources, regularSources, options);
+    return deliverImagesAsFiles(sources, options);
   }
   const regularFiles = options.externalFilesSupported
-    ? materializeFiles(regularSources)
+    ? regularSources.map((source) => source.file)
     : [];
+  if (!options.externalFilesSupported && regularSources.length > 0) {
+    options.onFileUnavailable();
+  }
   if (regularFiles.length > 0) {
     options.onFiles(regularFiles);
   }
-  const immediate = imageSources.filter((source) => source.file);
-  const deferred = imageSources.filter((source) => !source.file);
-  const staged = immediate.map((source) => stagePromptImage(source.file!));
-  if (deferred.length === 0) {
-    if (staged.length > 0) {
-      options.onImages(staged);
-    }
-    return staged.length > 0 || regularFiles.length > 0;
+  if (imageSources.length === 0) {
+    return regularFiles.length > 0;
   }
-  const placeholders = deferred.map((source) =>
+  const placeholders = imageSources.map((source) =>
     placeholderPromptImage(source.type)
   );
-  options.onImages([...staged, ...placeholders]);
+  options.onImages(placeholders);
   deferUntilNextTask(() => {
-    resolveDeferredPromptImages(deferred, placeholders, options);
+    options.onImages(
+      imageSources.map((source, index) =>
+        stagePromptImage(source.file, placeholders[index]?.id)
+      )
+    );
   });
   return true;
 }
@@ -251,107 +256,55 @@ function fileItems(dataTransfer: DataTransfer): DataTransferItem[] | null {
   return Array.from(items).filter((item) => item.kind === "file");
 }
 
-function clipboardFileSources(
-  dataTransfer: DataTransfer
-): ClipboardFileSource[] {
+function clipboardFileSources(dataTransfer: DataTransfer): {
+  sources: ClipboardFileSource[];
+  unavailable: boolean;
+} {
   const items = fileItems(dataTransfer);
+  const transferFiles = Array.from(dataTransfer.files ?? []);
   if (items && items.length > 0) {
-    return items.map((item) => ({
-      type: item.type,
-      file: null,
-      materialize: () => item.getAsFile()
-    }));
+    let unavailable = false;
+    const sources = items.flatMap((item, index) => {
+      let file: File | null = null;
+      try {
+        file = item.getAsFile();
+      } catch {
+        file = transferFiles[index] ?? null;
+      }
+      file ??= transferFiles[index] ?? null;
+      if (!file) unavailable = true;
+      return file ? [{ type: item.type, file }] : [];
+    });
+    return { sources, unavailable };
   }
-  return Array.from(dataTransfer.files ?? []).map((file) => ({
-    type: file.type,
-    file,
-    materialize: () => file
-  }));
+  return {
+    sources: transferFiles.map((file) => ({ type: file.type, file })),
+    unavailable: false
+  };
 }
 
 function sourceMightBeImage(source: ClipboardFileSource): boolean {
-  if (isPromptImageItemType(source.type)) {
-    return true;
-  }
-  if (source.file) {
-    return isClipboardImageFile(source.file);
-  }
-  const type = source.type.trim().toLowerCase();
-  return type === "" || type === "application/octet-stream";
-}
-
-function preferProviderImageSources(
-  sources: ClipboardFileSource[]
-): ClipboardFileSource[] {
-  const providerSources = sources.filter(
-    (source) =>
-      supportedPromptImageMimeType(source.type) ||
-      (source.file !== null && supportedPromptImageMimeType(source.file.type))
-  );
-  return providerSources.length > 0 ? providerSources : sources;
+  return isClipboardImageFile(source.file, source.type);
 }
 
 function deliverImagesAsFiles(
-  imageSources: readonly ClipboardFileSource[],
-  regularSources: readonly ClipboardFileSource[],
+  sources: readonly ClipboardFileSource[],
   options: ClipboardPromptImageDelivery
 ): boolean {
   if (!options.externalFilesSupported) {
-    if (imageSources.length > 0) {
+    if (sources.some(sourceMightBeImage)) {
       options.onUnsupported();
     }
-    return imageSources.length > 0;
+    if (sources.some((source) => !sourceMightBeImage(source))) {
+      options.onFileUnavailable();
+    }
+    return sources.length > 0;
   }
-  const files = materializeFiles([...regularSources, ...imageSources]);
+  const files = sources.map((source) => source.file);
   if (files.length > 0) {
     options.onFiles(files);
   }
-  return files.length > 0 || imageSources.length > 0;
-}
-
-function resolveDeferredPromptImages(
-  sources: readonly ClipboardFileSource[],
-  placeholders: readonly AgentRichTextPromptImage[],
-  options: ClipboardPromptImageDelivery
-): void {
-  const images: AgentRichTextPromptImage[] = [];
-  const rejectedFiles: File[] = [];
-  sources.forEach((source, index) => {
-    const id = placeholders[index]?.id ?? newPasteImageId();
-    let file: File | null = null;
-    try {
-      file = source.materialize();
-    } catch {
-      images.push({
-        id,
-        name: "clipboard-image",
-        mimeType: "image/png",
-        data: "",
-        readError: "This image could not be read."
-      });
-      return;
-    }
-    if (!file || !isClipboardImageFile(file)) {
-      images.push({
-        id,
-        name: "",
-        mimeType: "image/png",
-        data: "",
-        reject: true
-      });
-      if (file) {
-        rejectedFiles.push(file);
-      }
-      return;
-    }
-    images.push(stagePromptImage(file, id));
-  });
-  if (images.length > 0) {
-    options.onImages(images);
-  }
-  if (rejectedFiles.length > 0 && options.externalFilesSupported) {
-    options.onFiles(rejectedFiles);
-  }
+  return files.length > 0;
 }
 
 function stagePromptImage(
@@ -404,41 +357,31 @@ function isDeferredImageItemType(value: string): boolean {
   );
 }
 
-function isPromptImageFile(file: File): boolean {
-  return (
-    isPromptImageItemType(file.type) || IMAGE_FILE_NAME.test(file.name.trim())
-  );
-}
-
-function isClipboardImageFile(file: File): boolean {
-  if (file.type.trim().toLowerCase() === "image/svg+xml") {
+function isClipboardImageFile(file: File, itemType = file.type): boolean {
+  const type = itemType.trim().toLowerCase();
+  if (type === "image/svg+xml") {
     return false;
   }
-  if (isPromptImageFile(file)) {
+  if (isPromptImageItemType(type)) {
     return true;
   }
-  const type = file.type.trim().toLowerCase();
   if (type && type !== "application/octet-stream") {
+    return false;
+  }
+  const fileType = file.type.trim().toLowerCase();
+  if (isPromptImageItemType(fileType)) {
+    return true;
+  }
+  if (fileType && fileType !== "application/octet-stream") {
     return false;
   }
   const name = file.name.trim();
   return name === "" || GENERIC_CLIPBOARD_IMAGE_NAME.test(name);
 }
 
-function materializeFiles(sources: readonly ClipboardFileSource[]): File[] {
-  const files: File[] = [];
-  for (const source of sources) {
-    const file = source.materialize();
-    if (file) {
-      files.push(file);
-    }
-  }
-  return files;
-}
-
 function deferUntilNextTask(work: () => void): void {
-  // The chip must paint before clipboard bytes are read. A timer would raise
-  // the AgentGUI timer ratchet, so this queues one macrotask instead.
+  // The chip must paint before preview work. A timer would raise the AgentGUI
+  // timer ratchet, so this queues one macrotask instead.
   if (typeof MessageChannel !== "function") {
     work();
     return;

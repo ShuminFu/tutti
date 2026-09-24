@@ -8,6 +8,7 @@ import {
   type EngineEffectOptions
 } from "@tutti-os/agent-activity-core";
 import { describe, expect, it, vi } from "vitest";
+import { translate } from "../../../i18n/index";
 import type { AgentComposerDraft } from "../model/agentGuiNodeTypes";
 import { agentComposerDraftPrompt } from "../model/agentComposerDraft";
 import {
@@ -193,6 +194,21 @@ describe("embedded new-session retry", () => {
         initialContent: [{ type: "text", text: "first prompt" }],
         settings: { model: "gpt-5" }
       })
+    );
+  });
+});
+
+describe("clipboard file errors", () => {
+  it("shows a localized file error rather than an image-capability error", () => {
+    const { input, setDetailError } = createGoalControlInput(
+      vi.fn(async () => ({}) as never)
+    );
+    const { result } = renderHook(() =>
+      useAgentGUISubmitInteractionActions(input)
+    );
+    act(() => result.current.showClipboardFileUnavailable());
+    expect(setDetailError).toHaveBeenCalledWith(
+      translate("agentHost.agentGui.clipboardFileUnavailable")
     );
   });
 });

@@ -281,6 +281,7 @@ export interface DesktopHostFilesApi {
   selectUploadFiles(input?: DesktopSelectUploadFilesInput): Promise<string[]>;
   copyImageToClipboard(input: DesktopClipboardImagePayload): Promise<void>;
   copyFilesToClipboard(paths: string[]): Promise<void>;
+  paste?(): Promise<void>;
 }
 
 export interface DesktopHostApi {

@@ -38,6 +38,9 @@ export function useAgentGUIControllerActions(
   const showPromptImagesUnsupported = useStableControllerEventCallback(
     actions.showPromptImagesUnsupported
   );
+  const showClipboardFileUnavailable = useStableControllerEventCallback(
+    actions.showClipboardFileUnavailable
+  );
   const submitApprovalOption = useStableControllerEventCallback(
     actions.submitApprovalOption
   );
@@ -140,6 +143,7 @@ export function useAgentGUIControllerActions(
       submitGuidancePrompt,
       loadOlderConversationMessages,
       showPromptImagesUnsupported,
+      showClipboardFileUnavailable,
       submitApprovalOption,
       submitInteractivePrompt,
       interruptCurrentTurn,
@@ -199,6 +203,7 @@ export function useAgentGUIControllerActions(
       selectHomeComposerAgentTarget,
       sendQueuedPromptNext,
       showPromptImagesUnsupported,
+      showClipboardFileUnavailable,
       submitApprovalOption,
       submitGuidancePrompt,
       submitInteractivePrompt,

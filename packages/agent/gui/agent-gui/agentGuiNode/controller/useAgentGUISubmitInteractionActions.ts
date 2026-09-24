@@ -854,6 +854,10 @@ export function useAgentGUISubmitInteractionActions(
     setDetailError(translate("agentHost.agentGui.promptImagesUnsupported"));
   }, []);
 
+  const showClipboardFileUnavailable = useCallback(() => {
+    setDetailError(translate("agentHost.agentGui.clipboardFileUnavailable"));
+  }, []);
+
   const submitInteractivePrompt = useCallback(
     (input: AgentInteractionResponseInput): boolean => {
       // Plan-implementation actions are client-orchestrated; route them to the
@@ -995,6 +999,7 @@ export function useAgentGUISubmitInteractionActions(
     stopBackgroundMonitors,
     retryActivation,
     showPromptImagesUnsupported,
+    showClipboardFileUnavailable,
     submitApprovalOption,
     submitGuidancePrompt,
     submitInteractivePrompt,

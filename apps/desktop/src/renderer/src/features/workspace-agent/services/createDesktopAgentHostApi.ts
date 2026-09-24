@@ -198,6 +198,7 @@ export function createDesktopAgentHostApi({
     },
     clipboard: {
       useNativeContextMenu: isHostBridgeAvailable(),
+      ...(hostFilesApi.paste ? { paste: () => hostFilesApi.paste!() } : {}),
       writeImage: (input: { data: string; mimeType: "image/png" }) =>
         hostFilesApi.copyImageToClipboard(input),
       writeText: (text: string) => navigator.clipboard.writeText(text)

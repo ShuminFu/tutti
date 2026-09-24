@@ -603,6 +603,8 @@ export const zhCNAgentGui = {
   goalControlFailed: "目标变更未能应用",
   sessionNoLongerAvailable: "之前的 Agent 会话已不可用",
   promptImagesUnsupported: "当前模型不支持图片输入。",
+  clipboardFileUnavailable:
+    "部分剪贴板文件无法读取，请重新复制或从文件选择器添加",
   ...zhCNAgentGuiRuntimeNotices,
   contextCompactionInProgress: "正在压缩上下文",
   contextCompactionCompleted: "已压缩上下文",

@@ -587,6 +587,8 @@ export const enAgentGui = {
     "The previous agent session is no longer available.",
   promptImagesUnsupported:
     "This agent does not support image input with the current model.",
+  clipboardFileUnavailable:
+    "Some clipboard files could not be accessed. Copy them again or attach them from the file picker.",
   ...enAgentGuiRuntimeNotices,
   contextCompactionInProgress: "Compacting context",
   contextCompactionCompleted: "Context compacted.",

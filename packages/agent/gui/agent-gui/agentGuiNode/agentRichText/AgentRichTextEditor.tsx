@@ -101,6 +101,7 @@ export const AgentRichTextEditor = forwardRef<
     onLinkClick,
     promptImagesSupported = true,
     onPromptImagesUnsupported,
+    onClipboardFileUnavailable,
     onPasteImages,
     onPasteLargeText,
     onPasteFiles,
@@ -111,8 +112,9 @@ export const AgentRichTextEditor = forwardRef<
 ): React.JSX.Element {
   "use memo";
   const { t } = useTranslation();
-  const useNativeContextMenu =
-    useOptionalAgentHostApi()?.clipboard.useNativeContextMenu === true;
+  const hostApi = useOptionalAgentHostApi();
+  const useNativeContextMenu = hostApi?.clipboard.useNativeContextMenu === true;
+  const hostPaste = hostApi?.clipboard.paste;
   const lastEmittedPromptRef = useRef<string | null>(value);
   const controlledValueTrackerRef = useRef(
     createAgentRichTextControlledValueTracker(contentScopeKey)
@@ -136,6 +138,7 @@ export const AgentRichTextEditor = forwardRef<
   );
   const onLinkClickRef = useRef(onLinkClick);
   const onPromptImagesUnsupportedRef = useRef(onPromptImagesUnsupported);
+  const onClipboardFileUnavailableRef = useRef(onClipboardFileUnavailable);
   const onPasteImagesRef = useRef(onPasteImages);
   const onPasteLargeTextRef = useRef(onPasteLargeText);
   const onPasteFilesRef = useRef(onPasteFiles);
@@ -231,11 +234,28 @@ export const AgentRichTextEditor = forwardRef<
     if (disabled) {
       return;
     }
-    const text = await readPlainTextFromClipboard();
-    if (text) {
-      insertPlainText(text);
+    const pastePlainText = async (): Promise<void> => {
+      const text = await readPlainTextFromClipboard();
+      if (text) {
+        insertPlainText(text);
+      }
+    };
+    const currentEditor = editorRef.current;
+    if (hostPaste && currentEditor && !currentEditor.isDestroyed) {
+      currentEditor.view.focus();
+      try {
+        await hostPaste();
+        return;
+      } catch {
+        void hostApi?.debug?.logRuntimeDiagnostics?.({
+          event: "agent.gui.composer.nativePasteFailed"
+        });
+        await pastePlainText();
+        return;
+      }
     }
-  }, [closeContextMenu, disabled, insertPlainText]);
+    await pastePlainText();
+  }, [closeContextMenu, disabled, hostApi, hostPaste, insertPlainText]);
 
   const scheduleSelectionScroll = (targetEditor: Editor): void => {
     if (typeof window.requestAnimationFrame !== "function") {
@@ -291,6 +311,7 @@ export const AgentRichTextEditor = forwardRef<
   onFileMentionSuggestionKeyDownRef.current = onFileMentionSuggestionKeyDown;
   onLinkClickRef.current = onLinkClick;
   onPromptImagesUnsupportedRef.current = onPromptImagesUnsupported;
+  onClipboardFileUnavailableRef.current = onClipboardFileUnavailable;
   onPasteImagesRef.current = onPasteImages;
   onPasteLargeTextRef.current = onPasteLargeText;
   onPasteFilesRef.current = onPasteFiles;
@@ -417,6 +438,7 @@ export const AgentRichTextEditor = forwardRef<
           return true;
         },
         paste: (_view, event) => {
+          if (disabled) return false;
           if (
             deliverClipboardPromptImages(event.clipboardData, {
               externalFilesSupported: Boolean(onPasteFilesRef.current),
@@ -429,6 +451,9 @@ export const AgentRichTextEditor = forwardRef<
               },
               onUnsupported: () => {
                 onPromptImagesUnsupportedRef.current?.();
+              },
+              onFileUnavailable: () => {
+                onClipboardFileUnavailableRef.current?.();
               }
             })
           ) {

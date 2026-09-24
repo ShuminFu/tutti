@@ -2324,14 +2324,18 @@ The empty-home carousel may measure its placeholder synchronously when live
 alignment first activates. Later React updates coalesce alignment into the next
 animation frame; ResizeObserver and MutationObserver keep layout roots current.
 
-Pasted prompt images paint before their bytes are archived. The paste handler
-publishes a composer chip in the paste turn from clipboard item kind and type
-only, then yields one task before reading clipboard bytes. The chip shows a
-blob preview as soon as the file is in hand. Base64 encoding and host archival
-run after that preview and must not replace it with a data URL. An empty,
-generic, or non-SVG `image/*` clipboard type still takes this path; the
-provider payload is sniffed or transcoded to png, jpeg, or webp. A file that
-is not an image leaves the chip and uses the existing file attachment path.
+Pasted prompt images paint before their bytes are archived. The trusted paste
+handler captures each browser `File` handle while `DataTransferItem.getAsFile()`
+is readable, and classifies the captured file by MIME and name. It publishes
+image placeholders in that paste turn, then yields one task before creating
+previews or reading bytes. Base64 encoding and host archival run after the
+preview and must not replace it with a data URL. An empty, generic, or non-SVG
+`image/*` clipboard type may still take the image path when the captured file
+is image-like; named files with empty or octet-stream MIME take the external
+file path. Distinct `File` objects are preserved because MIME and basename do
+not prove duplicate clipboard representations. An item that yields no file and
+has no `DataTransfer.files` fallback reports a visible clipboard-file error;
+other readable items continue.
 A full-bleed spinner covers only the still-empty chip. Once the preview is
 visible, upload progress stays a corner mark so the picture is not hidden
 until archival finishes. Sending still omits an image that is encoding or
@@ -2406,9 +2410,14 @@ so the composer leaves the native edit menu in control. Native Paste delivers
 one trusted clipboard event to the existing text, mention, large-text, and
 attachment handlers; it must not first call `navigator.clipboard.readText()`,
 which introduces a second WebKit paste confirmation. Hosts that omit this
-optional capability retain the custom editor menu. The native context-menu
-event stops propagation without cancelling the browser default, so outer
-workbench menus cannot replace it.
+optional capability retain the custom editor menu. Desktop supplies an optional
+`AgentHostApi.clipboard.paste` command for that menu: the editor focuses its own
+view before the host asks the calling Electron `webContents` to paste, so the
+same trusted clipboard event handles files, images, text, and structured
+mentions. If the host command rejects, the editor records a diagnostic and
+falls back to plain-text clipboard reading; hosts without the command keep that
+text fallback. The native context-menu event stops propagation without
+cancelling the browser default, so outer workbench menus cannot replace it.
 
 Composer copy and cut write both the canonical prompt Markdown as
 `text/plain` and schema-serialized mention markup as `text/html`. Pasting that
@@ -2416,7 +2425,7 @@ markup reparses it through the AgentGUI editor schema, so built-in and
 currently registered custom mentions retain their canonical href and chip
 identity without a host DOM event interceptor.
 
-External OS file paste and drop enter one host-injected classification boundary before draft attachment creation. The synchronous `resolveExternalPromptEntries` port classifies each source index as a live `WorkspaceFileReference` or a snapshot requiring preparation. AgentGUI owns ordered mention insertion and draft reconciliation: references become ordinary file/folder mentions and never consume prompt-asset slots, while only `prepare` entries create pending attachment state and enter `prepareExternalPromptFiles`. A host without the resolver prepares every external entry. The preparer owns native-path or byte lookup, size enforcement, persistence, and remote transport; each prepared input has one `sourceIndex` result, one failure must not fail siblings, successful results include a provider-readable `path` or `url`, and failures carry typed error codes. Hosts that classify path-backed entries as references must reject any such entry that unexpectedly reaches preparation, so classification failure cannot silently create a duplicate snapshot.
+External OS file paste and drop enter one host-injected classification boundary before draft attachment creation. Paste captures `File` handles during the event, but does not read bytes or assume a browser `File` exposes an OS path. The synchronous `resolveExternalPromptEntries` port classifies each source index as a live `WorkspaceFileReference` or a snapshot requiring preparation. AgentGUI owns ordered mention insertion and draft reconciliation: references become ordinary file/folder mentions and never consume prompt-asset slots, while only `prepare` entries create pending attachment state and enter `prepareExternalPromptFiles`. A host without the resolver prepares every external entry. The preparer owns native-path or byte lookup, size enforcement, persistence, and remote transport; each prepared input has one `sourceIndex` result, one failure must not fail siblings, successful results include a provider-readable `path` or `url`, and failures carry typed error codes. Hosts that classify path-backed entries as references must reject any such entry that unexpectedly reaches preparation, so classification failure cannot silently create a duplicate snapshot.
 
 Attachment readiness is not a submit gate. The submit projection drops every
 attachment that is still uploading or that failed, so those attachments must

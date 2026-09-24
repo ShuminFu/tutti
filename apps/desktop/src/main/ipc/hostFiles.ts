@@ -172,6 +172,9 @@ export function registerHostFilesIpc(deps: HostFilesIpcDependencies): void {
       writeFilesToSystemClipboard(payload);
     }
   );
+  registerDesktopIpcHandler(desktopIpcChannels.host.files.paste, (event) => {
+    event.sender.paste();
+  });
 }
 
 async function archiveAgentPromptFile(

@@ -1,6 +1,14 @@
-import { act, fireEvent, render, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor
+} from "@testing-library/react";
 import { createRef } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { setAgentHostApiForTests } from "../../../agentActivityHost";
+import type { AgentHostInputApi } from "../../../host/agentHostApi";
 import {
   registerAgentCustomMentionKind,
   resetAgentCustomMentionKindsForTests
@@ -41,6 +49,265 @@ describe("isAgentRichTextAbsolutePathPasteCandidate", () => {
 });
 
 describe("AgentRichTextEditor file paste", () => {
+  const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(
+    navigator,
+    "clipboard"
+  );
+  afterEach(() => {
+    setAgentHostApiForTests(null);
+    if (originalClipboardDescriptor) {
+      Object.defineProperty(
+        navigator,
+        "clipboard",
+        originalClipboardDescriptor
+      );
+    } else {
+      Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  function stubClipboardReadText(readText: () => Promise<string>): void {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { readText }
+    });
+  }
+
+  function setClipboardHost(input: {
+    paste?: () => Promise<void>;
+    logRuntimeDiagnostics?: (payload: unknown) => void;
+  }): void {
+    setAgentHostApiForTests({
+      clipboard: {
+        ...(input.paste ? { paste: input.paste } : {}),
+        writeText: async () => undefined
+      },
+      ...(input.logRuntimeDiagnostics
+        ? { debug: { logRuntimeDiagnostics: input.logRuntimeDiagnostics } }
+        : {}),
+      filesystem: { readFileText: async () => ({ content: "" }) },
+      workspace: {
+        ensureDirectory: async () => undefined,
+        readFile: async () => ({ bytes: new Uint8Array() }),
+        selectDirectory: async () => null,
+        selectFiles: async () => [],
+        writeFileText: async () => undefined
+      }
+    } as AgentHostInputApi);
+  }
+
+  it("routes custom-menu native paste through the trusted editor event", async () => {
+    const file = new File(["document"], "notes.md", { type: "" });
+    const onPasteFiles = vi.fn();
+    const readText = vi.fn(async () => "unrelated text");
+    stubClipboardReadText(readText);
+    let editor: HTMLElement;
+    const paste = vi.fn(async () => {
+      expect(document.activeElement).toBe(editor);
+      fireEvent.paste(editor, {
+        clipboardData: { files: [file], getData: () => "" }
+      });
+    });
+    setClipboardHost({ paste });
+    const rendered = render(
+      <AgentRichTextEditor
+        value=""
+        disabled={false}
+        placeholder="Prompt"
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onPasteFiles={onPasteFiles}
+      />
+    );
+    editor = await waitFor(() => {
+      const element = rendered.container.querySelector<HTMLElement>(
+        '[contenteditable="true"]'
+      );
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    fireEvent.contextMenu(editor);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Paste" }));
+    await waitFor(() => expect(paste).toHaveBeenCalledOnce());
+    expect(onPasteFiles).toHaveBeenCalledExactlyOnceWith([file]);
+    expect(readText).not.toHaveBeenCalled();
+  });
+
+  it("falls back to plain text and records a native paste failure", async () => {
+    const readText = vi.fn(async () => "fallback text");
+    stubClipboardReadText(readText);
+    const logRuntimeDiagnostics = vi.fn();
+    const paste = vi.fn(async () => {
+      throw new Error("native paste failed");
+    });
+    setClipboardHost({ paste, logRuntimeDiagnostics });
+    const onChange = vi.fn();
+    const rendered = render(
+      <AgentRichTextEditor
+        value=""
+        disabled={false}
+        placeholder="Prompt"
+        onChange={onChange}
+        onSubmit={vi.fn()}
+      />
+    );
+    const editor = await waitFor(() => {
+      const element = rendered.container.querySelector<HTMLElement>(
+        '[contenteditable="true"]'
+      );
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    fireEvent.contextMenu(editor);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Paste" }));
+    await waitFor(() =>
+      expect(onChange.mock.calls.at(-1)?.[0]).toBe("fallback text")
+    );
+    expect(paste).toHaveBeenCalledOnce();
+    expect(logRuntimeDiagnostics).toHaveBeenCalledWith({
+      event: "agent.gui.composer.nativePasteFailed"
+    });
+  });
+
+  it("keeps text paste for hosts without a native paste capability", async () => {
+    const readText = vi.fn(async () => "web paste");
+    stubClipboardReadText(readText);
+    setClipboardHost({});
+    const onChange = vi.fn();
+    const rendered = render(
+      <AgentRichTextEditor
+        value=""
+        disabled={false}
+        placeholder="Prompt"
+        onChange={onChange}
+        onSubmit={vi.fn()}
+      />
+    );
+    const editor = await waitFor(() => {
+      const element = rendered.container.querySelector<HTMLElement>(
+        '[contenteditable="true"]'
+      );
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    fireEvent.contextMenu(editor);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Paste" }));
+    await waitFor(() =>
+      expect(onChange.mock.calls.at(-1)?.[0]).toBe("web paste")
+    );
+    expect(readText).toHaveBeenCalledOnce();
+  });
+
+  it("does not capture clipboard files while the editor is disabled", async () => {
+    const file = new File(["x"], "notes.txt", { type: "text/plain" });
+    const getAsFile = vi.fn(() => file);
+    const onPasteFiles = vi.fn();
+    const paste = vi.fn(async () => undefined);
+    setClipboardHost({ paste });
+    const rendered = render(
+      <AgentRichTextEditor
+        value=""
+        disabled
+        placeholder="Prompt"
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onPasteFiles={onPasteFiles}
+      />
+    );
+    const editor = await waitFor(() => {
+      const element = rendered.container.querySelector<HTMLElement>(
+        '[contenteditable="false"]'
+      );
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    fireEvent.paste(editor, {
+      clipboardData: {
+        items: [{ kind: "file", type: "text/plain", getAsFile }],
+        getData: () => ""
+      }
+    });
+    expect(getAsFile).not.toHaveBeenCalled();
+    expect(onPasteFiles).not.toHaveBeenCalled();
+    fireEvent.contextMenu(editor);
+    const pasteItem = screen.getByRole("menuitem", { name: "Paste" });
+    expect(pasteItem).toHaveProperty("disabled", true);
+    fireEvent.click(pasteItem);
+    expect(paste).not.toHaveBeenCalled();
+  });
+
+  it("captures an event-lifetime file before dispatching paste to the composer", async () => {
+    const document = new File(["document"], "notes.md", { type: "" });
+    const onPasteFiles = vi.fn();
+    const onChange = vi.fn();
+    let eventActive = true;
+    const getAsFile = vi.fn(() => (eventActive ? document : null));
+    const rendered = render(
+      <AgentRichTextEditor
+        value=""
+        disabled={false}
+        placeholder="Prompt"
+        onChange={onChange}
+        onSubmit={vi.fn()}
+        onPasteFiles={onPasteFiles}
+      />
+    );
+    const editor = await waitFor(() => {
+      const element = rendered.container.querySelector<HTMLElement>(
+        '[contenteditable="true"]'
+      );
+      expect(element).not.toBeNull();
+      return element!;
+    });
+
+    fireEvent.paste(editor, {
+      clipboardData: {
+        items: [{ kind: "file", type: "", getAsFile }],
+        getData: () => "should not enter the prompt"
+      }
+    });
+    eventActive = false;
+
+    expect(getAsFile).toHaveBeenCalledOnce();
+    expect(onPasteFiles).toHaveBeenCalledExactlyOnceWith([document]);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("reports an unreadable item while keeping its readable sibling", async () => {
+    const document = new File(["document"], "notes.md", { type: "" });
+    const onPasteFiles = vi.fn();
+    const onClipboardFileUnavailable = vi.fn();
+    const rendered = render(
+      <AgentRichTextEditor
+        value=""
+        disabled={false}
+        placeholder="Prompt"
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onPasteFiles={onPasteFiles}
+        onClipboardFileUnavailable={onClipboardFileUnavailable}
+      />
+    );
+    const editor = await waitFor(() => {
+      const element = rendered.container.querySelector<HTMLElement>(
+        '[contenteditable="true"]'
+      );
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    fireEvent.paste(editor, {
+      clipboardData: {
+        items: [
+          { kind: "file", type: "", getAsFile: () => null },
+          { kind: "file", type: "", getAsFile: () => document }
+        ],
+        getData: () => ""
+      }
+    });
+    expect(onClipboardFileUnavailable).toHaveBeenCalledOnce();
+    expect(onPasteFiles).toHaveBeenCalledExactlyOnceWith([document]);
+  });
+
   it("dispatches images and regular files from one paste", async () => {
     const onPasteFiles = vi.fn();
     const onPasteImages = vi.fn();

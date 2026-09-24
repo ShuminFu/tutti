@@ -97,7 +97,10 @@ model without going through a picker. AgentGUI asks the synchronous host
 `WorkspaceFileReference` or needs snapshot preparation. Live references keep
 their host path and kind, do not become prompt assets, and preserve their
 position relative to prepared entries. Hosts that cannot expose a live local
-reference omit that capability or classify the entry for preparation.
+reference omit that capability or classify the entry for preparation. Clipboard
+`File` handles are captured in the paste event before this classification;
+byte reads and uploads remain asynchronous. File names and missing MIME do not
+establish an OS path or make a regular file an image.
 
 Reference sources own whether preview bytes are available and how those bytes
 are read. The host-neutral `@tutti-os/workspace-file-preview` controller owns
