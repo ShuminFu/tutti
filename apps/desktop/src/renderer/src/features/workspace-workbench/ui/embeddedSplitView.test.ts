@@ -281,6 +281,42 @@ test("resize clamps both edges at the 320px minimum pane width", async () => {
   controller.dispose();
 });
 
+test("拖分栏卡顿：拖动途中的 previewResize 只改比例、不存盘不抢焦点，松手 resize 才落盘", async () => {
+  const fake = createFakeHost({ surfaceWidth: 1000 });
+  const writes: { layout: { ratio: number } | null }[] = [];
+  const layoutStore = {
+    read: async () => ({ layout: null, pairOrder: {} }),
+    write: (snapshot: (typeof writes)[number]) => {
+      writes.push(snapshot);
+    }
+  };
+  const controller = makeController(fake, { layoutStore: layoutStore as never });
+  await controller.adopt(["agent-left"]);
+  controller.select("session-a");
+  await controller.dropSession(dragSession("session-b"), "right");
+  const writesBefore = writes.length;
+  const focusBefore = fake.calls.filter((c) => c.kind === "focus").length;
+  let emits = 0;
+  const unsubscribe = controller.subscribe(() => emits++);
+
+  for (const ratio of [0.45, 0.4, 0.35, 0.05]) controller.previewResize(ratio);
+
+  // 预览照样夹逼（每栏 >= 320px），界面照样收到通知。
+  assert.ok(Math.abs(controller.getSnapshot().ratio - 0.32) < 1e-9);
+  assert.equal(emits, 4);
+  assert.equal(writes.length, writesBefore);
+  assert.equal(
+    fake.calls.filter((c) => c.kind === "focus").length,
+    focusBefore
+  );
+
+  controller.resize(0.35);
+  assert.equal(writes.length, writesBefore + 1);
+  assert.equal(writes.at(-1)?.layout?.ratio, 0.35);
+  unsubscribe();
+  controller.dispose();
+});
+
 test("the collapsed flag follows the surface width and never touches storage", async () => {
   const fake = createFakeHost({ surfaceWidth: 1000 });
   const storage = memoryStorage();

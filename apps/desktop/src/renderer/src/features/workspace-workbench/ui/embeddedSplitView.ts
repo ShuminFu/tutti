@@ -241,6 +241,11 @@ export interface EmbeddedSplitViewController {
   resetRatio(): void;
   resize(ratio: number): void;
   /**
+   * 拖分界线途中的预览：只改比例、通知界面，不存盘、不抢焦点。松手时必须再调一次
+   * `resize()` 把最终比例落盘（拖分栏卡顿：原来每个 pointermove 都走完整的 resize）。
+   */
+  previewResize(ratio: number): void;
+  /**
    * 左栏会话栏当前占多少像素（收起时给 0）。由覆盖层测量后写入：栏宽可拖，
    * 常量猜不准；夹逼在这里做，保证右栏不会被推到 320px 以下。
    */
@@ -1810,6 +1815,18 @@ export function createEmbeddedSplitViewController(
         queuedSelect = null;
         dispatch({ id, type: "select" });
       };
+    },
+    previewResize(ratio) {
+      const next = reduceSplitLayout(
+        layout,
+        { ratio, type: "resize" },
+        { minRatio: minRatio() }
+      );
+      if (next === layout) return;
+      // resize 只动比例、不换栏里的会话，applyLayout 的窗口活（开/关/激活/聚焦）
+      // 与记对子顺序都用不着；存盘留给松手时那一次 resize()。
+      layout = next;
+      emit();
     },
     select(agentSessionId) {
       const id = agentSessionId.trim();

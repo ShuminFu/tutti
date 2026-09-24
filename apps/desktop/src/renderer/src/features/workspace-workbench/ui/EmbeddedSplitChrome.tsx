@@ -83,6 +83,16 @@ export function EmbeddedSplitChrome(): ReactNode {
   const railPush = snapshot?.panes.right ? (snapshot.railPushRatio ?? 0) : 0;
   const focus = snapshot?.focus ?? "left";
   const collapsed = snapshot?.collapsed === true;
+  // 下面「量栏头」那个 effect 的依赖：哪两个窗口、显示谁、标题是什么、折没折叠。
+  // 刻意不含 ratio —— 拖分栏时它每帧都变，尺寸变化交给 ResizeObserver。
+  const measureKey = [
+    snapshot?.panes.left?.nodeId ?? "",
+    snapshot?.panes.left?.session?.title ?? "",
+    snapshot?.panes.right?.nodeId ?? "",
+    snapshot?.panes.right?.session?.title ?? "",
+    snapshot === null ? "none" : split ? "split" : "single",
+    collapsed ? "collapsed" : ""
+  ].join("\u0000");
 
   // 每次渲染都重投影（没有依赖数组）：窗口壳是工作台自己挂的，新壳挂上来的那一次
   // 也要立刻拿到 data-rndmaster-pane，否则会漏出一帧「两栏叠在一起」。
@@ -161,12 +171,14 @@ export function EmbeddedSplitChrome(): ReactNode {
       const leftRail = main.querySelector<HTMLElement>(
         '.workbench-window-shell[data-rndmaster-pane="left"] .agent-gui-node__rail-panel'
       );
-      embeddedSplitViewController()?.setRailPushPx(
-        leftRail ? Math.round(leftRail.getBoundingClientRect().width) : 0
-      );
-      for (const header of root.querySelectorAll<HTMLElement>(
-        ".rndmaster-split-pane-header"
-      )) {
+      // 先全部量、再全部写（拖分栏卡顿）：原来是边量边写，写完栏头 A 的样式再量
+      // 栏头 B 的壳，浏览器就得当场把两整栏聊天再排一遍版（强制同步布局）。
+      const railPx = leftRail
+        ? Math.round(leftRail.getBoundingClientRect().width)
+        : 0;
+      const measured = [
+        ...root.querySelectorAll<HTMLElement>(".rndmaster-split-pane-header")
+      ].map((header) => {
         const shell = main.querySelector<HTMLElement>(
           `.workbench-window-shell[data-rndmaster-pane="${header.dataset.side}"]`
         );
@@ -183,37 +195,64 @@ export function EmbeddedSplitChrome(): ReactNode {
                 )
               )
             : 0;
+        const title = header.querySelector<HTMLElement>(
+          ".rndmaster-split-pane-header__title"
+        );
+        const truncated = title
+          ? title.scrollWidth > title.clientWidth + 1
+          : null;
+        return { header, inset, truncated, wrap: title?.parentElement ?? null };
+      });
+      for (const { header, inset, truncated, wrap } of measured) {
         header.style.setProperty(
           "--rndmaster-split-pane-content-left",
           `${inset}px`
         );
-        const title = header.querySelector<HTMLElement>(
-          ".rndmaster-split-pane-header__title"
-        );
-        const wrap = title?.parentElement;
-        if (title && wrap) {
-          wrap.dataset.truncated =
-            title.scrollWidth > title.clientWidth + 1 ? "true" : "false";
+        if (wrap && truncated !== null) {
+          wrap.dataset.truncated = truncated ? "true" : "false";
         }
       }
+      embeddedSplitViewController()?.setRailPushPx(railPx);
     };
     sync();
     const observer = new ResizeObserver(sync);
     observer.observe(main);
-    for (const detail of main.querySelectorAll(
-      ".agent-gui-node__detail-panel"
-    )) {
-      observer.observe(detail);
-    }
-    // 会话栏自己也要盯：它一展开/收起，主区和详情面板的尺寸可能一帧都不变
-    // （壳宽是我们按推力算的，鸡生蛋），只有它自己的宽度变了。
-    for (const railPanel of main.querySelectorAll(
-      ".agent-gui-node__rail-panel"
-    )) {
-      observer.observe(railPanel);
-    }
-    return () => observer.disconnect();
-  });
+    const observed = new Set<Element>();
+    // 详情面板 / 会话栏是窗口里的组件自己挂的，可能比壳晚几帧出来；不再每次渲染
+    // 重挂之后，要自己补扫：每帧扫一次，直到每个分栏壳里都找到详情面板（最多 60 帧）。
+    const scan = (): boolean => {
+      for (const el of main.querySelectorAll(
+        // 会话栏自己也要盯：它一展开/收起，主区和详情面板的尺寸可能一帧都不变
+        // （壳宽是我们按推力算的，鸡生蛋），只有它自己的宽度变了。
+        ".agent-gui-node__detail-panel, .agent-gui-node__rail-panel"
+      )) {
+        if (observed.has(el)) continue;
+        observed.add(el);
+        observer.observe(el);
+      }
+      const shells = main.querySelectorAll(
+        ".workbench-window-shell[data-rndmaster-pane]"
+      );
+      return [...shells].every((shell) =>
+        shell.querySelector(".agent-gui-node__detail-panel")
+      );
+    };
+    let frame = 0;
+    let tries = 0;
+    const rescan = (): void => {
+      frame = 0;
+      if (scan() || ++tries >= 60) return;
+      frame = requestAnimationFrame(rescan);
+    };
+    rescan();
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+    // 只在「栏的结构」变了才重挂（拖分栏卡顿）：原来没有依赖数组，拖动中每帧重渲染
+    // 都拆掉重建观察器、再同步跑一遍 sync()（强制布局），一帧多排好几遍版。
+    // 比例 / 推力的变化会改尺寸，由 ResizeObserver 自己在布局之后通知，不必重挂。
+  }, [measureKey]);
 
   const onDividerPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>): void => {
@@ -235,21 +274,42 @@ export function EmbeddedSplitChrome(): ReactNode {
       resizeDragRef.current = drag;
       event.currentTarget.setPointerCapture?.(event.pointerId);
       event.preventDefault();
-      const onMove = (move: PointerEvent): void => {
+      // 拖分栏卡顿：pointermove 一秒能来 120 次以上，每次都改比例 = 两整栏聊天
+      // 重排一遍版。这里只记下最新的指针位置，每帧最多动一次（rAF 合并）；拖动中
+      // 只预览、不存盘，松手时再按最后位置落一次盘。
+      let latestX = event.clientX;
+      let frame = 0;
+      const ratioAt = (clientX: number): number | null => {
         const active = resizeDragRef.current;
-        if (!active) return;
+        if (!active) return null;
         // 夹逼（每栏 >= 320px）在 controller 里做，这里只给原始比例。
         // railPush 每帧现读：会话栏宽度会被右栏下限夹逼，拖动中会变。
-        const next = embeddedSplitDividerDragRatio(
+        return embeddedSplitDividerDragRatio(
           active,
-          move.clientX,
+          clientX,
           embeddedSplitViewSnapshot()?.railPushRatio ?? 0
         );
-        if (next === null) return;
-        embeddedSplitViewController()?.resize(next);
       };
-      const onUp = (): void => {
+      const onFrame = (): void => {
+        frame = 0;
+        const next = ratioAt(latestX);
+        if (next === null) return;
+        embeddedSplitViewController()?.previewResize(next);
+      };
+      const onMove = (move: PointerEvent): void => {
+        if (!resizeDragRef.current) return;
+        latestX = move.clientX;
+        if (!frame) frame = requestAnimationFrame(onFrame);
+      };
+      main.dataset.rndmasterSplitResizing = "true";
+      const onUp = (up: PointerEvent): void => {
+        if (frame) cancelAnimationFrame(frame);
+        frame = 0;
+        // pointercancel 不带可信坐标，就用最后一次 move 的位置。
+        const next = ratioAt(up.type === "pointerup" ? up.clientX : latestX);
         resizeDragRef.current = null;
+        delete main.dataset.rndmasterSplitResizing;
+        if (next !== null) embeddedSplitViewController()?.resize(next);
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onUp);
