@@ -5663,6 +5663,32 @@ paths:
           $ref: "#/components/responses/WorkspaceOperationError"
         "503":
           $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/codex-desktop-hold:retry:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/AgentSessionID"
+    post:
+      operationId: retryWorkspaceAgentSessionCodexDesktopHold
+      tags:
+        - agent-session
+      summary: Deliver sends queued while Codex desktop holds the thread
+      responses:
+        "200":
+          description: Workspace agent session after one delivery attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAgentSessionResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/WorkspaceNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
   /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/pin:
     parameters:
       - $ref: "#/components/parameters/WorkspaceID"
@@ -13036,6 +13062,29 @@ components:
           description: >-
             Turn currently open on the session, or an empty string when no turn
             is open (or the session is unknown).
+    CodexDesktopHold:
+      type: object
+      additionalProperties: false
+      required:
+        - held
+        - reasonCode
+        - queuedCount
+        - providerSessionId
+        - openUrl
+      properties:
+        held:
+          type: boolean
+        reasonCode:
+          type: string
+          description: Stable reason. codex_thread_held_externally while the desktop app owns the writer.
+        queuedCount:
+          type: integer
+          minimum: 0
+        providerSessionId:
+          type: string
+        openUrl:
+          type: string
+          description: codex://threads/<id> deep link for the held thread.
     WorkspaceAgentSession:
       type: object
       additionalProperties: false
@@ -13252,6 +13301,14 @@ components:
             Older daemons may omit this observation.
           x-go-type-skip-optional-pointer: true
           x-omitempty: false
+        codexDesktopHold:
+          allOf:
+            - $ref: "#/components/schemas/CodexDesktopHold"
+          nullable: true
+          description: >-
+            Set while the Codex desktop app holds this thread's writer lock.
+            Dock queues sends, handoffs, and reviews until the lock is released
+            or the user retries. Null when Dock can write the thread.
         visible:
           type: boolean
         settings:
@@ -13459,13 +13516,40 @@ components:
       oneOf:
         - $ref: "#/components/schemas/SendWorkspaceAgentSessionInputTurnResponse"
         - $ref: "#/components/schemas/SendWorkspaceAgentSessionInputQueuedResponse"
+        - $ref: "#/components/schemas/SendWorkspaceAgentSessionInputCodexDesktopHeldResponse"
         - $ref: "#/components/schemas/SendWorkspaceAgentSessionInputGoalControlResponse"
       discriminator:
         propertyName: kind
         mapping:
           turn: "#/components/schemas/SendWorkspaceAgentSessionInputTurnResponse"
           queued: "#/components/schemas/SendWorkspaceAgentSessionInputQueuedResponse"
+          codexDesktopHeld: "#/components/schemas/SendWorkspaceAgentSessionInputCodexDesktopHeldResponse"
           goalControl: "#/components/schemas/SendWorkspaceAgentSessionInputGoalControlResponse"
+    SendWorkspaceAgentSessionInputCodexDesktopHeldResponse:
+      type: object
+      additionalProperties: false
+      description: >-
+        The submission was accepted into Dock's queue because the Codex desktop
+        app holds the thread writer lock. No turn was started. Clients must not
+        resend the prompt and must not surface a send failure. The session
+        projection carries codexDesktopHold, including the queued count.
+      required:
+        - session
+        - kind
+      properties:
+        session:
+          $ref: "#/components/schemas/WorkspaceAgentSession"
+        kind:
+          type: string
+          enum:
+            - codexDesktopHeld
+          x-enum-varnames:
+            - SendWorkspaceAgentSessionInputCodexDesktopHeldResponseKindCodexDesktopHeld
+        queuedCount:
+          type: integer
+          minimum: 0
+        reasonCode:
+          type: string
     SendWorkspaceAgentSessionInputQueuedResponse:
       type: object
       additionalProperties: false

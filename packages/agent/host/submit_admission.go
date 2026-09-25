@@ -21,6 +21,9 @@ type submitAdmissionMode int
 const (
 	admissionPark submitAdmissionMode = iota
 	admissionReplay
+	// admissionCodexReplay delivers a prompt already stored in the desktop
+	// hold queue. A still-held resume must not append a second copy.
+	admissionCodexReplay
 )
 
 // submitAdmissionQueueLimit bounds the parked prompts per session. A session

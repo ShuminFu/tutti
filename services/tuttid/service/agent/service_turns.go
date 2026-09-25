@@ -219,6 +219,7 @@ func (s *Service) projectSessionForResponse(ctx context.Context, workspaceID str
 // 放在统一投影的最后一步：单条与批量都经过这里，别的地方不要另算一份。
 func (s *Service) withRuntimeLive(workspaceID string, session Session) Session {
 	session.RuntimeLive = s.runtimeSessionLiveIfConfigured(workspaceID, session.ID)
+	session.CodexDesktopHold = s.codexDesktopHold(workspaceID, session.ID, session.ProviderSessionID)
 	return session
 }
 

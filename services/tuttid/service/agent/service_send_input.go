@@ -90,6 +90,9 @@ func (s *Service) SendInput(ctx context.Context, workspaceID string, agentSessio
 		hostInput,
 	)
 	if err != nil {
+		if !input.Guidance && strings.TrimSpace(hostResult.TurnID) == "" && hostResult.Kind != agenthost.SubmitKindCodexDesktopHeld {
+			s.noteSendDidNotStart(workspaceID, agentSessionID)
+		}
 		if preparedTurnID != "" {
 			abandonErr := s.abandonPreparedTuttiModeExec(context.WithoutCancel(ctx), workspaceID, agentSessionID, preparedTurnID, preparedSnapshot, input.Guidance)
 			if abandonErr != nil {
@@ -108,6 +111,17 @@ func (s *Service) SendInput(ctx context.Context, workspaceID string, agentSessio
 			OperationID: hostResult.GoalControl.OperationID, GoalState: hostResult.GoalControl.GoalState,
 		}
 		return SendInputResult{Session: session, Kind: "goalControl", GoalControl: &goal}, nil
+	}
+	if hostResult.Kind == agenthost.SubmitKindCodexDesktopHeld {
+		s.clearSendDidNotStart(workspaceID, agentSessionID)
+		session, getErr := s.Get(ctx, workspaceID, agentSessionID)
+		if getErr != nil {
+			return SendInputResult{}, getErr
+		}
+		return SendInputResult{
+			Session: session,
+			Kind:    agenthost.SubmitKindCodexDesktopHeld,
+		}, nil
 	}
 	if hostResult.Kind == agenthost.SubmitKindQueued {
 		// The session's one canonical turn slot was busy. The Host parked the
@@ -156,6 +170,7 @@ func (s *Service) SendInput(ctx context.Context, workspaceID string, agentSessio
 		ctx, workspaceID, agentSessionID,
 		input.ClientSubmitID, input.Metadata, turn,
 	)
+	s.clearSendDidNotStart(workspaceID, agentSessionID)
 	return SendInputResult{
 		Session:            session,
 		Kind:               "turn",

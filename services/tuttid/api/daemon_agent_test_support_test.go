@@ -322,6 +322,10 @@ func (s stubAgentSessionService) UpdateArchive(ctx context.Context, workspaceID 
 	return s.updateArchiveFn(ctx, workspaceID, agentSessionID, archived)
 }
 
+func (stubAgentSessionService) RetryCodexDesktopHold(context.Context, string, string) (agentservice.Session, error) {
+	return agentservice.Session{}, nil
+}
+
 func (s stubAgentSessionService) UpdatePin(ctx context.Context, workspaceID string, agentSessionID string, pinned bool) (agentservice.Session, error) {
 	if s.updatePinFn == nil {
 		return agentservice.Session{}, nil

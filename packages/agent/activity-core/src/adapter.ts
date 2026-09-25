@@ -73,6 +73,11 @@ export interface AgentActivityAdapter {
   setSessionPinned(
     input: AgentActivitySetSessionPinnedInput
   ): Promise<AgentActivitySession>;
+  retryCodexDesktopHold?(input: {
+    workspaceId: string;
+    agentSessionId: string;
+    signal?: AbortSignal;
+  }): Promise<AgentActivitySession>;
   setSessionArchived?(input: {
     workspaceId: string;
     agentSessionId: string;

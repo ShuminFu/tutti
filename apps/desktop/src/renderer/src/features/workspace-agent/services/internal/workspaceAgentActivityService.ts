@@ -462,6 +462,24 @@ export class WorkspaceAgentActivityService
     ).engine.setSessionArchived(input);
   }
 
+  async retryCodexDesktopHold(input: {
+    agentSessionId: string;
+    workspaceId: string;
+  }): Promise<AgentActivitySession> {
+    const workspaceId = normalizeWorkspaceId(input.workspaceId);
+    const session = await this.entry(
+      workspaceId
+    ).adapter.retryCodexDesktopHold?.({
+      agentSessionId: input.agentSessionId,
+      workspaceId
+    });
+    if (!session) {
+      throw new Error("codex_desktop_hold_retry_unsupported");
+    }
+    this.upsertAuthoritativeSession(session, "codex_desktop_hold_retry");
+    return session;
+  }
+
   async setSessionPinned(input: {
     agentSessionId: string;
     pinned: boolean;
@@ -707,12 +725,16 @@ export class WorkspaceAgentActivityService
       fields:
         result.kind === "goalControl"
           ? { resultKind: "goalControl" }
-          : {
-              resultKind: "turn",
-              turnOutcome: result.turn.outcome ?? null,
-              turnId: result.turnId,
-              turnPhase: result.turn.phase
-            }
+          : result.kind === "codexDesktopHeld"
+            ? { resultKind: "codexDesktopHeld" }
+            : result.kind === "queued"
+              ? { resultKind: "queued", turnId: result.turnId }
+              : {
+                  resultKind: "turn",
+                  turnOutcome: result.turn.outcome ?? null,
+                  turnId: result.turnId,
+                  turnPhase: result.turn.phase
+                }
     });
     return result;
   }

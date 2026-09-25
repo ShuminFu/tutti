@@ -14,6 +14,21 @@ func classifyACPResumeError(session Session, method string, err error) error {
 	if !errors.As(err, &callErr) || callErr == nil {
 		return err
 	}
+	if isCodexThreadHeldExternally(method, callErr) && sessionUsesUserCodexHome(session.Env) {
+		return &AppError{
+			Code:    AppErrorCodexThreadHeldExternally,
+			Message: "Codex thread is open in the desktop app.",
+			DebugMessage: fmt.Sprintf(
+				"codex thread held externally: room_id=%s agent_session_id=%s provider_session_id=%s method=%s acp_error=%s",
+				strings.TrimSpace(session.RoomID),
+				strings.TrimSpace(session.AgentSessionID),
+				strings.TrimSpace(session.ProviderSessionID),
+				strings.TrimSpace(method),
+				acpErrorSummary(&callErr.Err),
+			),
+			Cause: errors.Join(ErrCodexThreadHeldExternally, err),
+		}
+	}
 	if !isACPProviderSessionNotFound(method, callErr) {
 		return err
 	}
@@ -54,6 +69,28 @@ func resumeSessionNotLocalError(session Session, reason string) error {
 			strings.TrimSpace(reason),
 		),
 	}
+}
+
+func sessionUsesUserCodexHome(env []string) bool {
+	_, found := lastEnvironmentValue(env, "TUTTI_CODEX_CONFIG_OVERRIDES")
+	return found
+}
+
+// Codex app-server reports a live writer as JSON-RPC -32600. The same code
+// also means "no rollout found", so the message is what distinguishes them.
+func isCodexThreadHeldExternally(method string, callErr *acpCallError) bool {
+	if callErr == nil || strings.TrimSpace(method) != appServerMethodThreadResume {
+		return false
+	}
+	if callErr.Err.Code != -32600 {
+		return false
+	}
+	lower := strings.ToLower(callErr.Err.Message)
+	if strings.Contains(lower, "already has an active writer") {
+		return true
+	}
+	return strings.Contains(lower, "thread-store") &&
+		(strings.Contains(lower, "writer") || strings.Contains(lower, "conflict"))
 }
 
 func isACPProviderSessionNotFound(method string, callErr *acpCallError) bool {

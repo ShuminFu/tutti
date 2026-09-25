@@ -465,6 +465,12 @@ export const enAgentGui = {
   activityStatusUnread: "Unread result",
   activityStatusWaiting: "Waiting for you",
   activityStatusWorking: "Working",
+  codexDesktopHoldStatus: "In progress in Codex",
+  codexDesktopHoldMessage:
+    "This thread is open in the Codex desktop app, so Dock cannot send into it yet. Handle it in Codex, or quit Codex and retry.",
+  codexDesktopHoldOpen: "Open in Codex",
+  codexDesktopHoldRetry: "Retry",
+  codexDesktopHoldQueued: "{{count}} queued",
   viewActivity: "View activity",
   viewActivityNeedsAttention: "View activity, attention needed",
   turnOffActivityView: "Turn off activity view",

@@ -668,6 +668,10 @@ export function conversationSummariesRenderEqual(
     left.hasUnreadCompletion === right.hasUnreadCompletion &&
     left.unreadCompletionKey === right.unreadCompletionKey &&
     left.needsUserAction === right.needsUserAction &&
+    left.codexDesktopHold?.held === right.codexDesktopHold?.held &&
+    left.codexDesktopHold?.queuedCount ===
+      right.codexDesktopHold?.queuedCount &&
+    left.codexDesktopHold?.openUrl === right.codexDesktopHold?.openUrl &&
     conversationProjectsRenderEqual(left.project, right.project)
   );
 }

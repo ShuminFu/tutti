@@ -346,6 +346,23 @@ func (api DaemonAPI) SendWorkspaceAgentSessionInput(ctx context.Context, request
 		}
 		return tuttigenerated.SendWorkspaceAgentSessionInput200JSONResponse(response), nil
 	}
+	if result.Kind == agenthost.SubmitKindCodexDesktopHeld {
+		heldResponse := tuttigenerated.SendWorkspaceAgentSessionInputCodexDesktopHeldResponse{
+			Kind:    tuttigenerated.SendWorkspaceAgentSessionInputCodexDesktopHeldResponseKindCodexDesktopHeld,
+			Session: generatedSession,
+		}
+		if hold := result.Session.CodexDesktopHold; hold != nil {
+			queuedCount := hold.QueuedCount
+			heldResponse.QueuedCount = &queuedCount
+			if reasonCode := strings.TrimSpace(hold.ReasonCode); reasonCode != "" {
+				heldResponse.ReasonCode = &reasonCode
+			}
+		}
+		if err := response.FromSendWorkspaceAgentSessionInputCodexDesktopHeldResponse(heldResponse); err != nil {
+			return nil, err
+		}
+		return tuttigenerated.SendWorkspaceAgentSessionInput200JSONResponse(response), nil
+	}
 	if turnID == "" || result.Turn == nil || strings.TrimSpace(result.Turn.TurnID) != turnID {
 		return writeSendWorkspaceAgentSessionInputError(agentservice.ErrSubmitDeliveryUnknown), nil
 	}

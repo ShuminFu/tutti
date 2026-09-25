@@ -1037,6 +1037,11 @@ export interface TuttidClient
     request: AgentSessionComposerSettings,
     requestOptions?: AgentCommandRequestOptions
   ): Promise<WorkspaceAgentSession>;
+  retryWorkspaceAgentSessionCodexDesktopHold(
+    workspaceID: string,
+    agentSessionID: string,
+    requestOptions?: TuttidRequestOptions
+  ): Promise<WorkspaceAgentSession>;
   updateWorkspaceAgentSessionPin(
     workspaceID: string,
     agentSessionID: string,

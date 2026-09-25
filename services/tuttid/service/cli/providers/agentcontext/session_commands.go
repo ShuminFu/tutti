@@ -75,8 +75,14 @@ type sessionActionResult struct {
 	TurnID           string
 	LaunchRequested  bool
 	WaitAfterVersion *uint64
+	Queued           bool
+	QueuedCount      int
+	ReasonCode       string
+	Message          string
 	Warnings         []cliservice.CommandWarning
 }
+
+const codexDesktopHeldMessage = "这个线程正在 Codex 桌面端打开，Dock 暂时发不进去。请在 Codex 里处理，或退出 Codex 后重试。"
 
 type cancelTurnCommandResult struct {
 	AgentSessionID string
@@ -370,6 +376,24 @@ func (p Provider) runSend(ctx context.Context, invoke framework.InvokeContext, i
 		return nil, err
 	}
 	session := result.Session
+	if result.Kind == agenthost.SubmitKindCodexDesktopHeld {
+		queuedCount := 0
+		if session.CodexDesktopHold != nil {
+			queuedCount = session.CodexDesktopHold.QueuedCount
+		}
+		return sessionActionResult{
+			Session:          session,
+			WaitAfterVersion: &waitAfterVersion,
+			Queued:           true,
+			QueuedCount:      queuedCount,
+			ReasonCode:       agenthost.CodexThreadHeldExternallyReason,
+			Message:          codexDesktopHeldMessage,
+			Warnings: []cliservice.CommandWarning{{
+				Code:    agenthost.CodexThreadHeldExternallyReason,
+				Message: codexDesktopHeldMessage,
+			}},
+		}, nil
+	}
 	return sessionActionResult{
 		Session: session, TurnID: strings.TrimSpace(result.TurnID), WaitAfterVersion: &waitAfterVersion,
 	}, nil
@@ -633,6 +657,12 @@ func sessionActionOutputSpec() framework.OutputSpec {
 				}
 				if action.WaitAfterVersion != nil {
 					value["waitAfterVersion"] = *action.WaitAfterVersion
+				}
+				if action.Queued {
+					value["queued"] = true
+					value["queuedCount"] = action.QueuedCount
+					value["reasonCode"] = action.ReasonCode
+					value["message"] = action.Message
 				}
 				return value
 			},

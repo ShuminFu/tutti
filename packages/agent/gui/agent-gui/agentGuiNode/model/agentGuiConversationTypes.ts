@@ -67,6 +67,8 @@ export interface AgentGUIConversationSummary {
   projectionSource?: "pending_activation";
   isImported?: boolean;
   activeTurn?: AgentActivitySession["activeTurn"];
+  /** Set while Codex desktop holds the thread writer lock. */
+  codexDesktopHold?: AgentActivitySession["codexDesktopHold"];
 }
 
 export type AgentGUIConversationProjectionSource = Pick<

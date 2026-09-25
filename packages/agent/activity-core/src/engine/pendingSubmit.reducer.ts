@@ -104,7 +104,7 @@ export function settleSubmitCommand(
       };
     }
     const result = validation.result;
-    if (result.kind === "goalControl") {
+    if (result.kind === "goalControl" || result.kind === "codexDesktopHeld") {
       return {
         commands: NO_COMMANDS,
         state: replaceSubmit(state, {

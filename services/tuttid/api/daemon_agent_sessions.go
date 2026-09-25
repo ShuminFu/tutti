@@ -52,6 +52,7 @@ type AgentSessionService interface {
 	ReconcileGoal(context.Context, string, string) (agentservice.GoalStateSessionResult, error)
 	SendInput(context.Context, string, string, agentservice.SendInput) (agentservice.SendInputResult, error)
 	UpdatePin(context.Context, string, string, bool) (agentservice.Session, error)
+	RetryCodexDesktopHold(context.Context, string, string) (agentservice.Session, error)
 	UpdateArchive(context.Context, string, string, bool) (agentservice.Session, error)
 	UpdateTitle(context.Context, string, string, string) (agentservice.Session, error)
 	UpdateVisible(context.Context, string, string, bool) (agentservice.Session, error)
@@ -787,6 +788,7 @@ func generatedAgentSession(session agentservice.Session) (tuttigenerated.Workspa
 		// 补丁 0125：会话此刻还有没有活的 provider（ACP）进程。值由 service 层的
 		// 统一投影边界贴上，这里只搬运，不另算一份判据。
 		RuntimeLive:         session.RuntimeLive,
+		CodexDesktopHold:    generatedCodexDesktopHold(session.CodexDesktopHold),
 		RootAgentSessionId:  optionalStringPointer(strings.TrimSpace(session.RootAgentSessionID)),
 		RootTurnId:          optionalStringPointer(strings.TrimSpace(session.RootTurnID)),
 		Settings:            generatedSettings,
@@ -796,6 +798,19 @@ func generatedAgentSession(session agentservice.Session) (tuttigenerated.Workspa
 		Usage:               generatedAgentSessionUsage(session.Metadata.Usage),
 		Visible:             session.Visible,
 	}, nil
+}
+
+func generatedCodexDesktopHold(hold *agentservice.CodexDesktopHold) *tuttigenerated.CodexDesktopHold {
+	if hold == nil || !hold.Held {
+		return nil
+	}
+	return &tuttigenerated.CodexDesktopHold{
+		Held:              hold.Held,
+		OpenUrl:           hold.OpenURL,
+		ProviderSessionId: hold.ProviderSessionID,
+		QueuedCount:       hold.QueuedCount,
+		ReasonCode:        hold.ReasonCode,
+	}
 }
 
 func int64Pointer(value int64) *int64 {

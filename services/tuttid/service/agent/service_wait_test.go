@@ -481,6 +481,101 @@ func TestWaitResolvedEmptyFinalMessageIgnoresLateAssistant(t *testing.T) {
 	}
 }
 
+func TestWaitAfterFailedSendDoesNotReportPreviousTurn(t *testing.T) {
+	runtime := newWaitRuntime()
+	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
+		ID: "session-1", WorkspaceID: "ws-1", Provider: "codex", Status: "completed",
+		TurnLifecycle: &TurnLifecycle{Phase: agentactivitybiz.TurnPhaseSettled}, Visible: true,
+	}
+	runtime.turnOverride = &agentactivitybiz.Turn{
+		WorkspaceID: "ws-1", AgentSessionID: "session-1", TurnID: "turn-previous",
+		Phase: agentactivitybiz.TurnPhaseSettled, Outcome: agentactivitybiz.TurnOutcomeCompleted,
+		FinalAssistantMessageID: "assistant-old", FinalAssistantMessageResolved: true,
+	}
+	reader := &waitMessageReader{list: func(input agentactivitybiz.ListSessionMessagesInput) (SessionMessagesPage, bool) {
+		return SessionMessagesPage{
+			AgentSessionID: input.AgentSessionID,
+			LatestVersion:  4,
+			Messages: []SessionMessage{{
+				AgentSessionID: input.AgentSessionID, TurnID: "turn-previous", MessageID: "assistant-old",
+				Role: "assistant", Kind: "text", Payload: map[string]any{"content": "previous ok"}, Version: 4,
+			}},
+		}, true
+	}}
+	service := newIsolatedAgentService(runtime)
+	service.TurnStore = runtime
+	service.MessageReader = reader
+	service.noteSendDidNotStart("ws-1", "session-1")
+
+	failed, err := service.Wait(context.Background(), WaitInput{
+		WorkspaceID: "ws-1", AgentSessionID: "session-1", SkipMessages: true,
+	})
+	if err != nil {
+		t.Fatalf("Wait() error = %v", err)
+	}
+	if failed.Reason != WaitReasonNotStarted || failed.TimedOut || failed.TurnID != "" || failed.FinalMessage != nil {
+		t.Fatalf("wait after failed send = %+v, want not_started without the previous turn", failed)
+	}
+
+	again, err := service.Wait(context.Background(), WaitInput{
+		WorkspaceID: "ws-1", AgentSessionID: "session-1", SkipMessages: true,
+	})
+	if err != nil {
+		t.Fatalf("second Wait() error = %v", err)
+	}
+	if again.Reason != WaitReasonCompleted || again.TurnID != "turn-previous" {
+		t.Fatalf("wait after the failed send was observed = %+v", again)
+	}
+}
+
+func TestWaitWhileCodexDesktopHoldDoesNotReturnPreviousTurn(t *testing.T) {
+	runtime := newWaitRuntime()
+	// The runtime session keeps an active-turn marker so subscribe can attach.
+	// The persisted turn is already settled, which is the stale result Wait
+	// must not return while the desktop hold queue is nonempty.
+	liveTurnID := "turn-live"
+	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
+		ID: "session-1", WorkspaceID: "ws-1", Provider: "codex", Status: "completed",
+		TurnLifecycle: &TurnLifecycle{
+			ActiveTurnID: &liveTurnID,
+			Phase:        agentactivitybiz.TurnPhaseSettled,
+		},
+		Visible: true,
+	}
+	runtime.turnOverride = &agentactivitybiz.Turn{
+		WorkspaceID: "ws-1", AgentSessionID: "session-1", TurnID: "turn-previous",
+		Phase: agentactivitybiz.TurnPhaseSettled, Outcome: agentactivitybiz.TurnOutcomeCompleted,
+	}
+	reader := &waitMessageReader{list: func(input agentactivitybiz.ListSessionMessagesInput) (SessionMessagesPage, bool) {
+		return SessionMessagesPage{AgentSessionID: input.AgentSessionID, LatestVersion: 4}, true
+	}}
+	service := newIsolatedAgentService(runtime)
+	service.TurnStore = runtime
+	service.MessageReader = reader
+	service.codexDesktopHoldLookup = func(string, string) *CodexDesktopHold {
+		return &CodexDesktopHold{
+			Held: true, ReasonCode: "codex_thread_held_externally", QueuedCount: 2,
+			ProviderSessionID: "thread-1", OpenURL: "codex://threads/thread-1",
+		}
+	}
+
+	result, err := service.Wait(context.Background(), WaitInput{
+		WorkspaceID: "ws-1", AgentSessionID: "session-1", SkipMessages: true,
+		Timeout: 30 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("Wait() error = %v", err)
+	}
+	if result.Reason != WaitReasonTimeout || result.TurnID == "turn-previous" || result.FinalMessage != nil {
+		t.Fatalf("queued wait = %+v, want timeout instead of the previous turn", result)
+	}
+	select {
+	case <-runtime.subscribeStarted:
+	default:
+		t.Fatal("queued wait returned without subscribing")
+	}
+}
+
 func TestWaitUserOnlyLongTailHasBoundedMessageQueries(t *testing.T) {
 	runtime := newWaitRuntime()
 	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{

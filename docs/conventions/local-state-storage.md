@@ -251,6 +251,13 @@ app can open the thread. Codex keeps a per-thread writer lock under that home
 for the life of the app-server process. After a user-home turn settles and no
 goal is active, Dock closes that process so the desktop app can resume the
 thread; the next Dock turn or handoff starts it again with `thread/resume`.
+The desktop app keeps that writer lock for every thread it has resumed until
+the app itself quits; switching threads does not release it. While the lock
+is held, Dock marks the session `codex_thread_held_externally` (“在 Codex 里进行中”)
+and appends sends, handoffs, and reviews under `agent/codex-held` instead of
+failing the send. Delivery runs when the user retries or a cheap lock probe
+sees the file free. `tutti agent wait` after a failed or still-queued send
+does not report the previous turn.
 `thread/unsubscribe` does not drop the lock. Isolated homes keep the process
 until the idle reaper. The first permissive `thread/start` in a project Codex
 does not already trust appends `[projects."<root>"] trust_level = "trusted"`

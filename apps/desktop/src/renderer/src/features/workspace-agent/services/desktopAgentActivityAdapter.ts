@@ -437,6 +437,15 @@ export function createDesktopAgentActivityAdapter({
           )
         };
       }
+      if (result.kind === "codexDesktopHeld") {
+        return {
+          kind: "codexDesktopHeld",
+          session: agentActivitySessionFromTuttidSession(
+            input.workspaceId,
+            result.session
+          )
+        };
+      }
       if (result.kind === "queued") {
         reportDesktopAgentSubmitTrace(runtimeApi, {
           agentSessionId: input.agentSessionId,
@@ -590,6 +599,15 @@ export function createDesktopAgentActivityAdapter({
         { archived: input.archived },
         { signal: input.signal }
       );
+      return agentActivitySessionFromTuttidSession(input.workspaceId, session);
+    },
+    async retryCodexDesktopHold(input) {
+      const session =
+        await tuttidClient.retryWorkspaceAgentSessionCodexDesktopHold(
+          input.workspaceId,
+          input.agentSessionId,
+          { signal: input.signal }
+        );
       return agentActivitySessionFromTuttidSession(input.workspaceId, session);
     },
     async setSessionPinned(input) {

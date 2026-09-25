@@ -133,6 +133,8 @@ export interface AgentActivitySession {
   // null = the source did not say (older payloads, locally minted sessions);
   // only an explicit false means "the process is gone".
   runtimeLive?: boolean | null;
+  /** Codex desktop owns the writer lock; Dock queues sends until it is released. */
+  codexDesktopHold?: AgentActivityCodexDesktopHold | null;
   /** Latest accepted durable message change cursor. */
   messageVersion: number;
   lastEventUnixMs: number;
@@ -142,6 +144,14 @@ export interface AgentActivitySession {
   archivedAtUnixMs?: number;
   createdAtUnixMs: number;
   updatedAtUnixMs: number;
+}
+
+export interface AgentActivityCodexDesktopHold {
+  held: boolean;
+  reasonCode: string;
+  queuedCount: number;
+  providerSessionId: string;
+  openUrl: string;
 }
 
 export type AgentActivityActivationMode = "new" | "existing";
@@ -468,6 +478,15 @@ export type AgentActivitySendInputResult =
       kind: "goalControl";
       session: AgentActivitySession;
       goal?: AgentActivitySessionGoal | null;
+    }
+  | {
+      /**
+       * Accepted into Dock's Codex-desktop hold queue. No turn was started.
+       * The daemon delivers the prompt after the writer lock is released, so
+       * the engine drops the local prompt and must not resend it.
+       */
+      kind: "codexDesktopHeld";
+      session: AgentActivitySession;
     };
 
 export interface AgentPromptContentBlock {

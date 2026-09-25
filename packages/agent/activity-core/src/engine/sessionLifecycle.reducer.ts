@@ -259,10 +259,12 @@ export function sessionLifecycleReducer(
             upsertCanonicalSession(state, sendResult.session, initialOperation)
           );
         }
-        if (sendResult.kind === "queued") {
-          // No turn exists yet: the daemon parked this prompt behind the
-          // running turn. Only the session snapshot is news; the turn shows up
-          // through the ordinary activity stream once it starts.
+        if (
+          sendResult.kind === "queued" ||
+          sendResult.kind === "codexDesktopHeld"
+        ) {
+          // No turn exists yet. The daemon owns delivery, so only the session
+          // snapshot (including a Codex desktop hold) is news here.
           return result(
             upsertCanonicalSession(state, sendResult.session, initialOperation)
           );

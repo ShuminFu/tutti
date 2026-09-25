@@ -713,6 +713,9 @@ func mapAgentRuntimeError(err error) error {
 	if errors.Is(err, agentruntime.ErrPermissionModeUnavailable) {
 		return agentservice.ErrPermissionModeUnavailable
 	}
+	if errors.Is(err, agentruntime.ErrCodexThreadHeldExternally) {
+		return fmt.Errorf("%w: %v", agenthost.ErrCodexThreadHeldExternally, err)
+	}
 	var appErr *agentruntime.AppError
 	if errors.As(err, &appErr) && appErr != nil {
 		return agenthost.NewProviderError(appErr.Code, appErr.Message, appErr.DebugMessage, appErr)

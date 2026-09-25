@@ -23,6 +23,12 @@ export function agentGUIConversationRailLabels(
     activityStatusUnread: t("agentHost.agentGui.activityStatusUnread"),
     activityStatusWaiting: t("agentHost.agentGui.activityStatusWaiting"),
     activityStatusWorking: t("agentHost.agentGui.activityStatusWorking"),
+    codexDesktopHoldStatus: t("agentHost.agentGui.codexDesktopHoldStatus"),
+    codexDesktopHoldMessage: t("agentHost.agentGui.codexDesktopHoldMessage"),
+    codexDesktopHoldOpen: t("agentHost.agentGui.codexDesktopHoldOpen"),
+    codexDesktopHoldRetry: t("agentHost.agentGui.codexDesktopHoldRetry"),
+    codexDesktopHoldQueued: (count: number) =>
+      t("agentHost.agentGui.codexDesktopHoldQueued", { count }),
     batchDeleteConversations: t("agentHost.agentGui.batchDeleteConversations"),
     batchDeleteConversationsBody: (count: number) =>
       t("agentHost.agentGui.batchDeleteConversationsBody", { count }),

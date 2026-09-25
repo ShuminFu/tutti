@@ -1105,6 +1105,31 @@ test("a queued send keeps the prompt visible and waits for its promised turn", (
   );
 });
 
+test("a Codex desktop hold drops the local prompt because the daemon queued it", () => {
+  const available = canonicalLifecycle("settled", 1, "turn-0");
+  const sent = reduce(
+    createInitialPromptQueueState(),
+    enqueue("prompt-1"),
+    available
+  );
+  const accepted = reduce(
+    sent.state,
+    commandResult(commandId(sent.commands[0]), "queue/sendPrompt", "succeeded"),
+    available,
+    {
+      sendValidation: {
+        kind: "valid",
+        result: {
+          kind: "codexDesktopHeld",
+          session: activitySession("settled", 2, "turn-0")
+        }
+      }
+    }
+  );
+  assert.equal(accepted.state.recordsBySessionId["session-1"], undefined);
+  assert.deepEqual(accepted.commands, []);
+});
+
 // Once the parked turn has settled, the prompt behind it drains normally: the
 // wait must not outlive the turn it was waiting for.
 test("the prompt behind a queued send drains once the promised turn settles", () => {

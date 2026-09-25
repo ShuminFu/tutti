@@ -724,6 +724,15 @@ file or directory`. A failed `codex app-server` probe is diagnostic evidence,
   [codex.go](../../../packages/agent/runtimeprep/codex.go)
   [preparer_test.go](../../../packages/agent/runtimeprep/preparer_test.go)
 
+### Dock send fails because Codex desktop holds the writer lock
+
+- Symptom:
+  `tutti agent send` fails with `acp thread/resume failed: thread <id> already has an active writer (code -32600)` and `workspace_operation_failed`. `tutti agent wait` then reports the previous turn as `completed`.
+- Root cause:
+  The Codex desktop app keeps the writer lock for every thread it has resumed until the app quits. Switching threads does not release the lock.
+- Fix:
+  User-home sessions treat that resume error as `codex_thread_held_externally`. Dock marks the session “在 Codex 里进行中”, queues the send, and tells the user to handle it in Codex or quit Codex and retry. A cheap probe of `$CODEX_HOME/thread-writer-locks/<id>.lock` avoids starting app-server while the lock is held; resume remains the source of truth. Isolated homes keep the generic failure.
+
 ### Cursor sessions create project `.cursor/skills` or `AGENTS.md` changes
 
 - Symptom:

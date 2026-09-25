@@ -9,19 +9,23 @@ import (
 )
 
 var (
-	ErrInvalidArgument                   = errors.New("invalid agent session request")
-	ErrRailPlacementConflict             = errors.New("agent session rail placement conflicts with canonical state")
-	ErrSessionNotFound                   = errors.New("workspace agent session not found")
-	ErrTurnNotFound                      = errors.New("workspace agent turn not found")
-	ErrProviderSessionNotEstablished     = errors.New("provider session was never established")
-	ErrSubmitDeliveryUnknown             = errors.New("agent submit delivery is still being confirmed")
-	ErrActiveTurnTargetRequired          = errors.New("active-turn guidance requires an exact target turn")
-	ErrActiveTurnTargetMismatch          = errors.New("active-turn guidance target is no longer active")
+	ErrInvalidArgument               = errors.New("invalid agent session request")
+	ErrRailPlacementConflict         = errors.New("agent session rail placement conflicts with canonical state")
+	ErrSessionNotFound               = errors.New("workspace agent session not found")
+	ErrTurnNotFound                  = errors.New("workspace agent turn not found")
+	ErrProviderSessionNotEstablished = errors.New("provider session was never established")
+	ErrSubmitDeliveryUnknown         = errors.New("agent submit delivery is still being confirmed")
+	ErrActiveTurnTargetRequired      = errors.New("active-turn guidance requires an exact target turn")
+	ErrActiveTurnTargetMismatch      = errors.New("active-turn guidance target is no longer active")
 	// ErrSessionTurnSlotBusy is the runtime's answer when a session already has
 	// a canonical turn running. It never reaches a caller: ordinary prompts park
 	// in the host admission queue and are replayed when the slot frees
 	// (submit_admission.go).
-	ErrSessionTurnSlotBusy               = errors.New("agent session already has an active turn")
+	ErrSessionTurnSlotBusy = errors.New("agent session already has an active turn")
+	// ErrCodexThreadHeldExternally means the Codex desktop app owns the
+	// thread writer. User-home sends park instead of failing; isolated
+	// sessions never see this sentinel.
+	ErrCodexThreadHeldExternally         = errors.New("codex thread is held by an external writer")
 	ErrSubmitAdmissionQueueFull          = errors.New("agent session has too many prompts waiting for the current turn")
 	ErrSessionTitleTooLong               = errors.New("agent session title is too long")
 	ErrRuntimeSessionDisconnected        = errors.New("agent runtime session is disconnected")

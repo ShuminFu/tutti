@@ -3,9 +3,14 @@ package agentruntime
 import "errors"
 
 const (
-	AppErrorProviderSessionNotFound = "agent.provider_session_not_found"
-	AppErrorResumeSessionNotLocal   = "agent.resume_session_not_local"
+	AppErrorProviderSessionNotFound   = "agent.provider_session_not_found"
+	AppErrorResumeSessionNotLocal     = "agent.resume_session_not_local"
+	AppErrorCodexThreadHeldExternally = "codex_thread_held_externally"
 )
+
+// ErrCodexThreadHeldExternally is the Codex desktop writer lock. The thread
+// already has an owner, so Dock must not start another app-server for it.
+var ErrCodexThreadHeldExternally = errors.New("codex thread is held by an external writer")
 
 var (
 	ErrSessionDisconnected           = errors.New("agent session is not connected")

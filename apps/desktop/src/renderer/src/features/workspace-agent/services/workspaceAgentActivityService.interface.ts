@@ -329,6 +329,10 @@ export interface IWorkspaceAgentActivityService {
   renameSession(
     input: AgentActivityRenameSessionInput
   ): Promise<AgentActivitySession>;
+  retryCodexDesktopHold?(input: {
+    agentSessionId: string;
+    workspaceId: string;
+  }): Promise<AgentActivitySession>;
   setSessionPinned(input: {
     agentSessionId: string;
     pinned: boolean;

@@ -311,6 +311,8 @@ export function createDesktopAgentActivityRuntime(
           ) => workspaceAgentActivityService.setSessionArchived!(input)
         }
       : {}),
+    retryCodexDesktopHold: (input) =>
+      workspaceAgentActivityService.retryCodexDesktopHold!(input),
     async setSessionPinned(input) {
       const session =
         await workspaceAgentActivityService.setSessionPinned(input);
