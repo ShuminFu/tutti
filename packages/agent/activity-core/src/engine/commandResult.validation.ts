@@ -136,6 +136,9 @@ export function validateSendInputResult(
       ? { kind: "valid", result: value }
       : { kind: "invalid", reason: "send_result_turn_scope_mismatch" };
   }
+  if (value.kind === "codexDesktopHeld") {
+    return { kind: "valid", result: value };
+  }
   const turnSessionId = value.turn.agentSessionId.trim();
   const turnId = value.turnId.trim();
   if (!turnId || value.turn.turnId.trim() !== turnId) {
@@ -164,6 +167,14 @@ function isSendInputResult(
     result.kind === "queued" &&
     result.session &&
     typeof result.turnId === "string" &&
+    typeof result.session.agentSessionId === "string" &&
+    typeof result.session.workspaceId === "string"
+  ) {
+    return true;
+  }
+  if (
+    result.kind === "codexDesktopHeld" &&
+    result.session &&
     typeof result.session.agentSessionId === "string" &&
     typeof result.session.workspaceId === "string"
   ) {

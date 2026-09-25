@@ -185,6 +185,37 @@ export function useAgentGUIConversationMetadataActions(
     [agentActivityRuntime, agentHostApi.toast, workspaceId]
   );
 
+  const retryCodexDesktopHold = useCallback(
+    (agentSessionId: string) => {
+      const normalizedAgentSessionId = agentSessionId.trim();
+      if (
+        !normalizedAgentSessionId ||
+        !agentActivityRuntime.retryCodexDesktopHold
+      ) {
+        return;
+      }
+      setDetailError(null);
+      void agentActivityRuntime
+        .retryCodexDesktopHold({
+          workspaceId,
+          agentSessionId: normalizedAgentSessionId
+        })
+        .catch((error) => {
+          const message = getAgentGUIErrorMessage(error);
+          reportAgentGUIRuntimeError({
+            agentSessionId: normalizedAgentSessionId,
+            error,
+            phase: "retry_codex_desktop_hold",
+            provider: dataRef.current.provider,
+            runtime: agentActivityRuntime,
+            workspaceId
+          });
+          showAgentGUIControllerErrorToast(agentHostApi.toast, message);
+        });
+    },
+    [agentActivityRuntime, agentHostApi.toast, setDetailError, workspaceId]
+  );
+
   const markConversationUnread = useCallback(
     (agentSessionId: string) => {
       const normalizedAgentSessionId = agentSessionId.trim();
@@ -327,6 +358,7 @@ export function useAgentGUIConversationMetadataActions(
     removeProject,
     toggleProjectPinned,
     toggleConversationPinned,
+    retryCodexDesktopHold,
     markConversationUnread,
     renameConversation
   };

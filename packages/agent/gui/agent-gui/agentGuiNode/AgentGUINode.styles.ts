@@ -87,6 +87,11 @@ const styles = {
   conversationActivitySecondaryIcon:
     "agent-gui-node__conversation-activity-secondary-icon",
   conversationActivityText: "agent-gui-node__conversation-activity-text",
+  conversationHoldStatus: "agent-gui-node__conversation-hold-status",
+  codexDesktopHold: "agent-gui-node__codex-desktop-hold",
+  codexDesktopHoldAction: "agent-gui-node__codex-desktop-hold-action",
+  codexDesktopHoldActions: "agent-gui-node__codex-desktop-hold-actions",
+  codexDesktopHoldCopy: "agent-gui-node__codex-desktop-hold-copy",
   conversationItem: "agent-gui-node__conversation-item",
   conversationList: "agent-gui-node__conversation-list",
   conversationMeta: "agent-gui-node__conversation-meta",

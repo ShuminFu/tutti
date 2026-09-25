@@ -51,7 +51,13 @@ func (s *Service) Wait(ctx context.Context, input WaitInput) (WaitResult, error)
 		return WaitResult{}, err
 	}
 	initialStop, initialStopped := waitStopStateForSession(initialSession)
+	if codexDesktopHoldQueued(initialSession) && initialStopped {
+		return s.waitResult(ctx, workspaceID, agentSessionID, initialSession, WaitReasonCodexDesktopHeld, false, effectiveAfter, messageLimit)
+	}
 	if input.AfterVersion == nil && initialStopped {
+		if s.consumeSendDidNotStart(workspaceID, agentSessionID) {
+			return s.waitResult(ctx, workspaceID, agentSessionID, initialSession, WaitReasonNotStarted, false, effectiveAfter, messageLimit)
+		}
 		return s.waitResult(ctx, workspaceID, agentSessionID, initialSession, WaitReason(initialStop.Reason), false, effectiveAfter, messageLimit)
 	}
 

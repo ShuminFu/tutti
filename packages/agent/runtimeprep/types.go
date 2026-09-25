@@ -31,13 +31,17 @@ type SkillBundleRenderer interface {
 }
 
 type PrepareInput struct {
-	WorkspaceID            string
-	AgentSessionID         string
-	AgentTargetID          string
-	Provider               string
-	Cwd                    string
-	CLICommand             string
-	CodexSaverMode         bool
+	WorkspaceID    string
+	AgentSessionID string
+	AgentTargetID  string
+	Provider       string
+	Cwd            string
+	CLICommand     string
+	CodexSaverMode bool
+	// CodexHomeMode selects the Codex process home for this prepare.
+	// "isolated" keeps the per-session home. "user" uses the user's Codex home.
+	// Empty follows TUTTI_CODEX_HOME_MODE and the legacy-rollout guard.
+	CodexHomeMode          string
 	Title                  string
 	PermissionModeID       string
 	PlanMode               bool

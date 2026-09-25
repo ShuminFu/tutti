@@ -1,6 +1,9 @@
 package agentruntime
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestIsACPProviderSessionNotFoundAcceptsResourceSuffixDetails(t *testing.T) {
 	t.Parallel()
@@ -60,6 +63,59 @@ func TestClassifyACPResumeErrorMapsMissingRolloutToProviderSessionNotFound(t *te
 	// The classified error must be recreatable so RecreateIfMissing can recover.
 	if !isResumeRecreatableError(classified) {
 		t.Fatalf("missing-rollout error should be recreatable")
+	}
+}
+
+func TestClassifyACPResumeErrorMapsActiveWriterToHeldExternally(t *testing.T) {
+	t.Parallel()
+
+	callErr := &acpCallError{
+		Method: appServerMethodThreadResume,
+		Err: acpError{
+			Code:    -32600,
+			Message: "thread 019eeec5-940b-7c00-9fef-a0da2990cfe5 already has an active writer",
+		},
+	}
+	session := Session{
+		Provider:          ProviderCodex,
+		ProviderSessionID: "019eeec5-940b-7c00-9fef-a0da2990cfe5",
+		Env:               []string{"TUTTI_CODEX_CONFIG_OVERRIDES=[\"sandbox_mode=\\\"workspace-write\\\"\"]"},
+	}
+	classified := classifyACPResumeError(session, appServerMethodThreadResume, callErr)
+	if AppErrorCode(classified) != AppErrorCodexThreadHeldExternally {
+		t.Fatalf("classified error code = %q, want %q", AppErrorCode(classified), AppErrorCodexThreadHeldExternally)
+	}
+	if !errors.Is(classified, ErrCodexThreadHeldExternally) {
+		t.Fatalf("classified error = %v, want ErrCodexThreadHeldExternally", classified)
+	}
+	if isResumeRecreatableError(classified) {
+		t.Fatal("an externally held thread must not be recreated")
+	}
+	if isACPProviderSessionNotFound(appServerMethodThreadResume, callErr) {
+		t.Fatal("active writer must not be classified as a missing rollout")
+	}
+}
+
+func TestClassifyACPResumeErrorLeavesIsolatedWriterLockGeneric(t *testing.T) {
+	t.Parallel()
+
+	callErr := &acpCallError{
+		Method: appServerMethodThreadResume,
+		Err: acpError{
+			Code:    -32600,
+			Message: "thread abc already has an active writer",
+		},
+	}
+	classified := classifyACPResumeError(
+		Session{Provider: ProviderCodex, ProviderSessionID: "abc"},
+		appServerMethodThreadResume,
+		callErr,
+	)
+	if AppErrorCode(classified) != "" {
+		t.Fatalf("isolated resume error code = %q, want the raw ACP error", AppErrorCode(classified))
+	}
+	if errors.Is(classified, ErrCodexThreadHeldExternally) {
+		t.Fatal("isolated mode must not take the user-home hold path")
 	}
 }
 

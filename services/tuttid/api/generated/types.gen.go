@@ -2842,6 +2842,21 @@ func (e PermissionModeSemantic) Valid() bool {
 	}
 }
 
+// Defines values for SendWorkspaceAgentSessionInputCodexDesktopHeldResponseKind.
+const (
+	SendWorkspaceAgentSessionInputCodexDesktopHeldResponseKindCodexDesktopHeld SendWorkspaceAgentSessionInputCodexDesktopHeldResponseKind = "codexDesktopHeld"
+)
+
+// Valid indicates whether the value is a known member of the SendWorkspaceAgentSessionInputCodexDesktopHeldResponseKind enum.
+func (e SendWorkspaceAgentSessionInputCodexDesktopHeldResponseKind) Valid() bool {
+	switch e {
+	case SendWorkspaceAgentSessionInputCodexDesktopHeldResponseKindCodexDesktopHeld:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SendWorkspaceAgentSessionInputGoalControlResponseKind.
 const (
 	SendWorkspaceAgentSessionInputGoalControlResponseKindGoalControl SendWorkspaceAgentSessionInputGoalControlResponseKind = "goalControl"
@@ -6103,6 +6118,19 @@ type CliTableOutput struct {
 	Columns []CliTableColumn `json:"columns"`
 }
 
+// CodexDesktopHold defines model for CodexDesktopHold.
+type CodexDesktopHold struct {
+	Held bool `json:"held"`
+
+	// OpenUrl codex://threads/<id> deep link for the held thread.
+	OpenUrl           string `json:"openUrl"`
+	ProviderSessionId string `json:"providerSessionId"`
+	QueuedCount       int    `json:"queuedCount"`
+
+	// ReasonCode Stable reason. codex_thread_held_externally while the desktop app owns the writer.
+	ReasonCode string `json:"reasonCode"`
+}
+
 // CollaborationRun One recorded collaboration run with full accounting. Credentials never appear on run records; consults resolve the plan credential at call time only.
 type CollaborationRun struct {
 	// Adoption Whether the run outcome was taken up by the source task. Fork and handoff runs report not_applicable.
@@ -8109,6 +8137,17 @@ type RollbackWorkspaceAppRequest struct {
 	Version string `json:"version"`
 }
 
+// SendWorkspaceAgentSessionInputCodexDesktopHeldResponse The submission was accepted into Dock's queue because the Codex desktop app holds the thread writer lock. No turn was started. Clients must not resend the prompt and must not surface a send failure. The session projection carries codexDesktopHold, including the queued count.
+type SendWorkspaceAgentSessionInputCodexDesktopHeldResponse struct {
+	Kind        SendWorkspaceAgentSessionInputCodexDesktopHeldResponseKind `json:"kind"`
+	QueuedCount *int                                                       `json:"queuedCount,omitempty"`
+	ReasonCode  *string                                                    `json:"reasonCode,omitempty"`
+	Session     WorkspaceAgentSession                                      `json:"session"`
+}
+
+// SendWorkspaceAgentSessionInputCodexDesktopHeldResponseKind defines model for SendWorkspaceAgentSessionInputCodexDesktopHeldResponse.Kind.
+type SendWorkspaceAgentSessionInputCodexDesktopHeldResponseKind string
+
 // SendWorkspaceAgentSessionInputGoalControlResponse defines model for SendWorkspaceAgentSessionInputGoalControlResponse.
 type SendWorkspaceAgentSessionInputGoalControlResponse struct {
 	Goal      *WorkspaceAgentSessionGoal                            `json:"goal"`
@@ -8960,6 +8999,9 @@ type WorkspaceAgentSession struct {
 
 	// Capabilities Protocol v2. Authoritative session capability snapshot. Null means no authoritative session snapshot is available, either because the runtime has not reported one yet or because legacy persisted data is ambiguous. A non-null object is complete, so false means explicitly unsupported. Only while this field is null may clients fall back to the authoritative provider composer descriptor; they must never infer capabilities from provider identity.
 	Capabilities *WorkspaceAgentCapabilities `json:"capabilities"`
+
+	// CodexDesktopHold Set while the Codex desktop app holds this thread's writer lock. Dock queues sends, handoffs, and reviews until the lock is released or the user retries. Null when Dock can write the thread.
+	CodexDesktopHold *CodexDesktopHold `json:"codexDesktopHold,omitempty"`
 
 	// CreatedAtUnixMs Protocol v2. Unix milliseconds replacement for createdAt.
 	CreatedAtUnixMs int64   `json:"createdAtUnixMs"`
@@ -11430,6 +11472,34 @@ func (t *SendWorkspaceAgentSessionInputResponse) MergeSendWorkspaceAgentSessionI
 	return err
 }
 
+// AsSendWorkspaceAgentSessionInputCodexDesktopHeldResponse returns the union data inside the SendWorkspaceAgentSessionInputResponse as a SendWorkspaceAgentSessionInputCodexDesktopHeldResponse
+func (t SendWorkspaceAgentSessionInputResponse) AsSendWorkspaceAgentSessionInputCodexDesktopHeldResponse() (SendWorkspaceAgentSessionInputCodexDesktopHeldResponse, error) {
+	var body SendWorkspaceAgentSessionInputCodexDesktopHeldResponse
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSendWorkspaceAgentSessionInputCodexDesktopHeldResponse overwrites any union data inside the SendWorkspaceAgentSessionInputResponse as the provided SendWorkspaceAgentSessionInputCodexDesktopHeldResponse
+func (t *SendWorkspaceAgentSessionInputResponse) FromSendWorkspaceAgentSessionInputCodexDesktopHeldResponse(v SendWorkspaceAgentSessionInputCodexDesktopHeldResponse) error {
+	v.Kind = "codexDesktopHeld"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSendWorkspaceAgentSessionInputCodexDesktopHeldResponse performs a merge with any union data inside the SendWorkspaceAgentSessionInputResponse, using the provided SendWorkspaceAgentSessionInputCodexDesktopHeldResponse
+func (t *SendWorkspaceAgentSessionInputResponse) MergeSendWorkspaceAgentSessionInputCodexDesktopHeldResponse(v SendWorkspaceAgentSessionInputCodexDesktopHeldResponse) error {
+	v.Kind = "codexDesktopHeld"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsSendWorkspaceAgentSessionInputGoalControlResponse returns the union data inside the SendWorkspaceAgentSessionInputResponse as a SendWorkspaceAgentSessionInputGoalControlResponse
 func (t SendWorkspaceAgentSessionInputResponse) AsSendWorkspaceAgentSessionInputGoalControlResponse() (SendWorkspaceAgentSessionInputGoalControlResponse, error) {
 	var body SendWorkspaceAgentSessionInputGoalControlResponse
@@ -11472,6 +11542,8 @@ func (t SendWorkspaceAgentSessionInputResponse) ValueByDiscriminator() (interfac
 		return nil, err
 	}
 	switch discriminator {
+	case "codexDesktopHeld":
+		return t.AsSendWorkspaceAgentSessionInputCodexDesktopHeldResponse()
 	case "goalControl":
 		return t.AsSendWorkspaceAgentSessionInputGoalControlResponse()
 	case "queued":

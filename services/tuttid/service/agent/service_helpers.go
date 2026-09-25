@@ -62,6 +62,10 @@ func cloneSession(session Session) Session {
 	cloned.ActiveTurnID = strings.TrimSpace(session.ActiveTurnID)
 	cloned.LatestTurnInteractions = cloneActivityInteractions(session.LatestTurnInteractions)
 	cloned.PendingInteractions = cloneActivityInteractions(session.PendingInteractions)
+	if session.CodexDesktopHold != nil {
+		hold := *session.CodexDesktopHold
+		cloned.CodexDesktopHold = &hold
+	}
 	return cloned
 }
 

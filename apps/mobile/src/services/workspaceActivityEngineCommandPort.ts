@@ -325,6 +325,12 @@ async function sendPrompt(
       session: context.mapSession(result.session)
     };
   }
+  if (result.kind === "codexDesktopHeld") {
+    return {
+      kind: "codexDesktopHeld",
+      session: context.mapSession(result.session)
+    };
+  }
   if (result.kind === "queued") {
     // Accepted, not dispatched: the daemon parked this prompt behind the
     // session's running turn and starts it when the slot frees.

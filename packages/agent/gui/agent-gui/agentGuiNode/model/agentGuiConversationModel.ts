@@ -354,6 +354,9 @@ export function conversationSummaryFromAgentSession(
     endedAtUnixMs: session.endedAtUnixMs ?? null,
     needsUserAction: options.needsUserAction ?? false,
     ...(session.visible === false ? { hiddenFromRail: true } : {}),
+    ...(session.codexDesktopHold
+      ? { codexDesktopHold: session.codexDesktopHold }
+      : {}),
     sortTimeUnixMs: resolveWorkspaceAgentSessionSortTimeUnixMs(session),
     updatedAtUnixMs:
       session.updatedAtUnixMs || session.createdAtUnixMs || Date.now()
@@ -484,6 +487,9 @@ function conversationSummaryFromActivity(
     sortTimeUnixMs: activity.sortTimeUnixMs,
     updatedAtUnixMs: session?.updatedAtUnixMs || activity.sortTimeUnixMs || 0,
     activeTurn: session?.activeTurn ?? null,
+    ...(session?.codexDesktopHold
+      ? { codexDesktopHold: session.codexDesktopHold }
+      : {}),
     ...(isImportedWorkspaceAgentSession(session) ? { isImported: true } : {})
   };
 }

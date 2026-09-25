@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	agentruntime "github.com/tutti-os/tutti/packages/agent/daemon/runtime"
+	agenthost "github.com/tutti-os/tutti/packages/agent/host"
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	workspacefiles "github.com/tutti-os/tutti/packages/workspace/files"
 	workspaceissues "github.com/tutti-os/tutti/packages/workspace/issues"
@@ -78,7 +79,7 @@ const (
 	ReasonUnsupportedDesktopDockPlacement                = "unsupported_desktop_dock_placement"
 	ReasonUnsupportedDeletedAgentConversationRetention   = "unsupported_deleted_agent_conversation_retention"
 	ReasonUnsupportedAgentRuntimeIdleMinutes             = "unsupported_agent_runtime_idle_minutes"
-	ReasonUnsupportedAgentRuntimeMaxResident            = "unsupported_agent_runtime_max_resident"
+	ReasonUnsupportedAgentRuntimeMaxResident             = "unsupported_agent_runtime_max_resident"
 	ReasonUnsupportedDesktopAppCatalogChannel            = "unsupported_desktop_app_catalog_channel"
 	ReasonUnsupportedDesktopBrowserUseConnectionMode     = "unsupported_desktop_browser_use_connection_mode"
 	ReasonUnsupportedDesktopLocale                       = "unsupported_desktop_locale"
@@ -559,6 +560,11 @@ func Classify(err error) *ProtocolError {
 	case errors.Is(err, agentservice.ErrRuntimeOperationFailed):
 		result := WorkspaceOperationFailed(WithCause(err))
 		result.Reason = ReasonAgentRuntimeOperationFailed
+		return result
+	case errors.Is(err, agenthost.ErrCodexThreadHeldExternally):
+		result := WorkspaceOperationFailed(WithCause(err))
+		result.Reason = agenthost.CodexThreadHeldExternallyReason
+		result.Retryable = true
 		return result
 	default:
 		return WorkspaceOperationFailed(WithCause(err))

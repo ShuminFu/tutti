@@ -326,6 +326,9 @@ type ServerInterface interface {
 	// Disable or select automation rules for one session
 	// (PUT /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/automation-rule-override)
 	SetAgentSessionAutomationRuleOverride(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, agentSessionID AgentSessionID)
+	// Deliver sends queued while Codex desktop holds the thread
+	// (POST /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/codex-desktop-hold:retry)
+	RetryWorkspaceAgentSessionCodexDesktopHold(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, agentSessionID AgentSessionID)
 	// Reconcile or safely retry one durable edit-retry operation
 	// (POST /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/edit-retry-operations/{operationID}/recover)
 	RecoverWorkspaceAgentEditRetry(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, agentSessionID AgentSessionID, operationID string)
@@ -4385,6 +4388,47 @@ func (siw *ServerInterfaceWrapper) SetAgentSessionAutomationRuleOverride(w http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetAgentSessionAutomationRuleOverride(w, r, workspaceID, agentSessionID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RetryWorkspaceAgentSessionCodexDesktopHold operation middleware
+func (siw *ServerInterfaceWrapper) RetryWorkspaceAgentSessionCodexDesktopHold(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspaceID" -------------
+	var workspaceID WorkspaceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspaceID", r.PathValue("workspaceID"), &workspaceID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspaceID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agentSessionID" -------------
+	var agentSessionID AgentSessionID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentSessionID", r.PathValue("agentSessionID"), &agentSessionID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentSessionID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetryWorkspaceAgentSessionCodexDesktopHold(w, r, workspaceID, agentSessionID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11601,6 +11645,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/attachments/{attachmentID}", wrapper.ReadWorkspaceAgentSessionAttachment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/automation-rule-override", wrapper.GetAgentSessionAutomationRuleOverride)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/automation-rule-override", wrapper.SetAgentSessionAutomationRuleOverride)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/codex-desktop-hold:retry", wrapper.RetryWorkspaceAgentSessionCodexDesktopHold)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/edit-retry-operations/{operationID}/recover", wrapper.RecoverWorkspaceAgentEditRetry)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/fork", wrapper.ForkWorkspaceAgentSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/git-branches", wrapper.ListWorkspaceAgentSessionGitBranches)
@@ -21136,6 +21181,107 @@ type SetAgentSessionAutomationRuleOverride503JSONResponse struct {
 }
 
 func (response SetAgentSessionAutomationRuleOverride503JSONResponse) VisitSetAgentSessionAutomationRuleOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryWorkspaceAgentSessionCodexDesktopHoldRequestObject struct {
+	WorkspaceID    WorkspaceID    `json:"workspaceID"`
+	AgentSessionID AgentSessionID `json:"agentSessionID"`
+}
+
+type RetryWorkspaceAgentSessionCodexDesktopHoldResponseObject interface {
+	VisitRetryWorkspaceAgentSessionCodexDesktopHoldResponse(w http.ResponseWriter) error
+}
+
+type RetryWorkspaceAgentSessionCodexDesktopHold200JSONResponse WorkspaceAgentSessionResponse
+
+func (response RetryWorkspaceAgentSessionCodexDesktopHold200JSONResponse) VisitRetryWorkspaceAgentSessionCodexDesktopHoldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryWorkspaceAgentSessionCodexDesktopHold401JSONResponse struct{ UnauthorizedErrorJSONResponse }
+
+func (response RetryWorkspaceAgentSessionCodexDesktopHold401JSONResponse) VisitRetryWorkspaceAgentSessionCodexDesktopHoldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryWorkspaceAgentSessionCodexDesktopHold404JSONResponse struct {
+	WorkspaceNotFoundErrorJSONResponse
+}
+
+func (response RetryWorkspaceAgentSessionCodexDesktopHold404JSONResponse) VisitRetryWorkspaceAgentSessionCodexDesktopHoldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryWorkspaceAgentSessionCodexDesktopHold405JSONResponse struct {
+	MethodNotAllowedErrorJSONResponse
+}
+
+func (response RetryWorkspaceAgentSessionCodexDesktopHold405JSONResponse) VisitRetryWorkspaceAgentSessionCodexDesktopHoldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryWorkspaceAgentSessionCodexDesktopHold502JSONResponse struct {
+	WorkspaceOperationErrorJSONResponse
+}
+
+func (response RetryWorkspaceAgentSessionCodexDesktopHold502JSONResponse) VisitRetryWorkspaceAgentSessionCodexDesktopHoldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryWorkspaceAgentSessionCodexDesktopHold503JSONResponse struct {
+	ServiceUnavailableErrorJSONResponse
+}
+
+func (response RetryWorkspaceAgentSessionCodexDesktopHold503JSONResponse) VisitRetryWorkspaceAgentSessionCodexDesktopHoldResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -40204,6 +40350,9 @@ type StrictServerInterface interface {
 	// Disable or select automation rules for one session
 	// (PUT /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/automation-rule-override)
 	SetAgentSessionAutomationRuleOverride(ctx context.Context, request SetAgentSessionAutomationRuleOverrideRequestObject) (SetAgentSessionAutomationRuleOverrideResponseObject, error)
+	// Deliver sends queued while Codex desktop holds the thread
+	// (POST /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/codex-desktop-hold:retry)
+	RetryWorkspaceAgentSessionCodexDesktopHold(ctx context.Context, request RetryWorkspaceAgentSessionCodexDesktopHoldRequestObject) (RetryWorkspaceAgentSessionCodexDesktopHoldResponseObject, error)
 	// Reconcile or safely retry one durable edit-retry operation
 	// (POST /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/edit-retry-operations/{operationID}/recover)
 	RecoverWorkspaceAgentEditRetry(ctx context.Context, request RecoverWorkspaceAgentEditRetryRequestObject) (RecoverWorkspaceAgentEditRetryResponseObject, error)
@@ -43680,6 +43829,33 @@ func (sh *strictHandler) SetAgentSessionAutomationRuleOverride(w http.ResponseWr
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetAgentSessionAutomationRuleOverrideResponseObject); ok {
 		if err := validResponse.VisitSetAgentSessionAutomationRuleOverrideResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RetryWorkspaceAgentSessionCodexDesktopHold operation middleware
+func (sh *strictHandler) RetryWorkspaceAgentSessionCodexDesktopHold(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, agentSessionID AgentSessionID) {
+	var request RetryWorkspaceAgentSessionCodexDesktopHoldRequestObject
+
+	request.WorkspaceID = workspaceID
+	request.AgentSessionID = agentSessionID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RetryWorkspaceAgentSessionCodexDesktopHold(ctx, request.(RetryWorkspaceAgentSessionCodexDesktopHoldRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RetryWorkspaceAgentSessionCodexDesktopHold")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RetryWorkspaceAgentSessionCodexDesktopHoldResponseObject); ok {
+		if err := validResponse.VisitRetryWorkspaceAgentSessionCodexDesktopHoldResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

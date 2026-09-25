@@ -492,6 +492,12 @@ export const zhCNAgentGui = {
   activityStatusUnread: "有未读结果",
   activityStatusWaiting: "等待你处理",
   activityStatusWorking: "正在运行",
+  codexDesktopHoldStatus: "在 Codex 里进行中",
+  codexDesktopHoldMessage:
+    "这个线程正在 Codex 桌面端打开，Dock 暂时发不进去。请在 Codex 里处理，或退出 Codex 后重试。",
+  codexDesktopHoldOpen: "在 Codex 中打开",
+  codexDesktopHoldRetry: "重试",
+  codexDesktopHoldQueued: "已排队 {{count}} 条",
   viewActivity: "查看活动",
   viewActivityNeedsAttention: "查看活动，有会话需要关注",
   turnOffActivityView: "关闭活动视图",

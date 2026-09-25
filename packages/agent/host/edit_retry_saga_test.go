@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -435,11 +436,15 @@ type hostEditRetryRuntime struct {
 	// turnSlotBusy makes ordinary Exec answer the way the runtime does while
 	// another canonical turn owns the session's turn slot. Tests clear it to
 	// simulate that turn settling.
-	turnSlotBusy bool
-	reconcileAcceptanceCalls    int
-	reconcileAcceptanceInput    agenthost.RuntimeProviderTurnAcceptanceInput
-	goalControlCalls            int
-	content                     []agenthost.PromptContentBlock
+	turnSlotBusy             bool
+	userCodexHome            bool
+	codexHome                string
+	codexHeld                bool
+	delivered                []string
+	reconcileAcceptanceCalls int
+	reconcileAcceptanceInput agenthost.RuntimeProviderTurnAcceptanceInput
+	goalControlCalls         int
+	content                  []agenthost.PromptContentBlock
 }
 
 func (*hostEditRetryRuntime) Start(context.Context, agenthost.RuntimeStartInput) (agenthost.RuntimeStartResult, error) {
@@ -451,16 +456,27 @@ func (r *hostEditRetryRuntime) Resume(context.Context, agenthost.RuntimeResumeIn
 func (r *hostEditRetryRuntime) Session(string, string) (agenthost.ProviderRuntimeSession, bool) {
 	return r.session(), true
 }
-func (*hostEditRetryRuntime) session() agenthost.ProviderRuntimeSession {
-	return agenthost.ProviderRuntimeSession{
+func (r *hostEditRetryRuntime) session() agenthost.ProviderRuntimeSession {
+	session := agenthost.ProviderRuntimeSession{
 		ID: "session-1", WorkspaceID: "workspace-1", Provider: "codex",
 		ProviderSessionID: "thread-1", InitialTitleEstablished: true,
 	}
+	if r.userCodexHome {
+		session.Env = []string{
+			"CODEX_HOME=" + r.codexHome,
+			"TUTTI_CODEX_CONFIG_OVERRIDES=[]",
+		}
+	}
+	return session
 }
 func (*hostEditRetryRuntime) CanResume(agenthost.RuntimeResumeInput) bool { return true }
 func (r *hostEditRetryRuntime) Exec(ctx context.Context, input agenthost.RuntimeExecInput) (agenthost.RuntimeExecResult, error) {
 	r.mu.Lock()
 	r.execCalls++
+	if r.codexHeld && !input.Guidance {
+		r.mu.Unlock()
+		return agenthost.RuntimeExecResult{}, fmt.Errorf("%w", agenthost.ErrCodexThreadHeldExternally)
+	}
 	if r.turnSlotBusy && !input.Guidance {
 		r.mu.Unlock()
 		return agenthost.RuntimeExecResult{}, fmt.Errorf("%w", agenthost.ErrSessionTurnSlotBusy)
@@ -550,6 +566,14 @@ func (r *hostEditRetryRuntime) Exec(ctx context.Context, input agenthost.Runtime
 	}); err != nil {
 		return agenthost.RuntimeExecResult{}, err
 	}
+	r.mu.Lock()
+	for _, block := range input.Content {
+		if strings.TrimSpace(block.Text) != "" {
+			r.delivered = append(r.delivered, block.Text)
+			break
+		}
+	}
+	r.mu.Unlock()
 	return agenthost.RuntimeExecResult{
 		TurnID: input.TurnID,
 		ProviderDispatch: agenthost.RuntimeProviderDispatchResult{

@@ -108,6 +108,9 @@ export function normalizeAgentActivitySession(
     ...(source.runtimeLive === undefined
       ? {}
       : { runtimeLive: source.runtimeLive }),
+    ...(source.codexDesktopHold === undefined
+      ? {}
+      : { codexDesktopHold: source.codexDesktopHold }),
     messageVersion: source.messageVersion ?? 0,
     lastEventUnixMs: source.lastEventUnixMs ?? updatedAtUnixMs,
     startedAtUnixMs: source.startedAtUnixMs ?? createdAtUnixMs,

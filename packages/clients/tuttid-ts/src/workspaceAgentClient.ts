@@ -43,6 +43,7 @@ import {
   resolveWorkspaceGitPatchSupport,
   resolveWorkspaceAgentSessionWorktreeSupport,
   scanWorkspaceExternalAgentSessionImports,
+  retryWorkspaceAgentSessionCodexDesktopHold,
   sendWorkspaceAgentSessionInput,
   startAgentSessionRecording,
   submitWorkspaceAgentInteractive,
@@ -107,6 +108,7 @@ type WorkspaceAgentClient = Pick<
   | "resolveWorkspaceGitPatchSupport"
   | "resolveWorkspaceAgentSessionWorktreeSupport"
   | "scanWorkspaceExternalAgentSessionImports"
+  | "retryWorkspaceAgentSessionCodexDesktopHold"
   | "sendWorkspaceAgentSessionInput"
   | "startAgentSessionRecording"
   | "submitWorkspaceAgentInteractive"
@@ -619,6 +621,20 @@ export function createWorkspaceAgentClient(
         }),
         "Reconcile workspace agent goal state failed."
       );
+    },
+    async retryWorkspaceAgentSessionCodexDesktopHold(
+      workspaceID,
+      agentSessionID,
+      requestOptions
+    ) {
+      return unwrapData(
+        await retryWorkspaceAgentSessionCodexDesktopHold({
+          client,
+          path: { agentSessionID, workspaceID },
+          ...requestOptions
+        }),
+        "Retry Codex desktop hold failed."
+      ).session;
     },
     async sendWorkspaceAgentSessionInput(
       workspaceID,

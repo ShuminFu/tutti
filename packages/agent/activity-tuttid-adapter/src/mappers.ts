@@ -89,6 +89,15 @@ export function agentActivitySessionFromTuttidSession(
     visible: session.visible ?? true,
     resumable: session.resumable ?? false,
     runtimeLive: session.runtimeLive ?? null,
+    codexDesktopHold: session.codexDesktopHold
+      ? {
+          held: session.codexDesktopHold.held,
+          openUrl: session.codexDesktopHold.openUrl,
+          providerSessionId: session.codexDesktopHold.providerSessionId,
+          queuedCount: session.codexDesktopHold.queuedCount,
+          reasonCode: session.codexDesktopHold.reasonCode
+        }
+      : null,
     messageVersion: session.messageVersion,
     lastEventUnixMs: updatedAtUnixMs,
     pinnedAtUnixMs: session.pinnedAtUnixMs ?? null,

@@ -34,6 +34,7 @@ import type { AgentTranscriptVirtualScrollController } from "../../../shared/age
 import type { AgentGUIDetailPaneProps } from "./AgentGUIDetailPane.types";
 import { useAgentGUIDetailEditRetry } from "./useAgentGUIDetailEditRetry";
 import { submitAgentInteractionResponseAndDismiss } from "../../../shared/agentConversation/interactionResponseAdmission";
+import { AGENT_EXTERNAL_LINK_ACTION_SOURCE } from "../../../actions/portableWorkspaceNavigationActions";
 export const EMPTY_WORKSPACE_APP_ICONS: readonly AgentMessageMarkdownWorkspaceAppIcon[] =
   [];
 export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
@@ -730,6 +731,12 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
           message={labels.goalRemoved}
         />
       ) : null}
+      <AgentGUICodexDesktopHoldBanner
+        actions={actions}
+        conversation={viewModel.rail.activeConversation}
+        labels={labels}
+        onLinkAction={onLinkAction}
+      />
       <AgentMonitorPresenceBar
         monitors={conversation?.monitors}
         onStopMonitors={actions.stopBackgroundMonitors}
@@ -806,3 +813,57 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     </main>
   );
 });
+
+function AgentGUICodexDesktopHoldBanner({
+  actions,
+  conversation,
+  labels,
+  onLinkAction
+}: {
+  actions: AgentGUIDetailPaneProps["actions"];
+  conversation: AgentGUIDetailPaneProps["rail"]["activeConversation"];
+  labels: AgentGUIDetailPaneProps["labels"];
+  onLinkAction: AgentGUIDetailPaneProps["onLinkAction"];
+}) {
+  const hold = conversation?.codexDesktopHold;
+  if (!conversation || !hold?.held) return null;
+  const openUrl = hold.openUrl.trim();
+  return (
+    <div
+      className={styles.codexDesktopHold}
+      data-testid="agent-gui-codex-desktop-hold"
+    >
+      <div className={styles.codexDesktopHoldCopy}>
+        <strong>{labels.codexDesktopHoldStatus}</strong>
+        <p>{labels.codexDesktopHoldMessage}</p>
+        {hold.queuedCount > 0 ? (
+          <p>{labels.codexDesktopHoldQueued(hold.queuedCount)}</p>
+        ) : null}
+      </div>
+      <div className={styles.codexDesktopHoldActions}>
+        {openUrl ? (
+          <button
+            type="button"
+            className={styles.codexDesktopHoldAction}
+            onClick={() =>
+              onLinkAction?.({
+                source: AGENT_EXTERNAL_LINK_ACTION_SOURCE,
+                type: "open-url",
+                url: openUrl
+              })
+            }
+          >
+            {labels.codexDesktopHoldOpen}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className={styles.codexDesktopHoldAction}
+          onClick={() => actions.retryCodexDesktopHold?.(conversation.id)}
+        >
+          {labels.codexDesktopHoldRetry}
+        </button>
+      </div>
+    </div>
+  );
+}

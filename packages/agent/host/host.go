@@ -61,6 +61,10 @@ type Config struct {
 	// its unit/conformance tests still exercise it; production wiring sets this
 	// true. Remove once the saga's resend/recovery gap is fixed.
 	EditRetryDisabled bool
+
+	// CodexHeldDir stores sends that are waiting because the Codex desktop
+	// app owns the thread writer. Empty keeps the queue in memory only.
+	CodexHeldDir string
 }
 
 type Host struct {
@@ -112,8 +116,9 @@ type Host struct {
 	editRetryDisabled      bool
 	// submitAdmission parks ordinary prompts that arrived while the session's
 	// one canonical turn slot was busy (submit_admission.go).
-	submitAdmission submitAdmissionQueue
-	goalFencesRestored     sync.Map
+	submitAdmission    submitAdmissionQueue
+	codexHold          *codexDesktopHoldQueue
+	goalFencesRestored sync.Map
 }
 
 func New(config Config) *Host {
@@ -150,6 +155,10 @@ func New(config Config) *Host {
 		goalMaxAttempts: config.GoalMaxAttempts, goalDispatchDeadline: config.GoalDispatchDeadline,
 		goalActor: goalActor, sessionMutationActor: sessionMutationActor,
 		editRetryDisabled: config.EditRetryDisabled,
+		codexHold: &codexDesktopHoldQueue{
+			dir:     strings.TrimSpace(config.CodexHeldDir),
+			records: map[string]*codexHoldRecord{},
+		},
 	}
 	if host.interactionTrees == nil {
 		host.interactionTrees, _ = host.store.(CanonicalInteractionTreeStore)

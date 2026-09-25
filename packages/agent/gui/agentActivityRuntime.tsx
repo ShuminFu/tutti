@@ -459,6 +459,10 @@ export interface AgentGUIRuntime {
   setSessionPinned(
     input: AgentActivityRuntimeSetSessionPinnedInput
   ): Promise<AgentActivitySession>;
+  retryCodexDesktopHold?(input: {
+    agentSessionId: string;
+    workspaceId: string;
+  }): Promise<AgentActivitySession>;
   setSessionArchived?(input: {
     workspaceId: string;
     agentSessionId: string;

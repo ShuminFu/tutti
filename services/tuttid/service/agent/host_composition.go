@@ -1,11 +1,14 @@
 package agent
 
 import (
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	agenthost "github.com/tutti-os/tutti/packages/agent/host"
 	claudecodeservice "github.com/tutti-os/tutti/services/tuttid/service/claudecode"
+	tuttitypes "github.com/tutti-os/tutti/services/tuttid/types"
 )
 
 type ApplicationHostRuntime interface {
@@ -60,6 +63,7 @@ type HostSupportPorts struct {
 	GoalRecoveryBudget     time.Duration
 	GoalMaxAttempts        int
 	GoalDispatchDeadline   time.Duration
+	CodexHeldDir           string
 }
 
 // ServiceComponents owns the narrow mutable components shared by production
@@ -132,6 +136,7 @@ func NewServiceComponents(
 		GoalRecoveryBudget:   config.Runtime.GoalOperationRecoveryBudget,
 		GoalMaxAttempts:      config.Runtime.GoalOperationMaxAttempts,
 		GoalDispatchDeadline: config.Runtime.GoalOperationDispatchDeadline,
+		CodexHeldDir:         filepath.Join(tuttitypes.DefaultStateDir(), "agent", "codex-held"),
 	}
 	return &ServiceComponents{
 		hostSupport:           support,
@@ -163,7 +168,7 @@ func NewApplicationHostWithPorts(
 			return nil
 		}
 	}
-	return composeApplicationHost(
+	host := composeApplicationHost(
 		support,
 		canonical,
 		canonical,
@@ -173,6 +178,10 @@ func NewApplicationHostWithPorts(
 		runtime,
 		runtime,
 	)
+	if host != nil && strings.TrimSpace(support.CodexHeldDir) != "" {
+		host.StartCodexDesktopHoldWatcher()
+	}
+	return host
 }
 
 func composeApplicationHost(
@@ -226,7 +235,8 @@ func composeApplicationHost(
 		GoalOwner: support.GoalOwner, GoalClock: support.GoalClock,
 		GoalAttemptTimeout: support.GoalAttemptTimeout, GoalRecoveryBudget: support.GoalRecoveryBudget,
 		GoalMaxAttempts: support.GoalMaxAttempts, GoalDispatchDeadline: support.GoalDispatchDeadline,
-		GoalActor: agenthost.NewSessionActor(),
+		GoalActor:    agenthost.NewSessionActor(),
+		CodexHeldDir: support.CodexHeldDir,
 		// Durable edit-and-retry (PR #1681) is neutralized: its saga can strand a
 		// session in a rolled-back-but-not-resent state whose runtime operation
 		// becomes a cold-recovery poison pill that crashes tuttid on launch.

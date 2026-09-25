@@ -72,6 +72,29 @@ func (api DaemonAPI) UpdateWorkspaceAgentSessionArchive(ctx context.Context, req
 	}
 }
 
+func (api DaemonAPI) RetryWorkspaceAgentSessionCodexDesktopHold(ctx context.Context, request tuttigenerated.RetryWorkspaceAgentSessionCodexDesktopHoldRequestObject) (tuttigenerated.RetryWorkspaceAgentSessionCodexDesktopHoldResponseObject, error) {
+	if api.AgentSessionService == nil {
+		return tuttigenerated.RetryWorkspaceAgentSessionCodexDesktopHold503JSONResponse{
+			ServiceUnavailableErrorJSONResponse: agentSessionServiceUnavailableError(),
+		}, nil
+	}
+	session, err := api.AgentSessionService.RetryCodexDesktopHold(
+		ctx,
+		string(request.WorkspaceID),
+		string(request.AgentSessionID),
+	)
+	if err != nil {
+		return writeRetryWorkspaceAgentSessionCodexDesktopHoldError(err), nil
+	}
+	generatedSession, err := generatedAgentSession(session)
+	if err != nil {
+		return writeRetryWorkspaceAgentSessionCodexDesktopHoldError(err), nil
+	}
+	return tuttigenerated.RetryWorkspaceAgentSessionCodexDesktopHold200JSONResponse{
+		Session: generatedSession,
+	}, nil
+}
+
 func (api DaemonAPI) UpdateWorkspaceAgentSessionPin(ctx context.Context, request tuttigenerated.UpdateWorkspaceAgentSessionPinRequestObject) (tuttigenerated.UpdateWorkspaceAgentSessionPinResponseObject, error) {
 	if api.AgentSessionService == nil {
 		return tuttigenerated.UpdateWorkspaceAgentSessionPin503JSONResponse{

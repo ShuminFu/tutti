@@ -110,6 +110,11 @@ type Service struct {
 	// when the persisted-session fallback scan last found nothing, so the
 	// full session scan is not repeated on every composer-options fetch.
 	liveModelPersistedScanMissAtUnixMS map[string]int64
+	// sendNotStarted marks a send that returned without opening a turn, so
+	// the next wait does not report the previous turn as its result.
+	sendNotStarted sync.Map
+	// codexDesktopHoldLookup overrides the host queue for tests.
+	codexDesktopHoldLookup func(workspaceID, agentSessionID string) *CodexDesktopHold
 	// modelPlanBinding wires the optional workspace model access plan
 	// integration; see ConfigureModelPlanBinding.
 	modelPlanBinding modelPlanBindingRuntime
@@ -324,6 +329,18 @@ type Session struct {
 	// projectSessionForResponse / projectSessionsForResponse 这条统一投影边界
 	// 贴上，是**读到那一刻**的观察，不进持久化。
 	RuntimeLive bool
+	// CodexDesktopHold is set when the Codex desktop app owns the writer lock.
+	// It is a read-time observation, like RuntimeLive.
+	CodexDesktopHold *CodexDesktopHold
+}
+
+// CodexDesktopHold is the session projection for a thread open in Codex.
+type CodexDesktopHold struct {
+	Held              bool
+	ReasonCode        string
+	QueuedCount       int
+	ProviderSessionID string
+	OpenURL           string
 }
 
 // SessionGoalSyncState is the narrow durable Goal-operation evidence exposed
@@ -728,8 +745,12 @@ type CreateSessionInput struct {
 	ComputerUse           *bool
 	CodexSaverMode        *bool
 	CodexSaverModeAllowed bool
-	ProviderTargetRef     map[string]any
-	ReasoningEffort       *string
+	// CodexHomeMode is an internal launch override. "isolated" keeps the
+	// per-session Codex home so hidden probes do not land in the user's Codex
+	// sidebar. Empty follows the preparer's default.
+	CodexHomeMode     string
+	ProviderTargetRef map[string]any
+	ReasoningEffort   *string
 	// ReasoningIntensity is an Issue-owned 0-100 strength request. When an
 	// explicit ReasoningEffort is absent, Create compiles it against the
 	// selected model's ordered reasoning-effort catalog. It is daemon-only and
@@ -838,6 +859,12 @@ const (
 	WaitReasonFailed          WaitReason = "failed"
 	WaitReasonCanceled        WaitReason = "canceled"
 	WaitReasonTimeout         WaitReason = "timeout"
+	// WaitReasonNotStarted means the latest send never opened a turn, so the
+	// previous settled turn is not this wait's result.
+	WaitReasonNotStarted WaitReason = "not_started"
+	// WaitReasonCodexDesktopHeld means the latest send is only parked behind
+	// the Codex desktop writer lock, so there is no turn to wait for.
+	WaitReasonCodexDesktopHeld WaitReason = "codex_desktop_held"
 )
 
 type WaitResult struct {

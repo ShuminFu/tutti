@@ -31,7 +31,8 @@ export function settleQueueCommand(
     // so the barrier keeps the next new-turn send behind it exactly as a
     // dispatched one would.
     const deliveryBarrierTurnId =
-      validation.result.kind === "goalControl"
+      validation.result.kind === "goalControl" ||
+      validation.result.kind === "codexDesktopHeld"
         ? null
         : validation.result.turnId;
     // A dispatched prompt leaves the queue because its Turn now carries the
@@ -54,9 +55,7 @@ export function settleQueueCommand(
               ? { ...prompt, acceptedTurnId: accepted }
               : prompt
           )
-        : current.prompts.filter(
-            (prompt) => prompt.id !== inFlight.promptId
-          ),
+        : current.prompts.filter((prompt) => prompt.id !== inFlight.promptId),
       pendingSendNowByPromptId: setPendingSendNowForPrompt(
         current.pendingSendNowByPromptId,
         inFlight.promptId,

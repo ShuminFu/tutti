@@ -194,8 +194,7 @@ test("WorkspaceAgentActivityService.sendInput preserves the authoritative ready 
     .sessions.find((session) => session.agentSessionId === "session-1");
 
   assert.equal(result.session.activeTurn, null);
-  assert.notEqual(result.kind, "goalControl");
-  if (result.kind === "goalControl") {
+  if (result.kind !== "turn") {
     throw new Error("expected a Turn-producing send result");
   }
   assert.equal(result.turn.phase, "submitted");

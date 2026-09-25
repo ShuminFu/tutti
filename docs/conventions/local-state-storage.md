@@ -194,6 +194,7 @@ Migrated agent runtime state should derive from the same root:
       <agent-session-id>/
         sidecar-manifest.json
         codex-home/
+        codex-overlay/
         tutti-agent-home/
     attachments/
       <agent-session-id>/
@@ -244,8 +245,31 @@ remain part of the identity. `agent/sessions` stores daemon-created working dire
 that do not receive an explicit cwd. `agent/runs` stores per-session provider
 sidecar state that can be recreated or cleaned up when the owning agent session
 is deleted. Provider-specific homes, generated skills, and cleanup manifests
-live under the matching run directory. Codex sessions use `codex-home` and
-receive it through `CODEX_HOME`; Tutti Agent sessions use `tutti-agent-home`
+live under the matching run directory. Dock Codex sessions use the user's
+Codex home (`CODEX_HOME` when set, otherwise `~/.codex`) so the Codex desktop
+app can open the thread. Codex keeps a per-thread writer lock under that home
+for the life of the app-server process. After a user-home turn settles and no
+goal is active, Dock closes that process so the desktop app can resume the
+thread; the next Dock turn or handoff starts it again with `thread/resume`.
+The desktop app keeps that writer lock for every thread it has resumed until
+the app itself quits; switching threads does not release it. While the lock
+is held, Dock marks the session `codex_thread_held_externally` (“在 Codex 里进行中”)
+and appends sends, handoffs, and reviews under `agent/codex-held` instead of
+failing the send. Delivery runs when the user retries or a cheap lock probe
+sees the file free. `tutti agent wait` after a failed or still-queued send
+does not report the previous turn.
+`thread/unsubscribe` does not drop the lock. Isolated homes keep the process
+until the idle reaper. The first permissive `thread/start` in a project Codex
+does not already trust appends `[projects."<root>"] trust_level = "trusted"`
+to the user's `config.toml`; Dock's `-c` overrides do not write that file.
+Sidebar project folders are desktop metadata (`thread-workspace-root-hints`
+and project assignment). An app-server thread, including one whose cwd is a
+git worktree inside an existing project, shows under Recents until the
+desktop assigns it. Continuing the thread in the desktop app uses that app's
+permission mode, not Dock's workspace-write sandbox. The run directory holds
+`codex-overlay` for Dock-only skills and developer instructions. Gateway,
+managed, and legacy sessions still use `codex-home` through `CODEX_HOME`. Set
+`TUTTI_CODEX_HOME_MODE=isolated` to keep that per-session home. Tutti Agent sessions use `tutti-agent-home`
 and receive it through `TUTTI_AGENT_HOME`. `agent/skill-bundles/v1/<digest>`
 stores immutable, rebuildable Tutti-managed Skill bundles shared by equal
 content across Tutti Agent sessions; session cleanup never removes these

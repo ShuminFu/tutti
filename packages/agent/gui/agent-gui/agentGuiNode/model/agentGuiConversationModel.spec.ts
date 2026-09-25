@@ -694,6 +694,43 @@ describe("agentGuiConversationModel", () => {
     ]);
   });
 
+  it("keeps a Codex desktop hold on the conversation summary", () => {
+    expect(
+      conversationSummaryFromAgentSession(
+        normalizeAgentActivitySession({
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: [],
+          workspaceId: "room-1",
+          agentSessionId: "session-codex",
+          provider: "codex",
+          providerSessionId: "thread-1",
+          cwd: "/workspace",
+          title: "Held thread",
+          createdAtUnixMs: 10,
+          updatedAtUnixMs: 20,
+          codexDesktopHold: {
+            held: true,
+            openUrl: "codex://threads/thread-1",
+            providerSessionId: "thread-1",
+            queuedCount: 2,
+            reasonCode: "codex_thread_held_externally"
+          }
+        })
+      )
+    ).toEqual(
+      expect.objectContaining({
+        codexDesktopHold: {
+          held: true,
+          openUrl: "codex://threads/thread-1",
+          providerSessionId: "thread-1",
+          queuedCount: 2,
+          reasonCode: "codex_thread_held_externally"
+        }
+      })
+    );
+  });
+
   it("preserves the session provider when a session has no explicit title", () => {
     expect(
       conversationSummaryFromAgentSession(

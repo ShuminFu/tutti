@@ -21,6 +21,9 @@ type submitAdmissionMode int
 const (
 	admissionPark submitAdmissionMode = iota
 	admissionReplay
+	// admissionCodexReplay delivers a prompt already stored in the desktop
+	// hold queue. A still-held resume must not append a second copy.
+	admissionCodexReplay
 )
 
 // submitAdmissionQueueLimit bounds the parked prompts per session. A session
@@ -162,6 +165,11 @@ func (h *Host) ObserveTurnSlotReleased(workspaceID string, agentSessionID string
 		return
 	}
 	h.drainParkedSubmits(context.Background(), workspaceID, agentSessionID)
+	// The item we just finished stays at the head until its turn settles.
+	// Continue in order now; the lock probe still refuses while Codex desktop holds it.
+	_ = h.deliverCodexDesktopHold(context.Background(), SessionRef{
+		WorkspaceID: workspaceID, AgentSessionID: agentSessionID,
+	}, false)
 }
 
 // drainParkedSubmits replays parked prompts one at a time, in arrival order.

@@ -2578,6 +2578,20 @@ export type WorkspaceAgentSessionLivenessEntry = {
   activeTurnId: string;
 };
 
+export type CodexDesktopHold = {
+  held: boolean;
+  /**
+   * Stable reason. codex_thread_held_externally while the desktop app owns the writer.
+   */
+  reasonCode: string;
+  queuedCount: number;
+  providerSessionId: string;
+  /**
+   * codex://threads/<id> deep link for the held thread.
+   */
+  openUrl: string;
+};
+
 export type WorkspaceAgentSession = {
   id: string;
   kind: WorkspaceAgentSessionKind;
@@ -2673,6 +2687,10 @@ export type WorkspaceAgentSession = {
    * True when this session still owns a live provider (ACP) process in the daemon runtime registry. Point-in-time observation: idle reclamation releases the process without changing session status or emitting an event, so this field is the only way to learn it. Older daemons may omit this observation.
    */
   runtimeLive?: boolean;
+  /**
+   * Set while the Codex desktop app holds this thread's writer lock. Dock queues sends, handoffs, and reviews until the lock is released or the user retries. Null when Dock can write the thread.
+   */
+  codexDesktopHold?: CodexDesktopHold | null;
   visible: boolean;
   settings: AgentSessionComposerSettings;
   permissionConfig: PermissionConfig;
@@ -2782,8 +2800,21 @@ export type SendWorkspaceAgentSessionInputResponse =
       kind: "queued";
     } & SendWorkspaceAgentSessionInputQueuedResponse)
   | ({
+      kind: "codexDesktopHeld";
+    } & SendWorkspaceAgentSessionInputCodexDesktopHeldResponse)
+  | ({
       kind: "goalControl";
     } & SendWorkspaceAgentSessionInputGoalControlResponse);
+
+/**
+ * The submission was accepted into Dock's queue because the Codex desktop app holds the thread writer lock. No turn was started. Clients must not resend the prompt and must not surface a send failure. The session projection carries codexDesktopHold, including the queued count.
+ */
+export type SendWorkspaceAgentSessionInputCodexDesktopHeldResponse = {
+  session: WorkspaceAgentSession;
+  kind: "codexDesktopHeld";
+  queuedCount?: number;
+  reasonCode?: string;
+};
 
 /**
  * The submission was accepted but not dispatched: the session's one canonical turn slot was still running another turn. The daemon owns the wait and starts this prompt when the slot frees, so clients must not resend it and must not surface a send failure. turnId is the canonical turn this prompt will occupy once it starts.
@@ -13537,6 +13568,52 @@ export type UpdateWorkspaceAgentSessionArchiveResponses = {
 
 export type UpdateWorkspaceAgentSessionArchiveResponse =
   UpdateWorkspaceAgentSessionArchiveResponses[keyof UpdateWorkspaceAgentSessionArchiveResponses];
+
+export type RetryWorkspaceAgentSessionCodexDesktopHoldData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+    agentSessionID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/codex-desktop-hold:retry";
+};
+
+export type RetryWorkspaceAgentSessionCodexDesktopHoldErrors = {
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type RetryWorkspaceAgentSessionCodexDesktopHoldError =
+  RetryWorkspaceAgentSessionCodexDesktopHoldErrors[keyof RetryWorkspaceAgentSessionCodexDesktopHoldErrors];
+
+export type RetryWorkspaceAgentSessionCodexDesktopHoldResponses = {
+  /**
+   * Workspace agent session after one delivery attempt
+   */
+  200: WorkspaceAgentSessionResponse;
+};
+
+export type RetryWorkspaceAgentSessionCodexDesktopHoldResponse =
+  RetryWorkspaceAgentSessionCodexDesktopHoldResponses[keyof RetryWorkspaceAgentSessionCodexDesktopHoldResponses];
 
 export type UpdateWorkspaceAgentSessionPinData = {
   body: UpdateWorkspaceAgentSessionPinRequest;

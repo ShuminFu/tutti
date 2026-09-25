@@ -336,13 +336,14 @@ export const AgentGUIConversationRailItem = memo(
       labels,
       uiLanguage
     );
+    const holdStatusLabel = agentGUIConversationHoldStatusLabel(item, labels);
     const activityStatusLabel = activityPresentation
       ? agentGUIConversationActivityStatusLabel(
           item,
           activityPresentation.priorityReason,
           labels
         )
-      : null;
+      : holdStatusLabel;
     const activityAccessibleLabel = activityPresentation
       ? [
           conversationTitle,
@@ -391,21 +392,28 @@ export const AgentGUIConversationRailItem = memo(
         }}
         onFocus={hasTargetInfo ? handleTargetInfoFocus : undefined}
       >
-        {activityPresentation ? (
+        {activityPresentation || holdStatusLabel ? (
           <span className={styles.conversationActivityText}>
             {conversationTitleRow}
-            <span
-              aria-hidden="true"
-              className={styles.conversationActivitySecondary}
-            >
-              {activityPresentation.secondary.kind === "project" ? (
-                <FolderIcon
-                  aria-hidden="true"
-                  className={styles.conversationActivitySecondaryIcon}
-                />
-              ) : null}
-              <span>{activityPresentation.secondary.text}</span>
-            </span>
+            {holdStatusLabel ? (
+              <span className={styles.conversationHoldStatus}>
+                {holdStatusLabel}
+              </span>
+            ) : null}
+            {activityPresentation ? (
+              <span
+                aria-hidden="true"
+                className={styles.conversationActivitySecondary}
+              >
+                {activityPresentation.secondary.kind === "project" ? (
+                  <FolderIcon
+                    aria-hidden="true"
+                    className={styles.conversationActivitySecondaryIcon}
+                  />
+                ) : null}
+                <span>{activityPresentation.secondary.text}</span>
+              </span>
+            ) : null}
           </span>
         ) : (
           conversationTitleRow
@@ -440,6 +448,7 @@ export const AgentGUIConversationRailItem = memo(
         ref={setItemElement}
         className={styles.conversationItem}
         data-active={active}
+        data-codex-desktop-hold={holdStatusLabel ? "true" : undefined}
         data-presentation={activityPresentation?.kind}
         data-pinned={pinned}
         data-pending-delete={isPendingDeleteConversation}
@@ -563,11 +572,25 @@ export const AgentGUIConversationRailItem = memo(
   }
 );
 
+function agentGUIConversationHoldStatusLabel(
+  item: AgentGUINodeViewModel["rail"]["conversations"][number],
+  labels: AgentGUIConversationRailLabels
+): string | null {
+  const hold = item.codexDesktopHold;
+  if (!hold?.held) return null;
+  if (hold.queuedCount > 0) {
+    return `${labels.codexDesktopHoldStatus} · ${labels.codexDesktopHoldQueued(hold.queuedCount)}`;
+  }
+  return labels.codexDesktopHoldStatus;
+}
+
 function agentGUIConversationActivityStatusLabel(
   item: AgentGUINodeViewModel["rail"]["conversations"][number],
   priorityReason: AgentGUIConversationActivityPriorityReason | null,
   labels: AgentGUIConversationRailLabels
 ): string | null {
+  const holdStatus = agentGUIConversationHoldStatusLabel(item, labels);
+  if (holdStatus) return holdStatus;
   if (item.needsUserAction || item.status === "waiting") {
     return labels.activityStatusWaiting;
   }

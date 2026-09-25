@@ -625,6 +625,9 @@ import type {
   RestoreWorkspaceDeletedAgentSessionData,
   RestoreWorkspaceDeletedAgentSessionErrors,
   RestoreWorkspaceDeletedAgentSessionResponses,
+  RetryWorkspaceAgentSessionCodexDesktopHoldData,
+  RetryWorkspaceAgentSessionCodexDesktopHoldErrors,
+  RetryWorkspaceAgentSessionCodexDesktopHoldResponses,
   RetryWorkspaceAppData,
   RetryWorkspaceAppErrors,
   RetryWorkspaceAppFactoryJobValidationData,
@@ -4190,6 +4193,24 @@ export const updateWorkspaceAgentSessionArchive = <
       "Content-Type": "application/json",
       ...options.headers
     }
+  });
+
+/**
+ * Deliver sends queued while Codex desktop holds the thread
+ */
+export const retryWorkspaceAgentSessionCodexDesktopHold = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<RetryWorkspaceAgentSessionCodexDesktopHoldData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    RetryWorkspaceAgentSessionCodexDesktopHoldResponses,
+    RetryWorkspaceAgentSessionCodexDesktopHoldErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/codex-desktop-hold:retry",
+    ...options
   });
 
 /**

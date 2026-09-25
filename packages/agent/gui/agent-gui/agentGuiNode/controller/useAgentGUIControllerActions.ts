@@ -103,6 +103,9 @@ export function useAgentGUIControllerActions(
   const toggleConversationPinned = useStableControllerEventCallback(
     actions.toggleConversationPinned
   );
+  const retryCodexDesktopHold = useStableControllerEventCallback(
+    actions.retryCodexDesktopHold ?? (() => undefined)
+  );
   const markConversationUnread = useStableControllerEventCallback(
     actions.markConversationUnread
   );
@@ -166,6 +169,7 @@ export function useAgentGUIControllerActions(
       confirmDeleteProjectConversations,
       confirmDeleteConversations,
       toggleConversationPinned,
+      retryCodexDesktopHold,
       markConversationUnread,
       renameConversation,
       forkConversationThroughTurn,
@@ -209,6 +213,7 @@ export function useAgentGUIControllerActions(
       submitInteractivePrompt,
       submitPrompt,
       toggleConversationPinned,
+      retryCodexDesktopHold,
       updateComposerSettings,
       retryComposerOptions,
       setTuttiModeActive,

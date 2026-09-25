@@ -479,7 +479,7 @@ func (h *Host) sendInputWithAdmission(
 ) (SendInputResult, error) {
 	ctx, command := h.beginCommand(ctx, "message_send", ref.WorkspaceID, ref.AgentSessionID)
 	result, err := h.sendInput(ctx, ref, input, admission)
-	if result.Kind == SubmitKindQueued {
+	if result.Kind == SubmitKindQueued || result.Kind == SubmitKindCodexDesktopHeld {
 		// A parked prompt is an accepted command whose dispatch is still
 		// ahead of it; finishing the command as a failure would report a
 		// terminal failure for a message that is going to run.
@@ -611,6 +611,9 @@ func (h *Host) sendInputSerialized(
 	if !input.Guidance && !session.InitialTitleEstablished {
 		initialTitle = DeriveInitialTitle(session.Title, firstNonEmpty(displayPrompt, promptText, preparedContent.DisplayText))
 	}
+	if !input.Guidance && h.codexDesktopHoldBlocks(session, admission) {
+		return h.parkCodexDesktopHold(ref, input, session, admission)
+	}
 	startedAt = h.now()
 	releaseStartup, err := h.acquireStartup(ctx, session.Provider)
 	if err != nil {
@@ -638,6 +641,10 @@ func (h *Host) sendInputSerialized(
 		// is not a user-visible failure: park the prompt and let the slot's
 		// release signal replay it (submit_admission.go).
 		return h.admitLater(ref, input, session, admission)
+	}
+	if err != nil && !input.Guidance && sessionUsesUserCodexHome(session.Env) &&
+		errors.Is(err, ErrCodexThreadHeldExternally) {
+		return h.parkCodexDesktopHold(ref, input, session, admission)
 	}
 	if err != nil {
 		// Only an explicit target verdict is a guidance-target failure. Any

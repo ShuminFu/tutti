@@ -79,6 +79,7 @@ export type AgentGUIRuntimeErrorPhase =
   | "send_prompt"
   | "submit_interactive"
   | "toggle_conversation_pinned"
+  | "retry_codex_desktop_hold"
   | "rename_conversation"
   | "fork_conversation_through_turn"
   | "open_fork_source_conversation"

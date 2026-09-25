@@ -226,6 +226,11 @@ export interface AgentGUIViewLabels extends AgentGUIProviderReadinessLabels {
   activityStatusUnread: string;
   activityStatusWaiting: string;
   activityStatusWorking: string;
+  codexDesktopHoldStatus: string;
+  codexDesktopHoldMessage: string;
+  codexDesktopHoldOpen: string;
+  codexDesktopHoldRetry: string;
+  codexDesktopHoldQueued: (count: number) => string;
   viewActivity: string;
   viewActivityNeedsAttention: string;
   turnOffActivityView: string;
@@ -506,6 +511,11 @@ export type AgentGUIConversationRailLabels = Pick<
   | "activityStatusUnread"
   | "activityStatusWaiting"
   | "activityStatusWorking"
+  | "codexDesktopHoldStatus"
+  | "codexDesktopHoldMessage"
+  | "codexDesktopHoldOpen"
+  | "codexDesktopHoldRetry"
+  | "codexDesktopHoldQueued"
   | "batchDeleteConversationsBody"
   | "batchDeleteConversationsConfirm"
   | "batchDeleteConversationsTitle"
@@ -729,6 +739,7 @@ export interface AgentGUINodeViewProps extends AgentGUIComposerExternalPromptPro
     retryActivation: () => void;
     continueInNewConversation: () => void;
     toggleConversationPinned: (agentSessionId: string, pinned: boolean) => void;
+    retryCodexDesktopHold?: (agentSessionId: string) => void;
     markConversationUnread: (agentSessionId: string) => void;
     renameConversation: (
       agentSessionId: string,

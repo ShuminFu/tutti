@@ -300,6 +300,7 @@ func (a *CodexAppServerAdapter) execBlocking(
 	emitCommands CommandSnapshotSink,
 	options codexTurnExecOptions,
 ) ([]activityshared.Event, error) {
+	defer a.releaseIdleUserCodexWriter(context.WithoutCancel(ctx), session)
 	execMetadata := execMetadataFromContext(ctx)
 	continuation := options.continuation
 	recordNotDispatched := func() {

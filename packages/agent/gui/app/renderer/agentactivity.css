@@ -7138,13 +7138,67 @@ button.agent-gui-node__conversation-section-toggle:hover
   opacity: 1;
 }
 
-.agent-gui-node__conversation-item[data-presentation="activity"] {
+.agent-gui-node__conversation-item[data-presentation="activity"],
+.agent-gui-node__conversation-item[data-codex-desktop-hold="true"] {
   height: auto;
   min-height: 56px;
   margin-bottom: 4px;
 }
 
+.agent-gui-node__conversation-hold-status {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-gui-node__codex-desktop-hold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 12px var(--agent-gui-detail-padding-x) 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--background-subtle, rgba(0, 0, 0, 0.04));
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.agent-gui-node__codex-desktop-hold-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.agent-gui-node__codex-desktop-hold-copy p {
+  margin: 0;
+}
+
+.agent-gui-node__codex-desktop-hold-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.agent-gui-node__codex-desktop-hold-action {
+  border: 1px solid var(--border-subtle, transparent);
+  border-radius: 6px;
+  background: var(--background-panel, transparent);
+  color: inherit;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
 .agent-gui-node__conversation-item[data-presentation="activity"]
+  .agent-gui-node__conversation-select,
+.agent-gui-node__conversation-item[data-codex-desktop-hold="true"]
   .agent-gui-node__conversation-select {
   align-items: start;
   min-height: 56px;
