@@ -862,6 +862,9 @@ const (
 	// WaitReasonNotStarted means the latest send never opened a turn, so the
 	// previous settled turn is not this wait's result.
 	WaitReasonNotStarted WaitReason = "not_started"
+	// WaitReasonCodexDesktopHeld means the latest send is only parked behind
+	// the Codex desktop writer lock, so there is no turn to wait for.
+	WaitReasonCodexDesktopHeld WaitReason = "codex_desktop_held"
 )
 
 type WaitResult struct {

@@ -91,11 +91,17 @@ func TestCodexDesktopHoldQueuesInOrderAndDeliversAfterRelease(t *testing.T) {
 	}
 
 	runtime.codexHeld = false
-	for _, turnID := range []string{"turn-submit-send", "turn-submit-handoff", "turn-submit-review"} {
-		if err := reloaded.RetryCodexDesktopHold(t.Context(), ref); err != nil {
-			t.Fatalf("retry %s: %v", turnID, err)
-		}
+	reloaded.DeliverReadyCodexDesktopHolds(t.Context())
+	state = reloaded.CodexDesktopHold("workspace-1", "session-1")
+	if state.QueuedCount != 2 || joinKinds(state.Kinds) != "handoff,review" {
+		t.Fatalf("queue after the first delivery = %+v", state)
+	}
+	for _, turnID := range []string{"turn-submit-send", "turn-submit-handoff"} {
 		settleHostTurn(t, store, turnID)
+		reloaded.ObserveTurnSlotReleased("workspace-1", "session-1")
+	}
+	if got, want := joinTexts(runtime.delivered), "first,second,third"; got != want {
+		t.Fatalf("delivered = %s, want %s", got, want)
 	}
 	state = reloaded.CodexDesktopHold("workspace-1", "session-1")
 	if state.QueuedCount != 0 || state.Held {
@@ -103,6 +109,62 @@ func TestCodexDesktopHoldQueuesInOrderAndDeliversAfterRelease(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "workspace-1", "session-1.json")); !os.IsNotExist(err) {
 		t.Fatalf("queue file still present: %v", err)
+	}
+}
+
+func TestCodexDesktopHoldQueuesGUIHandoffAndReview(t *testing.T) {
+	_, store, runtime := newHostEditRetryFixture(t)
+	runtime.userCodexHome = true
+	runtime.codexHome = t.TempDir()
+	runtime.codexHeld = true
+	host := agenthost.New(agenthost.Config{
+		CanonicalStore:    sqliteCanonicalStore{Store: store},
+		TurnSubmissions:   store,
+		EffectiveHistory:  store,
+		RuntimeOperations: store,
+		Runtime:           runtime,
+		HistoryRuntime:    runtime,
+		GoalRuntime:       runtime,
+		OperationOwner:    "worker-1",
+		CodexHeldDir:      t.TempDir(),
+	})
+	ref := agenthost.SessionRef{WorkspaceID: "workspace-1", AgentSessionID: "session-1"}
+	// Same bodies the GUI submits: the handoff button's session mention, and
+	// the review picker's slash command. Neither sets codexOutboundKind.
+	sends := []struct {
+		id   string
+		text string
+	}{
+		{id: "submit-handoff", text: "[@Thread](mention://agent-session/session-1?workspaceId=workspace-1) "},
+		{id: "submit-review", text: "/review uncommitted"},
+	}
+	for _, send := range sends {
+		result, err := host.SendInput(t.Context(), ref, agenthost.SendInput{
+			Content:        []agenthost.PromptContentBlock{{Type: "text", Text: send.text}},
+			ClientSubmitID: send.id,
+			TurnID:         "turn-" + send.id,
+		})
+		if err != nil {
+			t.Fatalf("SendInput(%s) error = %v", send.id, err)
+		}
+		if result.Kind != agenthost.SubmitKindCodexDesktopHeld {
+			t.Fatalf("SendInput(%s) kind = %q", send.id, result.Kind)
+		}
+	}
+	state := host.CodexDesktopHold("workspace-1", "session-1")
+	if got, want := joinKinds(state.Kinds), "handoff,review"; got != want || state.QueuedCount != 2 {
+		t.Fatalf("gui queue = %+v", state)
+	}
+	runtime.codexHeld = false
+	host.DeliverReadyCodexDesktopHolds(t.Context())
+	settleHostTurn(t, store, "turn-submit-handoff")
+	host.ObserveTurnSlotReleased("workspace-1", "session-1")
+	if got, want := joinTexts(runtime.delivered), "[@Thread](mention://agent-session/session-1?workspaceId=workspace-1),/review uncommitted"; got != want {
+		t.Fatalf("delivered = %q, want %q", got, want)
+	}
+	state = host.CodexDesktopHold("workspace-1", "session-1")
+	if state.QueuedCount != 0 || state.Held {
+		t.Fatalf("hold after gui delivery = %+v", state)
 	}
 }
 
@@ -183,6 +245,10 @@ func holdWriterLock(t *testing.T, codexHome, threadID string) *os.File {
 		t.Fatal(err)
 	}
 	return file
+}
+
+func joinTexts(texts []string) string {
+	return joinKinds(texts)
 }
 
 func joinKinds(kinds []string) string {

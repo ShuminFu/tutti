@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -439,6 +440,7 @@ type hostEditRetryRuntime struct {
 	userCodexHome            bool
 	codexHome                string
 	codexHeld                bool
+	delivered                []string
 	reconcileAcceptanceCalls int
 	reconcileAcceptanceInput agenthost.RuntimeProviderTurnAcceptanceInput
 	goalControlCalls         int
@@ -564,6 +566,14 @@ func (r *hostEditRetryRuntime) Exec(ctx context.Context, input agenthost.Runtime
 	}); err != nil {
 		return agenthost.RuntimeExecResult{}, err
 	}
+	r.mu.Lock()
+	for _, block := range input.Content {
+		if strings.TrimSpace(block.Text) != "" {
+			r.delivered = append(r.delivered, block.Text)
+			break
+		}
+	}
+	r.mu.Unlock()
 	return agenthost.RuntimeExecResult{
 		TurnID: input.TurnID,
 		ProviderDispatch: agenthost.RuntimeProviderDispatchResult{

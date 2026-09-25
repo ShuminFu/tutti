@@ -18,6 +18,7 @@ var sessionColumns = []cliservice.TableColumn{
 	{Key: "activeTurnId", Label: "Active Turn"},
 	{Key: "latestTurnPhase", Label: "Latest Phase"},
 	{Key: "latestTurnOutcome", Label: "Latest Outcome"},
+	{Key: "codexDesktopHold", Label: "Codex"},
 	{Key: "title", Label: "Title"},
 }
 
@@ -370,6 +371,7 @@ func sessionRows(sessions []agentservice.Session) []map[string]any {
 			"activeTurnId":      strings.TrimSpace(session.ActiveTurnID),
 			"latestTurnPhase":   latestTurnPhase,
 			"latestTurnOutcome": latestTurnOutcome,
+			"codexDesktopHold":  codexDesktopHoldTable(session.CodexDesktopHold),
 			"title":             strings.TrimSpace(title),
 		})
 	}

@@ -50,11 +50,15 @@ type codexHoldItem struct {
 }
 
 type codexDesktopHoldQueue struct {
-	mu      sync.Mutex
-	dir     string
-	loaded  bool
-	records map[string]*codexHoldRecord
-	started atomic.Bool
+	mu sync.Mutex
+	// deliverMu serializes drain attempts so a probe and a turn-slot release
+	// cannot start the same head twice.
+	// ponytail: one lock for every held session; split per session if delivery latency stacks.
+	deliverMu sync.Mutex
+	dir       string
+	loaded    bool
+	records   map[string]*codexHoldRecord
+	started   atomic.Bool
 }
 
 func (h *Host) codexHoldQueue() *codexDesktopHoldQueue {
@@ -89,14 +93,32 @@ func environmentValue(env []string, key string) (string, bool) {
 	return value, found
 }
 
-func codexOutboundKind(metadata map[string]any) string {
-	raw, _ := metadata["codexOutboundKind"].(string)
+func codexOutboundKind(input SendInput) string {
+	raw, _ := input.Metadata["codexOutboundKind"].(string)
 	switch strings.TrimSpace(raw) {
 	case "handoff", "review":
 		return strings.TrimSpace(raw)
+	}
+	// The GUI does not set metadata. Review is the /review slash command the
+	// picker submits; handoff is the session-mention draft the handoff button builds.
+	text := strings.TrimSpace(codexHoldPromptText(input.Content))
+	switch {
+	case text == "/review" || strings.HasPrefix(text, "/review ") || strings.HasPrefix(text, "/review\n") || strings.HasPrefix(text, "/review\t"):
+		return "review"
+	case strings.Contains(text, "mention://agent-session/"):
+		return "handoff"
 	default:
 		return "send"
 	}
+}
+
+func codexHoldPromptText(content []PromptContentBlock) string {
+	for _, block := range content {
+		if text := strings.TrimSpace(block.Text); text != "" {
+			return text
+		}
+	}
+	return ""
 }
 
 func (h *Host) codexDesktopHoldBlocks(session ProviderRuntimeSession, admission submitAdmissionMode) bool {
@@ -160,7 +182,7 @@ func (h *Host) rememberCodexDesktopHold(ref SessionRef, input SendInput, session
 		return errors.New("codex desktop hold queue is full")
 	}
 	record.Items = append(record.Items, codexHoldItem{
-		Kind:  codexOutboundKind(input.Metadata),
+		Kind:  codexOutboundKind(input),
 		Input: input,
 	})
 	return queue.saveLocked(ref.WorkspaceID, ref.AgentSessionID, record)
@@ -274,6 +296,8 @@ func (h *Host) deliverCodexDesktopHold(ctx context.Context, ref SessionRef, forc
 	if queue == nil {
 		return nil
 	}
+	queue.deliverMu.Lock()
+	defer queue.deliverMu.Unlock()
 	for {
 		item, ok := h.codexHoldHead(ref)
 		if !ok {

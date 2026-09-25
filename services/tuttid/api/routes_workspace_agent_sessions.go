@@ -245,6 +245,14 @@ func registerWorkspaceAgentSessionRoutes(
 		wrapper.UpdateWorkspaceAgentSessionPin(w, r)
 	})
 
+	mux.HandleFunc("/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/codex-desktop-hold:retry", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			tuttitypes.WriteMethodNotAllowed(w)
+			return
+		}
+		wrapper.RetryWorkspaceAgentSessionCodexDesktopHold(w, r)
+	})
+
 	mux.HandleFunc("/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/title", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			tuttitypes.WriteMethodNotAllowed(w)

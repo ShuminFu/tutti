@@ -165,6 +165,11 @@ func (h *Host) ObserveTurnSlotReleased(workspaceID string, agentSessionID string
 		return
 	}
 	h.drainParkedSubmits(context.Background(), workspaceID, agentSessionID)
+	// The item we just finished stays at the head until its turn settles.
+	// Continue in order now; the lock probe still refuses while Codex desktop holds it.
+	_ = h.deliverCodexDesktopHold(context.Background(), SessionRef{
+		WorkspaceID: workspaceID, AgentSessionID: agentSessionID,
+	}, false)
 }
 
 // drainParkedSubmits replays parked prompts one at a time, in arrival order.

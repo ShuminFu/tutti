@@ -44,6 +44,9 @@ func sessionSummaryValue(session agentservice.Session) map[string]any {
 	if session.Isolation != nil {
 		value["isolation"] = isolationCompactValue(*session.Isolation)
 	}
+	if hold := codexDesktopHoldValue(session.CodexDesktopHold); hold != nil {
+		value["codexDesktopHold"] = hold
+	}
 	return value
 }
 
@@ -71,7 +74,31 @@ func sessionActionValue(session agentservice.Session) map[string]any {
 	if session.Isolation != nil {
 		value["isolation"] = isolationCompactValue(*session.Isolation)
 	}
+	if hold := codexDesktopHoldValue(session.CodexDesktopHold); hold != nil {
+		value["codexDesktopHold"] = hold
+	}
 	return value
+}
+
+func codexDesktopHoldValue(hold *agentservice.CodexDesktopHold) map[string]any {
+	if hold == nil || !hold.Held {
+		return nil
+	}
+	return map[string]any{
+		"held":              true,
+		"reasonCode":        strings.TrimSpace(hold.ReasonCode),
+		"queuedCount":       hold.QueuedCount,
+		"providerSessionId": strings.TrimSpace(hold.ProviderSessionID),
+		"openUrl":           strings.TrimSpace(hold.OpenURL),
+	}
+}
+
+func codexDesktopHoldTable(hold *agentservice.CodexDesktopHold) string {
+	value := codexDesktopHoldValue(hold)
+	if value == nil {
+		return ""
+	}
+	return fmt.Sprintf("held %d %s", hold.QueuedCount, strings.TrimSpace(hold.OpenURL))
 }
 
 func isolationCompactValue(isolation agentservice.SessionIsolation) map[string]any {

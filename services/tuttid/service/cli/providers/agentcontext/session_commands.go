@@ -24,6 +24,7 @@ var sessionActionColumns = []cliservice.TableColumn{
 	{Key: "id", Label: "ID"},
 	{Key: "provider", Label: "Provider"},
 	{Key: "activeTurnId", Label: "Active Turn"},
+	{Key: "codexDesktopHold", Label: "Codex"},
 	{Key: "launchRequested", Label: "Launch Requested"},
 }
 
@@ -638,10 +639,11 @@ func sessionActionOutputSpec() framework.OutputSpec {
 			Rows: func(result any) []map[string]any {
 				action := result.(sessionActionResult)
 				return []map[string]any{{
-					"id":              action.Session.ID,
-					"provider":        action.Session.Provider,
-					"activeTurnId":    action.Session.ActiveTurnID,
-					"launchRequested": action.LaunchRequested,
+					"id":               action.Session.ID,
+					"provider":         action.Session.Provider,
+					"activeTurnId":     action.Session.ActiveTurnID,
+					"codexDesktopHold": codexDesktopHoldTable(action.Session.CodexDesktopHold),
+					"launchRequested":  action.LaunchRequested,
 				}}
 			},
 		},

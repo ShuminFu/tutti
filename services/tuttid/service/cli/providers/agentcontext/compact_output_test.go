@@ -183,6 +183,25 @@ func TestSessionSummaryValueIncludesTurnEntitiesAndInteractions(t *testing.T) {
 	}
 }
 
+func TestSessionInspectValueIncludesCodexDesktopHold(t *testing.T) {
+	session := agentserviceSessionWithRuntime()
+	session.CodexDesktopHold = &agentservice.CodexDesktopHold{
+		Held: true, ReasonCode: "codex_thread_held_externally", QueuedCount: 2,
+		ProviderSessionID: "thread-1", OpenURL: "codex://threads/thread-1",
+	}
+	value := sessionInspectValue(session)
+	hold, ok := value["codexDesktopHold"].(map[string]any)
+	if !ok || hold["held"] != true || hold["queuedCount"] != 2 ||
+		hold["reasonCode"] != "codex_thread_held_externally" ||
+		hold["openUrl"] != "codex://threads/thread-1" {
+		t.Fatalf("codexDesktopHold = %#v", value["codexDesktopHold"])
+	}
+	row := sessionRows([]agentservice.Session{session})
+	if len(row) != 1 || row[0]["codexDesktopHold"] != "held 2 codex://threads/thread-1" {
+		t.Fatalf("table hold = %#v", row)
+	}
+}
+
 func TestSessionInspectValueIncludesTurnEntities(t *testing.T) {
 	value := sessionInspectValue(agentserviceSessionWithLifecycle())
 	if _, ok := value["latestTurn"].(map[string]any); !ok {

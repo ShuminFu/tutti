@@ -530,17 +530,12 @@ func TestWaitAfterFailedSendDoesNotReportPreviousTurn(t *testing.T) {
 
 func TestWaitWhileCodexDesktopHoldDoesNotReturnPreviousTurn(t *testing.T) {
 	runtime := newWaitRuntime()
-	// The runtime session keeps an active-turn marker so subscribe can attach.
-	// The persisted turn is already settled, which is the stale result Wait
-	// must not return while the desktop hold queue is nonempty.
-	liveTurnID := "turn-live"
+	// The persisted turn is already settled. A send that is only queued has no
+	// new turn, so Wait must return the held status instead of that result.
 	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
 		ID: "session-1", WorkspaceID: "ws-1", Provider: "codex", Status: "completed",
-		TurnLifecycle: &TurnLifecycle{
-			ActiveTurnID: &liveTurnID,
-			Phase:        agentactivitybiz.TurnPhaseSettled,
-		},
-		Visible: true,
+		TurnLifecycle: &TurnLifecycle{Phase: agentactivitybiz.TurnPhaseSettled},
+		Visible:       true,
 	}
 	runtime.turnOverride = &agentactivitybiz.Turn{
 		WorkspaceID: "ws-1", AgentSessionID: "session-1", TurnID: "turn-previous",
@@ -566,13 +561,16 @@ func TestWaitWhileCodexDesktopHoldDoesNotReturnPreviousTurn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Wait() error = %v", err)
 	}
-	if result.Reason != WaitReasonTimeout || result.TurnID == "turn-previous" || result.FinalMessage != nil {
-		t.Fatalf("queued wait = %+v, want timeout instead of the previous turn", result)
+	if result.Reason != WaitReasonCodexDesktopHeld || result.TimedOut || result.TurnID != "" || result.FinalMessage != nil {
+		t.Fatalf("queued wait = %+v, want codex_desktop_held without the previous turn", result)
+	}
+	if result.Session.CodexDesktopHold == nil || result.Session.CodexDesktopHold.QueuedCount != 2 {
+		t.Fatalf("queued wait session = %+v", result.Session.CodexDesktopHold)
 	}
 	select {
 	case <-runtime.subscribeStarted:
+		t.Fatal("queued wait subscribed instead of returning the held status")
 	default:
-		t.Fatal("queued wait returned without subscribing")
 	}
 }
 
