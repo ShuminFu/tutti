@@ -1,8 +1,11 @@
 package agentruntime
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,6 +119,29 @@ func applyCodexConfigOverrides(spec *ProcessSpec) error {
 	}
 	spec.Command = insertCodexConfigOverrides(spec.Command, overrides)
 	return nil
+}
+
+// releaseIdleUserCodexWriter closes the app-server once a user-home turn is
+// idle, so Codex desktop can acquire the thread writer lock. An active goal
+// still needs this process for the next provider turn. Isolated homes do not
+// carry that marker and stay on the idle reaper.
+func (a *CodexAppServerAdapter) releaseIdleUserCodexWriter(ctx context.Context, session Session) {
+	if a == nil || session.Provider != ProviderCodex {
+		return
+	}
+	if _, found := lastEnvironmentValue(session.Env, runtimeprep.CodexConfigOverridesEnv); !found {
+		return
+	}
+	if strings.TrimSpace(asString(a.sessionGoal(session.AgentSessionID)["status"])) == "active" {
+		return
+	}
+	if err := a.ReleaseLiveSession(ctx, session); err != nil && !errors.Is(err, ErrLiveSessionBusy) {
+		slog.Warn("codex user-home writer release failed",
+			"event", "agent_session.app_server.writer_release.failed",
+			"agent_session_id", session.AgentSessionID,
+			"error", err.Error(),
+		)
+	}
 }
 
 func insertCodexConfigOverrides(command []string, overrides []string) []string {

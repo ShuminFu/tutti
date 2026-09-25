@@ -696,8 +696,10 @@ file or directory`. A failed `codex app-server` probe is diagnostic evidence,
 - Quick checks:
   Inspect the session cwd and its parents for an accidental project root, such
   as a `.git` directory under `$HOME`, plus a sibling `.codex/config.toml`.
-  The Codex process command should include `-c project_root_markers=[]`. The
-  user's `~/.codex/config.toml` should be unchanged.
+  The Codex process command should include `-c project_root_markers=[]`. Dock
+  does not write `project_root_markers` into the user's `~/.codex/config.toml`.
+  Codex itself may append a `[projects."<root>"] trust_level = "trusted"`
+  entry the first time a permissive `thread/start` sees an untrusted project.
 - Root cause:
   Codex walks upward from the session cwd to identify the project root. If it
   reaches a parent directory that also contains `.codex/config.toml`, Codex can
