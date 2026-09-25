@@ -696,22 +696,22 @@ file or directory`. A failed `codex app-server` probe is diagnostic evidence,
 - Quick checks:
   Inspect the session cwd and its parents for an accidental project root, such
   as a `.git` directory under `$HOME`, plus a sibling `.codex/config.toml`.
-  Inspect the generated `codex-home/config.toml`; it should be a session-scoped
-  file, not a symlink to the user's global Codex config.
+  The Codex process command should include `-c project_root_markers=[]`. The
+  user's `~/.codex/config.toml` should be unchanged.
 - Root cause:
   Codex walks upward from the session cwd to identify the project root. If it
   reaches a parent directory that also contains `.codex/config.toml`, Codex can
   read the user's global config as project-local config, where user-level keys
   are unsupported.
 - Fix:
-  Codex sidecar preparation must treat `CODEX_HOME` as the run-scoped
-  user-level Codex home for application-wide injection, not as a project root.
-  Copy the user's `config.toml` into the run-scoped `codex-home`, then merge
-  `project_root_markers = []` there so ACP sessions do not read accidental
-  parent `.codex/config.toml` files as project-local config. Do not symlink the
-  config, because the run may need session-specific config that must not mutate
-  the global Codex config. Do not create marker files or directories in the
-  user's cwd.
+  Dock Codex sessions use the user's Codex home (`CODEX_HOME` when set,
+  otherwise `~/.codex`) so the Codex desktop app can see the thread. Pass
+  `project_root_markers = []` with `codex -c` for that process. Do not write it
+  into the user's config, and do not create marker files in the user's cwd.
+  Gateway sessions, `TUTTI_CODEX_MANAGED=1`, `TUTTI_CODEX_HOME_MODE=isolated`
+  (also `session` or `legacy`), and sessions that already have a rollout under
+  the per-session `codex-home` still copy config into that private home and
+  merge `project_root_markers = []` there.
 - Validation:
   Add or update `runtimeprep` tests that verify no cwd marker is created, the
   generated Codex config preserves user-level provider settings while disabling
@@ -914,12 +914,15 @@ file or directory`. A failed `codex app-server` probe is diagnostic evidence,
   `config.toml` is copied, but relative catalog and instruction files must also
   be present there.
 - Root cause:
-  Tutti prepares a run-scoped `CODEX_HOME` and copies only `config.toml` (plus
-  auth/plugin/skill exposure). Relative `model_catalog_json` and
-  `model_instructions_file` paths resolve against that sandbox home, so the
-  dependency is missing unless Tutti mirrors it.
+  Isolated Codex sessions prepare a run-scoped `CODEX_HOME` and copy
+  `config.toml` (plus auth/plugin/skill exposure). Relative
+  `model_catalog_json` and `model_instructions_file` paths resolve against that
+  sandbox home, so the dependency is missing unless Tutti mirrors it. The
+  default user-home mode keeps `CODEX_HOME` on the user's Codex home, where
+  those relative files already resolve.
 - Fix:
-  After copying `config.toml`, resolve top-level `model_catalog_json` and
+  User-home sessions do not mirror catalog files. For an isolated home, after
+  copying `config.toml`, resolve top-level `model_catalog_json` and
   `model_instructions_file`. For relative paths under `~/.codex`, symlink (or
   copy) the file into the run-scoped `CODEX_HOME` at the same relative path.
   Absolute paths need no mirror but must be validated in place. Missing,

@@ -724,6 +724,7 @@ func (s *Service) prepareRuntimeWithModelEndpoint(
 		BrowserUse:                effectiveBrowserUse,
 		ComputerUse:               effectiveComputerUse,
 		CodexSaverMode:            valueBool(input.CodexSaverMode),
+		CodexHomeMode:             input.CodexHomeMode,
 		ProviderTargetRef:         clonePayload(input.ProviderTargetRef),
 		ExtensionSkillRoots:       s.resolveExtensionSkillRoots(ctx, input.ProviderTargetRef),
 		ExtensionRuntimePrep:      s.resolveExtensionRuntimePrep(ctx, input.ProviderTargetRef),

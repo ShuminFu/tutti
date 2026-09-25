@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	"github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
 	claudecodeservice "github.com/tutti-os/tutti/services/tuttid/service/claudecode"
 )
@@ -269,6 +270,8 @@ func (s *Service) discoverLiveComposerModelsUncachedForScope(
 		ReasoningEffort:   stringPointer(strings.TrimSpace(settings.ReasoningEffort)),
 		Speed:             stringPointer(strings.TrimSpace(settings.Speed)),
 		Visible:           &visible,
+		// Probe threads must not show up in the user's Codex sidebar.
+		CodexHomeMode: runtimeprep.CodexHomeModeIsolated,
 	}
 	if isExtension && strings.TrimSpace(settings.Model) != "" {
 		startInput.Model = stringPointer(strings.TrimSpace(settings.Model))

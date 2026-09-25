@@ -19,8 +19,11 @@ func (a *CodexAppServerAdapter) Start(ctx context.Context, session Session) (eve
 	defer func() {
 		trace.Finish(err)
 	}()
-	extraSkillRoots, err := tuttiAgentExtraSkillRoots(a.config.skillRootsStrategy, session.Env)
+	extraSkillRoots, err := appServerExtraSkillRoots(a.config.skillRootsStrategy, session.Env)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := readCodexDeveloperInstructions(session.Env); err != nil {
 		return nil, err
 	}
 	stableSystemSkillsRoot, err := tuttiAgentStableSystemSkillsRoot(a.config.skillRootsStrategy, session.Env)
@@ -194,8 +197,11 @@ func (a *CodexAppServerAdapter) Resume(ctx context.Context, session Session) (er
 	trace.Log("resume.begin", map[string]any{
 		"thread_id": strings.TrimSpace(session.ProviderSessionID),
 	})
-	extraSkillRoots, err := tuttiAgentExtraSkillRoots(a.config.skillRootsStrategy, session.Env)
+	extraSkillRoots, err := appServerExtraSkillRoots(a.config.skillRootsStrategy, session.Env)
 	if err != nil {
+		return err
+	}
+	if _, err := readCodexDeveloperInstructions(session.Env); err != nil {
 		return err
 	}
 	stableSystemSkillsRoot, err := tuttiAgentStableSystemSkillsRoot(a.config.skillRootsStrategy, session.Env)
@@ -496,6 +502,10 @@ func (a *CodexAppServerAdapter) prepareInitializedClientLaunch(
 	if a.config.skillRootsStrategy == providerregistry.AppServerSkillRootsStrategyTuttiStable {
 		spec.Env = withoutEnvironmentKey(spec.Env, tuttiAgentExtraSkillRootsEnv)
 		spec.Env = withoutEnvironmentKey(spec.Env, tuttiAgentStableSystemSkillsEnv)
+	}
+	if err := applyCodexConfigOverrides(&spec); err != nil {
+		cleanupPreparedLaunch(cleanup)
+		return ProcessSpec{}, nil, err
 	}
 	return spec, cleanup, nil
 }

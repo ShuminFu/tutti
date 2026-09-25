@@ -59,6 +59,9 @@ func appServerThreadStartParams(session Session, cwd string) map[string]any {
 	if approvalsReviewer := codexAppServerApprovalsReviewer(session.PermissionModeID); approvalsReviewer != "" {
 		params["approvalsReviewer"] = approvalsReviewer
 	}
+	if text, err := readCodexDeveloperInstructions(session.Env); err == nil && text != "" {
+		params["developerInstructions"] = text
+	}
 	return params
 }
 
@@ -139,6 +142,7 @@ func appServerTurnStartParams(
 	if approvalsReviewer := codexAppServerApprovalsReviewer(session.PermissionModeID); approvalsReviewer != "" {
 		params["approvalsReviewer"] = approvalsReviewer
 	}
+	appendCodexDockDeveloperInstructions(session.Env, params)
 	return params
 }
 

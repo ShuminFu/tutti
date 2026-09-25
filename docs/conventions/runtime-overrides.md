@@ -24,7 +24,8 @@ Use the owner documents linked below for detailed behavior. This file exists to 
 | `TUTTID_RUN_DIR`              | [Local State Storage](./local-state-storage.md)                                                            | Overrides listener-info and pid paths, but not the state-root ownership lock.        |
 | `TUTTID_PID_PATH`             | [Local State Storage](./local-state-storage.md)                                                            | Overrides the daemon pid file, but not the state-root ownership lock.                |
 | `TUTTID_LISTENER_INFO_PATH`   | [Local State Storage](./local-state-storage.md), [Desktop Transport](../architecture/desktop-transport.md) | Overrides the listener-info file path used by managed desktop-to-daemon transport.   |
-| `CODEX_HOME`                  | [Local State Storage](./local-state-storage.md)                                                            | Injected per Codex agent run by tuttid; points at the run-scoped `codex-home`.       |
+| `CODEX_HOME`                  | [Local State Storage](./local-state-storage.md)                                                            | User Codex home for Dock Codex sessions. Isolated mode points it at the run-scoped `codex-home`. |
+| `TUTTI_CODEX_HOME_MODE`       | [Local State Storage](./local-state-storage.md)                                                            | `isolated`, `session`, or `legacy` keeps the per-session Codex home. Unset or `user` uses the user's home. |
 | `TUTTI_AGENT_HOME`            | [Local State Storage](./local-state-storage.md)                                                            | Injected per Tutti Agent run by tuttid; points at the run-scoped `tutti-agent-home`. |
 
 ## Workspace App Catalog

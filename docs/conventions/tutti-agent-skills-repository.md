@@ -36,17 +36,15 @@ agent sessions as an extra provider-native skill. The skill is copied into the
 session-scoped provider skill root. It is not installed into the user's global
 skill directory.
 
-For Codex sessions, the runtime preparer writes the skill under:
+For Codex sessions, the runtime preparer writes the skill under the run overlay:
 
 ```text
-<runtimeRoot>/codex-home/skills/app-factory/
+<runtimeRoot>/codex-overlay/skills/app-factory/
 ```
 
-and sets:
-
-```text
-CODEX_HOME=<runtimeRoot>/codex-home
-```
+and leaves `CODEX_HOME` on the user's Codex home. Isolated mode still writes
+the skill under `<runtimeRoot>/codex-home/skills/app-factory/` and points
+`CODEX_HOME` there.
 
 For Claude Code sessions, the runtime preparer writes the skill under the
 session-scoped Tutti plugin directory:

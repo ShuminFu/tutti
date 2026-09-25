@@ -78,6 +78,10 @@ func (p *DefaultPreparer) BindSessionForkProviderState(
 		return errors.New("app-server session fork provider state binding requires distinct source and target identities")
 	}
 
+	if strings.EqualFold(input.Provider, "codex") && codexUsesUserHome(PrepareInput{}, "") {
+		return p.bindSharedCodexHomeFork(ctx, input)
+	}
+
 	store := p.runtimeStore()
 	sourceRoot, err := store.RuntimeRoot(input.WorkspaceID, input.SourceAgentSessionID)
 	if err != nil {

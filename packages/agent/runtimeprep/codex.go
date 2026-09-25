@@ -34,6 +34,9 @@ func (CodexPreparer) Provider() string {
 }
 
 func (p CodexPreparer) Prepare(ctx context.Context, input ProviderPrepareInput) (result ProviderPrepareResult, err error) {
+	if codexUsesUserHome(input.PrepareInput, input.RuntimeRoot) {
+		return p.prepareCodexUserHome(ctx, input)
+	}
 	codexHome := filepath.Join(input.RuntimeRoot, "codex-home")
 	logRuntimePrepareTrace("runtime_prepare.codex.entered", input.PrepareInput, nil)
 	if err := prepareCodexHome(codexHome, input.PrepareInput); err != nil {

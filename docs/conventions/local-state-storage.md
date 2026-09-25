@@ -194,6 +194,7 @@ Migrated agent runtime state should derive from the same root:
       <agent-session-id>/
         sidecar-manifest.json
         codex-home/
+        codex-overlay/
         tutti-agent-home/
     attachments/
       <agent-session-id>/
@@ -244,8 +245,12 @@ remain part of the identity. `agent/sessions` stores daemon-created working dire
 that do not receive an explicit cwd. `agent/runs` stores per-session provider
 sidecar state that can be recreated or cleaned up when the owning agent session
 is deleted. Provider-specific homes, generated skills, and cleanup manifests
-live under the matching run directory. Codex sessions use `codex-home` and
-receive it through `CODEX_HOME`; Tutti Agent sessions use `tutti-agent-home`
+live under the matching run directory. Dock Codex sessions use the user's
+Codex home (`CODEX_HOME` when set, otherwise `~/.codex`) so the Codex desktop
+app can open the thread. The run directory holds `codex-overlay` for Dock-only
+skills and developer instructions. Gateway, managed, and legacy sessions still
+use `codex-home` through `CODEX_HOME`. Set `TUTTI_CODEX_HOME_MODE=isolated` to
+keep that per-session home. Tutti Agent sessions use `tutti-agent-home`
 and receive it through `TUTTI_AGENT_HOME`. `agent/skill-bundles/v1/<digest>`
 stores immutable, rebuildable Tutti-managed Skill bundles shared by equal
 content across Tutti Agent sessions; session cleanup never removes these

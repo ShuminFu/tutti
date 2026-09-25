@@ -728,8 +728,12 @@ type CreateSessionInput struct {
 	ComputerUse           *bool
 	CodexSaverMode        *bool
 	CodexSaverModeAllowed bool
-	ProviderTargetRef     map[string]any
-	ReasoningEffort       *string
+	// CodexHomeMode is an internal launch override. "isolated" keeps the
+	// per-session Codex home so hidden probes do not land in the user's Codex
+	// sidebar. Empty follows the preparer's default.
+	CodexHomeMode     string
+	ProviderTargetRef map[string]any
+	ReasoningEffort   *string
 	// ReasoningIntensity is an Issue-owned 0-100 strength request. When an
 	// explicit ReasoningEffort is absent, Create compiles it against the
 	// selected model's ordered reasoning-effort catalog. It is daemon-only and
